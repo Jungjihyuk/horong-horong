@@ -51,6 +51,23 @@ It brings together a `Pomodoro timer`, `app usage tracking`, `quick memos`, `new
 - **To gather $\color{#D97706}{\textbf{interests}}$ quickly** — Videos, articles, and trends become heavier as they pile up. HorongHorong collects sources, lets an LLM classify and summarize them, and keeps your interests gathered in one place.
 - **To create an $\color{#D97706}{\textbf{environment}}$ for small experiments** — Seeing good information is easy; turning it into something you build is harder. HorongHorong connects AI Agent CLI tools from planning to execution, shortening the path from consumption to creation. Data is stored locally with SwiftData, and AI calls run through CLI tools installed by the user.
 
+## At a Glance
+
+<table>
+<tr>
+<td align="center" width="60%">
+<img src="./assets/features/timer.png" alt="HorongHorong popover from the menu bar" width="380" />
+<br />
+<sub>Click the menu bar icon to open timer, memo, statistics, news, Agent, and settings in one place.</sub>
+</td>
+<td align="center" width="40%">
+<img src="./assets/logos/horonghorong.png" alt="HorongHorong app icon" width="150" />
+<br />
+<sub>HorongHorong app icon</sub>
+</td>
+</tr>
+</table>
+
 ## 📌 Features
 
 <table>

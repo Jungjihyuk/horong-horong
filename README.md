@@ -53,6 +53,23 @@
 - **$\color{#D97706}{\textbf{관심사}}$ 를 빠르게 모으려고** — 보고 싶은 영상 · 기사 · 트렌드는 쌓일수록 무거워집니다. 흩어진 소스를 자동으로 수집하고 LLM이 카테고리별로 분류 · 요약해, 관심사가 한 화면 안에 가만히 모이도록 했습니다.
 - **작은 실험이 시작될 $\color{#D97706}{\textbf{환경}}$ 을 마련하려고** — 좋은 정보를 봐도 *직접 만들어보는* 단계로 넘어가는 장벽은 늘 큽니다. AI Agent CLI를 한 번의 호출로 계획 → 실행까지 이어지게 해, 소비에서 창작으로 가는 다리를 짧게 했습니다. 데이터는 모두 로컬(SwiftData)에 저장되고 AI 호출도 사용자가 설치한 CLI를 통해 이뤄지기에, 외부 의존 없이 가볍게 시작할 수 있습니다.
 
+## 한눈에 보기
+
+<table>
+<tr>
+<td align="center" width="60%">
+<img src="./assets/overview/menubar.png" alt="메뉴바에서 열리는 호롱호롱 팝오버" width="380" />
+<br />
+<sub>메뉴바 아이콘을 클릭하면 타이머, 메모, 통계, 뉴스, Agent, 설정을 한 곳에서 열 수 있습니다.</sub>
+</td>
+<td align="center" width="40%">
+<img src="./assets/overview/app-icon.png" alt="호롱호롱 앱 아이콘" width="150" />
+<br />
+<sub>호롱호롱 앱 아이콘</sub>
+</td>
+</tr>
+</table>
+
 ## 📌 특징
 
 <table>
