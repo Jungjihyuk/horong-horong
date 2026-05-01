@@ -1,0 +1,172 @@
+# ============================================================
+# .gitignore 분류 기준: "누가/무엇이 생성하는가"
+# ============================================================
+# 1. Environment   — 개발 환경이 생성 (OS, IDE, Editor, Logs)
+# 2. macOS App     — Swift / Xcode 빌드 산출물 및 사용자 상태
+# 3. Agents        — Python 에이전트 툴체인이 생성
+# 4. DB            — 데이터베이스 / 데이터 파일
+# 5. AI / Agent    — AI 도구가 생성 (Claude, Codex, Gemini 등)
+# 6. Infra         — 환경 변수, 시크릿, 배포 관련
+# 7. Documentation — 팀 내부 문서, 초안, 노트
+# ============================================================
+
+
+# ========================= 1. Environment ===========================
+
+## OS - macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon
+
+## OS - Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+## IDE / Editor
+.vscode/
+.cursor/
+.antiglarity/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+
+## Logs
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+
+# ========================= 2. macOS App (Swift / Xcode) =========================
+
+## Build Artifacts
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+## Swift macro / 자동 생성 소스
+swift-generated-sources/
+
+## Xcode - User-specific (개인 UI 상태, 브레이크포인트 등)
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xcuserstatev2
+*.xcscmblueprint
+*.xccheckout
+
+## Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+
+## CocoaPods / Carthage (사용 시 대비)
+Pods/
+Carthage/Build/
+Carthage/Checkouts/
+
+## fastlane (사용 시 대비)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+
+# ========================= 3. Agents (Python) =========================
+
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+## Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+## Packaging / Cache
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+
+# ============================== 4. DB ===============================
+
+## Database Files (development)
+*.sqlite
+*.sqlite3
+*.db
+
+## Data Files (CSV, Excel exports)
+*.csv
+*.xlsx
+*.xls
+
+
+# ====================== 5. AI / Agent Tools =========================
+
+## Claude
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+.claude/settings.local.json
+.claude/docs-file.json
+.claude/**/*.bak.*
+
+## Codex
+# .codex/
+
+## Gemini
+# .gemini/
+
+## Opencode
+# .agent/
+# .opencode/
+
+## Sisyphus
+# .sisyphus/
+
+## Graphify
+# graphify-out/
+
+
+# ============================= 6. Infra =============================
+
+## Environment Variables
+.env
+.env.local
+.env.*.local
+
+## Secrets / Keys
+*.pem
+*.key
+
+## Security Scan Reports
+trivy-reports/
+
+
+# ========================= 7. Documentation ==========================
+
+## Project Documentation (internal/draft)
+docs/
