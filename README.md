@@ -17,8 +17,8 @@
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)](https://swift.org)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](assets/LICENSE)
-[![Release](https://img.shields.io/github/v/release/Jungjihyuk/HorongHorong?style=flat)](https://github.com/Jungjihyuk/HorongHorong/releases)
-[![Stars](https://img.shields.io/github/stars/Jungjihyuk/HorongHorong?style=flat&logo=github)](https://github.com/Jungjihyuk/HorongHorong)
+[![Release](https://img.shields.io/github/v/release/Jungjihyuk/horong-horong?style=flat)](https://github.com/Jungjihyuk/horong-horong/releases)
+[![Stars](https://img.shields.io/github/stars/Jungjihyuk/horong-horong?style=flat&logo=github)](https://github.com/Jungjihyuk/horong-horong)
 
 <sub>한국어</sub> · <sub><a href="README.en.md">English</a></sub>
 
@@ -33,7 +33,7 @@
 
 <br />
 
-<a href="https://github.com/Jungjihyuk/HorongHorong/releases/latest"><strong>📥 최신 릴리스 다운로드</strong></a>
+<a href="https://github.com/Jungjihyuk/horong-horong/releases/latest"><strong>📥 최신 릴리스 다운로드</strong></a>
  · 
 <a href="#b-소스에서-빌드"><strong>소스에서 빌드하기</strong></a>
 
@@ -164,7 +164,7 @@ Claude / Codex / Gemini CLI를 호출해 N일치 실험 계획을 생성하고, 
 
 정식 릴리스 준비 중입니다. 릴리스가 생성되면 아래 링크에서 `.dmg` 또는 `.zip` 파일을 받을 수 있습니다.
 
-[**📥 최신 릴리스 다운로드 →**](https://github.com/Jungjihyuk/HorongHorong/releases/latest)
+[**📥 최신 릴리스 다운로드 →**](https://github.com/Jungjihyuk/horong-horong/releases/latest)
 
 > ⚠️ **첫 실행 안내** — 호롱호롱은 아직 Apple Developer 코드 서명 / 공증(notarization)이 되어 있지 않습니다. 처음 실행하면 macOS가 *"확인되지 않은 개발자"* 또는 *"손상된 앱"* 경고를 띄울 수 있습니다. 그 경우:
 > 1. **System Settings → Privacy & Security** 로 이동 → "그래도 열기" 클릭
@@ -198,8 +198,8 @@ brew install --cask USER/horong/horonghorong
 #### 빌드 절차
 
 ```bash
-git clone https://github.com/Jungjihyuk/HorongHorong.git
-cd HorongHorong
+git clone https://github.com/Jungjihyuk/horong-horong.git
+cd horong-horong
 xcodegen generate
 xcodebuild -scheme HorongHorong -configuration Debug build
 open ~/Library/Developer/Xcode/DerivedData/HorongHorong-*/Build/Products/Debug/호롱호롱.app

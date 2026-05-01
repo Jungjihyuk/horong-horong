@@ -63,8 +63,8 @@
 ### 셋업
 
 ```bash
-git clone https://github.com/Jungjihyuk/HorongHorong.git
-cd HorongHorong
+git clone https://github.com/Jungjihyuk/horong-horong.git
+cd horong-horong
 xcodegen generate
 open HorongHorong.xcodeproj
 ```

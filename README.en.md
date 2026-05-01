@@ -17,8 +17,8 @@ Like a horong gathers and shelters its light, this app helps hold scattered $\co
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)](https://swift.org)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](assets/LICENSE)
-[![Release](https://img.shields.io/github/v/release/Jungjihyuk/HorongHorong?style=flat)](https://github.com/Jungjihyuk/HorongHorong/releases)
-[![Stars](https://img.shields.io/github/stars/Jungjihyuk/HorongHorong?style=flat&logo=github)](https://github.com/Jungjihyuk/HorongHorong)
+[![Release](https://img.shields.io/github/v/release/Jungjihyuk/horong-horong?style=flat)](https://github.com/Jungjihyuk/horong-horong/releases)
+[![Stars](https://img.shields.io/github/stars/Jungjihyuk/horong-horong?style=flat&logo=github)](https://github.com/Jungjihyuk/horong-horong)
 
 <sub><a href="README.md">한국어</a></sub> · <sub>English</sub>
 
@@ -32,7 +32,7 @@ Like a horong gathers and shelters its light, this app helps hold scattered $\co
 
 <br />
 
-<a href="https://github.com/Jungjihyuk/HorongHorong/releases/latest"><strong>📥 Download Latest Release</strong></a>
+<a href="https://github.com/Jungjihyuk/horong-horong/releases/latest"><strong>📥 Download Latest Release</strong></a>
  · 
 <a href="#b-build-from-source"><strong>Build from Source</strong></a>
 
@@ -162,7 +162,7 @@ There are two ways to use HorongHorong — choose **A. Download and Run** if you
 
 Official releases are still being prepared. Once a release is available, you will be able to download a `.dmg` or `.zip` file from the link below.
 
-[**📥 Download Latest Release →**](https://github.com/Jungjihyuk/HorongHorong/releases/latest)
+[**📥 Download Latest Release →**](https://github.com/Jungjihyuk/horong-horong/releases/latest)
 
 > ⚠️ **First launch notice** — HorongHorong is not yet signed with an Apple Developer certificate or notarized. On first launch, macOS may show an "unidentified developer" or "damaged app" warning. In that case:
 > 1. Go to **System Settings → Privacy & Security** and click "Open Anyway".
@@ -196,8 +196,8 @@ Use this path when you want to build the app directly or contribute to the codeb
 #### Build Steps
 
 ```bash
-git clone https://github.com/Jungjihyuk/HorongHorong.git
-cd HorongHorong
+git clone https://github.com/Jungjihyuk/horong-horong.git
+cd horong-horong
 xcodegen generate
 xcodebuild -scheme HorongHorong -configuration Debug build
 open ~/Library/Developer/Xcode/DerivedData/HorongHorong-*/Build/Products/Debug/호롱호롱.app
