@@ -292,7 +292,7 @@ uv sync
 <a href="https://github.com/Jungjihyuk">
 <img src="https://avatars.githubusercontent.com/u/33630505?v=4" width="100px;" alt=""/><br />
 <sub><b>정지혁</b></sub></a><br />
-<a href="https://github.com" title="Code">🛠️</a> 
+<a href="https://github.com/Jungjihyuk/horong-horong/commits?author=Jungjihyuk" title="Code">🛠️</a> 
 
 
 🪔 *Made with a small flame.*
