@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSUIElement</key>
+	<true/>
+	<key>CFBundleName</key>
+	<string>호롱호롱</string>
+	<key>CFBundleDisplayName</key>
+	<string>호롱호롱</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>NSUserNotificationAlertStyle</key>
+	<string>alert</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>현재 열려있는 브라우저(Chrome/Safari) 탭의 URL을 읽어 "엔터/조사/기타" 통계 분류에 사용합니다.</string>
+</dict>
+</plist>

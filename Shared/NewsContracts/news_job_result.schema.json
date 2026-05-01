@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NewsJobResult",
+  "type": "object",
+  "required": ["jobId", "status"],
+  "properties": {
+    "jobId": { "type": "string" },
+    "status": { "type": "string", "enum": ["queued", "running", "success", "partial_success", "failed"] },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "endedAt": { "type": ["string", "null"], "format": "date-time" },
+    "reportPath": { "type": ["string", "null"] },
+    "metaPath": { "type": ["string", "null"] },
+    "sourceStats": {
+      "type": ["object", "null"],
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "fetched": { "type": "integer" },
+          "used": { "type": "integer" },
+          "failed": { "type": "integer" }
+        }
+      }
+    },
+    "topItems": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "importanceScore": { "type": "integer" },
+          "category": { "type": "string" }
+        }
+      }
+    },
+    "warnings": { "type": ["array", "null"], "items": { "type": "string" } },
+    "errorCode": { "type": ["string", "null"] },
+    "errorMessage": { "type": ["string", "null"] }
+  }
+}
