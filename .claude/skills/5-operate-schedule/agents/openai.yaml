@@ -1,0 +1,4 @@
+interface:
+  display_name: "Versioned Dev Schedule Planner"
+  short_description: "1~6번 문서 버전과 개인 일정을 기반으로 개발 진행 일정을 버전별로 계획하는 스킬"
+  default_prompt: "문서 버전과 내 개인 가능 시간을 반영해 개발 일정을 짜줘."

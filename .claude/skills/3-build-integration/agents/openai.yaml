@@ -1,0 +1,4 @@
+interface:
+  display_name: "API Spec Builder"
+  short_description: "정의서·요구사항·UI·시스템·DB 문서와 백엔드 코드를 기반으로 API 명세서를 작성·동기화하는 스킬"
+  default_prompt: "관련 문서와 backend 코드를 기준으로 API 명세서를 작성하고 동기화해줘."
