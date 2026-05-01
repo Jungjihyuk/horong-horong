@@ -62,7 +62,7 @@ Manage focus and break cycles with presets: 50/5, 100/10, and custom. The menu b
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/timer.png" alt="Timer" width="100%" />
+<img src="./assets/features/timer.png" alt="Timer" width="420" />
 </td>
 </tr>
 
@@ -74,7 +74,7 @@ Open a floating input panel from anywhere with a global shortcut. Saved memos ar
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/quick-memo.png" alt="Quick memo" width="100%" />
+<img src="./assets/features/quick-memo.png" alt="Quick memo" width="420" />
 </td>
 </tr>
 
@@ -89,24 +89,24 @@ Track the active app in the background and automatically aggregate time by categ
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/stats-summary.png" alt="Summary statistics" width="100%" />
+<img src="./assets/features/stats-summary.png" alt="Summary statistics" width="190" />
 <sub>Summary</sub>
 <br />
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/daily_statistic.png" alt="Daily statistics" width="100%" />
+<img src="./assets/features/daily_statistic.png" alt="Daily statistics" width="190" />
 <br />
 <sub>Daily</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/weekly_statistic.png" alt="Weekly statistics" width="100%" />
+<img src="./assets/features/weekly_statistic.png" alt="Weekly statistics" width="190" />
 <br />
 <sub>Weekly</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/monthly_statistic.png" alt="Monthly statistics" width="100%" />
+<img src="./assets/features/monthly_statistic.png" alt="Monthly statistics" width="190" />
 <br />
 <sub>Monthly</sub>
 </td>
@@ -123,7 +123,7 @@ Collect data from channels you frequently use, such as YouTube playlists, Google
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/news.png" alt="News" width="100%" />
+<img src="./assets/features/news.png" alt="News" width="420" />
 </td>
 </tr>
 
@@ -135,7 +135,7 @@ Call Claude / Codex / Gemini CLI to generate an N-day experiment plan, then sele
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/agent.png" alt="Agent" width="100%" />
+<img src="./assets/features/agent.png" alt="Agent" width="420" />
 </td>
 </tr>
 
@@ -147,7 +147,7 @@ Customize app-to-category mapping rules, add/delete/rename categories, choose an
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/settings.png" alt="Settings" width="100%" />
+<img src="./assets/features/settings.png" alt="Settings" width="420" />
 </td>
 </tr>
 </table>

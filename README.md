@@ -64,7 +64,7 @@
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/timer.png" alt="타이머" width="100%" />
+<img src="./assets/features/timer.png" alt="타이머" width="420" />
 </td>
 </tr>
 
@@ -76,7 +76,7 @@
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/quick-memo.png" alt="퀵 메모" width="100%" />
+<img src="./assets/features/quick-memo.png" alt="퀵 메모" width="420" />
 </td>
 </tr>
 
@@ -91,24 +91,24 @@
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/stats-summary.png" alt="요약 통계" width="100%" />
+<img src="./assets/features/stats-summary.png" alt="요약 통계" width="190" />
 <sub>요약 통계</sub>
 <br />
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/daily_statistic.png" alt="일간 통계" width="100%" />
+<img src="./assets/features/daily_statistic.png" alt="일간 통계" width="190" />
 <br />
 <sub>일간</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/weekly_statistic.png" alt="주간 통계" width="100%" />
+<img src="./assets/features/weekly_statistic.png" alt="주간 통계" width="190" />
 <br />
 <sub>주간</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/monthly_statistic.png" alt="월간 통계" width="100%" />
+<img src="./assets/features/monthly_statistic.png" alt="월간 통계" width="190" />
 <br />
 <sub>월간</sub>
 </td>
@@ -125,7 +125,7 @@ YouTube 재생목록 · Google News · 요즘IT 등 자주 정보를 접하는 �
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/news.png" alt="뉴스" width="100%" />
+<img src="./assets/features/news.png" alt="뉴스" width="420" />
 </td>
 </tr>
 
@@ -137,7 +137,7 @@ Claude / Codex / Gemini CLI를 호출해 N일치 실험 계획을 생성하고, 
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/agent.png" alt="Agent" width="100%" />
+<img src="./assets/features/agent.png" alt="Agent" width="420" />
 </td>
 </tr>
 
@@ -149,7 +149,7 @@ Claude / Codex / Gemini CLI를 호출해 N일치 실험 계획을 생성하고, 
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/settings.png" alt="설정" width="100%" />
+<img src="./assets/features/settings.png" alt="설정" width="420" />
 </td>
 </tr>
 </table>
