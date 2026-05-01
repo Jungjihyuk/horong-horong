@@ -1,0 +1,28 @@
+{
+  "sources": [
+    {
+      "type": "youtube",
+      "enabled": true,
+      "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "label": "Google Developers"
+    },
+    {
+      "type": "google_news",
+      "enabled": true,
+      "keywords": ["AI", "개발", "생산성", "자동화"],
+      "label": "Google News"
+    },
+    {
+      "type": "linkedin",
+      "enabled": false,
+      "profiles": [],
+      "label": "LinkedIn (비활성: 인증 필요)"
+    },
+    {
+      "type": "yozm_it",
+      "enabled": true,
+      "keywords": ["개발", "생산성", "AI", "자동화"],
+      "label": "요즘IT"
+    }
+  ]
+}

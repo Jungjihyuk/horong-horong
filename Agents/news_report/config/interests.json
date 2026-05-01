@@ -1,0 +1,15 @@
+{
+  "keywords": ["AI", "개발", "생산성", "자동화"],
+  "categories": {
+    "AI/반도체": ["AI", "인공지능", "GPU", "반도체", "LLM", "ChatGPT", "Claude", "Gemini", "OpenAI"],
+    "매크로경제": ["금리", "환율", "인플레이션", "주식", "코스피", "나스닥", "Fed", "연준"],
+    "개발/IT": ["개발", "Python", "Swift", "API", "오픈소스", "GitHub", "Docker", "클라우드"],
+    "커리어": ["취업", "이직", "연봉", "커리어", "스타트업", "채용"]
+  },
+  "sourceWeights": {
+    "youtube": 15,
+    "google_news": 10,
+    "yozm_it": 12,
+    "linkedin": 8
+  }
+}
