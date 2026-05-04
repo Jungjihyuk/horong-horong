@@ -55,8 +55,9 @@ struct MemoListView: View {
                     memoRow(memo, isPinned: false)
                 }
             }
+            .padding(.trailing, 12)
         }
-        .frame(maxHeight: 300)
+        .frame(maxHeight: .infinity)
     }
 
     private func memoRow(_ memo: Memo, isPinned: Bool) -> some View {

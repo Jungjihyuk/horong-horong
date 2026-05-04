@@ -59,6 +59,7 @@ struct SettingsView: View {
                 Divider()
                 versionFooter
             }
+            .padding(.trailing, 12)
         }
     }
 

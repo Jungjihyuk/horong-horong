@@ -37,6 +37,7 @@ struct NewsView: View {
                 Divider()
                 settingsSection
             }
+            .padding(.trailing, 12)
         }
         .onAppear {
             applyDefaultPathsIfNeeded()
