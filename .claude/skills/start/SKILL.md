@@ -1,6 +1,6 @@
 ---
 name: start
-description: 새로운 기능 브랜치 작업을 시작한다. 원격 dv 브랜치를 동기화한 뒤 이슈 번호 기반의 feature 브랜치를 생성하고 이동한다.
+description: 새로운 기능 브랜치 작업을 시작한다. 원격 dev 브랜치를 동기화한 뒤 이슈 번호 기반의 feature 브랜치를 생성하고 이동한다.
 ---
 
 ## 동작 순서
@@ -8,14 +8,14 @@ description: 새로운 기능 브랜치 작업을 시작한다. 원격 dv 브랜
 ### 1. 현재 브랜치 확인
 `git branch --show-current` 로 현재 브랜치를 확인한다.
 
-- 현재 브랜치가 `dv`가 아니어도 계속 진행한다. (어느 브랜치에서든 실행 가능)
+- 현재 브랜치가 `dev`가 아니어도 계속 진행한다. (어느 브랜치에서든 실행 가능)
 
-### 2. dv 동기화
-원격의 최신 `dv` 코드를 로컬에 반영한다.
+### 2. dev 동기화
+원격의 최신 `dev` 코드를 로컬에 반영한다.
 
 ```bash
-git checkout dv
-git pull origin dv
+git checkout dev
+git pull origin dev
 ```
 
 - `git pull` 실패 시 중단하고 오류 내용을 출력한다.
@@ -46,7 +46,7 @@ git checkout -b feature/#N-branch-description
 ## 출력 예시
 
 ```
-✅ dv 동기화 완료
+✅ dev 동기화 완료
 
 브랜치명: feature/#3-semantic-search
 으로 생성하고 이동했습니다.
