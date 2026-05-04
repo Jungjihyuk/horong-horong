@@ -28,10 +28,15 @@ struct StatsSummaryView: View {
     var body: some View {
         VStack(spacing: 12) {
             header
-            if categoryUsages.isEmpty {
-                emptyState
-            } else {
-                usageBars
+            ScrollView {
+                Group {
+                    if categoryUsages.isEmpty {
+                        emptyState
+                    } else {
+                        usageBars
+                    }
+                }
+                .padding(.trailing, 12)
             }
             detailButton
         }

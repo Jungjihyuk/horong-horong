@@ -35,7 +35,7 @@ struct MenuBarPopover: View {
             Divider()
             tabContent
                 .id(selectedTab)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(12)
             Divider()
             quitButton
@@ -187,6 +187,7 @@ struct AgentExperimentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .padding(.trailing, 12)
         }
         .onAppear {
             applyDefaultAgentRootIfNeeded()
