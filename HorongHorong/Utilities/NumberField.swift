@@ -39,6 +39,7 @@ struct NumberField: View {
                 Text(suffix)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .fixedSize()
             }
         }
         .onAppear { text = "\(value)" }
