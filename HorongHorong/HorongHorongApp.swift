@@ -147,15 +147,19 @@ struct HorongHorongApp: App {
                 .environment(appDelegate.appState)
                 .modelContainer(appDelegate.modelContainer)
         } label: {
-            Label {
-                Text(
-                    appDelegate.appState.menuBarTitle.isEmpty
-                        ? "호롱호롱"
-                        : appDelegate.appState.menuBarTitle
-                )
-            } icon: {
-                Image("MenuBarIcon")
-                    .renderingMode(.original)
+            let title = appDelegate.appState.menuBarTitle
+            switch appDelegate.appState.timerState {
+            case .focusing, .paused:
+                Text("🔥 \(title)")
+            case .breaking:
+                Text("☕️ \(title)")
+            case .idle, .breakAlert:
+                Label {
+                    Text(title.isEmpty ? "호롱호롱" : title)
+                } icon: {
+                    Image("MenuBarIcon")
+                        .renderingMode(.original)
+                }
             }
         }
         .menuBarExtraStyle(.window)
