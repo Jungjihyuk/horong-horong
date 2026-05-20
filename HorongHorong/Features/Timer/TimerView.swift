@@ -12,6 +12,10 @@ struct TimerView: View {
     private var longFocusFocusMinutes: Int = Constants.defaultLongFocusFocusMinutes
     @AppStorage(Constants.AppStorageKey.longFocusBreakMinutes)
     private var longFocusBreakMinutes: Int = Constants.defaultLongFocusBreakMinutes
+    @AppStorage(Constants.AppStorageKey.customFocusMinutes)
+    private var customFocusMinutes: Int = Constants.defaultCustomFocusMinutes
+    @AppStorage(Constants.AppStorageKey.customBreakMinutes)
+    private var customBreakMinutes: Int = Constants.defaultCustomBreakMinutes
     var timerManager: TimerManager
 
     var body: some View {
@@ -180,8 +184,8 @@ struct TimerView: View {
             appState.focusMinutes = longFocusFocusMinutes
             appState.breakMinutes = longFocusBreakMinutes
         case .custom:
-            appState.focusMinutes = Constants.defaultCustomFocusMinutes
-            appState.breakMinutes = Constants.defaultCustomBreakMinutes
+            appState.focusMinutes = customFocusMinutes
+            appState.breakMinutes = customBreakMinutes
         }
     }
 
