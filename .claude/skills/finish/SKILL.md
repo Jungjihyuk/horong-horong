@@ -1,6 +1,6 @@
 ---
 name: finish
-description: 기능 구현 완료 후 원격 dv 브랜치를 동기화하고 merge한 뒤 feature 브랜치를 push한다. 충돌 발생 시 안내 후 중단한다.
+description: 기능 구현 완료 후 원격 dev 브랜치를 동기화하고 merge한 뒤 feature 브랜치를 push한다. 충돌 발생 시 안내 후 중단한다.
 ---
 
 ## 동작 순서
@@ -17,18 +17,18 @@ description: 기능 구현 완료 후 원격 dv 브랜치를 동기화하고 mer
 - 미커밋 변경사항이 있으면 **중단**한다:
   > ⚠️ 커밋되지 않은 변경사항이 있습니다. `commit` 스킬로 먼저 커밋하세요.
 
-### 3. 원격 dv 동기화
+### 3. 원격 dev 동기화
 ```bash
-git checkout dv
-git pull origin dv
+git checkout dev
+git pull origin dev
 ```
 
 - `git pull` 실패 시 중단하고 오류 내용을 출력한다.
 
-### 4. feature 브랜치로 복귀 후 dv merge
+### 4. feature 브랜치로 복귀 후 dev merge
 ```bash
 git checkout {feature-branch}
-git merge dv
+git merge dev
 ```
 
 - **충돌이 발생한 경우** (`git merge`가 0이 아닌 종료 코드 반환, 또는 `git status`에 `UU`/`AA`/`DD` 표시):
@@ -68,8 +68,8 @@ git push origin {feature-branch}
 ## 출력 예시 (충돌 없는 경우)
 
 ```
-✅ dv 동기화 완료 (fast-forward)
-✅ dv → feature/#3-semantic-search merge 완료
+✅ dev 동기화 완료 (fast-forward)
+✅ dev → feature/#3-semantic-search merge 완료
 
 push 대상: feature/#3-semantic-search → origin
 진행할까요?
@@ -78,7 +78,7 @@ push 대상: feature/#3-semantic-search → origin
 ## 출력 예시 (충돌 발생)
 
 ```
-✅ dv 동기화 완료
+✅ dev 동기화 완료
 ⚠️ 충돌이 발생했습니다. 아래 파일을 직접 해결하세요:
 
   - backend/app/api/search.py

@@ -11,30 +11,153 @@ struct StatsDetailWindow: View {
     @State private var periodSegments: [AppUsageSegment] = []
     @State private var timerSessions: [FocusSession] = []
     @State private var showEditor: Bool = false
+    @State private var trackerStore = TrackerStateStore.shared
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            ScrollView {
-                StatsChartView(
-                    records: records,
-                    viewMode: viewMode,
-                    referenceDate: selectedDate,
-                    dailySegments: dailySegments,
-                    weekSegments: weekSegments,
-                    periodSegments: periodSegments,
-                    timerSessions: timerSessions
-                )
-                .padding(20)
+            if shouldShowVacationIllustration {
+                // 일러스트 자체가 휴가 컨텍스트를 충분히 전달하므로 상단 배너는 생략.
+                vacationIllustration
+            } else {
+                vacationBanner
+                ScrollView {
+                    StatsChartView(
+                        records: records,
+                        viewMode: viewMode,
+                        referenceDate: selectedDate,
+                        dailySegments: dailySegments,
+                        weekSegments: weekSegments,
+                        periodSegments: periodSegments,
+                        timerSessions: timerSessions,
+                        vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
+                    )
+                    .padding(20)
+                }
             }
         }
         .frame(minWidth: 720, minHeight: 460)
         .onAppear { loadRecords() }
         .onChange(of: selectedDate) { _, _ in loadRecords() }
         .onChange(of: viewMode) { _, _ in loadRecords() }
+        // 설정에서 휴가가 추가/삭제(=기록 삭제 옵션 포함)되면 캐시된 @State 가 stale 이 되므로 이때만 다시 로드.
+        .onChange(of: trackerStore.vacationRanges.count) { _, _ in loadRecords() }
         .sheet(isPresented: $showEditor, onDismiss: { loadRecords() }) {
             ManualSegmentEditorView(date: selectedDate)
+        }
+    }
+
+    // MARK: - 휴가 표시 배너
+
+    @ViewBuilder
+    private var vacationBanner: some View {
+        switch viewMode {
+        case .daily:
+            if let range = trackerStore.vacationRange(containing: selectedDate) {
+                VStack(spacing: 0) {
+                    vacationBannerView(
+                        title: range.label.isEmpty ? "🏖️ 휴가" : "🏖️ \(range.label)",
+                        subtitle: "이 날은 휴가 기간이라 기록이 남아있지 않습니다."
+                    )
+                    Divider()
+                }
+            }
+        case .weekly:
+            let (start, end) = periodBounds()
+            let days = trackerStore.vacationCount(in: start, end: end)
+            if days > 0 {
+                VStack(spacing: 0) {
+                    vacationBannerView(
+                        title: "🏖️ 이 기간에 휴가 \(days)일 포함",
+                        subtitle: "휴가로 표시된 날에는 기록이 남아있지 않아 차트에 빈 부분이 있을 수 있어요."
+                    )
+                    Divider()
+                }
+            }
+        case .monthly:
+            // 월간 탭은 히트맵 자체에서 🏖️ 셀로 시각 구분되니까 배너 생략.
+            EmptyView()
+        }
+    }
+
+    private func vacationBannerView(title: String, subtitle: String) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12))
+    }
+
+    // MARK: - 휴가 일러스트 (일간 + 데이터 없음)
+
+    private var shouldShowVacationIllustration: Bool {
+        guard viewMode == .daily else { return false }
+        guard trackerStore.vacationRange(containing: selectedDate) != nil else { return false }
+        return records.isEmpty && dailySegments.isEmpty && timerSessions.isEmpty
+    }
+
+    private var vacationIllustration: some View {
+        let range = trackerStore.vacationRange(containing: selectedDate)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy. M. d."
+        return VStack(spacing: 14) {
+            Spacer(minLength: 0)
+            Text("🌴🍅🌴")
+                .font(.system(size: 56))
+            Text("오늘은 푹 쉬세요")
+                .font(.title.bold())
+            if let range {
+                Text("\(range.label.isEmpty ? "휴가 기간" : range.label) · \(formatter.string(from: range.start)) ~ \(formatter.string(from: range.end))")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+    }
+
+    /// 현재 선택 월에 포함된 휴가 일자 집합 (월간 히트맵용). 휴가가 없으면 빈 Set.
+    private var vacationDaysInMonth: Set<Date> {
+        let ranges = trackerStore.vacationRanges
+        guard !ranges.isEmpty else { return [] }
+        let cal = Calendar.current
+        guard let start = cal.date(from: cal.dateComponents([.year, .month], from: selectedDate)),
+              let end = cal.date(byAdding: .month, value: 1, to: start) else { return [] }
+        var result: Set<Date> = []
+        var cursor = start
+        while cursor < end {
+            if ranges.contains(where: { $0.contains(cursor) }) {
+                result.insert(cal.startOfDay(for: cursor))
+            }
+            guard let next = cal.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return result
+    }
+
+    private func periodBounds() -> (Date, Date) {
+        let cal = Calendar.current
+        switch viewMode {
+        case .daily:
+            let s = cal.startOfDay(for: selectedDate)
+            return (s, cal.date(byAdding: .day, value: 1, to: s) ?? s)
+        case .weekly:
+            let weekStart = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)) ?? selectedDate
+            return (weekStart, cal.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart)
+        case .monthly:
+            let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: selectedDate)) ?? selectedDate
+            return (monthStart, cal.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart)
         }
     }
 
