@@ -61,6 +61,8 @@ def main():
         from providers.codex_cli import CodexCliProvider
         from providers.gemini_cli import GeminiCliProvider
         from providers.opencode_cli import OpencodeCliProvider
+        from ontology import load_or_build as load_or_build_ontology
+        from ontology import keyword_match as ontology_keyword_match
 
         connector_map = {
             "youtube": YouTubeConnector,
@@ -111,12 +113,32 @@ def main():
         deduped = _dedupe(normalized)
         log(f"Deduped: {len(deduped)}")
 
-        step("classify")
-        classified = _classify(deduped)
-        log(f"Classified: {len(classified)}")
-
+        # provider 는 ontology 클러스터링에도 필요하므로 classify 이전에 인스턴스화.
         llm_cls = provider_map.get(provider, ClaudeCliProvider)
         llm = llm_cls()
+
+        step("ontology")
+        ontology_path = os.path.join(output_dir, "data", "ontology", "news_ontology.json")
+        # 구 경로(`data/cache/news_ontology.json`) 에 파일이 남아있고 새 경로엔 없으면 1회성 이동.
+        legacy_ontology_path = os.path.join(output_dir, "data", "cache", "news_ontology.json")
+        if os.path.isfile(legacy_ontology_path) and not os.path.isfile(ontology_path):
+            try:
+                os.makedirs(os.path.dirname(ontology_path), exist_ok=True)
+                os.replace(legacy_ontology_path, ontology_path)
+                log(f"  ontology 파일 이동: {legacy_ontology_path} → {ontology_path}")
+            except Exception as e:
+                log(f"  ontology 파일 이동 실패: {e}")
+        ontology, ontology_status = load_or_build_ontology(
+            interest_keywords, llm, ontology_path, log_fn=log
+        )
+        log(
+            f"Ontology {ontology_status}: {len(ontology.categories)} categories "
+            f"({', '.join(ontology.labels())})"
+        )
+
+        step("classify")
+        classified = _classify(deduped, ontology)
+        log(f"Classified: {len(classified)}")
 
         step("relevance_filter")
         filtered, dropped_count = _filter_relevance(
@@ -131,23 +153,51 @@ def main():
         log(f"Relevance-filtered: {len(filtered)}")
 
         step("rank")
-        ranked = _rank(filtered, interest_keywords)
+        ranked = _rank(filtered, interest_keywords, ontology)
         log(f"Ranked: {len(ranked)}")
 
         step("summarize")
         ranked = _summarize_transcripts(ranked, interest_keywords, llm, log)
         summarized = _summarize(ranked, interest_keywords, llm, log)
 
+        # 카테고리별 그룹화 — 트렌드 요약 + render 양쪽에서 사용.
+        by_category: dict = {}
+        for item in summarized:
+            cat = item.get("category", "기타")
+            by_category.setdefault(cat, []).append(item)
+
+        step("trend_summary")
+        category_keywords = {
+            cat: _extract_keyword_stats(items, top_n=5)
+            for cat, items in by_category.items()
+        }
+        category_trends = _summarize_category_trends(by_category, llm, log)
+        log(f"Trend summary: {len(category_trends)} category 요약 생성")
+
         step("render")
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        report_rel = f"data/reports/{today_str}.md"
-        meta_rel = f"data/meta/{today_str}.meta.json"
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        # 파일명은 분 단위까지 포함 → 같은 날 여러 번 돌려도 덮어쓰지 않음.
+        file_stamp = now.strftime("%Y-%m-%d-%H%M")
+        generated_at_human = now.strftime("%Y-%m-%d %H:%M")
+        report_rel = f"data/reports/{file_stamp}.md"
+        meta_rel = f"data/meta/{file_stamp}.meta.json"
         report_full = os.path.join(output_dir, report_rel)
         meta_full = os.path.join(output_dir, meta_rel)
         os.makedirs(os.path.dirname(report_full), exist_ok=True)
         os.makedirs(os.path.dirname(meta_full), exist_ok=True)
 
-        md = _render(summarized, today_str, interest_keywords, source_stats, warnings)
+        md = _render(
+            summarized,
+            today_str,
+            generated_at_human,
+            interest_keywords,
+            source_stats,
+            warnings,
+            ontology,
+            category_keywords,
+            category_trends,
+        )
         with open(report_full, "w", encoding="utf-8") as f:
             f.write(md)
         log(f"Report written: {report_full}")
@@ -155,16 +205,28 @@ def main():
         meta = {
             "jobId": job_id,
             "reportDate": today_str,
+            "generatedAt": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "reportPath": report_rel,
             "itemCount": len(summarized),
+            "interestKeywords": interest_keywords,
+            "ontologySnapshot": [
+                {"label": c.label, "keywords": list(c.keywords)}
+                for c in ontology.categories
+            ],
+            "categoryCounts": {cat: len(items) for cat, items in by_category.items()},
+            "categoryKeywords": category_keywords,
+            "categoryTrendSummary": category_trends,
             "topItems": [
                 {
                     "title": i.get("title", ""),
                     "url": i.get("url", ""),
                     "category": i.get("category", ""),
+                    "sourceType": i.get("sourceType", ""),
                     "importanceScore": i.get("importanceScore", 0),
+                    "publishedAt": i.get("publishedAt", ""),
+                    "headline": i.get("headline") or i.get("llmSummary", ""),
                 }
-                for i in summarized[:5]
+                for i in summarized[:20]
             ],
             "sourceStats": source_stats,
             "warnings": warnings,
@@ -231,104 +293,6 @@ def main():
         sys.exit(1)
 
 
-_CATEGORY_KEYWORDS = {
-    "AI/반도체": [
-        "AI",
-        "인공지능",
-        "GPU",
-        "반도체",
-        "LLM",
-        "ChatGPT",
-        "Claude",
-        "Gemini",
-        "OpenAI",
-        "딥러닝",
-        "머신러닝",
-        "chip",
-        "nvidia",
-        "transformer",
-        "에이전트",
-        "생성형",
-        "팔란티어",
-        "실리콘밸리",
-        "빅테크",
-        "엔비디아",
-    ],
-    "미국증시/월가": [
-        "나스닥",
-        "S&P",
-        "다우",
-        "월가",
-        "뉴욕증시",
-        "월스트리트",
-        "미증시",
-        "주가",
-        "증시",
-        "랠리",
-        "급등",
-        "급락",
-        "기술주",
-        "빅테크",
-        "애플",
-        "테슬라",
-        "메타",
-        "구글",
-        "알파벳",
-        "마이크로소프트",
-        "아마존",
-    ],
-    "매크로/정책": [
-        "금리",
-        "환율",
-        "인플레이션",
-        "Fed",
-        "연준",
-        "FOMC",
-        "파월",
-        "GDP",
-        "채권",
-        "관세",
-        "무역",
-        "경기침체",
-        "달러",
-        "부채한도",
-        "트럼프",
-        "바이든",
-        "백악관",
-        "의회",
-        "정책",
-    ],
-    "개발/IT": [
-        "개발",
-        "Python",
-        "Swift",
-        "JavaScript",
-        "API",
-        "오픈소스",
-        "GitHub",
-        "Docker",
-        "Kubernetes",
-        "클라우드",
-        "서버",
-        "데이터베이스",
-    ],
-    "커리어/스타트업": [
-        "취업",
-        "이직",
-        "연봉",
-        "커리어",
-        "스타트업",
-        "채용",
-        "직장",
-        "면접",
-        "VC",
-        "펀딩",
-        "유니콘",
-        "IPO",
-    ],
-}
-
-
 def _normalize(items):
     result = []
     for item in items:
@@ -347,6 +311,94 @@ def _normalize(items):
     return result
 
 
+# 카테고리 키워드 통계 추출용 불용어 (한글·영문). 일반적이면서 정보량 적은 단어들.
+_STOPWORDS = {
+    # 한국어 조사·접속사·일반 단어
+    "의", "을", "를", "이", "가", "은", "는", "에", "에서", "에게", "와", "과",
+    "도", "만", "로", "으로", "부터", "까지", "한", "하다", "위해", "통해",
+    "있는", "있다", "없는", "없다", "되는", "되다", "관한", "대한", "대해",
+    "또한", "또는", "그리고", "하지만", "이번", "오늘", "최근", "관련",
+    "기사", "뉴스", "이번주", "지난", "지난주", "올해", "내년", "작년",
+    # 영문 stopwords
+    "the", "a", "an", "and", "or", "but", "to", "of", "in", "for", "on",
+    "at", "by", "from", "with", "as", "is", "are", "was", "were", "be",
+    "been", "being", "this", "that", "these", "those", "it", "its",
+    "we", "you", "they", "i", "he", "she", "his", "her", "their", "our",
+    "will", "would", "can", "could", "should", "may", "might", "do", "does",
+    "did", "has", "have", "had", "not", "no", "if", "so", "than", "then",
+    "into", "out", "up", "down", "off", "over", "more", "less", "new",
+}
+
+_TOKEN_RE = re.compile(r"[A-Za-z]+|[가-힯]+|[0-9]+")
+
+
+def _extract_keyword_stats(items, top_n: int = 5) -> list[str]:
+    """카테고리 안 기사 *제목* 토큰화 → 불용어 제거 → 빈도순 top N 키워드."""
+    counts: dict[str, int] = {}
+    for item in items:
+        title = item.get("title", "") or ""
+        for tok in _TOKEN_RE.findall(title):
+            if len(tok) <= 1:
+                continue
+            key = tok.lower() if tok.isascii() else tok
+            if key in _STOPWORDS:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+    # 빈도 같으면 사전순 (안정적 결과).
+    sorted_kws = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [k for k, _ in sorted_kws[:top_n]]
+
+
+def _summarize_category_trends(by_category, provider, log_fn) -> dict[str, str]:
+    """모든 카테고리를 한 번의 LLM 호출에 담아 카테고리당 1~2줄 트렌드 요약 생성.
+
+    실패 시 빈 dict 반환 — render 측이 줄을 생략한다.
+    """
+    if not by_category:
+        return {}
+    # 각 카테고리당 최대 8개 제목만 LLM 에 노출 (프롬프트 비대화 방지).
+    blocks: list[str] = []
+    for cat, items in by_category.items():
+        if not items:
+            continue
+        titles = [it.get("title", "").strip() for it in items[:8] if it.get("title")]
+        if not titles:
+            continue
+        blocks.append(
+            "카테고리: " + cat + "\n" + "\n".join(f"- {t}" for t in titles)
+        )
+    if not blocks:
+        return {}
+    prompt = (
+        "다음은 각 카테고리에 묶인 뉴스 *제목 목록* 입니다.\n"
+        "각 카테고리에 대해 *1~2 문장* 으로 최근 트렌드를 요약해 주세요.\n"
+        "- 구체적인 주체(기업·인물·기술명) 와 핵심 동향이 드러나야 합니다.\n"
+        "- '~에 대한 뉴스가 있습니다' 처럼 메타적 표현 금지. 사실 위주.\n"
+        "- 80~160자.\n\n"
+        "다음 JSON 만 정확히 출력하세요 (다른 텍스트 없이):\n"
+        '[{"category": "...", "summary": "..."}]\n\n'
+        + "\n\n".join(blocks)
+    )
+    try:
+        raw = provider.run(prompt)
+    except Exception as e:
+        log_fn(f"  trend summary LLM 호출 실패: {e}")
+        return {}
+    try:
+        m = re.search(r"\[.*\]", raw, re.DOTALL)
+        if not m:
+            raise ValueError("응답에 JSON 배열 없음")
+        parsed = json.loads(m.group(0))
+        return {
+            str(e.get("category", "")).strip(): str(e.get("summary", "")).strip()
+            for e in parsed
+            if isinstance(e, dict) and e.get("category") and e.get("summary")
+        }
+    except Exception as e:
+        log_fn(f"  trend summary JSON 파싱 실패: {e}")
+        return {}
+
+
 def _dedupe(items):
     seen = set()
     result = []
@@ -358,36 +410,26 @@ def _dedupe(items):
     return result
 
 
-def _classify(items):
+def _classify(items, ontology):
+    # 함수 내부 lazy import — runner 가 main() 안에서 sys.path 를 만진 뒤에야 ontology 가 import 가능.
+    from ontology import keyword_match
     for item in items:
         text = (
             item.get("title", "")
             + " "
             + item.get("summary", "")
             + " "
-            + item.get("contentText", "")[:1000]
-        ).lower()
-        category = "기타"
-        best_cat = "기타"
-        best_count = 0
-        for cat, kws in _CATEGORY_KEYWORDS.items():
-            count = sum(1 for kw in kws if kw.lower() in text)
-            if count > best_count:
-                best_count = count
-                best_cat = cat
-        item["category"] = best_cat if best_count > 0 else "기타"
+            + (item.get("contentText", "") or "")[:1000]
+        )
+        item["category"] = keyword_match(text, ontology)
     return items
 
 
-def _rank(items, interest_keywords):
-    category_bonus = {
-        "AI/반도체": 20,
-        "미국증시/월가": 18,
-        "매크로/정책": 15,
-        "개발/IT": 12,
-        "커리어/스타트업": 8,
-        "기타": 0,
-    }
+def _rank(items, interest_keywords, ontology):
+    # ontology 의 모든 카테고리에 균일한 보너스를 준다 (사용자 도메인을 모르기 때문).
+    # "기타" 만 0 으로 두어 미분류 아이템의 우선순위를 낮춘다.
+    category_bonus = {cat.label: 12 for cat in ontology.categories}
+    category_bonus["기타"] = 0
     source_weight = {"youtube": 15, "google_news": 10, "yozm_it": 12, "linkedin": 8}
 
     for item in items:
@@ -501,39 +543,80 @@ def _summarize_transcripts(items, interest_keywords, provider, log_fn):
 
 
 def _summarize(items, interest_keywords, provider, log_fn):
+    """기사 본문 요약 — *headline (1줄)* + *bullets (2~3개)* 구조로 LLM 호출.
+
+    - 배치 크기 5 (응답 잘림 방지)
+    - 각 기사당 contentText 를 1500자까지 컨텍스트로 제공
+    - LLM 응답 파싱 실패 시 RSS summary 첫 80자 + "…" 를 headline 으로 폴백
+    """
     if not items:
         return items
 
-    def _item_content(item):
-        if item.get("llmSummary"):
-            return item["llmSummary"][:200]
-        ct = item.get("contentText", "") or item.get("summary", "")
-        return ct[:300]
+    batch_size = 5
+    targets = items[:20]  # 최대 20개까지만 LLM 요약 (그 이상은 비용 부담)
+    keywords_str = ", ".join(interest_keywords) if interest_keywords else "(전 영역)"
 
-    items_text = "\n".join(
-        f"{i + 1}. [{item.get('category', '기타')}] {item.get('title', '')} - {_item_content(item)}"
-        for i, item in enumerate(items[:10])
-    )
-    prompt = (
-        f"다음 뉴스 항목들을 관심사({', '.join(interest_keywords)}) 기준으로 분석해주세요.\n"
-        "각 항목에 대해 JSON 배열로 응답하세요.\n"
-        '각 항목은: {"index": 번호, "summary": "핵심내용 요약(50자 이상, 구체적 수치·사건 포함)", "reason": "관심사 연결 근거(20자 이상)"} 형식입니다.\n'
-        "주의: 멤버십 가입, 구독 안내 등 홍보성 내용은 요약에 절대 포함하지 마세요.\n\n"
-        f"뉴스 목록:\n{items_text}\n\nJSON 배열만 출력하세요. 다른 텍스트 없이."
-    )
+    for batch_start in range(0, len(targets), batch_size):
+        batch = targets[batch_start : batch_start + batch_size]
+        items_text = []
+        for offset, item in enumerate(batch):
+            local_idx = offset + 1
+            transcript_or_content = (
+                item.get("llmSummary")
+                or item.get("contentText")
+                or item.get("summary", "")
+            )[:1500]
+            items_text.append(
+                f"[{local_idx}] 제목: {item.get('title', '')}\n"
+                f"카테고리: {item.get('category', '기타')}\n"
+                f"본문/자막 발췌:\n{transcript_or_content}"
+            )
+        prompt = (
+            f"다음 뉴스 항목 {len(batch)} 개를 관심사({keywords_str}) 기준으로 분석해 주세요.\n"
+            "각 항목에 대해 다음 JSON 형식으로 응답하세요:\n"
+            "- index: 항목 번호 (위에 표기된 1, 2, …)\n"
+            "- headline: 60~100자, 사건의 핵심을 한 문장으로. 구체 수치·기관명·인물명 포함.\n"
+            "- bullets: 30~60자짜리 서브 포인트 *2~3개* 배열. 사실 위주.\n"
+            "- reason: 관심사와의 연결 근거 한 줄 (30자 내외).\n"
+            "주의: 멤버십 가입·구독 안내·광고성 내용 절대 포함 금지. 추측·메타 문장 금지.\n\n"
+            f"뉴스 목록:\n{chr(10).join(items_text)}\n\n"
+            'JSON 배열만 출력 (다른 텍스트 없이): [{"index":1,"headline":"...","bullets":["...","..."],"reason":"..."}]'
+        )
 
-    try:
-        result_text = provider.run(prompt)
-        json_match = re.search(r"\[.*?\]", result_text, re.DOTALL)
-        if json_match:
-            summaries = json.loads(json_match.group())
+        try:
+            result_text = provider.run(prompt)
+            json_match = re.search(r"\[.*\]", result_text, re.DOTALL)
+            if not json_match:
+                raise ValueError("응답에 JSON 배열 없음")
+            summaries = json.loads(json_match.group(0))
             for s in summaries:
-                idx = s.get("index", 0) - 1
-                if 0 <= idx < len(items):
-                    items[idx]["llmSummary"] = s.get("summary", "")
-                    items[idx]["relevanceReason"] = s.get("reason", "")
-    except Exception as e:
-        log_fn(f"LLM 요약 실패 (계속 진행): {e}")
+                local_idx = int(s.get("index", 0)) - 1
+                if 0 <= local_idx < len(batch):
+                    target = batch[local_idx]
+                    headline = str(s.get("headline", "")).strip()
+                    bullets_raw = s.get("bullets") or []
+                    bullets = [str(b).strip() for b in bullets_raw if str(b).strip()][:3]
+                    reason = str(s.get("reason", "")).strip()
+                    if headline:
+                        target["headline"] = headline
+                        target["llmSummary"] = headline  # 하위호환 (기존 필드)
+                    if bullets:
+                        target["bullets"] = bullets
+                    if reason:
+                        target["relevanceReason"] = reason
+            log_fn(
+                f"  요약 배치 {batch_start // batch_size + 1}: {len(batch)} 처리"
+            )
+        except Exception as e:
+            log_fn(f"LLM 요약 배치 실패, fallback 적용: {e}")
+
+    # Fallback — headline 없는 항목은 원본 summary 첫 80자로 채움.
+    for item in items:
+        if not item.get("headline"):
+            raw = (item.get("summary") or item.get("contentText") or "").strip()
+            if raw:
+                item["headline"] = raw[:80] + ("…" if len(raw) > 80 else "")
+            item.setdefault("bullets", [])
 
     return items
 
@@ -565,11 +648,25 @@ def _format_duration(iso_duration: str) -> str:
     return " ".join(parts) or iso_duration
 
 
-def _render(items, date_str, interest_keywords, source_stats, warnings):
+def _render(
+    items,
+    date_str,
+    generated_at,
+    interest_keywords,
+    source_stats,
+    warnings,
+    ontology,
+    category_keywords=None,
+    category_trends=None,
+):
+    category_keywords = category_keywords or {}
+    category_trends = category_trends or {}
+
+    keywords_line = ", ".join(interest_keywords) if interest_keywords else "(등록된 관심사 없음)"
     lines = [
         f"# 뉴스 큐레이션 리포트 - {date_str}",
-        f"생성일: {date_str}",
-        f"관심사: {', '.join(interest_keywords)}",
+        f"생성일: {generated_at}",
+        f"관심사: {keywords_line}",
         "",
         "## 수집 현황",
     ]
@@ -588,16 +685,35 @@ def _render(items, date_str, interest_keywords, source_stats, warnings):
         cat = item.get("category", "기타")
         categories.setdefault(cat, []).append(item)
 
-    for cat, cat_items in sorted(categories.items()):
+    # ontology 의 카테고리 순서대로 출력 → 그 외에 등장한 카테고리(예: "기타")는 마지막에.
+    ordered_labels = [c.label for c in ontology.categories if c.label in categories]
+    for label in categories.keys():
+        if label not in ordered_labels:
+            ordered_labels.append(label)
+
+    for cat in ordered_labels:
+        cat_items = categories.get(cat) or []
         lines.append(f"## {cat}")
+
+        # 카테고리 트렌드 헤더 (통계 키워드 + LLM 한 줄 요약).
+        kws = category_keywords.get(cat) or []
+        trend = (category_trends.get(cat) or "").strip()
+        if kws:
+            lines.append(f"🔑 키워드: {', '.join(kws)}")
+        if trend:
+            lines.append(f"📈 트렌드: {trend}")
+        if kws or trend:
+            lines.append("")
+
         for i, item in enumerate(cat_items[:5], 1):
             title = item.get("title", "")
             url = item.get("url", "")
             score = item.get("importanceScore", 0)
-            summary = item.get("llmSummary", item.get("summary", "")[:80])
-            reason = item.get("relevanceReason", "")
+            headline = (item.get("headline") or item.get("llmSummary") or "").strip()
+            bullets = item.get("bullets") or []
+            reason = (item.get("relevanceReason") or "").strip()
+
             lines.append(f"### {i}. [{title}]({url})")
-            # Build info line with metadata for YouTube videos
             info_parts = [f"중요도: {score}/100", cat]
             rel_score = item.get("relevanceScore")
             if rel_score is not None:
@@ -612,8 +728,11 @@ def _render(items, date_str, interest_keywords, source_stats, warnings):
             if duration:
                 info_parts.append(f"길이: {_format_duration(duration)}")
             lines.append(f"> {' | '.join(info_parts)}")
-            if summary:
-                lines.append(f"**{summary}**")
+
+            if headline:
+                lines.append(f"**{headline}**")
+            for bullet in bullets:
+                lines.append(f"- {bullet}")
             if reason:
                 lines.append(f"_{reason}_")
             lines.append("")

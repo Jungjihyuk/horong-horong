@@ -1,5 +1,7 @@
 import feedparser
 
+from ._text import clean_summary
+
 
 class YozmConnector:
     RSS_URLS = [
@@ -20,7 +22,7 @@ class YozmConnector:
         for entry in feed.entries:
             title = (entry.get("title") or "").strip()
             link = (entry.get("link") or "").strip()
-            summary = (entry.get("summary") or "").strip()[:300]
+            summary = clean_summary(entry.get("summary"))
             pub_date = entry.get("published") or ""
             author = (entry.get("author") or "").strip()
 
