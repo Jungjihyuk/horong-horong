@@ -196,7 +196,7 @@ struct AgentExperimentView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.callout)
                     if interestKeywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("비어 있으면 기본값(\(Constants.defaultInterestKeywords))이 사용됩니다.")
+                        Text("관심사를 입력해 주세요. 비어 있으면 Agent 가 일반적인 주제로 계획을 만듭니다.")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }

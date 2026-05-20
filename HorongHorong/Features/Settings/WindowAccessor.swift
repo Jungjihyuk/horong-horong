@@ -87,11 +87,67 @@ final class TrafficLightInsetController {
 }
 
 nonisolated(unsafe) private var trafficLightControllerKey: UInt8 = 0
+nonisolated(unsafe) private var sidebarToggleControllerKey: UInt8 = 0
+
+@MainActor
+final class SettingsSidebarToggleController: NSObject {
+    private weak var window: NSWindow?
+    private let accessory = NSTitlebarAccessoryViewController()
+    private let button = NSButton()
+    private var action: (() -> Void)?
+    private var isSidebarVisible = true
+
+    init(window: NSWindow) {
+        self.window = window
+        super.init()
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: Self.expandedWidth, height: 28))
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
+        let baseImage = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Toggle sidebar")
+        button.image = baseImage?.withSymbolConfiguration(symbolConfig)
+        button.bezelStyle = .texturedRounded
+        button.isBordered = false
+        button.target = self
+        button.action = #selector(toggleSidebar)
+        button.toolTip = "사이드바 숨기기"
+        button.frame = NSRect(x: Self.expandedWidth - 36, y: 0, width: 32, height: 28)
+        container.addSubview(button)
+
+        accessory.view = container
+        accessory.layoutAttribute = .leading
+        window.addTitlebarAccessoryViewController(accessory)
+    }
+
+    func update(isSidebarVisible: Bool, action: @escaping () -> Void) {
+        self.isSidebarVisible = isSidebarVisible
+        self.action = action
+        button.toolTip = isSidebarVisible ? "사이드바 숨기기" : "사이드바 펴기"
+        layoutButton()
+    }
+
+    private func layoutButton() {
+        let width = isSidebarVisible ? Self.expandedWidth : Self.collapsedWidth
+        accessory.view.frame.size = NSSize(width: width, height: 28)
+        button.frame = NSRect(x: width - 36, y: 0, width: 32, height: 28)
+    }
+
+    @objc private func toggleSidebar() {
+        action?()
+    }
+
+    private static let expandedWidth = SettingsTheme.sidebarWidth - 78
+    private static let collapsedWidth: CGFloat = 62
+}
 
 extension NSWindow {
     /// 윈도우 수명동안 살아남는 컨트롤러 핸들. associated object 로 보유.
     var horongTrafficLightController: TrafficLightInsetController? {
         get { objc_getAssociatedObject(self, &trafficLightControllerKey) as? TrafficLightInsetController }
         set { objc_setAssociatedObject(self, &trafficLightControllerKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
+    }
+
+    var horongSidebarToggleController: SettingsSidebarToggleController? {
+        get { objc_getAssociatedObject(self, &sidebarToggleControllerKey) as? SettingsSidebarToggleController }
+        set { objc_setAssociatedObject(self, &sidebarToggleControllerKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
     }
 }
