@@ -87,6 +87,7 @@ final class NewsPipelineService: @unchecked Sendable {
         dataBasePath: String,
         interestKeywords: [String],
         youtubeChannelIds: [String] = [],
+        maxItemsPerSource: Int = 10,
         context: ModelContext
     ) {
         guard !isRunning else { return }
@@ -129,12 +130,24 @@ final class NewsPipelineService: @unchecked Sendable {
             withIntermediateDirectories: true
         )
 
-        var sources = NewsSource.defaultSources
-        if let idx = sources.firstIndex(where: { $0.type == "youtube" }) {
-            if !youtubeChannelIds.isEmpty {
-                sources[idx].channelIds = youtubeChannelIds
-                sources[idx].enabled = true
-            }
+        // 설정 창의 NewsSourceStore 에서 사용자가 등록한 소스를 그대로 받아온다.
+        // 사용자 interest_keywords 를 google_news / yozm_it 의 검색어로 전파해 fetch 범위가 키워드에 따라 달라지게 한다.
+        var sources = NewsSourceStore.shared.toPipelineSources(interestKeywords: interestKeywords)
+
+        // 호환성: 팝오버 NewsView 가 전달하는 youtubeChannelIds(legacy CSV 기반) 가 있고,
+        // NewsSourceStore 에 등록된 YouTube 항목이 없다면 그 채널들로 채워 넣는다.
+        if !youtubeChannelIds.isEmpty,
+           !sources.contains(where: { $0.type == "youtube" }) {
+            sources.append(NewsSource(
+                type: "youtube",
+                enabled: true,
+                channelIds: youtubeChannelIds
+            ))
+        }
+
+        // 그래도 비어있으면 (사용자가 아무 소스도 등록 안 한 첫 사용자) 디폴트 소스로 폴백.
+        if sources.isEmpty {
+            sources = NewsSource.defaultSources
         }
 
         // Build and write request.json
@@ -143,7 +156,7 @@ final class NewsPipelineService: @unchecked Sendable {
             requestedAt: isoString(Date()),
             provider: provider,
             interestKeywords: interestKeywords,
-            maxItemsPerSource: 10,
+            maxItemsPerSource: max(1, maxItemsPerSource),
             dateRangeHours: 24,
             outputDir: dataBasePath,
             sources: sources
