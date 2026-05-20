@@ -20,6 +20,12 @@ struct CategoryUsage: Identifiable {
     }
 }
 
+private struct SummaryPomodoroFocusWindow {
+    let start: Date
+    let end: Date
+    let category: String
+}
+
 struct StatsSummaryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
@@ -143,11 +149,12 @@ struct StatsSummaryView: View {
         }
 
         if !visibleSegments.isEmpty {
+            let focusWindows = loadFocusWindows(from: today, to: tomorrow)
             var categoryDurations: [String: Int] = [:]
             for segment in visibleSegments {
-                let duration = clippedDuration(segment, from: today, to: tomorrow)
-                guard duration > 0 else { continue }
-                categoryDurations[segment.category, default: 0] += duration
+                for slice in attributedSlices(for: segment, from: today, to: tomorrow, focusWindows: focusWindows) {
+                    categoryDurations[slice.category, default: 0] += slice.durationSeconds
+                }
             }
             categoryUsages = makeCategoryUsages(from: categoryDurations)
             return
@@ -162,6 +169,7 @@ struct StatsSummaryView: View {
         var categoryDurations: [String: Int] = [:]
         for record in records {
             guard !Constants.hiddenLegacyCategories.contains(record.category) else { continue }
+            guard !record.bundleIdentifier.hasPrefix(Constants.focusSessionBundlePrefix) else { continue }
             categoryDurations[record.category, default: 0] += record.durationSeconds
         }
 
@@ -173,6 +181,93 @@ struct StatsSummaryView: View {
         let clippedEnd = min(segment.endTime, end)
         guard clippedEnd > clippedStart else { return 0 }
         return Int(clippedEnd.timeIntervalSince(clippedStart))
+    }
+
+    private func loadFocusWindows(from start: Date, to end: Date) -> [SummaryPomodoroFocusWindow] {
+        let calendar = Calendar.current
+        let bufferStart = calendar.date(byAdding: .hour, value: -4, to: start) ?? start
+        let descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { $0.startedAt >= bufferStart && $0.startedAt < end },
+            sortBy: [SortDescriptor(\.startedAt)]
+        )
+
+        return ((try? modelContext.fetch(descriptor)) ?? []).compactMap { session in
+            guard isCompletedPomodoro(session),
+                  let focusEnd = focusEnd(for: session) else {
+                return nil
+            }
+
+            let windowStart = max(session.startedAt, start)
+            let windowEnd = min(focusEnd, end)
+            guard windowEnd > windowStart else { return nil }
+
+            return SummaryPomodoroFocusWindow(
+                start: windowStart,
+                end: windowEnd,
+                category: session.category ?? Constants.defaultFocusCategory
+            )
+        }
+    }
+
+    private func attributedSlices(
+        for segment: AppUsageSegment,
+        from start: Date,
+        to end: Date,
+        focusWindows: [SummaryPomodoroFocusWindow]
+    ) -> [(category: String, durationSeconds: Int)] {
+        let segmentStart = max(segment.startTime, start)
+        let segmentEnd = min(segment.endTime, end)
+        guard segmentEnd > segmentStart else { return [] }
+
+        var remaining: [(start: Date, end: Date)] = [(segmentStart, segmentEnd)]
+        var slices: [(category: String, durationSeconds: Int)] = []
+
+        for window in focusWindows {
+            let overlapStart = max(segmentStart, window.start)
+            let overlapEnd = min(segmentEnd, window.end)
+            guard overlapEnd > overlapStart else { continue }
+
+            let duration = Int(overlapEnd.timeIntervalSince(overlapStart))
+            if duration > 0 {
+                slices.append((window.category, duration))
+            }
+
+            remaining = remaining.flatMap { interval -> [(start: Date, end: Date)] in
+                let clippedStart = max(interval.start, overlapStart)
+                let clippedEnd = min(interval.end, overlapEnd)
+                guard clippedEnd > clippedStart else { return [interval] }
+
+                var parts: [(start: Date, end: Date)] = []
+                if interval.start < clippedStart {
+                    parts.append((interval.start, clippedStart))
+                }
+                if clippedEnd < interval.end {
+                    parts.append((clippedEnd, interval.end))
+                }
+                return parts
+            }
+        }
+
+        for interval in remaining {
+            let duration = Int(interval.end.timeIntervalSince(interval.start))
+            guard duration > 0 else { continue }
+            slices.append((segment.category, duration))
+        }
+
+        return slices
+    }
+
+    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
+        guard let endedAt = session.endedAt else { return false }
+        let expectedSeconds = max(0, session.focusMinutes) * 60
+        guard expectedSeconds > 0 else { return false }
+        return session.completed || endedAt.timeIntervalSince(session.startedAt) >= TimeInterval(expectedSeconds)
+    }
+
+    private func focusEnd(for session: FocusSession) -> Date? {
+        guard let endedAt = session.endedAt else { return nil }
+        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
+        return min(endedAt, expectedEnd)
     }
 
     private func makeCategoryUsages(from durations: [String: Int]) -> [CategoryUsage] {
