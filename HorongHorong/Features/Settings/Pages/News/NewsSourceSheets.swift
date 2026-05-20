@@ -20,15 +20,24 @@ struct AddSourceSheet: View {
         case rss
 
         var id: String { rawValue }
-        var label: String {
+        /// 백엔드 connector 가 아직 없는 소스. UI 에는 노출하되 추가는 막아 혼동을 방지.
+        var isComingSoon: Bool {
             switch self {
-            case .youtubeChannel:  return "YouTube 채널"
-            case .youtubePlaylist: return "YouTube 재생목록"
-            case .googleNews:      return "Google News"
-            case .hackerNews:      return "Hacker News"
-            case .yozmIT:          return "YOZM IT"
-            case .rss:             return "RSS 피드"
+            case .hackerNews, .rss: return true
+            default: return false
             }
+        }
+        var label: String {
+            let base: String
+            switch self {
+            case .youtubeChannel:  base = "YouTube 채널"
+            case .youtubePlaylist: base = "YouTube 재생목록"
+            case .googleNews:      base = "Google News"
+            case .hackerNews:      base = "Hacker News"
+            case .yozmIT:          base = "YOZM IT"
+            case .rss:             base = "RSS 피드"
+            }
+            return isComingSoon ? "\(base) (준비 중)" : base
         }
         var icon: SourceChipIcon {
             switch self {
@@ -76,7 +85,17 @@ struct AddSourceSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if selectedType.needsInput {
+            if selectedType.isComingSoon {
+                Text(disabledNote)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.orange.opacity(0.08))
+                    )
+            } else if selectedType.needsInput {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("URL 또는 ID")
                         .font(.caption)
@@ -108,6 +127,9 @@ struct AddSourceSheet: View {
     }
 
     private var disabledNote: String {
+        if selectedType.isComingSoon {
+            return "해당 소스 collector 는 아직 구현 전이라 추가해도 수집되지 않습니다. (HN / RSS connector 추가 후 활성화 예정)"
+        }
         switch selectedType {
         case .googleNews: return store.googleNewsEnabled ? "이미 활성화돼 있어요." : "Google News 소스를 활성화합니다. 관심 키워드가 자동 적용됩니다."
         case .hackerNews: return store.hackerNewsEnabled ? "이미 활성화돼 있어요." : "Hacker News 첫 페이지를 수집합니다."
@@ -117,6 +139,7 @@ struct AddSourceSheet: View {
     }
 
     private var canAdd: Bool {
+        if selectedType.isComingSoon { return false }
         switch selectedType {
         case .youtubeChannel, .youtubePlaylist, .rss:
             return !inputURL.trimmingCharacters(in: .whitespaces).isEmpty

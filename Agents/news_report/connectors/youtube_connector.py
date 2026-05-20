@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from ._text import clean_summary
+
 
 class YouTubeConnector:
     CHANNEL_FEED = "https://www.youtube.com/feeds/videos.xml?channel_id={id}"
@@ -121,8 +123,7 @@ class YouTubeConnector:
             item = {
                 "title": title.strip(),
                 "url": link.strip(),
-                "summary": (description[:300] if description else transcript[:300])
-                or "",
+                "summary": clean_summary(description or transcript),
                 "contentText": content_text,
                 "publishedAt": published_str,
                 "sourceType": "youtube",

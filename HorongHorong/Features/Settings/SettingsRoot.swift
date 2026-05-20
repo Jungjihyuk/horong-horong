@@ -4,11 +4,25 @@ struct SettingsRoot: View {
     @State private var selection: SettingsTab = .general
     @State private var query: String = ""
     @State private var showResetConfirm: Bool = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var hostWindow: NSWindow?
+    @AppStorage(Constants.AppStorageKey.appearanceMode)
+    private var appearanceMode: String = Constants.defaultAppearanceMode
+
+    /// 화면 모드를 SwiftUI ColorScheme 으로 (nil = 시스템 따라감).
+    private var colorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "dark":  return .dark
+        case "light": return .light
+        default:      return nil
+        }
+    }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SettingsSidebar(selection: $selection, query: $query)
                 .navigationSplitViewColumnWidth(min: 200, ideal: SettingsTheme.sidebarWidth, max: 280)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
                 detailView
@@ -22,12 +36,15 @@ struct SettingsRoot: View {
             minHeight: SettingsTheme.windowMinSize.height
         )
         .configureHostWindow { window in
-            // 최소화/확대 버튼 활성화. Resizable 은 .windowResizability(.contentMinSize) 에서 이미 보장.
-            window.styleMask.insert([.miniaturizable, .resizable])
-            // 트래픽 라이트를 우/하로 살짝 밀어 cmux 처럼 여유 있는 간격을 만든다.
-            if window.horongTrafficLightController == nil {
-                window.horongTrafficLightController = TrafficLightInsetController(window: window, dx: 6, dy: -4)
-            }
+            hostWindow = window
+            configureWindowChrome(window)
+        }
+        .preferredColorScheme(colorScheme)
+        .onChange(of: appearanceMode) { _, newValue in
+            applyAppearance(newValue, to: hostWindow)
+        }
+        .onChange(of: columnVisibility) { _, _ in
+            configureWindowChrome(hostWindow)
         }
         .alert("기본값으로 복원하시겠어요?", isPresented: $showResetConfirm) {
             Button("취소", role: .cancel) {}
@@ -36,6 +53,51 @@ struct SettingsRoot: View {
             }
         } message: {
             Text("\(selection.label) 페이지의 설정만 기본값으로 되돌립니다.")
+        }
+    }
+
+    private func collapseSidebar() {
+        withAnimation { columnVisibility = .detailOnly }
+    }
+
+    private func expandSidebar() {
+        withAnimation { columnVisibility = .all }
+    }
+
+    private func configureWindowChrome(_ window: NSWindow?) {
+        guard let window else { return }
+
+        // 최소화/확대 + fullSizeContentView 로 사이드바 배경이 트래픽 라이트 영역까지 확장된다.
+        window.styleMask.insert([.miniaturizable, .resizable, .fullSizeContentView])
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        if window.horongTrafficLightController == nil {
+            window.horongTrafficLightController = TrafficLightInsetController(window: window, dx: 6, dy: -4)
+        }
+        if window.horongSidebarToggleController == nil {
+            window.horongSidebarToggleController = SettingsSidebarToggleController(window: window)
+        }
+        window.horongSidebarToggleController?.update(isSidebarVisible: columnVisibility == .all) {
+            if columnVisibility == .all {
+                collapseSidebar()
+            } else {
+                expandSidebar()
+            }
+        }
+        applyAppearance(appearanceMode, to: window)
+    }
+
+    /// 설정 윈도우 *한 개만* 라이트/다크/시스템 모드를 따르도록 NSWindow.appearance 를 갱신한다.
+    /// NSApp.appearance 를 건드리지 않아 팝오버·통계 윈도우는 영향을 받지 않는다.
+    private func applyAppearance(_ mode: String, to window: NSWindow?) {
+        guard let window else { return }
+        switch mode {
+        case "dark":
+            window.appearance = NSAppearance(named: .darkAqua)
+        case "light":
+            window.appearance = NSAppearance(named: .aqua)
+        default:
+            window.appearance = nil  // 시스템 따라감
         }
     }
 

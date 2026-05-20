@@ -80,12 +80,12 @@ struct AgentPage: View {
         }
     }
 
-    // MARK: - 관심사 카드 (뉴스 탭과 값 공유)
+    // MARK: - 관심사 카드 (뉴스 탭과 *별개*로 저장)
 
     private var keywordCard: some View {
         SettingsGroupCard("관심사") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("관심사를 칩으로 관리하세요. 뉴스 탭과 같은 값을 공유합니다.")
+                Text("Agent 실험 계획에 쓰일 관심사를 칩으로 관리하세요. 뉴스 탭의 관심사와는 별개로 저장됩니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
