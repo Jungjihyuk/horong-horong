@@ -24,12 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NewsJob.self,
             NewsReportIndex.self,
         ])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
         do {
+            let storeURL = try SwiftDataStoreLocation.storeURL()
+            let config = ModelConfiguration(schema: schema, url: storeURL)
             modelContainer = try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("ModelContainer 생성 실패: \(error)")
+            fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }
     }
 
