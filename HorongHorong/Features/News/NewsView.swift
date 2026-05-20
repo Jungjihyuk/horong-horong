@@ -8,6 +8,7 @@ struct NewsView: View {
     @AppStorage(Constants.NewsStorageKey.selectedProvider) private var selectedProvider = Constants.defaultNewsProvider
     @AppStorage(Constants.NewsStorageKey.interestKeywords) private var interestKeywords = Constants.defaultNewsInterestKeywords
     @AppStorage(Constants.NewsStorageKey.youtubeChannelIds) private var youtubeChannelIdsRaw = ""
+    @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource: Int = Constants.defaultNewsMaxItemsPerSource
 
     @State private var pipelineService = NewsPipelineService()
     @State private var newChannelInput = ""
@@ -330,8 +331,9 @@ struct NewsView: View {
             provider: selectedProvider,
             runnerPath: resolvedRunnerPath,
             dataBasePath: resolvedDataBasePath,
-            interestKeywords: keywords.isEmpty ? Constants.defaultNewsInterestKeywords.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) } : keywords,
+            interestKeywords: keywords,
             youtubeChannelIds: youtubeChannelIds,
+            maxItemsPerSource: maxItemsPerSource,
             context: modelContext
         )
     }

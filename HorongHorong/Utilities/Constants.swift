@@ -238,12 +238,14 @@ enum Constants {
     }
     static let agentIdeaDirectoryName = "ideas"
     static let agentOutputDirectoryName = "outputs"
-    static let defaultInterestKeywords = "생산성, 자동화, 학습"
+    // 기본 관심 키워드 = 빈 문자열. 사용자가 직접 등록한 키워드만 사용한다는 정책.
+    static let defaultInterestKeywords = ""
     static let defaultAgentType = "Codex"
     static let defaultPlanDayCount = 5
     static let availableAgentTypes = ["Codex", "Claude", "Gemini"]
 
     enum AppStorageKey {
+        static let appearanceMode = "appearance.mode"  // "light" | "dark"
         static let agentRootDirectoryPath = "agent.rootDirectoryPath"
         static let ideaDirectoryPath = "agent.ideaDirectoryPath"
         static let outputDirectoryPath = "agent.outputDirectoryPath"
@@ -312,7 +314,8 @@ enum Constants {
         repositoryRelativePath("Agents", "news_report")
     }
     static let defaultNewsProvider = "claude"
-    static let defaultNewsInterestKeywords = "AI, 개발, 생산성, 자동화"
+    // 기본 뉴스 키워드 = 빈 문자열. (이전엔 "AI, 개발, 생산성, 자동화" 가 자동 들어갔지만, 백지 정책으로 전환)
+    static let defaultNewsInterestKeywords = ""
     static let availableNewsProviders = ["claude", "codex", "gemini", "opencode"]
     enum NewsStorageKey {
         static let dataBasePath = "news.dataBasePath"
@@ -321,7 +324,12 @@ enum Constants {
         static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
         static let sources = "news.sources.v1"
         static let schedule = "news.schedule"
+        static let maxItemsPerSource = "news.maxItemsPerSource"
     }
+
+    static let defaultNewsMaxItemsPerSource = 10
+
+    static let defaultAppearanceMode = "light"
 
     static let availableNewsSchedules: [(value: String, label: String)] = [
         ("manual", "수동"),

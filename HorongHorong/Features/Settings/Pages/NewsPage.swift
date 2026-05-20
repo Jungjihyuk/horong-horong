@@ -2,14 +2,20 @@ import SwiftUI
 import AppKit
 
 struct NewsPage: View {
+    // 뉴스 전용 관심 키워드 — popover NewsView·runner 와 동일한 키를 사용해 설정 변경이 곧장 리포트에 반영되도록 함.
+    @AppStorage(Constants.NewsStorageKey.interestKeywords)
+    private var interestKeywordsCSV: String = ""
+    // AI Agent 와 *과거에 공유* 하던 키. 첫 진입 시 마이그레이션 소스로만 사용.
     @AppStorage(Constants.AppStorageKey.interestKeywords)
-    private var interestKeywordsCSV: String = Constants.defaultInterestKeywords
+    private var legacyAgentKeywordsCSV: String = Constants.defaultInterestKeywords
     @AppStorage(Constants.NewsStorageKey.selectedProvider)
     private var selectedProvider: String = Constants.defaultNewsProvider
     @AppStorage(Constants.NewsStorageKey.dataBasePath)
     private var dataBasePath: String = ""
     @AppStorage(Constants.NewsStorageKey.schedule)
     private var schedule: String = Constants.defaultNewsSchedule
+    @AppStorage(Constants.NewsStorageKey.maxItemsPerSource)
+    private var maxItemsPerSource: Int = Constants.defaultNewsMaxItemsPerSource
 
     @State private var store = NewsSourceStore.shared
 
@@ -30,6 +36,7 @@ struct NewsPage: View {
             if dataBasePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 dataBasePath = Constants.defaultNewsDataBasePath
             }
+            migrateLegacyKeywordsIfNeeded()
         }
         .sheet(isPresented: $showAddSource) {
             AddSourceSheet()
@@ -149,7 +156,7 @@ struct NewsPage: View {
     private var keywordCard: some View {
         SettingsGroupCard("관심 키워드") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("관심사를 칩으로 관리하세요. Agent 실험 탭과 같은 값을 공유합니다.")
+                Text("뉴스 리포트 수집에 쓰일 관심사를 칩으로 관리하세요. AI Agent 탭의 관심사와는 별개로 저장됩니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -204,6 +211,17 @@ struct NewsPage: View {
         interestKeywordsCSV = current.joined(separator: ", ")
     }
 
+    /// 뉴스 전용 키가 비어있을 때만, 기존에 Agent 와 공유하던 키워드를 *1회* 복사한다.
+    /// 사용자가 이미 뉴스 키워드를 한 번이라도 편집했다면 (값이 있으면) 건너뜀.
+    private func migrateLegacyKeywordsIfNeeded() {
+        guard interestKeywordsCSV.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let legacy = legacyAgentKeywordsCSV.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !legacy.isEmpty else { return }
+        interestKeywordsCSV = legacy
+    }
+
     // MARK: - 파이프라인 카드
 
     private var pipelineCard: some View {
@@ -234,6 +252,17 @@ struct NewsPage: View {
                     }
                     .labelsHidden()
                     .frame(width: 120)
+                }
+                SettingsRow(
+                    "소스당 최대 항목 수",
+                    subtitle: "각 소스에서 한 번에 가져올 기사 수. 늘리면 더 풍부하지만 LLM 호출 비용이 커집니다."
+                ) {
+                    Stepper("\(maxItemsPerSource)개", value: $maxItemsPerSource, in: 1...30)
+                        .labelsHidden()
+                    Text("\(maxItemsPerSource)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
                 }
                 SettingsRow(
                     "일일 리포트 저장 위치",

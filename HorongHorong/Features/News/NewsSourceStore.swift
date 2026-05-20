@@ -181,8 +181,16 @@ final class NewsSourceStore: @unchecked Sendable {
     // MARK: - 파이프라인 변환
 
     /// runner.py 가 받는 NewsSource 배열로 변환. 비활성 소스는 enabled=false 로 표시 (백엔드가 무시).
-    func toPipelineSources() -> [NewsSource] {
+    /// `interestKeywords` 가 전달되면 키워드 기반 소스(google_news, yozm_it) 의 검색어로 사용 → 사용자의
+    /// 관심사가 실제 fetch 범위를 결정하게 됨.
+    func toPipelineSources(interestKeywords: [String] = []) -> [NewsSource] {
         var sources: [NewsSource] = []
+
+        let trimmedKeywords = interestKeywords
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        // connector 가 기대하는 fallback (빈 배열이면 connector 가 자체 default 사용).
+        let keywordsOrNil: [String]? = trimmedKeywords.isEmpty ? nil : trimmedKeywords
 
         // YouTube — channel 과 playlist 를 분리한 채로 하나의 NewsSource 로 묶음.
         let channelIds = youtubeItems.compactMap { item -> String? in
@@ -208,13 +216,13 @@ final class NewsSourceStore: @unchecked Sendable {
         }
 
         if googleNewsEnabled {
-            sources.append(NewsSource(type: "google_news", enabled: true, keywords: nil))
+            sources.append(NewsSource(type: "google_news", enabled: true, keywords: keywordsOrNil))
         }
         if hackerNewsEnabled {
             sources.append(NewsSource(type: "hacker_news", enabled: true))
         }
         if yozmITEnabled {
-            sources.append(NewsSource(type: "yozm_it", enabled: true, keywords: nil))
+            sources.append(NewsSource(type: "yozm_it", enabled: true, keywords: keywordsOrNil))
         }
         if !rssFeeds.isEmpty {
             let urls = rssFeeds.map(\.url)

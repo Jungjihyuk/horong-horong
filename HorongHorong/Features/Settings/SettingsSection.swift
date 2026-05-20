@@ -35,7 +35,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     var subtitle: String {
         switch self {
         case .general:    return "앱의 기본 동작과 표시 방식을 설정합니다."
-        case .appearance: return "테마와 강조 색, 정보 밀도를 조정합니다."
+        case .appearance: return "화면 모드와 팝오버 테마, 강조 색 등 시각 옵션을 조정합니다."
         case .timer:      return "집중·휴식 사이클의 기본값과 동작 방식을 설정합니다."
         case .hotkey:     return "전역 단축키를 확인하고 변경합니다."
         case .category:   return "카테고리·앱 매핑·자리 비움 임계값을 한 곳에서 관리합니다."
@@ -71,8 +71,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .general:
             return ["로그인 시 자동 시작", "자동 업데이트", "익명 사용 데이터 전송"]
         case .appearance:
-            return ["테마", "강조 색", "정보 밀도", "앱 아이콘", "메뉴바 아이콘 애니메이션",
-                    "시스템", "라이트", "다크"]
+            return ["모드", "화면 모드", "라이트", "다크", "시스템",
+                    "강조 색", "정보 밀도", "앱 아이콘", "메뉴바 아이콘 애니메이션",
+                    "테마", "팝오버 테마", "따뜻한 등불", "편안한 풀", "게임 픽셀"]
         case .timer:
             return ["프리셋", "포모도로", "긴 집중", "커스텀",
                     "프리셋 시간 편집", "집중 완료 시 자동으로 휴식 시작", "종료 알림 사운드",
