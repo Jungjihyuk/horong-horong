@@ -8,28 +8,39 @@ struct ManualSegmentEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var segments: [AppUsageSegment] = []
+    @State private var focusSessions: [FocusSession] = []
     @State private var showAddSheet: Bool = false
+    @State private var editError: String?
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if segments.isEmpty {
+            if segments.isEmpty, focusSessions.isEmpty {
                 emptyView
             } else {
-                segmentList
+                editorContent
             }
         }
         .frame(minWidth: 560, minHeight: 440)
         .onAppear(perform: load)
+        .alert("저장할 수 없습니다", isPresented: Binding(
+            get: { editError != nil },
+            set: { if !$0 { editError = nil } }
+        )) {
+            Button("확인", role: .cancel) { editError = nil }
+        } message: {
+            Text(editError ?? "")
+        }
         .sheet(isPresented: $showAddSheet) {
             SegmentFormSheet(
                 title: "세그먼트 추가",
                 initial: defaultInitial(),
                 onSave: { draft in
-                    addSegment(from: draft)
-                    showAddSheet = false
-                    load()
+                    if addSegment(from: draft) {
+                        showAddSheet = false
+                        load()
+                    }
                 },
                 onCancel: { showAddSheet = false }
             )
@@ -74,19 +85,48 @@ struct ManualSegmentEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var segmentList: some View {
+    private var editorContent: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(segments, id: \.id) { seg in
-                    SegmentRowView(
-                        segment: seg,
-                        onSaveEdit: { draft in applyEdit(on: seg, draft: draft); load() },
-                        onDelete: { delete(seg); load() }
-                    )
-                    Divider()
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if !focusSessions.isEmpty {
+                    sectionTitle("포모도로 기록")
+                    ForEach(focusSessions, id: \.id) { session in
+                        PomodoroEditRowView(
+                            session: session,
+                            childSegments: childSegments(for: session),
+                            onDelete: { deletePomodoro(session); load() }
+                        )
+                        Divider()
+                    }
+                }
+
+                if !segments.isEmpty {
+                    sectionTitle("앱 실행 기록")
+                    ForEach(segments, id: \.id) { seg in
+                        SegmentRowView(
+                            segment: seg,
+                            onSaveEdit: { draft in
+                                if applyEdit(on: seg, draft: draft) {
+                                    load()
+                                    return true
+                                }
+                                return false
+                            },
+                            onDelete: { delete(seg); load() }
+                        )
+                        Divider()
+                    }
                 }
             }
         }
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
     }
 
     // MARK: - Data
@@ -95,16 +135,31 @@ struct ManualSegmentEditorView: View {
         let dayStart = Calendar.current.startOfDay(for: date)
         guard let dayEnd = Calendar.current.date(byAdding: .day, value: 1, to: dayStart) else {
             segments = []
+            focusSessions = []
             return
         }
         let descriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.startTime >= dayStart && $0.startTime < dayEnd },
+            predicate: #Predicate { $0.startTime < dayEnd && $0.endTime > dayStart },
             sortBy: [SortDescriptor(\.startTime)]
         )
         segments = (try? modelContext.fetch(descriptor)) ?? []
+
+        let bufferStart = Calendar.current.date(byAdding: .hour, value: -4, to: dayStart) ?? dayStart
+        let sessionDescriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { $0.startedAt >= bufferStart && $0.startedAt < dayEnd },
+            sortBy: [SortDescriptor(\.startedAt)]
+        )
+        focusSessions = ((try? modelContext.fetch(sessionDescriptor)) ?? []).filter {
+            guard isCompletedPomodoro($0), let end = focusEnd(for: $0) else { return false }
+            return $0.startedAt < dayEnd && end > dayStart
+        }
     }
 
-    private func addSegment(from draft: SegmentDraft) {
+    private func addSegment(from draft: SegmentDraft) -> Bool {
+        guard validatePomodoroChildLimit(existing: nil, draft: draft) else {
+            return false
+        }
+
         let bundleId = "manual.\(draft.appName.lowercased().replacingOccurrences(of: " ", with: "-"))"
         let seg = AppUsageSegment(
             appName: draft.appName,
@@ -123,9 +178,14 @@ struct ManualSegmentEditorView: View {
             deltaSeconds: seg.durationSeconds
         )
         try? modelContext.save()
+        return true
     }
 
-    private func applyEdit(on seg: AppUsageSegment, draft: SegmentDraft) {
+    private func applyEdit(on seg: AppUsageSegment, draft: SegmentDraft) -> Bool {
+        guard validatePomodoroChildLimit(existing: seg, draft: draft) else {
+            return false
+        }
+
         let oldBundle = seg.bundleIdentifier
         let oldApp = seg.appName
         let oldCat = seg.category
@@ -155,6 +215,7 @@ struct ManualSegmentEditorView: View {
             deltaSeconds: seg.durationSeconds
         )
         try? modelContext.save()
+        return true
     }
 
     private func delete(_ seg: AppUsageSegment) {
@@ -166,6 +227,140 @@ struct ManualSegmentEditorView: View {
         modelContext.delete(seg)
         syncRecord(bundleId: bundleId, appName: appName, category: category, date: date, deltaSeconds: -duration)
         try? modelContext.save()
+    }
+
+    private func deletePomodoro(_ session: FocusSession) {
+        guard let end = focusEnd(for: session) else { return }
+        let start = session.startedAt
+
+        for segment in segments {
+            removeSegmentOverlap(segment, from: start, to: end)
+        }
+
+        deleteFocusRecord(for: session)
+        modelContext.delete(session)
+        try? modelContext.save()
+    }
+
+    private func removeSegmentOverlap(_ segment: AppUsageSegment, from start: Date, to end: Date) {
+        let overlapStart = max(segment.startTime, start)
+        let overlapEnd = min(segment.endTime, end)
+        guard overlapEnd > overlapStart else { return }
+
+        let removedSeconds = Int(overlapEnd.timeIntervalSince(overlapStart))
+        let originalStart = segment.startTime
+        let originalEnd = segment.endTime
+        let bundleId = segment.bundleIdentifier
+        let appName = segment.appName
+        let category = segment.category
+        let isManual = segment.isManual
+
+        if overlapStart <= originalStart, overlapEnd >= originalEnd {
+            modelContext.delete(segment)
+        } else if overlapStart <= originalStart {
+            segment.startTime = overlapEnd
+        } else if overlapEnd >= originalEnd {
+            segment.endTime = overlapStart
+        } else {
+            segment.endTime = overlapStart
+            let tail = AppUsageSegment(
+                appName: appName,
+                bundleIdentifier: bundleId,
+                category: category,
+                startTime: overlapEnd,
+                endTime: originalEnd,
+                isManual: isManual
+            )
+            modelContext.insert(tail)
+        }
+
+        syncRecord(
+            bundleId: bundleId,
+            appName: appName,
+            category: category,
+            date: originalStart,
+            deltaSeconds: -removedSeconds
+        )
+    }
+
+    private func deleteFocusRecord(for session: FocusSession) {
+        let category = session.category ?? Constants.defaultFocusCategory
+        let bundleId = Constants.focusSessionBundleId(for: category)
+        guard let end = focusEnd(for: session) else { return }
+        let duration = Int(end.timeIntervalSince(session.startedAt))
+        syncRecord(
+            bundleId: bundleId,
+            appName: Constants.focusSessionAppName,
+            category: category,
+            date: session.startedAt,
+            deltaSeconds: -duration
+        )
+    }
+
+    private func childSegments(for session: FocusSession) -> [AppUsageSegment] {
+        guard let end = focusEnd(for: session) else { return [] }
+        return segments.filter { overlaps($0.startTime, $0.endTime, session.startedAt, end) }
+    }
+
+    private func validatePomodoroChildLimit(existing: AppUsageSegment?, draft: SegmentDraft) -> Bool {
+        let affectedSessions = focusSessions.filter { session in
+            guard let end = focusEnd(for: session) else { return false }
+            let overlapsDraft = overlaps(draft.start, draft.end, session.startedAt, end)
+            let overlapsExisting = existing.map { overlaps($0.startTime, $0.endTime, session.startedAt, end) } ?? false
+            return overlapsDraft || overlapsExisting
+        }
+
+        for session in affectedSessions {
+            guard let end = focusEnd(for: session) else { continue }
+            let sessionSeconds = Int(end.timeIntervalSince(session.startedAt))
+            var childSeconds = 0
+
+            for segment in segments {
+                if let existing, segment.id == existing.id { continue }
+                childSeconds += overlapSeconds(segment.startTime, segment.endTime, session.startedAt, end)
+            }
+            childSeconds += overlapSeconds(draft.start, draft.end, session.startedAt, end)
+
+            if childSeconds > sessionSeconds {
+                editError = "포모도로 '\(session.category ?? Constants.defaultFocusCategory)'의 하위 앱 기록 합계가 집중 시간 \(formatDuration(sessionSeconds))을 넘을 수 없습니다."
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
+        guard let endedAt = session.endedAt else { return false }
+        let expectedSeconds = max(0, session.focusMinutes) * 60
+        guard expectedSeconds > 0 else { return false }
+        return session.completed || endedAt.timeIntervalSince(session.startedAt) >= TimeInterval(expectedSeconds)
+    }
+
+    private func focusEnd(for session: FocusSession) -> Date? {
+        guard let endedAt = session.endedAt else { return nil }
+        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
+        return min(endedAt, expectedEnd)
+    }
+
+    private func overlaps(_ lhsStart: Date, _ lhsEnd: Date, _ rhsStart: Date, _ rhsEnd: Date) -> Bool {
+        lhsStart < rhsEnd && lhsEnd > rhsStart
+    }
+
+    private func overlapSeconds(_ lhsStart: Date, _ lhsEnd: Date, _ rhsStart: Date, _ rhsEnd: Date) -> Int {
+        let start = max(lhsStart, rhsStart)
+        let end = min(lhsEnd, rhsEnd)
+        guard end > start else { return 0 }
+        return Int(end.timeIntervalSince(start))
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        let s = seconds % 60
+        if h > 0 { return "\(h)h \(m)m" }
+        if m > 0 { return "\(m)m" }
+        return "\(s)s"
     }
 
     /// AppUsageRecord 에 증감분을 반영한다. 없으면 deltaSeconds > 0 일 때만 새로 생성.
@@ -220,7 +415,7 @@ struct ManualSegmentEditorView: View {
 
 private struct SegmentRowView: View {
     let segment: AppUsageSegment
-    let onSaveEdit: (SegmentDraft) -> Void
+    let onSaveEdit: (SegmentDraft) -> Bool
     let onDelete: () -> Void
 
     @State private var showEditPopover: Bool = false
@@ -270,8 +465,9 @@ private struct SegmentRowView: View {
                         end: segment.endTime
                     ),
                     onSave: { draft in
-                        onSaveEdit(draft)
-                        showEditPopover = false
+                        if onSaveEdit(draft) {
+                            showEditPopover = false
+                        }
                     },
                     onCancel: { showEditPopover = false }
                 )
@@ -300,6 +496,96 @@ private struct SegmentRowView: View {
         let m = (dur % 3600) / 60
         let durText = h > 0 ? "\(h)h \(m)m" : "\(m)m"
         return "\(s) – \(e) · \(segment.category) · \(durText)"
+    }
+}
+
+private struct PomodoroEditRowView: View {
+    let session: FocusSession
+    let childSegments: [AppUsageSegment]
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(Constants.categoryEmoji(for: category))
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(category)
+                        .font(.callout.weight(.medium))
+                    Text(timeRange)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                if childSegments.isEmpty {
+                    Text("하위 앱 기록 없음")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("하위 앱 \(childSegments.count)개 · \(formatDuration(childTotalSeconds))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Text(formatDuration(durationSeconds))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.borderless)
+            .help("포모도로 기록과 하위 앱 기록 삭제")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private var category: String {
+        session.category ?? Constants.defaultFocusCategory
+    }
+
+    private var focusEnd: Date {
+        guard let endedAt = session.endedAt else { return session.startedAt }
+        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
+        return min(endedAt, expectedEnd)
+    }
+
+    private var durationSeconds: Int {
+        max(0, Int(focusEnd.timeIntervalSince(session.startedAt)))
+    }
+
+    private var childTotalSeconds: Int {
+        childSegments.reduce(0) { total, segment in
+            let start = max(segment.startTime, session.startedAt)
+            let end = min(segment.endTime, focusEnd)
+            guard end > start else { return total }
+            return total + Int(end.timeIntervalSince(start))
+        }
+    }
+
+    private var timeRange: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return "\(formatter.string(from: session.startedAt)) – \(formatter.string(from: focusEnd))"
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        let s = seconds % 60
+        if h > 0 { return "\(h)h \(m)m" }
+        if m > 0 { return "\(m)m" }
+        return "\(s)s"
     }
 }
 
