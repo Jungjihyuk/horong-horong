@@ -8,7 +8,6 @@ enum PopoverTab: String, CaseIterable, Identifiable {
     case stats = "통계"
     case news = "뉴스"
     case agent = "Agent"
-    case settings = "설정"
 
     var id: String { rawValue }
 
@@ -19,13 +18,13 @@ enum PopoverTab: String, CaseIterable, Identifiable {
         case .stats: return "chart.bar"
         case .news: return "newspaper"
         case .agent: return "bolt.horizontal.circle"
-        case .settings: return "gearshape"
         }
     }
 }
 
 struct MenuBarPopover: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     @State private var selectedTab: PopoverTab = .timer
     var timerManager: TimerManager
 
@@ -38,7 +37,7 @@ struct MenuBarPopover: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(12)
             Divider()
-            quitButton
+            bottomBar
         }
         .frame(width: Constants.popoverWidth)
         .frame(maxHeight: Constants.popoverMaxHeight, alignment: .top)
@@ -82,30 +81,64 @@ struct MenuBarPopover: View {
             NewsView()
         case .agent:
             AgentExperimentView()
-        case .settings:
-            SettingsView()
         }
     }
 
-    private var quitButton: some View {
-        Button {
-            NSApplication.shared.terminate(nil)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 11))
-                Text("종료")
-                    .font(.system(size: 12))
+    private var bottomBar: some View {
+        HStack(spacing: 6) {
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+                // openSettings 직후엔 윈도우가 아직 background 일 수 있어 다음 런루프에서 강제 전면화.
+                DispatchQueue.main.async {
+                    for window in NSApp.windows {
+                        let id = window.identifier?.rawValue ?? ""
+                        let title = window.title
+                        if id.contains("com_apple_SwiftUI_Settings") || title.localizedCaseInsensitiveContains("설정") {
+                            window.makeKeyAndOrderFront(nil)
+                            window.orderFrontRegardless()
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 11))
+                    Text("설정")
+                        .font(.system(size: 12))
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(.primary.opacity(0.00001))
+                )
             }
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(.primary.opacity(0.00001))
-            )
+            .buttonStyle(.plain)
+            .keyboardShortcut(",", modifiers: .command)
+
+            Divider().frame(height: 18)
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 11))
+                    Text("종료")
+                        .font(.system(size: 12))
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(.primary.opacity(0.00001))
+                )
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }

@@ -130,6 +130,12 @@ final class AppTracker: @unchecked Sendable {
               let appName = app.localizedName,
               let trackingContext else { return }
 
+        // 추적이 꺼져있거나(민감 작업/휴가) 비활성 기간이면 저장 건너뛰고 타이머만 리셋.
+        guard TrackerStateStore.shared.shouldRecord() else {
+            currentAppStartTime = Date()
+            return
+        }
+
         let elapsed = Int(Date().timeIntervalSince(startTime))
         guard elapsed > 0 else { return }
 
@@ -184,6 +190,12 @@ final class AppTracker: @unchecked Sendable {
               let bundleId = app.bundleIdentifier,
               let appName = app.localizedName,
               let trackingContext else { return }
+
+        // 추적 비활성(민감/휴가) 시 세그먼트 저장도 건너뛴다.
+        guard TrackerStateStore.shared.shouldRecord() else {
+            currentSegmentStart = Date()
+            return
+        }
 
         let now = Date()
         let elapsed = now.timeIntervalSince(start)

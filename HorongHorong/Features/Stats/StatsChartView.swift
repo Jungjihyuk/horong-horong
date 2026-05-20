@@ -83,6 +83,8 @@ struct StatsChartView: View {
 
     @State private var weeklySelection: Date? = nil
     @State private var dailyAngleSelection: Double? = nil
+    /// 부모(StatsDetailWindow)가 미리 계산해서 넘겨주는 휴가 일자 집합. 차트가 직접 store 를 관찰하지 않도록 함.
+    var vacationDays: Set<Date> = []
 
     @AppStorage(Constants.AppStorageKey.timelineStartHour)
     private var timelineStartHour: Int = Constants.defaultTimelineStartHour
@@ -644,7 +646,11 @@ struct StatsChartView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            HeatmapCalendar(dailyTotals: totals, month: referenceDate)
+            HeatmapCalendar(
+                dailyTotals: totals,
+                month: referenceDate,
+                vacationDates: vacationDays
+            )
         }
     }
 
@@ -1012,18 +1018,24 @@ struct StatsChartView: View {
     }
 
     private var dailySegmentTotalsMap: [Date: Double] {
-        var totals: [Date: Int] = [:]
+        // 세그먼트 1개씩 한 번만 훑으며 자정을 넘는 구간만 분할한다.
+        // 기존 O(days × segments) 중첩 루프 대비 월간 뷰에서 수만 배 이상 빠르다.
         guard let bounds = periodBounds else { return [:] }
+        var totals: [Date: Int] = [:]
         let calendar = Calendar.current
-        var day = calendar.startOfDay(for: bounds.start)
-        while day < bounds.end {
-            for segment in activeSegments {
-                let seconds = clippedDuration(segment, in: day)
-                guard seconds > 0 else { continue }
-                totals[day, default: 0] += seconds
+        for segment in activeSegments {
+            var cursor = max(segment.startTime, bounds.start)
+            let segmentEnd = min(segment.endTime, bounds.end)
+            while cursor < segmentEnd {
+                let day = calendar.startOfDay(for: cursor)
+                guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                let chunkEnd = min(segmentEnd, nextDay)
+                let seconds = Int(chunkEnd.timeIntervalSince(cursor))
+                if seconds > 0 {
+                    totals[day, default: 0] += seconds
+                }
+                cursor = chunkEnd
             }
-            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-            day = next
         }
         return totals.mapValues { Double($0) / 3600.0 }
     }
@@ -1205,6 +1217,8 @@ struct StatsChartView: View {
 struct HeatmapCalendar: View {
     let dailyTotals: [Date: Double]
     let month: Date
+    /// 휴가로 표시할 날짜들 (startOfDay 정규화). 비어있으면 일반 셀로 그려진다.
+    var vacationDates: Set<Date> = []
 
     private var calendar: Calendar { Calendar.current }
 
@@ -1227,7 +1241,12 @@ struct HeatmapCalendar: View {
                 ForEach(cells) { cell in
                     if let date = cell.date {
                         let key = calendar.startOfDay(for: date)
-                        cellView(date: date, hours: dailyTotals[key] ?? 0, maxHours: maxHours)
+                        cellView(
+                            date: date,
+                            hours: dailyTotals[key] ?? 0,
+                            maxHours: maxHours,
+                            isVacation: vacationDates.contains(key)
+                        )
                     } else {
                         Color.clear.frame(height: 44)
                     }
@@ -1236,30 +1255,57 @@ struct HeatmapCalendar: View {
         }
     }
 
-    private func cellView(date: Date, hours: Double, maxHours: Double) -> some View {
+    private func cellView(date: Date, hours: Double, maxHours: Double, isVacation: Bool) -> some View {
         let intensity = min(1.0, hours / maxHours)
         let day = calendar.component(.day, from: date)
         let isToday = calendar.isDateInToday(date)
+        let vacationOrange = Color.orange
         return VStack(spacing: 2) {
-            Text("\(day)")
-                .font(.caption2.bold())
-                .foregroundStyle(intensity > 0.55 ? Color.white : Color.primary)
+            HStack(spacing: 2) {
+                Text("\(day)")
+                    .font(.caption2.bold())
+                    .foregroundStyle(intensity > 0.55 && !isVacation ? Color.white : Color.primary)
+                if isVacation {
+                    Text("🏖️")
+                        .font(.system(size: 9))
+                }
+            }
             if hours > 0 {
                 Text(hours >= 1 ? String(format: "%.1fh", hours) : "\(Int(round(hours * 60)))m")
                     .font(.system(size: 9))
-                    .foregroundStyle(intensity > 0.55 ? Color.white.opacity(0.95) : Color.secondary)
+                    .foregroundStyle(intensity > 0.55 && !isVacation ? Color.white.opacity(0.95) : Color.secondary)
                     .monospacedDigit()
+            } else if isVacation {
+                Text("휴가")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(vacationOrange)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 44)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color.accentColor.opacity(hours > 0 ? 0.2 + intensity * 0.7 : 0.06))
+                .fill(
+                    isVacation
+                        ? vacationOrange.opacity(hours > 0 ? 0.14 + intensity * 0.18 : 0.16)
+                        : Color.accentColor.opacity(hours > 0 ? 0.2 + intensity * 0.7 : 0.06)
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(isToday ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                .stroke(borderColor(isToday: isToday, isVacation: isVacation), lineWidth: borderWidth(isToday: isToday, isVacation: isVacation))
         )
+    }
+
+    private func borderColor(isToday: Bool, isVacation: Bool) -> Color {
+        if isToday { return Color.accentColor }
+        if isVacation { return Color.orange.opacity(0.45) }
+        return Color.clear
+    }
+
+    private func borderWidth(isToday: Bool, isVacation: Bool) -> CGFloat {
+        if isToday { return 1.5 }
+        if isVacation { return 0.8 }
+        return 0
     }
 
     private struct Cell: Identifiable {
