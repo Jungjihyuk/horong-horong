@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     private(set) var timerManager: TimerManager!
     private let appTracker = AppTracker()
-    private let hotKeyManager = HotKeyManager()
     private let quickMemoPanel = QuickMemoPanel()
 
     private(set) var modelContainer: ModelContainer!
@@ -46,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NotificationManager.shared.requestAuthorization()
 
-        hotKeyManager.setup { [weak self] in
+        HotKeyManager.shared.setup { [weak self] in
             guard let self else { return }
             self.quickMemoPanel.toggle(modelContext: context)
         }
@@ -137,6 +136,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// 메뉴바 라벨. 사용자가 선택한 라벨/시간 형식에 맞춰 텍스트·아이콘을 합성한다.
+private struct MenuBarLabel: View {
+    let appState: AppState
+    @AppStorage(Constants.AppStorageKey.menubarLabelStyle)
+    private var labelStyleRaw: String = Constants.defaultMenubarLabelStyle
+    @AppStorage(Constants.AppStorageKey.menubarTimeStyle)
+    private var timeStyleRaw: String = Constants.defaultMenubarTimeStyle
+    @AppStorage(Constants.AppStorageKey.selectedFocusCategory)
+    private var selectedFocusCategory: String = ""
+
+    private var labelStyle: Constants.MenubarLabelStyle {
+        Constants.MenubarLabelStyle(rawValue: labelStyleRaw) ?? .timeAndIcon
+    }
+
+    private var timeStyle: Constants.MenubarTimeStyle {
+        Constants.MenubarTimeStyle(rawValue: timeStyleRaw) ?? .mmss
+    }
+
+    var body: some View {
+        let state = appState.timerState
+        let isActive = state == .focusing || state == .paused || state == .breaking
+        let icon = stateIcon(for: state)
+
+        if !isActive || labelStyle == .iconOnly {
+            // idle / breakAlert 이거나 사용자가 "아이콘만"을 선택한 경우 — 항상 앱 아이콘.
+            Label {
+                Text("호롱호롱")
+            } icon: {
+                Image("MenuBarIcon")
+                    .renderingMode(.original)
+            }
+        } else {
+            switch labelStyle {
+            case .timeAndIcon:
+                Text("\(icon) \(appState.formattedRemaining(style: timeStyle))")
+            case .timeOnly:
+                Text(appState.formattedRemaining(style: timeStyle))
+            case .categoryOnly:
+                Text("\(icon) \(categoryText(for: state))")
+            case .iconOnly:
+                EmptyView() // 위에서 이미 처리.
+            }
+        }
+    }
+
+    private func stateIcon(for state: TimerState) -> String {
+        switch state {
+        case .focusing, .paused: return "🔥"
+        case .breaking:          return "☕️"
+        default:                 return ""
+        }
+    }
+
+    private func categoryText(for state: TimerState) -> String {
+        if state == .breaking { return "휴식" }
+        let trimmed = selectedFocusCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultFocusCategory : trimmed
+    }
+}
+
 @main
 struct HorongHorongApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -147,20 +206,7 @@ struct HorongHorongApp: App {
                 .environment(appDelegate.appState)
                 .modelContainer(appDelegate.modelContainer)
         } label: {
-            let title = appDelegate.appState.menuBarTitle
-            switch appDelegate.appState.timerState {
-            case .focusing, .paused:
-                Text("🔥 \(title)")
-            case .breaking:
-                Text("☕️ \(title)")
-            case .idle, .breakAlert:
-                Label {
-                    Text(title.isEmpty ? "호롱호롱" : title)
-                } icon: {
-                    Image("MenuBarIcon")
-                        .renderingMode(.original)
-                }
-            }
+            MenuBarLabel(appState: appDelegate.appState)
         }
         .menuBarExtraStyle(.window)
 
@@ -170,5 +216,20 @@ struct HorongHorongApp: App {
                 .modelContainer(appDelegate.modelContainer)
         }
         .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
+
+        Settings {
+            SettingsRoot()
+                .environment(appDelegate.appState)
+                .modelContainer(appDelegate.modelContainer)
+                .frame(
+                    minWidth: SettingsTheme.windowMinSize.width,
+                    idealWidth: SettingsTheme.windowDefaultSize.width,
+                    maxWidth: .infinity,
+                    minHeight: SettingsTheme.windowMinSize.height,
+                    idealHeight: SettingsTheme.windowDefaultSize.height,
+                    maxHeight: .infinity
+                )
+        }
+        .windowResizability(.contentMinSize)
     }
 }
