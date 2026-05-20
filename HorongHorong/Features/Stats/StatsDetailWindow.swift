@@ -160,19 +160,24 @@ struct StatsDetailWindow: View {
         loadTimerSessions(start: startDate, end: endDate)
     }
 
-    /// 전환 카운트 예외 판단용. 범위 앞쪽으로 약간 버퍼를 둬서 경계에 걸친 세션도 포함.
+    /// 전환 카운트와 포모도로 상세 표시용. 범위 앞쪽으로 약간 버퍼를 둬서 경계에 걸친 세션도 포함.
     private func loadTimerSessions(start: Date, end: Date) {
-        guard viewMode != .monthly else {
-            timerSessions = []
-            return
-        }
         let calendar = Calendar.current
         let bufferStart = calendar.date(byAdding: .hour, value: -4, to: start) ?? start
         let descriptor = FetchDescriptor<FocusSession>(
             predicate: #Predicate { $0.startedAt >= bufferStart && $0.startedAt < end },
             sortBy: [SortDescriptor(\.startedAt)]
         )
-        timerSessions = (try? modelContext.fetch(descriptor)) ?? []
+        timerSessions = ((try? modelContext.fetch(descriptor)) ?? []).filter {
+            guard let focusEnd = focusEnd(for: $0) else { return false }
+            return $0.startedAt < end && focusEnd > start
+        }
+    }
+
+    private func focusEnd(for session: FocusSession) -> Date? {
+        guard let endedAt = session.endedAt else { return nil }
+        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
+        return min(endedAt, expectedEnd)
     }
 
     /// 일간 뷰에서는 선택한 하루의 세그먼트, 주간 뷰에서는 해당 주 7일 세그먼트를 읽는다.
