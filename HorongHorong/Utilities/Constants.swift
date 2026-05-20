@@ -176,7 +176,8 @@ enum Constants {
             let v = defaults.integer(forKey: AppStorageKey.longFocusFocusMinutes)
             return v > 0 ? v : defaultLongFocusFocusMinutes
         case .custom:
-            return defaultCustomFocusMinutes
+            let v = defaults.integer(forKey: AppStorageKey.customFocusMinutes)
+            return v > 0 ? v : defaultCustomFocusMinutes
         }
     }
 
@@ -190,7 +191,8 @@ enum Constants {
             let v = defaults.integer(forKey: AppStorageKey.longFocusBreakMinutes)
             return v > 0 ? v : defaultLongFocusBreakMinutes
         case .custom:
-            return defaultCustomBreakMinutes
+            let v = defaults.integer(forKey: AppStorageKey.customBreakMinutes)
+            return v > 0 ? v : defaultCustomBreakMinutes
         }
     }
 
@@ -253,10 +255,48 @@ enum Constants {
         static let pomodoroBreakMinutes = "timer.pomodoroBreakMinutes"
         static let longFocusFocusMinutes = "timer.longFocusFocusMinutes"
         static let longFocusBreakMinutes = "timer.longFocusBreakMinutes"
+        static let customFocusMinutes = "timer.customFocusMinutes"
+        static let customBreakMinutes = "timer.customBreakMinutes"
         static let timelineStartHour = "timeline.startHour"
         static let timelineEndHour = "timeline.endHour"
         static let timelineBucketMinutes = "timeline.bucketMinutes"
+        static let menubarLabelStyle = "menubar.labelStyle"
+        static let menubarTimeStyle = "menubar.timeStyle"
     }
+
+    // MARK: - 메뉴바 표시 형식
+    enum MenubarLabelStyle: String, CaseIterable, Identifiable {
+        case timeAndIcon
+        case timeOnly
+        case categoryOnly
+        case iconOnly
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .timeAndIcon:  return "시간 + 이모지"
+            case .timeOnly:     return "시간만"
+            case .categoryOnly: return "카테고리"
+            case .iconOnly:     return "아이콘만"
+            }
+        }
+    }
+
+    enum MenubarTimeStyle: String, CaseIterable, Identifiable {
+        case mmss
+        case minutes
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .mmss:    return "분:초 (25:00)"
+            case .minutes: return "분 (25분)"
+            }
+        }
+    }
+
+    static let defaultMenubarLabelStyle = MenubarLabelStyle.timeAndIcon.rawValue
+    static let defaultMenubarTimeStyle = MenubarTimeStyle.mmss.rawValue
 
     // MARK: - 타임라인 표시 기본값
     static let defaultTimelineStartHour = 0
@@ -278,8 +318,17 @@ enum Constants {
         static let dataBasePath = "news.dataBasePath"
         static let selectedProvider = "news.selectedProvider"
         static let interestKeywords = "news.interestKeywords"
-        static let youtubeChannelIds = "news.youtube.channelIds"
+        static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
+        static let sources = "news.sources.v1"
+        static let schedule = "news.schedule"
     }
+
+    static let availableNewsSchedules: [(value: String, label: String)] = [
+        ("manual", "수동"),
+        ("hourly", "매시간"),
+        ("daily", "매일"),
+    ]
+    static let defaultNewsSchedule = "manual"
 
     static func agentIdeaDirectoryPath(for rootDirectoryPath: String) -> String {
         appendPath(rootDirectoryPath, agentIdeaDirectoryName)
