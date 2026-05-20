@@ -31,6 +31,34 @@ struct AppUsageEntry: Identifiable {
     let durationSeconds: Int
 }
 
+struct PomodoroAppUsageEntry: Identifiable {
+    var id: String { "\(appName)-\(category)" }
+    let appName: String
+    let category: String
+    let durationSeconds: Int
+}
+
+struct PomodoroSessionBreakdown: Identifiable {
+    let id: UUID
+    let startedAt: Date
+    let endedAt: Date
+    let category: String
+    let durationSeconds: Int
+    let apps: [PomodoroAppUsageEntry]
+}
+
+private struct PomodoroFocusWindow {
+    let start: Date
+    let end: Date
+    let category: String
+}
+
+private struct AttributedUsageSlice {
+    let appName: String
+    let category: String
+    let durationSeconds: Int
+}
+
 enum StatsViewMode: String, CaseIterable, Identifiable {
     case daily = "일간"
     case weekly = "주간"
@@ -71,6 +99,12 @@ struct StatsChartView: View {
         periodSegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) }
     }
 
+    private var activeUsageRecords: [AppUsageRecord] {
+        activeRecords.filter {
+            !$0.bundleIdentifier.hasPrefix(Constants.focusSessionBundlePrefix)
+        }
+    }
+
     private var hasSegmentSource: Bool {
         !activeSegments.isEmpty
     }
@@ -89,31 +123,35 @@ struct StatsChartView: View {
 
     private var dailyView: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if categoryData.isEmpty {
+            if categoryData.isEmpty, pomodoroSessions.isEmpty {
                 noDataView
             } else {
-                DailyFocusSummaryCard(summary: dailySummary)
+                if !categoryData.isEmpty {
+                    DailyFocusSummaryCard(summary: dailySummary)
 
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        donutChart(data: categoryData)
-                            .frame(width: 220)
-                        categoryLegend(data: categoryData)
-                            .frame(maxWidth: 260)
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            donutChart(data: categoryData)
+                                .frame(width: 220)
+                            categoryLegend(data: categoryData)
+                                .frame(maxWidth: 260)
+                        }
+                        .frame(width: 280, alignment: .top)
+
+                        DailyTimelineBucketsView(
+                            buckets: displayBuckets,
+                            bucketSeconds: displayBucketSeconds,
+                            emptyTitle: timelineEmptyTitle,
+                            emptyDetail: timelineEmptyDetail
+                        )
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
-                    .frame(width: 280, alignment: .top)
 
-                    DailyTimelineBucketsView(
-                        buckets: displayBuckets,
-                        bucketSeconds: displayBucketSeconds,
-                        emptyTitle: timelineEmptyTitle,
-                        emptyDetail: timelineEmptyDetail
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    Divider()
+                    categoryBreakdownSection
                 }
 
-                Divider()
-                categoryBreakdownSection
+                pomodoroSection
             }
         }
     }
@@ -129,20 +167,30 @@ struct StatsChartView: View {
     }
 
     private var dailySummary: DailyFocusSummary {
-        if dailySegments.isEmpty, !activeRecords.isEmpty {
-            return recordBackedDailySummary
+        let summary: DailyFocusSummary
+        if dailySegments.isEmpty, !activeUsageRecords.isEmpty {
+            summary = recordBackedDailySummary
+        } else {
+            summary = TimelineAnalytics.summary(
+                for: referenceDate,
+                segments: dailySegments,
+                buckets: dailyBuckets,
+                timerSessions: timerSessions
+            )
         }
-        return TimelineAnalytics.summary(
-            for: referenceDate,
-            segments: dailySegments,
-            buckets: dailyBuckets,
-            timerSessions: timerSessions
+
+        return DailyFocusSummary(
+            totalSeconds: summary.totalSeconds,
+            switches: summary.switches,
+            longestFocusSeconds: summary.longestFocusSeconds,
+            topCategory: categoryData.first?.category ?? summary.topCategory,
+            overallScore: summary.overallScore
         )
     }
 
     private var recordBackedDailySummary: DailyFocusSummary {
         var totals: [String: Int] = [:]
-        for record in activeRecords {
+        for record in activeUsageRecords {
             totals[record.category, default: 0] += record.durationSeconds
         }
         let totalSec = totals.values.reduce(0, +)
@@ -218,7 +266,7 @@ struct StatsChartView: View {
         if hasTimelineDataForDay && !hasTimelineDataInDisplayRange {
             return "설정의 타임라인 표시 시간 범위를 넓히면 볼 수 있습니다"
         }
-        return "총 사용 시간과 별도로 저장되며, 앱 전환/종료 이후의 기록부터 표시됩니다"
+        return "총 앱 사용 시간과 별도로 저장되며, 앱 전환/종료 이후의 기록부터 표시됩니다"
     }
 
     private func donutChart(data: [ChartCategoryData]) -> some View {
@@ -265,7 +313,7 @@ struct StatsChartView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             } else {
-                Text("총 사용 시간")
+                Text("총 앱 사용 시간")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(formatHours(total))
@@ -357,15 +405,19 @@ struct StatsChartView: View {
 
     private var weeklyView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if weeklyStackedData.isEmpty {
+            if weeklyStackedData.isEmpty, pomodoroSessions.isEmpty {
                 noDataView
             } else {
-                weeklyTooltipPanel
-                weeklyFocusLegend
-                weeklyStackedChart
-                categoryLegend(data: categoryData)
-                Divider()
-                weeklyCategoryTotals
+                if !weeklyStackedData.isEmpty {
+                    weeklyTooltipPanel
+                    weeklyFocusLegend
+                    weeklyStackedChart
+                    categoryLegend(data: categoryData)
+                    Divider()
+                    weeklyCategoryTotals
+                }
+
+                pomodoroSection
             }
         }
     }
@@ -562,14 +614,18 @@ struct StatsChartView: View {
 
     private var monthlyView: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if categoryData.isEmpty {
+            if categoryData.isEmpty, pomodoroSessions.isEmpty {
                 noDataView
             } else {
-                monthlyHeatmapSection
-                Divider()
-                monthlyCategorySection
-                Divider()
-                monthlyTopAppsSection
+                if !categoryData.isEmpty {
+                    monthlyHeatmapSection
+                    Divider()
+                    monthlyCategorySection
+                    Divider()
+                    monthlyTopAppsSection
+                }
+
+                pomodoroSection
             }
         }
     }
@@ -641,6 +697,74 @@ struct StatsChartView: View {
         .frame(maxWidth: .infinity, minHeight: 200)
     }
 
+    // MARK: - Pomodoro
+
+    private var pomodoroSection: some View {
+        Group {
+            if !pomodoroSessions.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("포모도로 집중")
+                            .font(.headline)
+                        Spacer()
+                        Text("총 \(formatDuration(pomodoroTotalSeconds)) · \(pomodoroSessions.count)회")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ForEach(pomodoroSessions) { session in
+                        pomodoroSessionRow(session)
+                    }
+                }
+            }
+        }
+    }
+
+    private func pomodoroSessionRow(_ session: PomodoroSessionBreakdown) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(Constants.categoryEmoji(for: session.category))
+                    Text(session.category)
+                        .font(.callout.bold())
+                    Text(pomodoroTimeRange(session))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatDuration(session.durationSeconds))
+                        .font(.callout.bold())
+                        .monospacedDigit()
+                }
+
+                if session.apps.isEmpty {
+                    Text("세션 중 앱 사용 기록 없음")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 22)
+                } else {
+                    ForEach(session.apps) { app in
+                        HStack(spacing: 6) {
+                            Text(app.appName)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(.leading, 22)
+                            Text(app.category)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Spacer()
+                            Text(formatDuration(app.durationSeconds))
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+            Divider()
+        }
+    }
+
     // MARK: - Derived data
 
     private var categoryData: [ChartCategoryData] {
@@ -658,43 +782,36 @@ struct StatsChartView: View {
     }
 
     private var appDetails: [(appName: String, category: String, durationSeconds: Int)] {
-        var details: [String: (category: String, duration: Int)] = [:]
+        var details: [String: (appName: String, category: String, duration: Int)] = [:]
         if hasSegmentSource {
             for segment in activeSegments {
-                let duration = clippedDuration(segment)
-                guard duration > 0 else { continue }
-                if let existing = details[segment.appName] {
-                    details[segment.appName] = (existing.category, existing.duration + duration)
-                } else {
-                    details[segment.appName] = (segment.category, duration)
+                for slice in attributedSlices(for: segment) {
+                    let key = "\(slice.appName)\u{1F}\(slice.category)"
+                    if let existing = details[key] {
+                        details[key] = (existing.appName, existing.category, existing.duration + slice.durationSeconds)
+                    } else {
+                        details[key] = (slice.appName, slice.category, slice.durationSeconds)
+                    }
                 }
             }
         } else {
-            for record in activeRecords {
-                if let existing = details[record.appName] {
-                    details[record.appName] = (existing.category, existing.duration + record.durationSeconds)
-                } else {
-                    details[record.appName] = (record.category, record.durationSeconds)
-                }
-            }
+            addRecordDetails(activeUsageRecords, to: &details)
         }
         return details
             .sorted { $0.value.duration > $1.value.duration }
-            .map { (appName: $0.key, category: $0.value.category, durationSeconds: $0.value.duration) }
+            .map { (appName: $0.value.appName, category: $0.value.category, durationSeconds: $0.value.duration) }
     }
 
     private var categoryBreakdownData: [CategoryAppsBreakdown] {
         var groups: [String: [String: Int]] = [:]
         if hasSegmentSource {
             for segment in activeSegments {
-                let duration = clippedDuration(segment)
-                guard duration > 0 else { continue }
-                groups[segment.category, default: [:]][segment.appName, default: 0] += duration
+                for slice in attributedSlices(for: segment) {
+                    groups[slice.category, default: [:]][slice.appName, default: 0] += slice.durationSeconds
+                }
             }
         } else {
-            for record in activeRecords {
-                groups[record.category, default: [:]][record.appName, default: 0] += record.durationSeconds
-            }
+            addRecordBreakdown(activeUsageRecords, to: &groups)
         }
         return groups
             .map { (cat, apps) in
@@ -709,7 +826,7 @@ struct StatsChartView: View {
 
     private var recordDurationsByCategory: [String: Int] {
         var durations: [String: Int] = [:]
-        for record in activeRecords {
+        for record in activeUsageRecords {
             durations[record.category, default: 0] += record.durationSeconds
         }
         return durations
@@ -718,9 +835,9 @@ struct StatsChartView: View {
     private var segmentDurationsByCategory: [String: Int] {
         var durations: [String: Int] = [:]
         for segment in activeSegments {
-            let duration = clippedDuration(segment)
-            guard duration > 0 else { continue }
-            durations[segment.category, default: 0] += duration
+            for slice in attributedSlices(for: segment) {
+                durations[slice.category, default: 0] += slice.durationSeconds
+            }
         }
         return durations
     }
@@ -764,13 +881,96 @@ struct StatsChartView: View {
         return Int(end.timeIntervalSince(start))
     }
 
+    private func attributedSlices(for segment: AppUsageSegment) -> [AttributedUsageSlice] {
+        guard let bounds = periodBounds else { return [] }
+        return attributedSlices(for: segment, from: bounds.start, to: bounds.end)
+    }
+
+    private func attributedSlices(for segment: AppUsageSegment, in day: Date) -> [AttributedUsageSlice] {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: day)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
+        return attributedSlices(for: segment, from: dayStart, to: dayEnd)
+    }
+
+    private func attributedSlices(for segment: AppUsageSegment, from start: Date, to end: Date) -> [AttributedUsageSlice] {
+        let segmentStart = max(segment.startTime, start)
+        let segmentEnd = min(segment.endTime, end)
+        guard segmentEnd > segmentStart else { return [] }
+
+        var remaining: [(start: Date, end: Date)] = [(segmentStart, segmentEnd)]
+        var slices: [AttributedUsageSlice] = []
+
+        for window in pomodoroFocusWindows(from: segmentStart, to: segmentEnd) {
+            let overlapStart = max(segmentStart, window.start)
+            let overlapEnd = min(segmentEnd, window.end)
+            guard overlapEnd > overlapStart else { continue }
+
+            let duration = Int(overlapEnd.timeIntervalSince(overlapStart))
+            if duration > 0 {
+                slices.append(AttributedUsageSlice(
+                    appName: segment.appName,
+                    category: window.category,
+                    durationSeconds: duration
+                ))
+            }
+
+            remaining = remaining.flatMap { interval -> [(start: Date, end: Date)] in
+                let clippedStart = max(interval.start, overlapStart)
+                let clippedEnd = min(interval.end, overlapEnd)
+                guard clippedEnd > clippedStart else { return [interval] }
+
+                var parts: [(start: Date, end: Date)] = []
+                if interval.start < clippedStart {
+                    parts.append((interval.start, clippedStart))
+                }
+                if clippedEnd < interval.end {
+                    parts.append((clippedEnd, interval.end))
+                }
+                return parts
+            }
+        }
+
+        for interval in remaining {
+            let duration = Int(interval.end.timeIntervalSince(interval.start))
+            guard duration > 0 else { continue }
+            slices.append(AttributedUsageSlice(
+                appName: segment.appName,
+                category: segment.category,
+                durationSeconds: duration
+            ))
+        }
+
+        return slices
+    }
+
+    private func pomodoroFocusWindows(from start: Date, to end: Date) -> [PomodoroFocusWindow] {
+        timerSessions.compactMap { session in
+            guard isCompletedPomodoro(session),
+                  let focusEnd = focusEnd(for: session) else {
+                return nil
+            }
+
+            let windowStart = max(session.startedAt, start)
+            let windowEnd = min(focusEnd, end)
+            guard windowEnd > windowStart else { return nil }
+
+            return PomodoroFocusWindow(
+                start: windowStart,
+                end: windowEnd,
+                category: session.category ?? Constants.defaultFocusCategory
+            )
+        }
+        .sorted { $0.start < $1.start }
+    }
+
     private var dailySegmentCategoryData: [DailyChartData] {
         var grouped: [Date: [String: Int]] = [:]
         for day in weeklyDays {
             for segment in activeSegments {
-                let seconds = clippedDuration(segment, in: day)
-                guard seconds > 0 else { continue }
-                grouped[day, default: [:]][segment.category, default: 0] += seconds
+                for slice in attributedSlices(for: segment, in: day) {
+                    grouped[day, default: [:]][slice.category, default: 0] += slice.durationSeconds
+                }
             }
         }
         var result: [DailyChartData] = []
@@ -791,7 +991,7 @@ struct StatsChartView: View {
 
     private var dailyRecordCategoryData: [DailyChartData] {
         var grouped: [Date: [String: Int]] = [:]
-        for record in activeRecords {
+        for record in activeUsageRecords {
             let day = Calendar.current.startOfDay(for: record.date)
             grouped[day, default: [:]][record.category, default: 0] += record.durationSeconds
         }
@@ -830,7 +1030,7 @@ struct StatsChartView: View {
 
     private var dailyRecordTotalsMap: [Date: Double] {
         var totals: [Date: Int] = [:]
-        for record in activeRecords {
+        for record in activeUsageRecords {
             let day = Calendar.current.startOfDay(for: record.date)
             totals[day, default: 0] += record.durationSeconds
         }
@@ -843,6 +1043,97 @@ struct StatsChartView: View {
 
     private var monthlyDailyTotalsMap: [Date: Double] {
         hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
+    }
+
+    private func addRecordDetails(
+        _ records: [AppUsageRecord],
+        to details: inout [String: (appName: String, category: String, duration: Int)]
+    ) {
+        for record in records {
+            let key = "\(record.appName)\u{1F}\(record.category)"
+            if let existing = details[key] {
+                details[key] = (existing.appName, existing.category, existing.duration + record.durationSeconds)
+            } else {
+                details[key] = (record.appName, record.category, record.durationSeconds)
+            }
+        }
+    }
+
+    private func addRecordBreakdown(
+        _ records: [AppUsageRecord],
+        to groups: inout [String: [String: Int]]
+    ) {
+        for record in records {
+            groups[record.category, default: [:]][record.appName, default: 0] += record.durationSeconds
+        }
+    }
+
+    private var pomodoroSessions: [PomodoroSessionBreakdown] {
+        guard let bounds = periodBounds else { return [] }
+        return timerSessions.compactMap { session in
+            guard isCompletedPomodoro(session),
+                  let focusEnd = focusEnd(for: session) else {
+                return nil
+            }
+            let start = max(session.startedAt, bounds.start)
+            let end = min(focusEnd, bounds.end)
+            guard end > start else { return nil }
+
+            let category = session.category ?? Constants.defaultFocusCategory
+            return PomodoroSessionBreakdown(
+                id: session.id,
+                startedAt: start,
+                endedAt: end,
+                category: category,
+                durationSeconds: Int(end.timeIntervalSince(start)),
+                apps: pomodoroApps(from: start, to: end)
+            )
+        }
+        .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    private var pomodoroTotalSeconds: Int {
+        pomodoroSessions.reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
+        guard let endedAt = session.endedAt else { return false }
+        let expectedSeconds = max(0, session.focusMinutes) * 60
+        guard expectedSeconds > 0 else { return false }
+        return session.completed || endedAt.timeIntervalSince(session.startedAt) >= TimeInterval(expectedSeconds)
+    }
+
+    private func focusEnd(for session: FocusSession) -> Date? {
+        guard let endedAt = session.endedAt else { return nil }
+        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
+        return min(endedAt, expectedEnd)
+    }
+
+    private func pomodoroApps(from start: Date, to end: Date) -> [PomodoroAppUsageEntry] {
+        var apps: [String: (appName: String, category: String, duration: Int)] = [:]
+        for segment in activeSegments {
+            let clippedStart = max(segment.startTime, start)
+            let clippedEnd = min(segment.endTime, end)
+            guard clippedEnd > clippedStart else { continue }
+
+            let key = "\(segment.appName)\u{1F}\(segment.category)"
+            let duration = Int(clippedEnd.timeIntervalSince(clippedStart))
+            if let existing = apps[key] {
+                apps[key] = (existing.appName, existing.category, existing.duration + duration)
+            } else {
+                apps[key] = (segment.appName, segment.category, duration)
+            }
+        }
+
+        return apps.values
+            .sorted { $0.duration > $1.duration }
+            .map {
+                PomodoroAppUsageEntry(
+                    appName: $0.appName,
+                    category: $0.category,
+                    durationSeconds: $0.duration
+                )
+            }
     }
 
     private var weeklyDays: [Date] {
@@ -864,11 +1155,28 @@ struct StatsChartView: View {
 
     // MARK: - Formatters
 
+    private func pomodoroTimeRange(_ session: PomodoroSessionBreakdown) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        switch viewMode {
+        case .daily:
+            formatter.dateFormat = "HH:mm"
+            return "\(formatter.string(from: session.startedAt))-\(formatter.string(from: session.endedAt))"
+        case .weekly, .monthly:
+            formatter.dateFormat = "M/d HH:mm"
+            let start = formatter.string(from: session.startedAt)
+            formatter.dateFormat = "HH:mm"
+            return "\(start)-\(formatter.string(from: session.endedAt))"
+        }
+    }
+
     private func formatDuration(_ seconds: Int) -> String {
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
+        let s = seconds % 60
         if h > 0 { return "\(h)h \(m)m" }
-        return "\(m)m"
+        if m > 0 { return "\(m)m" }
+        return "\(s)s"
     }
 
     private func formatHours(_ hours: Double) -> String {

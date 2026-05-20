@@ -54,7 +54,7 @@ final class TimerManager: @unchecked Sendable {
         timer?.invalidate()
         timer = nil
 
-        if let session = currentSession {
+        if let session = currentSession, !session.completed {
             session.endedAt = Date()
             session.completed = false
             try? modelContext?.save()
