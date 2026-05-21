@@ -157,10 +157,8 @@ private struct MenuBarLabel: View {
     var body: some View {
         let state = appState.timerState
         let isActive = state == .focusing || state == .paused || state == .breaking
-        let icon = stateIcon(for: state)
 
-        if !isActive || labelStyle == .iconOnly {
-            // idle / breakAlert 이거나 사용자가 "아이콘만"을 선택한 경우 — 항상 앱 아이콘.
+        if !isActive {
             Label {
                 Text("호롱호롱")
             } icon: {
@@ -170,22 +168,33 @@ private struct MenuBarLabel: View {
         } else {
             switch labelStyle {
             case .timeAndIcon:
-                Text("\(icon) \(appState.formattedRemaining(style: timeStyle))")
+                HStack(spacing: 3) {
+                    stateIconView(for: state)
+                    Text(appState.formattedRemaining(style: timeStyle))
+                }
             case .timeOnly:
                 Text(appState.formattedRemaining(style: timeStyle))
             case .categoryOnly:
-                Text("\(icon) \(categoryText(for: state))")
+                HStack(spacing: 3) {
+                    stateIconView(for: state)
+                    Text(categoryText(for: state))
+                }
             case .iconOnly:
-                EmptyView() // 위에서 이미 처리.
+                stateIconView(for: state)
             }
         }
     }
 
-    private func stateIcon(for state: TimerState) -> String {
+    @ViewBuilder
+    private func stateIconView(for state: TimerState) -> some View {
         switch state {
-        case .focusing, .paused: return "🔥"
-        case .breaking:          return "☕️"
-        default:                 return ""
+        case .focusing, .paused:
+            Image("FocusOnMenuBar")
+                .renderingMode(.original)
+        case .breaking:
+            Text("☕️")
+        default:
+            EmptyView()
         }
     }
 
