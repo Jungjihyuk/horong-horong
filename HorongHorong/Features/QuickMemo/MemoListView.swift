@@ -8,24 +8,22 @@ struct MemoListView: View {
     @State private var editContent: String = ""
     @State private var showNewMemoField: Bool = false
     @State private var newMemoContent: String = ""
+    @State private var newMemoIcon: String = MemoIcon.defaultIcon
 
-    private var pinnedMemos: [Memo] {
-        allMemos.filter { $0.isPinned }
-    }
-
-    private var recentMemos: [Memo] {
-        Array(allMemos.filter { !$0.isPinned }.prefix(5))
+    private var visibleMemos: [Memo] {
+        let pinned = allMemos.filter { $0.isPinned }
+        let recent = allMemos.filter { !$0.isPinned }
+        return pinned + recent
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             if allMemos.isEmpty {
                 emptyState
             } else {
                 memoList
             }
 
-            Divider()
             newMemoButton
         }
     }
@@ -34,25 +32,23 @@ struct MemoListView: View {
         VStack(spacing: 8) {
             Image(systemName: "note.text")
                 .font(.largeTitle)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             Text("메모가 없습니다")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
             Text("⌘+Shift+N으로 빠르게 메모하세요")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
         }
         .frame(maxWidth: .infinity, minHeight: 120)
+        .popoverCard()
     }
 
     private var memoList: some View {
         ScrollView {
             LazyVStack(spacing: 4) {
-                ForEach(pinnedMemos) { memo in
-                    memoRow(memo, isPinned: true)
-                }
-                ForEach(recentMemos) { memo in
-                    memoRow(memo, isPinned: false)
+                ForEach(visibleMemos) { memo in
+                    memoRow(memo)
                 }
             }
             .padding(.trailing, 12)
@@ -60,39 +56,36 @@ struct MemoListView: View {
         .frame(maxHeight: .infinity)
     }
 
-    private func memoRow(_ memo: Memo, isPinned: Bool) -> some View {
+    private func memoRow(_ memo: Memo) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if editingMemo?.id == memo.id {
                 editView(memo)
             } else {
-                displayView(memo, isPinned: isPinned)
+                displayView(memo)
             }
         }
-        .padding(8)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .popoverCard(padding: 10, radius: 14)
     }
 
-    private func displayView(_ memo: Memo, isPinned: Bool) -> some View {
-        HStack(alignment: .top) {
+    private func displayView(_ memo: Memo) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            memoIconButton(for: memo)
+
             VStack(alignment: .leading, spacing: 2) {
-                if isPinned {
-                    Label("고정됨", systemImage: "pin.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
                 Text(memo.content)
                     .font(.callout)
+                    .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(3)
                     .textSelection(.enabled)
                 Text(memo.createdAt, style: .relative)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
             }
             Spacer()
             Menu {
                 Button(memo.isPinned ? "고정 해제" : "고정") {
                     memo.isPinned.toggle()
+                    memo.updatedAt = Date()
                     try? modelContext.save()
                 }
                 Button("편집") {
@@ -107,11 +100,36 @@ struct MemoListView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
             }
             .menuStyle(.borderlessButton)
             .frame(width: 20)
         }
+    }
+
+    private func memoIconButton(for memo: Memo) -> some View {
+        Menu {
+            if memo.isPinned {
+                Text("고정된 메모")
+            } else {
+                ForEach(MemoIcon.options, id: \.self) { icon in
+                    Button {
+                        memo.icon = icon
+                        memo.updatedAt = Date()
+                        try? modelContext.save()
+                    } label: {
+                        Text("\(icon) \(MemoIcon.label(for: icon))")
+                    }
+                }
+            }
+        } label: {
+            Text(memo.isPinned ? MemoIcon.pinnedIcon : (memo.icon ?? MemoIcon.defaultIcon))
+                .font(.system(size: 18))
+                .frame(width: 26, height: 26)
+                .background(PopoverChrome.surfaceAlt.opacity(0.9), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help(memo.isPinned ? "고정된 메모" : "아이콘 변경")
     }
 
     private func editView(_ memo: Memo) -> some View {
@@ -144,24 +162,30 @@ struct MemoListView: View {
         Group {
             if showNewMemoField {
                 VStack(spacing: 6) {
-                    TextField("새 메모 입력...", text: $newMemoContent, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...3)
+                    HStack(alignment: .top, spacing: 8) {
+                        newMemoIconButton
+
+                        TextField("새 메모 입력...", text: $newMemoContent, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...3)
+                    }
 
                     HStack {
                         Spacer()
                         Button("취소") {
                             showNewMemoField = false
                             newMemoContent = ""
+                            newMemoIcon = MemoIcon.defaultIcon
                         }
                         .controlSize(.small)
 
                         Button("저장") {
                             guard !newMemoContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                            let memo = Memo(content: newMemoContent)
+                            let memo = Memo(content: newMemoContent, icon: newMemoIcon)
                             modelContext.insert(memo)
                             try? modelContext.save()
                             newMemoContent = ""
+                            newMemoIcon = MemoIcon.defaultIcon
                             showNewMemoField = false
                         }
                         .controlSize(.small)
@@ -176,9 +200,50 @@ struct MemoListView: View {
                     Label("새 메모", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(LanternSecondaryButtonStyle())
             }
         }
         .padding(.bottom, 4)
+    }
+
+    private var newMemoIconButton: some View {
+        Menu {
+            ForEach(MemoIcon.options, id: \.self) { icon in
+                Button {
+                    newMemoIcon = icon
+                } label: {
+                    Text("\(icon) \(MemoIcon.label(for: icon))")
+                }
+            }
+        } label: {
+            Text(newMemoIcon)
+                .font(.system(size: 18))
+                .frame(width: 28, height: 28)
+                .background(PopoverChrome.surfaceAlt.opacity(0.9), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help("아이콘 선택")
+    }
+}
+
+private enum MemoIcon {
+    static let defaultIcon = "📝"
+    static let pinnedIcon = "📌"
+    static let options = ["🌱", "🐜", "🚀", "📝", "☕️", "💡", "📚", "🔗", "✅", "⭐️"]
+
+    static func label(for icon: String) -> String {
+        switch icon {
+        case "🌱": return "아이디어"
+        case "🐜": return "작업"
+        case "🚀": return "링크"
+        case "📝": return "메모"
+        case "☕️": return "읽을거리"
+        case "💡": return "힌트"
+        case "📚": return "공부"
+        case "🔗": return "참고"
+        case "✅": return "할 일"
+        case "⭐️": return "중요"
+        default: return "아이콘"
+        }
     }
 }

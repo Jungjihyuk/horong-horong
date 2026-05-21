@@ -220,8 +220,8 @@ enum Constants {
     static let idleActiveReturnThresholdSeconds: Double = 3.0
 
     // MARK: - 팝오버 크기
-    static let popoverWidth: CGFloat = 320
-    static let popoverMaxHeight: CGFloat = 480
+    static let popoverWidth: CGFloat = 360
+    static let popoverMaxHeight: CGFloat = 560
 
     // MARK: - 퀵 메모 패널 크기
     static let quickMemoPanelWidth: CGFloat = 560
@@ -229,8 +229,8 @@ enum Constants {
     static let quickMemoPanelMaxHeight: CGFloat = 320
 
     // MARK: - 통계 윈도우 크기
-    static let statsWindowWidth: CGFloat = 700
-    static let statsWindowHeight: CGFloat = 500
+    static let statsWindowWidth: CGFloat = 880
+    static let statsWindowHeight: CGFloat = 660
 
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
@@ -246,6 +246,7 @@ enum Constants {
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
+        static let popoverTheme = "appearance.popoverTheme"
         static let agentRootDirectoryPath = "agent.rootDirectoryPath"
         static let ideaDirectoryPath = "agent.ideaDirectoryPath"
         static let outputDirectoryPath = "agent.outputDirectoryPath"
@@ -331,6 +332,7 @@ enum Constants {
     static let defaultNewsMaxItemsPerSource = 10
 
     static let defaultAppearanceMode = "light"
+    static let defaultPopoverTheme = "warmLantern"
 
     static let availableNewsSchedules: [(value: String, label: String)] = [
         ("manual", "수동"),

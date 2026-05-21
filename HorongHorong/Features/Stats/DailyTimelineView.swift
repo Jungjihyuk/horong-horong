@@ -262,16 +262,19 @@ struct DailyFocusSummaryCard: View {
             HStack(spacing: 6) {
                 Text(summary.levelEmoji).font(.title3)
                 Text(summary.levelLabel).font(.callout.bold())
+                    .foregroundStyle(PopoverChrome.ink)
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 10)
-            .background(summary.levelColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+            .background(summary.levelColor.opacity(0.15), in: Capsule())
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                Capsule()
                     .stroke(summary.levelColor.opacity(0.35), lineWidth: 1)
             )
 
-            Divider().frame(height: 28)
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(width: 1, height: 28)
 
             metric(label: "최장 집중", value: formatDuration(summary.longestFocusSeconds))
             metric(label: "작업 전환", value: "\(summary.switches)회")
@@ -284,19 +287,18 @@ struct DailyFocusSummaryCard: View {
 
             Spacer()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+        .popoverCard(padding: 12)
     }
 
     private func metric(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             Text(value)
                 .font(.callout.bold())
                 .monospacedDigit()
+                .foregroundStyle(PopoverChrome.ink)
         }
     }
 
@@ -338,16 +340,17 @@ struct DailyTimelineBucketsView: View {
         HStack(alignment: .firstTextBaseline) {
             Text("시간대별 작업")
                 .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
             Spacer()
             if let h = hovered {
                 Text(hoverLabel(h))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
                     .monospacedDigit()
             } else {
                 Text("막대가 길수록 오래, 흐릿할수록 산만한 시간대에요 (설정에서 시간 범위·간격 조정)")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
             }
         }
     }
@@ -367,7 +370,12 @@ struct DailyTimelineBucketsView: View {
             .padding(.vertical, 2)
         }
         .frame(maxHeight: 420)
-        .background(.quaternary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+        .padding(8)
+        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
     }
 
     private func bucketRow(_ bucket: TimelineBucket) -> some View {
@@ -376,14 +384,14 @@ struct DailyTimelineBucketsView: View {
         return HStack(spacing: 8) {
             Text(timeLabel(bucket.startTime))
                 .font(.system(size: 10).monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
                 .frame(width: 44, alignment: .trailing)
 
             GeometryReader { geo in
                 let fullWidth = geo.size.width
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.secondary.opacity(0.08))
+                        .fill(PopoverChrome.surfaceAlt.opacity(0.85))
                     HStack(spacing: 0) {
                         ForEach(bucket.sortedCategories, id: \.category) { entry in
                             let segFrac = CGFloat(entry.seconds) / CGFloat(max(1, bucket.totalSeconds))
@@ -398,7 +406,7 @@ struct DailyTimelineBucketsView: View {
                 }
                 .overlay(
                     RoundedRectangle(cornerRadius: 3)
-                        .stroke(isHovered ? Color.accentColor : .clear, lineWidth: 1.5)
+                        .stroke(isHovered ? PopoverChrome.accent : .clear, lineWidth: 1.5)
                 )
             }
             .frame(height: 14)
@@ -418,6 +426,7 @@ struct DailyTimelineBucketsView: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 1)
         .contentShape(Rectangle())
+        .background(isHovered ? PopoverChrome.accentSoft.opacity(0.35) : .clear, in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func timeLabel(_ date: Date) -> String {
@@ -430,15 +439,15 @@ struct DailyTimelineBucketsView: View {
         HStack(spacing: 10) {
             HStack(spacing: 4) {
                 Rectangle().fill(Color.blue).frame(width: 10, height: 10).cornerRadius(2)
-                Text("집중").font(.caption2).foregroundStyle(.secondary)
+                Text("집중").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
             }
             HStack(spacing: 4) {
                 Rectangle().fill(Color.blue).saturation(0.15).frame(width: 10, height: 10).cornerRadius(2)
-                Text("산만").font(.caption2).foregroundStyle(.secondary)
+                Text("산만").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
             }
             HStack(spacing: 4) {
                 Circle().fill(Color.red.opacity(0.8)).frame(width: 4, height: 4)
-                Text("전환 4회 이상").font(.caption2).foregroundStyle(.secondary)
+                Text("전환 4회 이상").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
             }
             Spacer()
         }
@@ -449,15 +458,16 @@ struct DailyTimelineBucketsView: View {
         VStack(spacing: 6) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             Text(emptyTitle)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
             Text(emptyDetail)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
         }
         .frame(maxWidth: .infinity, minHeight: 120)
+        .popoverCard()
     }
 
     private func hoverLabel(_ bucket: TimelineBucket) -> String {
