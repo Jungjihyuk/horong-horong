@@ -47,6 +47,27 @@ struct PomodoroSessionBreakdown: Identifiable {
     let apps: [PomodoroAppUsageEntry]
 }
 
+struct PomodoroTimeSummary: Identifiable {
+    let id: UUID
+    let startedAt: Date
+    let endedAt: Date
+    let category: String
+    let durationSeconds: Int
+}
+
+struct PomodoroCategorySummary: Identifiable {
+    var id: String { category }
+    let category: String
+    let durationSeconds: Int
+}
+
+struct PomodoroDaySummary: Identifiable {
+    var id: Int { Int(date.timeIntervalSince1970) }
+    let date: Date
+    let durationSeconds: Int
+    let count: Int
+}
+
 private struct PomodoroFocusWindow {
     let start: Date
     let end: Date
@@ -153,7 +174,7 @@ struct StatsChartView: View {
                     categoryBreakdownSection
                 }
 
-                pomodoroSection
+                pomodoroDetailSection
             }
         }
     }
@@ -417,7 +438,7 @@ struct StatsChartView: View {
 
     private var weeklyView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if weeklyStackedData.isEmpty, pomodoroSessions.isEmpty {
+            if weeklyStackedData.isEmpty, pomodoroTimeSummaries.isEmpty {
                 noDataView
             } else {
                 if !weeklyStackedData.isEmpty {
@@ -429,7 +450,7 @@ struct StatsChartView: View {
                     weeklyCategoryTotals
                 }
 
-                pomodoroSection
+                weeklyPomodoroSection
             }
         }
     }
@@ -637,7 +658,7 @@ struct StatsChartView: View {
 
     private var monthlyView: some View {
         VStack(alignment: .leading, spacing: 24) {
-            if categoryData.isEmpty, pomodoroSessions.isEmpty {
+            if categoryData.isEmpty, pomodoroTimeSummaries.isEmpty {
                 noDataView
             } else {
                 if !categoryData.isEmpty {
@@ -646,7 +667,7 @@ struct StatsChartView: View {
                     monthlyTopAppsSection
                 }
 
-                pomodoroSection
+                monthlyPomodoroSection
             }
         }
     }
@@ -733,7 +754,7 @@ struct StatsChartView: View {
 
     // MARK: - Pomodoro
 
-    private var pomodoroSection: some View {
+    private var pomodoroDetailSection: some View {
         Group {
             if !pomodoroSessions.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -753,6 +774,104 @@ struct StatsChartView: View {
                 }
                 .popoverCard(padding: 14)
             }
+        }
+    }
+
+    private var weeklyPomodoroSection: some View {
+        Group {
+            if !pomodoroTimeSummaries.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("포모도로 집중")
+                            .font(.headline)
+                            .foregroundStyle(PopoverChrome.ink)
+                        Spacer()
+                        Text("총 \(formatDuration(pomodoroSummaryTotalSeconds)) · \(pomodoroTimeSummaries.count)회")
+                            .font(.caption)
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                    }
+
+                    HStack(alignment: .top, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("카테고리별")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                            ForEach(pomodoroCategoryData) { item in
+                                pomodoroCategoryRow(item)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("요일별")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                            ForEach(weeklyPomodoroDayData) { item in
+                                pomodoroDayRow(item)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                }
+                .popoverCard(padding: 14)
+            }
+        }
+    }
+
+    private var monthlyPomodoroSection: some View {
+        Group {
+            if !pomodoroTimeSummaries.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("포모도로 집중")
+                            .font(.headline)
+                            .foregroundStyle(PopoverChrome.ink)
+                        Spacer()
+                        Text("총 \(formatDuration(pomodoroSummaryTotalSeconds)) · \(pomodoroTimeSummaries.count)회")
+                            .font(.caption)
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                    }
+
+                    ForEach(pomodoroCategoryData) { item in
+                        pomodoroCategoryRow(item)
+                    }
+                }
+                .popoverCard(padding: 14)
+            }
+        }
+    }
+
+    private func pomodoroCategoryRow(_ item: PomodoroCategorySummary) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Constants.categoryColor(for: item.category))
+                .frame(width: 10, height: 10)
+            Text(Constants.categoryEmoji(for: item.category))
+            Text(item.category)
+                .font(.callout)
+                .foregroundStyle(PopoverChrome.ink)
+            Spacer()
+            Text(formatDuration(item.durationSeconds))
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+                .monospacedDigit()
+        }
+    }
+
+    private func pomodoroDayRow(_ item: PomodoroDaySummary) -> some View {
+        HStack(spacing: 8) {
+            Text(weekdayShortLabel(item.date))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .frame(width: 24, alignment: .leading)
+            Text(formatDuration(item.durationSeconds))
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+                .monospacedDigit()
+            Spacer()
+            Text("\(item.count)회")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
         }
     }
 
@@ -983,23 +1102,24 @@ struct StatsChartView: View {
     }
 
     private func pomodoroFocusWindows(from start: Date, to end: Date) -> [PomodoroFocusWindow] {
-        timerSessions.compactMap { session in
-            guard isCompletedPomodoro(session),
-                  let focusEnd = focusEnd(for: session) else {
-                return nil
-            }
+        var windows: [PomodoroFocusWindow] = []
+        for session in timerSessions {
+            guard let focusEnd = focusEnd(for: session) else { continue }
+            if focusEnd <= start { continue }
+            if session.startedAt >= end { break }
+            guard isCompletedPomodoro(session) else { continue }
 
             let windowStart = max(session.startedAt, start)
             let windowEnd = min(focusEnd, end)
-            guard windowEnd > windowStart else { return nil }
+            guard windowEnd > windowStart else { continue }
 
-            return PomodoroFocusWindow(
+            windows.append(PomodoroFocusWindow(
                 start: windowStart,
                 end: windowEnd,
                 category: session.category ?? Constants.defaultFocusCategory
-            )
+            ))
         }
-        .sorted { $0.start < $1.start }
+        return windows
     }
 
     private var dailySegmentCategoryData: [DailyChartData] {
@@ -1113,6 +1233,23 @@ struct StatsChartView: View {
     }
 
     private var pomodoroSessions: [PomodoroSessionBreakdown] {
+        return pomodoroTimeSummaries.map { summary in
+            return PomodoroSessionBreakdown(
+                id: summary.id,
+                startedAt: summary.startedAt,
+                endedAt: summary.endedAt,
+                category: summary.category,
+                durationSeconds: summary.durationSeconds,
+                apps: pomodoroApps(from: summary.startedAt, to: summary.endedAt)
+            )
+        }
+    }
+
+    private var pomodoroTotalSeconds: Int {
+        pomodoroSessions.reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    private var pomodoroTimeSummaries: [PomodoroTimeSummary] {
         guard let bounds = periodBounds else { return [] }
         return timerSessions.compactMap { session in
             guard isCompletedPomodoro(session),
@@ -1123,21 +1260,50 @@ struct StatsChartView: View {
             let end = min(focusEnd, bounds.end)
             guard end > start else { return nil }
 
-            let category = session.category ?? Constants.defaultFocusCategory
-            return PomodoroSessionBreakdown(
+            return PomodoroTimeSummary(
                 id: session.id,
                 startedAt: start,
                 endedAt: end,
-                category: category,
-                durationSeconds: Int(end.timeIntervalSince(start)),
-                apps: pomodoroApps(from: start, to: end)
+                category: session.category ?? Constants.defaultFocusCategory,
+                durationSeconds: Int(end.timeIntervalSince(start))
             )
         }
         .sorted { $0.startedAt < $1.startedAt }
     }
 
-    private var pomodoroTotalSeconds: Int {
-        pomodoroSessions.reduce(0) { $0 + $1.durationSeconds }
+    private var pomodoroSummaryTotalSeconds: Int {
+        pomodoroTimeSummaries.reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    private var pomodoroCategoryData: [PomodoroCategorySummary] {
+        var durations: [String: Int] = [:]
+        for session in pomodoroTimeSummaries {
+            durations[session.category, default: 0] += session.durationSeconds
+        }
+        return durations
+            .sorted {
+                if $0.value != $1.value { return $0.value > $1.value }
+                return $0.key < $1.key
+            }
+            .map { PomodoroCategorySummary(category: $0.key, durationSeconds: $0.value) }
+    }
+
+    private var weeklyPomodoroDayData: [PomodoroDaySummary] {
+        let cal = Calendar.current
+        var durations: [Date: Int] = [:]
+        var counts: [Date: Int] = [:]
+        for session in pomodoroTimeSummaries {
+            let day = cal.startOfDay(for: session.startedAt)
+            durations[day, default: 0] += session.durationSeconds
+            counts[day, default: 0] += 1
+        }
+        return weeklyDays.map { day in
+            PomodoroDaySummary(
+                date: day,
+                durationSeconds: durations[day] ?? 0,
+                count: counts[day] ?? 0
+            )
+        }
     }
 
     private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
@@ -1156,6 +1322,9 @@ struct StatsChartView: View {
     private func pomodoroApps(from start: Date, to end: Date) -> [PomodoroAppUsageEntry] {
         var apps: [String: (appName: String, category: String, duration: Int)] = [:]
         for segment in activeSegments {
+            if segment.endTime <= start { continue }
+            if segment.startTime >= end { break }
+
             let clippedStart = max(segment.startTime, start)
             let clippedEnd = min(segment.endTime, end)
             guard clippedEnd > clippedStart else { continue }

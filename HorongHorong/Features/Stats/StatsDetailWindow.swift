@@ -1,5 +1,20 @@
 import SwiftUI
 import SwiftData
+import OSLog
+
+private struct StatsLoadCacheKey: Hashable {
+    let mode: StatsViewMode
+    let startDate: Date
+    let endDate: Date
+}
+
+private struct StatsLoadedData {
+    let records: [AppUsageRecord]
+    let dailySegments: [AppUsageSegment]
+    let weekSegments: [AppUsageSegment]
+    let periodSegments: [AppUsageSegment]
+    let timerSessions: [FocusSession]
+}
 
 struct StatsDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
@@ -12,6 +27,12 @@ struct StatsDetailWindow: View {
     @State private var timerSessions: [FocusSession] = []
     @State private var showEditor: Bool = false
     @State private var trackerStore = TrackerStateStore.shared
+    @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
+
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "app.horonghorong",
+        category: "StatsDetail"
+    )
 
     init(initialViewMode: StatsViewMode = .daily) {
         _viewMode = State(initialValue: initialViewMode)
@@ -46,8 +67,14 @@ struct StatsDetailWindow: View {
         .onChange(of: selectedDate) { _, _ in loadRecords() }
         .onChange(of: viewMode) { _, _ in loadRecords() }
         // 설정에서 휴가가 추가/삭제(=기록 삭제 옵션 포함)되면 캐시된 @State 가 stale 이 되므로 이때만 다시 로드.
-        .onChange(of: trackerStore.vacationRanges.count) { _, _ in loadRecords() }
-        .sheet(isPresented: $showEditor, onDismiss: { loadRecords() }) {
+        .onChange(of: trackerStore.vacationRanges.count) { _, _ in
+            invalidateLoadCache()
+            loadRecords()
+        }
+        .sheet(isPresented: $showEditor, onDismiss: {
+            invalidateLoadCache()
+            loadRecords()
+        }) {
             ManualSegmentEditorView(date: selectedDate)
         }
     }
@@ -275,46 +302,79 @@ struct StatsDetailWindow: View {
     }
 
     private func loadRecords() {
-        let calendar = Calendar.current
-        let startDate: Date
-        let endDate: Date
+        guard let bounds = periodBounds(for: viewMode, date: selectedDate) else { return }
+        let startDate = bounds.start
+        let endDate = bounds.end
+        let key = StatsLoadCacheKey(mode: viewMode, startDate: startDate, endDate: endDate)
+        let loadStartedAt = Date()
 
-        switch viewMode {
-        case .daily:
-            startDate = calendar.startOfDay(for: selectedDate)
-            endDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
-        case .weekly:
-            guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)) else { return }
-            startDate = weekStart
-            endDate = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-        case .monthly:
-            guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedDate)) else { return }
-            startDate = monthStart
-            endDate = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? monthStart
+        if let cached = loadCache[key] {
+            applyLoadedData(cached)
+            let elapsedMs = Int(Date().timeIntervalSince(loadStartedAt) * 1_000)
+            Self.logger.notice("StatsDetail cache hit mode=\(viewMode.rawValue, privacy: .public) elapsed=\(elapsedMs)ms")
+            return
         }
 
+        let recordsStartedAt = Date()
         let descriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.date >= startDate && $0.date < endDate }
+            predicate: #Predicate { $0.date >= startDate && $0.date < endDate },
+            sortBy: [SortDescriptor(\.date)]
+        )
+        let fetchedRecords = (try? modelContext.fetch(descriptor)) ?? []
+        let recordsElapsedMs = Int(Date().timeIntervalSince(recordsStartedAt) * 1_000)
+
+        let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
+        let loadedSegments = loadSegments(
+            for: viewMode,
+            start: startDate,
+            end: endDate,
+            records: fetchedRecords,
+            timerSessions: fetchedSessions
         )
 
-        records = (try? modelContext.fetch(descriptor)) ?? []
+        let loadedData = StatsLoadedData(
+            records: fetchedRecords,
+            dailySegments: loadedSegments.daily,
+            weekSegments: loadedSegments.week,
+            periodSegments: loadedSegments.period,
+            timerSessions: fetchedSessions
+        )
+        loadCache[key] = loadedData
+        applyLoadedData(loadedData)
 
-        loadSegments(for: viewMode)
-        loadTimerSessions(start: startDate, end: endDate)
+        let elapsedMs = Int(Date().timeIntervalSince(loadStartedAt) * 1_000)
+        Self.logger.notice("StatsDetail loaded mode=\(viewMode.rawValue, privacy: .public) records=\(fetchedRecords.count) dailySegments=\(loadedSegments.daily.count) weekSegments=\(loadedSegments.week.count) periodSegments=\(loadedSegments.period.count) sessions=\(fetchedSessions.count) recordsFetch=\(recordsElapsedMs)ms total=\(elapsedMs)ms")
+    }
+
+    private func applyLoadedData(_ data: StatsLoadedData) {
+        records = data.records
+        dailySegments = data.dailySegments
+        weekSegments = data.weekSegments
+        periodSegments = data.periodSegments
+        timerSessions = data.timerSessions
+    }
+
+    private func invalidateLoadCache() {
+        loadCache.removeAll()
+        Self.logger.notice("StatsDetail load cache invalidated")
     }
 
     /// 전환 카운트와 포모도로 상세 표시용. 범위 앞쪽으로 약간 버퍼를 둬서 경계에 걸친 세션도 포함.
-    private func loadTimerSessions(start: Date, end: Date) {
+    private func loadTimerSessions(start: Date, end: Date) -> [FocusSession] {
         let calendar = Calendar.current
         let bufferStart = calendar.date(byAdding: .hour, value: -4, to: start) ?? start
+        let startedAt = Date()
         let descriptor = FetchDescriptor<FocusSession>(
             predicate: #Predicate { $0.startedAt >= bufferStart && $0.startedAt < end },
             sortBy: [SortDescriptor(\.startedAt)]
         )
-        timerSessions = ((try? modelContext.fetch(descriptor)) ?? []).filter {
+        let sessions = ((try? modelContext.fetch(descriptor)) ?? []).filter {
             guard let focusEnd = focusEnd(for: $0) else { return false }
             return $0.startedAt < end && focusEnd > start
         }
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        Self.logger.notice("StatsDetail sessions fetch count=\(sessions.count) elapsed=\(elapsedMs)ms")
+        return sessions
     }
 
     private func focusEnd(for session: FocusSession) -> Date? {
@@ -324,54 +384,71 @@ struct StatsDetailWindow: View {
     }
 
     /// 일간 뷰에서는 선택한 하루의 세그먼트, 주간 뷰에서는 해당 주 7일 세그먼트를 읽는다.
-    private func loadSegments(for mode: StatsViewMode) {
-        let calendar = Calendar.current
-
+    private func loadSegments(
+        for mode: StatsViewMode,
+        start: Date,
+        end: Date,
+        records: [AppUsageRecord],
+        timerSessions: [FocusSession]
+    ) -> (daily: [AppUsageSegment], week: [AppUsageSegment], period: [AppUsageSegment]) {
+        let startedAt = Date()
         switch mode {
         case .daily:
-            let dayStart = calendar.startOfDay(for: selectedDate)
-            guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
-                dailySegments = []
-                weekSegments = []
-                periodSegments = []
-                return
-            }
             let dayDescriptor = FetchDescriptor<AppUsageSegment>(
-                predicate: #Predicate { $0.startTime < dayEnd && $0.endTime > dayStart },
+                predicate: #Predicate { $0.startTime < end && $0.endTime > start },
                 sortBy: [SortDescriptor(\.startTime)]
             )
-            dailySegments = (try? modelContext.fetch(dayDescriptor)) ?? []
-            weekSegments = []
-            periodSegments = dailySegments
+            let segments = (try? modelContext.fetch(dayDescriptor)) ?? []
+            logSegmentFetch(mode: mode, count: segments.count, startedAt: startedAt, source: "segments")
+            return (segments, [], segments)
 
         case .weekly:
-            dailySegments = []
-            guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)),
-                  let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
-                weekSegments = []
-                periodSegments = []
-                return
-            }
             let weekDescriptor = FetchDescriptor<AppUsageSegment>(
-                predicate: #Predicate { $0.startTime < weekEnd && $0.endTime > weekStart },
+                predicate: #Predicate { $0.startTime < end && $0.endTime > start },
                 sortBy: [SortDescriptor(\.startTime)]
             )
-            weekSegments = (try? modelContext.fetch(weekDescriptor)) ?? []
-            periodSegments = weekSegments
+            let segments = (try? modelContext.fetch(weekDescriptor)) ?? []
+            logSegmentFetch(mode: mode, count: segments.count, startedAt: startedAt, source: "segments")
+            return ([], segments, segments)
 
         case .monthly:
-            dailySegments = []
-            weekSegments = []
-            guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedDate)),
-                  let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
-                periodSegments = []
-                return
+            if !records.isEmpty {
+                logSegmentFetch(mode: mode, count: 0, startedAt: startedAt, source: "records")
+                return ([], [], [])
             }
             let monthDescriptor = FetchDescriptor<AppUsageSegment>(
-                predicate: #Predicate { $0.startTime < monthEnd && $0.endTime > monthStart },
+                predicate: #Predicate { $0.startTime < end && $0.endTime > start },
                 sortBy: [SortDescriptor(\.startTime)]
             )
-            periodSegments = (try? modelContext.fetch(monthDescriptor)) ?? []
+            let segments = (try? modelContext.fetch(monthDescriptor)) ?? []
+            logSegmentFetch(mode: mode, count: segments.count, startedAt: startedAt, source: "segmentsFallback")
+            return ([], [], segments)
+        }
+    }
+
+    private func logSegmentFetch(mode: StatsViewMode, count: Int, startedAt: Date, source: String) {
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        Self.logger.notice("StatsDetail segment load mode=\(mode.rawValue, privacy: .public) source=\(source, privacy: .public) count=\(count) elapsed=\(elapsedMs)ms")
+    }
+
+    private func periodBounds(for mode: StatsViewMode, date: Date) -> (start: Date, end: Date)? {
+        let calendar = Calendar.current
+        switch mode {
+        case .daily:
+            let start = calendar.startOfDay(for: date)
+            return (start, calendar.date(byAdding: .day, value: 1, to: start) ?? start)
+        case .weekly:
+            guard let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)),
+                  let end = calendar.date(byAdding: .day, value: 7, to: start) else {
+                return nil
+            }
+            return (start, end)
+        case .monthly:
+            guard let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date)),
+                  let end = calendar.date(byAdding: .month, value: 1, to: start) else {
+                return nil
+            }
+            return (start, end)
         }
     }
 }
