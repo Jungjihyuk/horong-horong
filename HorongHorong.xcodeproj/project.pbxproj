@@ -393,6 +393,7 @@
 			buildConfigurationList = A14A5297AE08D880A940871A /* Build configuration list for PBXNativeTarget "HorongHorong" */;
 			buildPhases = (
 				846A6832735890A7535AB965 /* Sources */,
+				613E1507391BCB27408AF181 /* Copy News Runner Resources */,
 				BA29CBEDE63D494DAA4A8A3B /* Resources */,
 				09EAF433CEAFBA6D0F266997 /* Frameworks */,
 			);
@@ -468,6 +469,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		613E1507391BCB27408AF181 /* Copy News Runner Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy News Runner Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nSRC=\"${PROJECT_DIR}/Agents/news_report\"\nDST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/news_report\"\nif [ ! -d \"$SRC\" ]; then\n  echo \"warning: News runner source not found: $SRC\"\n  exit 0\nfi\nmkdir -p \"$DST\"\nrsync -a --delete \\\n  --exclude '.venv' \\\n  --exclude '__pycache__' \\\n  --exclude '*.pyc' \\\n  --exclude '.DS_Store' \\\n  --exclude 'data' \\\n  \"$SRC/\" \"$DST/\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		846A6832735890A7535AB965 /* Sources */ = {

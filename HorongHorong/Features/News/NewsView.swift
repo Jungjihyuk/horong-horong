@@ -12,6 +12,8 @@ struct NewsView: View {
 
     @State private var pipelineService = NewsPipelineService()
     @State private var newChannelInput = ""
+    @State private var showExecutionEnvironmentAlert = false
+    @State private var executionEnvironmentAlertMessage = ""
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
     @State private var selectedReport: NewsReportIndex?
 
@@ -42,6 +44,11 @@ struct NewsView: View {
         }
         .onAppear {
             applyDefaultPathsIfNeeded()
+        }
+        .alert("뉴스 리포트 실행 환경이 필요합니다", isPresented: $showExecutionEnvironmentAlert) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(executionEnvironmentAlertMessage)
         }
     }
 
@@ -336,6 +343,10 @@ struct NewsView: View {
             maxItemsPerSource: maxItemsPerSource,
             context: modelContext
         )
+        if pipelineService.lastErrorCode == "E_ENV" {
+            executionEnvironmentAlertMessage = pipelineService.lastErrorMessage ?? "uv 또는 Python 3 실행 환경을 확인해주세요."
+            showExecutionEnvironmentAlert = true
+        }
     }
 
     private func applyDefaultPathsIfNeeded() {
