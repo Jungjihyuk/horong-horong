@@ -14,6 +14,7 @@ struct NewsView: View {
     @State private var newChannelInput = ""
     @State private var showExecutionEnvironmentAlert = false
     @State private var executionEnvironmentAlertMessage = ""
+    @State private var isRunButtonHovered = false
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
     @State private var selectedReport: NewsReportIndex?
 
@@ -22,23 +23,24 @@ struct NewsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                header
-                Divider()
-                runSection
+                HStack(alignment: .center) {
+                    header
+                    Spacer()
+                    providerMenu
+                }
+
+                runButton
+
                 if pipelineService.isRunning {
                     statusSection
                 }
                 if !pipelineService.lastWarnings.isEmpty {
                     warningsSection
                 }
-                Divider()
                 reportsSection
                 if pipelineService.lastErrorCode != nil {
-                    Divider()
                     errorSection
                 }
-                Divider()
-                settingsSection
             }
             .padding(.trailing, 12)
         }
@@ -53,36 +55,83 @@ struct NewsView: View {
     }
 
     private var header: some View {
-        Label("뉴스 큐레이션", systemImage: "newspaper")
-            .font(.headline)
+        HStack(spacing: 6) {
+            Image(systemName: "newspaper")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(PopoverChrome.accent)
+            Text("뉴스 큐레이션")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+        }
     }
 
-    private var runSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Provider")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $selectedProvider) {
-                    ForEach(Constants.availableNewsProviders, id: \.self) { provider in
-                        Text(provider.capitalized).tag(provider)
-                    }
+    private var providerMenu: some View {
+        Menu {
+            ForEach(Constants.availableNewsProviders, id: \.self) { provider in
+                Button {
+                    selectedProvider = provider
+                } label: {
+                    Text(provider.capitalized)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .fixedSize()
             }
+        } label: {
+            HStack(spacing: 6) {
+                Text("Provider")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                Text(selectedProvider.capitalized)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 11)
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
 
+    private var runButton: some View {
+        Button {
             if pipelineService.isRunning {
-                Button("중단") { pipelineService.cancelJob() }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                pipelineService.cancelJob()
             } else {
-                Button("리포트 생성") { launchJob() }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
+                launchJob()
             }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: pipelineService.isRunning ? "stop.fill" : "sparkles")
+                    .font(.system(size: 10, weight: .bold))
+                Text(pipelineService.isRunning ? "중단" : "리포트 생성")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(PopoverChrome.accentInk)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 1.00, green: 0.59, blue: 0.22),
+                        Color(red: 0.94, green: 0.45, blue: 0.16),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                in: Capsule()
+            )
+            .shadow(color: PopoverChrome.accent.opacity(isRunButtonHovered ? 0.38 : 0.28), radius: isRunButtonHovered ? 15 : 12, x: 0, y: isRunButtonHovered ? 9 : 7)
+        }
+        .buttonStyle(.plain)
+        .offset(y: isRunButtonHovered ? -2 : 0)
+        .animation(.easeOut(duration: 0.16), value: isRunButtonHovered)
+        .onHover { isHovering in
+            isRunButtonHovered = isHovering
         }
     }
 
@@ -92,11 +141,11 @@ struct NewsView: View {
                 ProgressView().scaleEffect(0.7)
                 Text(stepLabel(pipelineService.currentStep))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
                 Spacer()
                 Text("\(pipelineService.elapsedSeconds)초")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
             }
             HStack(spacing: 4) {
                 ForEach(pipelineSteps, id: \.self) { step in
@@ -104,9 +153,7 @@ struct NewsView: View {
                 }
             }
         }
-        .padding(8)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .popoverCard(padding: 10)
     }
 
     private func stepDot(step: String) -> some View {
@@ -138,20 +185,21 @@ struct NewsView: View {
     }
 
     private var reportsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("최근 리포트")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
 
             if recentReports.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "newspaper")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                     Text("아직 생성된 리포트가 없습니다")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
+                .popoverCard()
             } else {
                 ForEach(recentReports.prefix(5)) { report in
                     reportRow(report: report)
@@ -161,39 +209,37 @@ struct NewsView: View {
     }
 
     private func reportRow(report: NewsReportIndex) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(formatDate(report.reportDate))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
                 Text(report.topTitle)
-                    .font(.caption)
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
                     .lineLimit(2)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(PopoverChrome.ink)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 10, weight: .medium))
                 Text("\(report.itemCount)개")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Button {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: report.reportPath))
-                } label: {
-                    Image(systemName: "doc.text")
-                        .font(.caption)
-                        .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
             }
+            .foregroundStyle(PopoverChrome.inkSecondary)
         }
-        .padding(8)
+        .popoverCard(padding: 12, radius: 10)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(selectedReport?.jobId == report.jobId
-                    ? Color.accentColor.opacity(0.1)
-                    : Color.secondary.opacity(0.05))
+            selectedReport?.jobId == report.jobId
+                ? PopoverChrome.accentSoft.opacity(0.22)
+                : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
-        .onTapGesture { selectedReport = report }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedReport = report
+            NSWorkspace.shared.open(URL(fileURLWithPath: report.reportPath))
+        }
     }
 
     private var errorSection: some View {
@@ -223,7 +269,7 @@ struct NewsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("설정")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
 
             runnerPathPreview
             pathField(title: "리포트 저장 경로", path: $dataBasePath)
@@ -239,6 +285,7 @@ struct NewsView: View {
 
             youtubeChannelSection
         }
+        .popoverCard()
     }
 
     private var youtubeChannelSection: some View {
