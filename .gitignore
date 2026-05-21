@@ -53,6 +53,8 @@ pip-delete-this-directory.txt
 build/
 DerivedData/
 Artifacts/Screenshots/
+HorongHorong-*.dmg
+HorongHorong-*.zip
 *.moved-aside
 *.hmap
 *.ipa
