@@ -25,8 +25,13 @@ enum PopoverTab: String, CaseIterable, Identifiable {
 struct MenuBarPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
-    @State private var selectedTab: PopoverTab = .timer
+    @State private var selectedTab: PopoverTab
     var timerManager: TimerManager
+
+    init(timerManager: TimerManager, initialTab: PopoverTab = .timer) {
+        self.timerManager = timerManager
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
