@@ -31,16 +31,22 @@ struct MenuBarPopover: View {
     var body: some View {
         VStack(spacing: 0) {
             tabBar
-            Divider()
             tabContent
                 .id(selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(12)
-            Divider()
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
             bottomBar
         }
-        .frame(width: Constants.popoverWidth)
-        .frame(maxHeight: Constants.popoverMaxHeight, alignment: .top)
+        .frame(width: Constants.popoverWidth, height: Constants.popoverMaxHeight, alignment: .top)
+        .background(PopoverChrome.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.28), radius: 30, x: 0, y: 18)
     }
 
     private var tabBar: some View {
@@ -51,21 +57,29 @@ struct MenuBarPopover: View {
                 } label: {
                     VStack(spacing: 2) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 14))
+                            .font(.system(size: 18, weight: .medium))
                         Text(tab.rawValue)
-                            .font(.caption2)
+                            .font(.system(size: 11.5, weight: selectedTab == tab ? .semibold : .regular))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .padding(.vertical, 8)
+                    .foregroundStyle(selectedTab == tab ? PopoverChrome.accent : PopoverChrome.inkSecondary)
+                    .background(selectedTab == tab ? PopoverChrome.accentSoft : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(PopoverChrome.surfaceAlt)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(height: 1)
+        }
     }
 
     @ViewBuilder
@@ -85,7 +99,7 @@ struct MenuBarPopover: View {
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openSettings()
@@ -103,44 +117,113 @@ struct MenuBarPopover: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "gearshape")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                     Text("설정")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(.primary.opacity(0.00001))
                 )
             }
             .buttonStyle(.plain)
             .keyboardShortcut(",", modifiers: .command)
 
-            Divider().frame(height: 18)
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(width: 1, height: 20)
 
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                     Text("종료")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(.primary.opacity(0.00001))
                 )
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+        .background(PopoverChrome.surfaceAlt)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(height: 1)
+        }
+    }
+}
+
+enum PopoverChrome {
+    static let ink = Color(red: 0.23, green: 0.16, blue: 0.10)
+    static let inkSecondary = Color(red: 0.48, green: 0.36, blue: 0.27)
+    static let inkTertiary = Color(red: 0.64, green: 0.52, blue: 0.39)
+    static let surface = Color(red: 1.00, green: 0.965, blue: 0.91)
+    static let surfaceAlt = Color(red: 0.996, green: 0.94, blue: 0.86)
+    static let card = Color.white.opacity(0.78)
+    static let border = Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.18)
+    static let divider = Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.16)
+    static let accent = Color(red: 0.94, green: 0.47, blue: 0.18)
+    static let accentSoft = Color(red: 1.00, green: 0.86, blue: 0.70)
+    static let accentInk = Color.white
+}
+
+struct PopoverCardModifier: ViewModifier {
+    var padding: CGFloat = 12
+    var radius: CGFloat = 14
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(PopoverChrome.border, lineWidth: 1)
+            )
+            .shadow(color: Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08), radius: 6, x: 0, y: 2)
+    }
+}
+
+extension View {
+    func popoverCard(padding: CGFloat = 12, radius: CGFloat = 14) -> some View {
+        modifier(PopoverCardModifier(padding: padding, radius: radius))
+    }
+}
+
+struct LanternPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(PopoverChrome.accentInk)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .background(PopoverChrome.accent, in: Capsule())
+            .shadow(color: PopoverChrome.accent.opacity(configuration.isPressed ? 0.12 : 0.22), radius: 10, x: 0, y: 4)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+struct LanternSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .background(Color.white.opacity(configuration.isPressed ? 0.55 : 0.72), in: Capsule())
+            .overlay(Capsule().stroke(PopoverChrome.divider, lineWidth: 1))
     }
 }
 
@@ -153,71 +236,89 @@ struct AgentExperimentView: View {
     @AppStorage(Constants.AppStorageKey.planDayCount) private var planDayCount = Constants.defaultPlanDayCount
 
     @State private var statusMessage: String = ""
+    @State private var hoveredAgentType: String?
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Agent 실험", systemImage: "bolt.horizontal.circle")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.horizontal.circle")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(PopoverChrome.accent)
+                    Text("Agent 실험")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                    Spacer()
+                    Image("FocusOnTransparent")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .shadow(color: PopoverChrome.accent.opacity(0.22), radius: 8, x: 0, y: 3)
+                }
 
-                directorySection(
-                    title: "실험 루트 폴더",
-                    path: $agentRootDirectoryPath,
-                    action: {
-                        if let selected = selectDirectory() {
-                            agentRootDirectoryPath = selected
-                        }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("관심사 키워드")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    if interestKeywordTags.isEmpty {
+                        Text("등록된 관심사 없음")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    } else {
+                        interestKeywordChips
                     }
-                )
+                }
 
-                derivedDirectorySummary
+                Text("관심사는 설정창에서 수정할 수 있어요.")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .padding(.top, -10)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Agent")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("Agent", selection: $selectedAgentType) {
-                        ForEach(Constants.availableAgentTypes, id: \.self) { agent in
-                            Text(agent).tag(agent)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    agentSelector
                 }
 
-                Stepper("계획 일수: \(planDayCount)일", value: $planDayCount, in: 1...30)
-                    .font(.callout)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("관심사 키워드")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("예: 생산성, 자동화, 실험", text: $interestKeywords)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.callout)
-                    if interestKeywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("관심사를 입력해 주세요. 비어 있으면 Agent 가 일반적인 주제로 계획을 만듭니다.")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("계획 일수")
+                            .font(.caption)
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                        Text("\(planDayCount)일")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
                     }
+                    Spacer()
+                    Stepper("", value: $planDayCount, in: 1...30)
+                        .labelsHidden()
                 }
+                .popoverCard()
 
                 HStack(spacing: 8) {
-                    Button("계획 생성") {
+                    Button {
                         runPlanGeneration()
+                    } label: {
+                        Label("계획 생성", systemImage: "sparkles")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(LanternPrimaryButtonStyle())
+                    .frame(maxWidth: .infinity)
 
-                    Button("오늘 실험 실행") {
+                    Button {
                         runTodayExperiment()
+                    } label: {
+                        Label("오늘 실험 실행", systemImage: "play.fill")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(LanternSecondaryButtonStyle())
+                    .frame(maxWidth: .infinity)
                 }
 
                 if !statusMessage.isEmpty {
                     Text(statusMessage)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .popoverCard(padding: 10)
                 }
             }
             .padding(.trailing, 12)
@@ -230,6 +331,73 @@ struct AgentExperimentView: View {
         }
     }
 
+    private var interestKeywordChips: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(interestKeywordTags, id: \.self) { keyword in
+                Text(keyword)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(PopoverChrome.surfaceAlt, in: Capsule())
+                    .overlay(Capsule().stroke(PopoverChrome.divider, lineWidth: 1))
+            }
+        }
+    }
+
+    private var agentSelector: some View {
+        HStack(spacing: 6) {
+            ForEach(Constants.availableAgentTypes, id: \.self) { agent in
+                Button {
+                    selectedAgentType = agent
+                } label: {
+                    Text(agent)
+                        .font(.system(size: 12.5, weight: selectedAgentType == agent ? .bold : .medium, design: .rounded))
+                        .foregroundStyle(selectedAgentType == agent ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(agentTypeFill(for: agent))
+                        )
+                        .shadow(color: selectedAgentType == agent ? PopoverChrome.accent.opacity(0.28) : .clear, radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    hoveredAgentType = isHovering ? agent : nil
+                }
+            }
+        }
+        .padding(4)
+        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+
+    private func agentTypeFill(for agent: String) -> Color {
+        if selectedAgentType == agent {
+            return PopoverChrome.accent
+        }
+        if hoveredAgentType == agent {
+            return PopoverChrome.card
+        }
+        return .clear
+    }
+
+    private var trimmedInterestKeywords: String {
+        interestKeywords.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasInterestKeywords: Bool {
+        !trimmedInterestKeywords.isEmpty
+    }
+
+    private var interestKeywordTags: [String] {
+        trimmedInterestKeywords
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     private var normalizedAgentRootDirectory: String {
         agentRootDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -240,32 +408,6 @@ struct AgentExperimentView: View {
 
     private var outputDirectoryPath: String {
         Constants.agentOutputDirectoryPath(for: normalizedAgentRootDirectory)
-    }
-
-    private var derivedDirectorySummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("루트 안에서 자동으로 나눠 저장됩니다.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            pathPreview(title: "아이디어", path: ideaDirectoryPath)
-            pathPreview(title: "출력", path: outputDirectoryPath)
-        }
-        .padding(8)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-
-    private func pathPreview(title: String, path: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .frame(width: 44, alignment: .leading)
-            Text(path.isEmpty ? "루트 폴더를 선택하세요" : path)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
     }
 
     private func applyDefaultAgentRootIfNeeded() {
@@ -287,37 +429,6 @@ struct AgentExperimentView: View {
         if !output.isEmpty { return output }
         if !idea.isEmpty { return idea }
         return nil
-    }
-
-    @ViewBuilder
-    private func directorySection(title: String, path: Binding<String>, action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                TextField("경로를 입력하거나 변경 버튼을 누르세요", text: path)
-                    .textFieldStyle(.roundedBorder)
-                Button("변경") {
-                    action()
-                }
-                .controlSize(.small)
-            }
-            Text(path.wrappedValue)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(2)
-        }
-    }
-
-    private func selectDirectory() -> String? {
-        let panel = NSOpenPanel()
-        panel.prompt = "선택"
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-        return panel.runModal() == .OK ? panel.url?.path : nil
     }
 
     private func runPlanGeneration() {

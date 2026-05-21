@@ -4,8 +4,8 @@ struct AppearancePage: View {
     // 화면 모드: light / dark. (시스템 따라가기는 미구현)
     @AppStorage(Constants.AppStorageKey.appearanceMode)
     private var appearanceMode: String = Constants.defaultAppearanceMode
-    // 팝오버 UI 의 *테마* — 따뜻한 등불 / 편안한 풀 / 게임 픽셀.
-    @State private var popoverTheme: String = "warmLantern"
+    @AppStorage(Constants.AppStorageKey.popoverTheme)
+    private var popoverTheme: String = Constants.defaultPopoverTheme
     @State private var accent: Color = SettingsTheme.accent
     @State private var density: String = "comfortable"
     @State private var appIcon: String = "auto"
@@ -23,6 +23,9 @@ struct AppearancePage: View {
             // 시스템 모드 옵션 제거 — 기존 "system" 저장값은 라이트로 정규화한다.
             if appearanceMode != "light" && appearanceMode != "dark" {
                 appearanceMode = "light"
+            }
+            if popoverTheme != Constants.defaultPopoverTheme {
+                popoverTheme = Constants.defaultPopoverTheme
             }
         }
     }
@@ -89,19 +92,55 @@ struct AppearancePage: View {
         SettingsGroupCard("테마") {
             SettingsRow(
                 "팝오버 테마",
-                subtitle: "메뉴바 팝오버의 UI 무드를 선택합니다. 색·일러스트·폰트 강조가 함께 바뀝니다.",
-                comingSoon: true
+                subtitle: "현재 팝오버에 적용되는 테마입니다. 다른 테마는 준비 중입니다."
             ) {
-                Picker("", selection: $popoverTheme) {
-                    Text("🏮 따뜻한 등불").tag("warmLantern")
-                    Text("🌿 편안한 풀").tag("calmGrass")
-                    Text("👾 게임 픽셀").tag("pixelGame")
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 180)
+                popoverThemeMenu
             }
         }
+    }
+
+    private var popoverThemeMenu: some View {
+        Menu {
+            Button {
+                popoverTheme = Constants.defaultPopoverTheme
+            } label: {
+                Label("따뜻한 등불", systemImage: popoverTheme == Constants.defaultPopoverTheme ? "checkmark" : "")
+            }
+
+            Button {} label: {
+                HStack {
+                    Text("편안한 풀")
+                    Text("준비 중")
+                }
+            }
+            .disabled(true)
+
+            Button {} label: {
+                HStack {
+                    Text("게임 픽셀")
+                    Text("준비 중")
+                }
+            }
+            .disabled(true)
+        } label: {
+            HStack(spacing: 8) {
+                Text("🏮")
+                    .font(.system(size: 14))
+                Text("따뜻한 등불")
+                    .font(.callout)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: 190, alignment: .leading)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - 아이콘 카드

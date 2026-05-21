@@ -1,7 +1,31 @@
 import SwiftUI
 
+private struct TimerGradientButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 22)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 1.00, green: 0.60, blue: 0.24),
+                        Color(red: 0.96, green: 0.40, blue: 0.10),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                in: Capsule()
+            )
+            .shadow(color: Color(red: 0.92, green: 0.40, blue: 0.08).opacity(configuration.isPressed ? 0.22 : 0.32), radius: 13, x: 0, y: 8)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
 struct TimerView: View {
     @Environment(AppState.self) private var appState
+    @State private var hoveredPreset: Constants.PomodoroPreset?
     @AppStorage(Constants.AppStorageKey.selectedFocusCategory)
     private var selectedFocusCategory: String = Constants.defaultFocusCategory
     @AppStorage(Constants.AppStorageKey.pomodoroFocusMinutes)
@@ -19,35 +43,107 @@ struct TimerView: View {
     var timerManager: TimerManager
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 4) {
             timerDisplay
             controlButtons
             presetSelector
         }
+        .frame(maxWidth: .infinity, minHeight: 410, alignment: .top)
     }
 
     private var timerDisplay: some View {
-        VStack(spacing: 4) {
-            Text(statusText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+        VStack(spacing: 12) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+                Text(statusText)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                focusStatusIcon
+                    .padding(.leading, 2)
+            }
+            .frame(height: 26)
 
-            Text(timeString)
-                .font(.system(size: 48, weight: .light, design: .monospaced))
-                .contentTransition(.numericText())
-                .animation(.default, value: appState.remainingSeconds)
+            timerText
 
-            if appState.timerState == .focusing || appState.timerState == .breaking {
+            if showsProgress {
                 ProgressView(value: progress)
-                    .tint(appState.timerState == .focusing ? .orange : .green)
+                    .tint(statusColor)
                     .animation(.linear, value: progress)
+                    .padding(.horizontal, 24)
+            } else {
+                Color.clear
+                    .frame(height: 4)
+                    .padding(.horizontal, 24)
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+    }
+
+    private var timerGlow: some View {
+        Ellipse()
+            .fill(
+                RadialGradient(
+                    colors: [
+                        Color(red: 1.00, green: 0.67, blue: 0.31).opacity(isFocusing ? 0.44 : 0.34),
+                        Color(red: 1.00, green: 0.75, blue: 0.39).opacity(0.18),
+                        .clear,
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 128
+                )
+            )
+            .frame(width: 260, height: 90)
+            .blur(radius: 8)
+            .offset(y: 44)
+            .allowsHitTesting(false)
+    }
+
+    private var timerText: some View {
+        ZStack {
+            timerGlow
+
+            TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                HStack(spacing: 0) {
+                    Text(minutesString)
+                        .foregroundStyle(PopoverChrome.ink)
+                        .contentTransition(.numericText())
+                    Text(":")
+                        .font(.system(size: 46, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.accent)
+                        .opacity(colonOpacity(at: context.date))
+                    Text(secondsString)
+                        .foregroundStyle(PopoverChrome.ink)
+                        .contentTransition(.numericText())
+                }
+            }
+            .font(.system(size: 66, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .shadow(color: Color(red: 0.95, green: 0.45, blue: 0.13).opacity(0.15), radius: 18, x: 0, y: 10)
+            .animation(.default, value: appState.remainingSeconds)
+        }
+        .frame(height: 78)
+    }
+
+    private var focusStatusIcon: some View {
+        TimelineView(.animation(minimumInterval: 1 / 60)) { context in
+            Image(focusIconName)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: 29, height: 29)
+                .offset(y: focusIconOffset(at: context.date))
+                .shadow(color: PopoverChrome.accent.opacity(isFocusing ? 0.26 : 0.12), radius: 8, x: 0, y: 2)
+        }
+        .frame(width: 29, height: 29)
     }
 
     private var controlButtons: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 10) {
             switch appState.timerState {
             case .idle:
                 Button {
@@ -55,8 +151,7 @@ struct TimerView: View {
                 } label: {
                     Label("집중 시작", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .buttonStyle(TimerGradientButtonStyle())
 
             case .focusing:
                 Button {
@@ -64,15 +159,14 @@ struct TimerView: View {
                 } label: {
                     Label("일시정지", systemImage: "pause.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(LanternSecondaryButtonStyle())
 
                 Button {
                     timerManager.reset()
                 } label: {
-                    Label("리셋", systemImage: "stop.fill")
+                    Label("리셋", systemImage: "arrow.counterclockwise")
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .buttonStyle(LanternSecondaryButtonStyle())
 
             case .paused:
                 Button {
@@ -80,16 +174,14 @@ struct TimerView: View {
                 } label: {
                     Label("재개", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .buttonStyle(TimerGradientButtonStyle())
 
                 Button {
                     timerManager.reset()
                 } label: {
-                    Label("리셋", systemImage: "stop.fill")
+                    Label("리셋", systemImage: "arrow.counterclockwise")
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .buttonStyle(LanternSecondaryButtonStyle())
 
             case .breakAlert:
                 Button {
@@ -97,15 +189,14 @@ struct TimerView: View {
                 } label: {
                     Label("휴식 시작", systemImage: "cup.and.saucer.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .buttonStyle(TimerGradientButtonStyle())
 
                 Button {
                     timerManager.reset()
                 } label: {
                     Label("건너뛰기", systemImage: "forward.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(LanternSecondaryButtonStyle())
 
             case .breaking:
                 Button {
@@ -113,56 +204,92 @@ struct TimerView: View {
                 } label: {
                     Label("휴식 종료", systemImage: "stop.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(LanternSecondaryButtonStyle())
             }
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .offset(y: -9)
     }
 
     private var presetSelector: some View {
         Group {
             if appState.timerState == .idle {
                 VStack(spacing: 8) {
-                    Picker("프리셋", selection: Binding(
-                        get: { currentPreset },
-                        set: { applyPreset($0) }
-                    )) {
-                        ForEach(Constants.PomodoroPreset.allCases) { preset in
-                            Text(preset.rawValue).tag(preset)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    Text("프리셋")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    presetChips
 
                     HStack(spacing: 8) {
                         Text("카테고리")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Picker("카테고리", selection: $selectedFocusCategory) {
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                        Spacer(minLength: 8)
+                        Menu {
                             ForEach(Constants.allCategories, id: \.self) { cat in
-                                Text("\(Constants.categoryEmoji(for: cat)) \(cat)")
-                                    .tag(cat)
+                                Button {
+                                    selectedFocusCategory = cat
+                                } label: {
+                                    Text("\(Constants.categoryEmoji(for: cat)) \(cat)")
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("\(Constants.categoryEmoji(for: selectedFocusCategory)) \(selectedFocusCategory)")
+                                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                    .foregroundStyle(PopoverChrome.ink)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(PopoverChrome.inkSecondary)
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 10)
+                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(PopoverChrome.divider, lineWidth: 1)
+                        )
                     }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    if currentPreset == .custom {
-                        HStack {
-                            Stepper("집중 \(appState.focusMinutes)분", value: Binding(
-                                get: { appState.focusMinutes },
-                                set: { appState.focusMinutes = $0 }
-                            ), in: 1...120)
-
-                            Stepper("휴식 \(appState.breakMinutes)분", value: Binding(
-                                get: { appState.breakMinutes },
-                                set: { appState.breakMinutes = $0 }
-                            ), in: 1...30)
-                        }
-                        .font(.caption)
-                    }
                 }
             }
         }
+    }
+
+    private var presetChips: some View {
+        HStack(spacing: 6) {
+            ForEach(Constants.PomodoroPreset.allCases) { preset in
+                Button {
+                    applyPreset(preset)
+                } label: {
+                    Text(preset.rawValue)
+                        .font(.system(size: 12.5, weight: currentPreset == preset ? .bold : .medium, design: .rounded))
+                        .foregroundStyle(currentPreset == preset ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(presetChipFill(for: preset))
+                        )
+                        .shadow(color: currentPreset == preset ? PopoverChrome.accent.opacity(0.28) : .clear, radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    hoveredPreset = isHovering ? preset : nil
+                }
+            }
+        }
+        .padding(4)
+        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 
     private var currentPreset: Constants.PomodoroPreset {
@@ -189,20 +316,85 @@ struct TimerView: View {
         }
     }
 
+    private func presetChipFill(for preset: Constants.PomodoroPreset) -> Color {
+        if currentPreset == preset {
+            return PopoverChrome.accent
+        }
+        if hoveredPreset == preset {
+            return PopoverChrome.card
+        }
+        return .clear
+    }
+
     private var statusText: String {
         switch appState.timerState {
         case .idle: return "준비"
-        case .focusing: return "🔥 집중 중"
-        case .paused: return "⏸ 일시정지"
-        case .breakAlert: return "🎉 집중 완료!"
-        case .breaking: return "☕ 휴식 중"
+        case .focusing: return "집중 중"
+        case .paused: return "잠시 멈춤"
+        case .breakAlert: return "집중 완료"
+        case .breaking: return "휴식 중"
         }
     }
 
-    private var timeString: String {
-        let minutes = appState.remainingSeconds / 60
-        let seconds = appState.remainingSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+    private var statusColor: Color {
+        switch appState.timerState {
+        case .idle, .paused:
+            return PopoverChrome.accent
+        case .focusing:
+            return .orange
+        case .breakAlert:
+            return .yellow
+        case .breaking:
+            return .green
+        }
+    }
+
+    private var isFocusing: Bool {
+        appState.timerState == .focusing
+    }
+
+    private var isFocusSessionActive: Bool {
+        appState.timerState == .focusing || appState.timerState == .paused
+    }
+
+    private var showsProgress: Bool {
+        switch appState.timerState {
+        case .focusing, .breaking:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var focusIconName: String {
+        isFocusSessionActive ? "FocusOnTransparent" : "FocusOffTransparent"
+    }
+
+    private var minutesString: String {
+        let minutes = displayedSeconds / 60
+        return String(format: "%02d", minutes)
+    }
+
+    private var secondsString: String {
+        let seconds = displayedSeconds % 60
+        return String(format: "%02d", seconds)
+    }
+
+    private var displayedSeconds: Int {
+        appState.timerState == .idle ? appState.focusMinutes * 60 : appState.remainingSeconds
+    }
+
+    private func colonOpacity(at date: Date) -> Double {
+        let cycle = 1.44
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+        let wave = (sin(phase * 2 * .pi - (.pi / 2)) + 1) / 2
+        return 0.36 + (wave * 0.64)
+    }
+
+    private func focusIconOffset(at date: Date) -> CGFloat {
+        let cycle = 3.1
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+        return CGFloat(sin(phase * 2 * .pi) * 1.4)
     }
 
     private var progress: Double {
