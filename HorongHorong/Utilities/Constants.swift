@@ -308,11 +308,12 @@ enum Constants {
 
     // MARK: - 뉴스 큐레이션 설정
     static var defaultNewsRunnerPath: String {
-        repositoryRelativePath("Agents", "news_report", "runner.py")
+        newsRunnerPath() ?? ""
     }
     static var defaultNewsDataBasePath: String {
-        repositoryRelativePath("Agents", "news_report")
+        newsDataBasePath()
     }
+    static let newsRunnerMissingMessage = "뉴스 리포트 실행 파일을 찾을 수 없습니다. 앱을 다시 설치한 뒤에도 문제가 계속되면 개발자에게 문의해주세요."
     static let defaultNewsProvider = "claude"
     // 기본 뉴스 키워드 = 빈 문자열. (이전엔 "AI, 개발, 생산성, 자동화" 가 자동 들어갔지만, 백지 정책으로 전환)
     static let defaultNewsInterestKeywords = ""
@@ -344,6 +345,57 @@ enum Constants {
 
     static func agentOutputDirectoryPath(for rootDirectoryPath: String) -> String {
         appendPath(rootDirectoryPath, agentOutputDirectoryName)
+    }
+
+    static func newsRunnerPath(
+        bundleResourceURL: URL? = Bundle.main.resourceURL,
+        repositoryRootPath: String? = Constants.repositoryRootPath,
+        fileManager: FileManager = .default
+    ) -> String? {
+        let bundleCandidates = [
+            bundleResourceURL?
+                .appendingPathComponent("news_report", isDirectory: true)
+                .appendingPathComponent("runner.py", isDirectory: false),
+            bundleResourceURL?
+                .appendingPathComponent("Agents", isDirectory: true)
+                .appendingPathComponent("news_report", isDirectory: true)
+                .appendingPathComponent("runner.py", isDirectory: false),
+        ]
+        let repositoryCandidate = repositoryRootPath.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+                .appendingPathComponent("Agents", isDirectory: true)
+                .appendingPathComponent("news_report", isDirectory: true)
+                .appendingPathComponent("runner.py", isDirectory: false)
+        }
+
+        return (bundleCandidates + [repositoryCandidate])
+            .compactMap { $0 }
+            .first { fileManager.fileExists(atPath: $0.path) }?
+            .path
+    }
+
+    static func newsDataBasePath(
+        repositoryRootPath: String? = Constants.repositoryRootPath,
+        applicationSupportDirectory: URL? = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first,
+        fileManager: FileManager = .default
+    ) -> String {
+        if let repositoryRootPath {
+            let repositoryNewsPath = URL(fileURLWithPath: repositoryRootPath, isDirectory: true)
+                .appendingPathComponent("Agents", isDirectory: true)
+                .appendingPathComponent("news_report", isDirectory: true)
+            if fileManager.fileExists(atPath: repositoryNewsPath.path) {
+                return repositoryNewsPath.path
+            }
+        }
+
+        guard let applicationSupportDirectory else { return "" }
+        return applicationSupportDirectory
+            .appendingPathComponent(SwiftDataStoreLocation.directoryName, isDirectory: true)
+            .appendingPathComponent("news_report", isDirectory: true)
+            .path
     }
 
     private static func repositoryRelativePath(_ components: String...) -> String {

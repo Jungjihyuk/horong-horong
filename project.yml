@@ -51,6 +51,24 @@ targets:
         SWIFT_VERSION: "6.0"
     dependencies:
       - package: HotKey
+    postCompileScripts:
+      - name: Copy News Runner Resources
+        script: |
+          set -euo pipefail
+          SRC="${PROJECT_DIR}/Agents/news_report"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/news_report"
+          if [ ! -d "$SRC" ]; then
+            echo "warning: News runner source not found: $SRC"
+            exit 0
+          fi
+          mkdir -p "$DST"
+          rsync -a --delete \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude '.DS_Store' \
+            --exclude 'data' \
+            "$SRC/" "$DST/"
 
   HorongHorongTests:
     type: bundle.unit-test
