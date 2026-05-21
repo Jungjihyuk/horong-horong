@@ -229,8 +229,8 @@ enum Constants {
     static let quickMemoPanelMaxHeight: CGFloat = 320
 
     // MARK: - 통계 윈도우 크기
-    static let statsWindowWidth: CGFloat = 700
-    static let statsWindowHeight: CGFloat = 500
+    static let statsWindowWidth: CGFloat = 880
+    static let statsWindowHeight: CGFloat = 660
 
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
