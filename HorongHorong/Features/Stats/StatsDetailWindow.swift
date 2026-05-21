@@ -13,6 +13,10 @@ struct StatsDetailWindow: View {
     @State private var showEditor: Bool = false
     @State private var trackerStore = TrackerStateStore.shared
 
+    init(initialViewMode: StatsViewMode = .daily) {
+        _viewMode = State(initialValue: initialViewMode)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
