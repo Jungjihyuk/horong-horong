@@ -223,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FocusSession.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
+            StatsAggregateCache.self,
             AppCategoryRule.self,
             NewsJob.self,
             NewsReportIndex.self,

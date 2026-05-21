@@ -60,6 +60,7 @@
 		CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
 		CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */; };
 		D1693B32CB672067FC2B9645 /* NewsSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE27FF26C6BCFBE650785D /* NewsSourceStore.swift */; };
+		D1B01DA0AC4C7C042A3F2A5E /* StatsAggregateCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */; };
 		D73B107FF69D256E8EB3818C /* NewsSourceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */; };
 		E0E8E2D315CAAD284FAA4995 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
 		E31A54EE84EC9A62F4FA971C /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 249ADDF9DA45E15FEBDF62D3 /* HotKey */; };
@@ -102,6 +103,7 @@
 		41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSidebar.swift; sourceTree = "<group>"; };
 		466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HorongHorongTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		47BCD9DC2B0CED624438303A /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
+		4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsAggregateCache.swift; sourceTree = "<group>"; };
 		5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUsageRecord.swift; sourceTree = "<group>"; };
 		5439DBA4DA11226E1FD32E0F /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorong.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -322,6 +324,7 @@
 				CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */,
 				99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */,
 				DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */,
+				4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */,
 				3449422DE95BD818E909C196 /* StatsChartView.swift */,
 				7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */,
 				0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */,
@@ -542,6 +545,7 @@
 				2CA6F9AFFFC2AE48382D2FF9 /* SettingsSection.swift in Sources */,
 				F2C018E05B5982E4D56AFFE0 /* SettingsSidebar.swift in Sources */,
 				0A73805E0D529289643AF890 /* SettingsTheme.swift in Sources */,
+				D1B01DA0AC4C7C042A3F2A5E /* StatsAggregateCache.swift in Sources */,
 				35F856165E7997406F5237AA /* StatsChartView.swift in Sources */,
 				84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */,
 				EA80346AF95E33D253BC6571 /* StatsPage.swift in Sources */,
