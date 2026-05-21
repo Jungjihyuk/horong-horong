@@ -29,8 +29,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(Constants.agentOutputDirectoryPath(for: ""), "")
     }
 
-    func testPublicDefaultInterestKeywords() {
-        XCTAssertEqual(Constants.defaultInterestKeywords, "생산성, 자동화, 학습")
-        XCTAssertEqual(Constants.defaultNewsInterestKeywords, "AI, 개발, 생산성, 자동화")
+    func testDefaultInterestKeywordsStartEmpty() {
+        XCTAssertEqual(Constants.defaultInterestKeywords, "")
+        XCTAssertEqual(Constants.defaultNewsInterestKeywords, "")
     }
 }
