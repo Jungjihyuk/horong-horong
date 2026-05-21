@@ -52,6 +52,7 @@ pip-delete-this-directory.txt
 ## Build Artifacts
 build/
 DerivedData/
+Artifacts/Screenshots/
 *.moved-aside
 *.hmap
 *.ipa

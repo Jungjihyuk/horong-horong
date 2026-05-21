@@ -9,6 +9,10 @@ struct SettingsRoot: View {
     @AppStorage(Constants.AppStorageKey.appearanceMode)
     private var appearanceMode: String = Constants.defaultAppearanceMode
 
+    init(initialSelection: SettingsTab = .general) {
+        _selection = State(initialValue: initialSelection)
+    }
+
     /// 화면 모드를 SwiftUI ColorScheme 으로 (nil = 시스템 따라감).
     private var colorScheme: ColorScheme? {
         switch appearanceMode {
