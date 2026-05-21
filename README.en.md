@@ -8,7 +8,6 @@ A horong is a small vessel that protects a quiet flame from going out. <br>
 That flame represents hope, aspiration, $\color{#D97706}{\textbf{focus}}$, and personal goals. <br>
 Like a horong gathers and shelters its light, this app helps hold scattered $\color{#D97706}{\textbf{focus}}$, collect $\color{#D97706}{\textbf{interests}}$ in one place, and create an $\color{#D97706}{\textbf{environment}}$ where small experiments can begin.
 
-<!-- TODO: Replace the representative image / hero banner. Currently using yagyong_jeong4.png as a temporary image. -->
 <img src="./assets/intro/yagyong_jeong4.png" alt="HorongHorong" width="450"/>
 
 <br />
@@ -45,6 +44,8 @@ Like a horong gathers and shelters its light, this app helps hold scattered $\co
 **HorongHorong** is a multi-purpose productivity app that lives in the macOS menu bar. <br>
 It brings together a `Pomodoro timer`, `app usage tracking`, `quick memos`, `news curation`, and `AI Agent experiments` under one menu bar icon.
 
+The app is currently developed with a Korean UI. Memos, usage records, statistics caches, and settings are stored locally with SwiftData. News and Agent features call CLI tools installed by the user.
+
 ### Why This Exists
 
 - **To reconnect scattered $\color{#D97706}{\textbf{focus}}$** — Jumping between a timer, usage tracker, memo app, and news reader can keep breaking the shape of your work. HorongHorong keeps those tools in one lightweight menu bar surface, so you can return to focus without leaving your flow.
@@ -75,7 +76,7 @@ It brings together a `Pomodoro timer`, `app usage tracking`, `quick memos`, `new
 <td width="45%" valign="middle">
 
 ### 🕐 Pomodoro Timer
-Manage focus and break cycles with presets: 50/5, 100/10, and custom. The menu bar icon changes to 🔥/☕ and shows the remaining time. When a session ends, HorongHorong shows both a system notification and a floating toast.
+Manage focus and break cycles with presets: 50/5, 100/10, and custom. Choose a focus category so completed sessions are recorded in statistics, and configure how the remaining time appears in the menu bar. When a session ends, HorongHorong shows both a system notification and a floating toast.
 
 </td>
 <td width="55%" align="center">
@@ -87,7 +88,7 @@ Manage focus and break cycles with presets: 50/5, 100/10, and custom. The menu b
 <td width="45%" valign="middle">
 
 ### 📝 Quick Memo
-Open a floating input panel from anywhere with a global shortcut. Saved memos are stored permanently and can be reviewed in the menu bar memo tab, sorted by newest first.
+Open a floating input panel from anywhere with a global shortcut. The shortcut is configurable in Settings, and saved memos are stored locally and shown in the menu bar memo tab, sorted by newest first.
 
 </td>
 <td width="55%" align="center">
@@ -99,7 +100,7 @@ Open a floating input panel from anywhere with a global shortcut. Saved memos ar
 <td width="45%" valign="middle">
 
 ### 📊 App Usage Statistics
-Track the active app in the background and automatically aggregate time by category: Work / Development / Study / Research / Log / Communication / Entertainment / Other. Check today's usage quickly from the menu bar summary, or open the detail view for daily, weekly, and monthly statistics.
+Track the active app in the background and automatically aggregate time by category: Work / Development / Study / Research / Log / Communication / Entertainment / Other. Check today's or this week's usage from the menu bar summary, or open the detail view for daily, weekly, and monthly charts, Pomodoro summaries, timeline buckets, and per-category app breakdowns. Daily records can be added, edited, or deleted manually, and vacation periods are shown separately in statistics.
 
 </td>
 <td width="55%" align="center">
@@ -136,7 +137,7 @@ Track the active app in the background and automatically aggregate time by categ
 <td width="45%" valign="middle">
 
 ### 📰 News Curation
-Collect data from channels you frequently use, such as YouTube playlists, Google News, and yozmIT. An LLM classifies the content by category and generates one-line summaries. Results are saved as daily Markdown reports.
+Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
 
 </td>
 <td width="55%" align="center">
@@ -148,7 +149,7 @@ Collect data from channels you frequently use, such as YouTube playlists, Google
 <td width="45%" valign="middle">
 
 ### ⚡ AI Agent Experiments
-Call Claude / Codex / Gemini CLI to generate an N-day experiment plan, then select and run the section for the current day.
+Call Codex / Claude / Gemini CLI to generate an N-day experiment plan, then run only today's section from the most recent plan. The experiment root is split automatically into `ideas` and `outputs`.
 
 </td>
 <td width="55%" align="center">
@@ -159,8 +160,8 @@ Call Claude / Codex / Gemini CLI to generate an N-day experiment plan, then sele
 <tr>
 <td width="45%" valign="middle">
 
-### ⚙️ Settings / Category Mapping
-Customize app-to-category mapping rules, add/delete/rename categories, choose an LLM provider, set interest keywords, and configure data paths from the settings tab.
+### ⚙️ Settings Window / Category Mapping
+Manage General, Appearance, Timer, Hotkey, Category Mapping, Statistics, News, AI Agent, Memo, Data, and About pages in a separate Settings window. It includes settings search, per-page reset to defaults, light/dark appearance modes, the warm lantern theme, app-to-category rules, idle thresholds, category pairs that are ignored for context-switch counts, news sources and interest keywords, and data paths.
 
 </td>
 <td width="55%" align="center">
@@ -188,13 +189,6 @@ Official releases are still being prepared. Once a release is available, you wil
 >    xattr -dr com.apple.quarantine /Applications/호롱호롱.app
 >    ```
 
-<!-- TODO: Enable this section after the first .dmg release. -->
-<!-- TODO: Add a Homebrew Cask command after the tap is registered.
-```bash
-brew install --cask USER/horong/horonghorong
-```
--->
-
 ### B. Build from Source
 
 Use this path when you want to build the app directly or contribute to the codebase.
@@ -207,8 +201,10 @@ Use this path when you want to build the app directly or contribute to the codeb
 - Data storage: SwiftData (local)
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 - [`uv`](https://github.com/astral-sh/uv) — *(required for the news feature)* `brew install uv`
-- At least one LLM CLI — *(required for news / Agent features)*
-  - `claude`, `codex`, `gemini`, `opencode`
+- Python 3 — *(required for the news feature)*
+- At least one LLM CLI
+  - News: `claude`, `codex`, `gemini`, `opencode`
+  - Agent experiments: `codex`, `claude`, `gemini`
 
 #### Build Steps
 
@@ -227,6 +223,12 @@ cd Agents/news_report
 uv sync
 ```
 
+#### Tests
+
+```bash
+xcodebuild -scheme HorongHorong -configuration Debug test
+```
+
 ---
 
 ## 🪔 Usage
@@ -237,7 +239,12 @@ Detailed behavior and options for each feature are documented separately.
 |------|------|
 | [`USER_GUIDE.md`](USER_GUIDE.md) | Basic guide for each menu bar tab |
 
-<!-- TODO: Add one or two GIFs for core actions, such as starting the timer or opening quick memo. -->
+### Data Locations
+
+- Timer sessions, memos, app usage records, statistics caches, and category rules: local SwiftData store
+- News reports, logs, and metadata: `data/reports`, `data/logs`, and `data/meta` under the news report path
+- Agent experiment plans and outputs: `outputs` under the Agent experiment root
+- Agent idea files: `ideas` under the Agent experiment root
 
 ---
 
