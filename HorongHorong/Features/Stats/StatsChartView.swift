@@ -139,6 +139,7 @@ struct StatsChartView: View {
                                 .frame(maxWidth: 260)
                         }
                         .frame(width: 280, alignment: .top)
+                        .popoverCard(padding: 14)
 
                         DailyTimelineBucketsView(
                             buckets: displayBuckets,
@@ -149,7 +150,6 @@ struct StatsChartView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
 
-                    Divider()
                     categoryBreakdownSection
                 }
 
@@ -303,25 +303,28 @@ struct StatsChartView: View {
     private func donutCenterLabel(data: [ChartCategoryData], total: Double, selected: String?) -> some View {
         VStack(spacing: 2) {
             if let sel = selected, let item = data.first(where: { $0.category == sel }) {
-                Text(Constants.categoryEmoji(for: sel))
-                    .font(.title3)
-                Text(sel)
-                    .font(.callout.bold())
-                Text(formatHours(item.hours))
-                    .font(.caption)
-                    .monospacedDigit()
-                Text(percentLabel(item.hours, total: total))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            } else {
-                Text("총 앱 사용 시간")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(formatHours(total))
-                    .font(.title3.bold())
-                    .monospacedDigit()
-            }
+            Text(Constants.categoryEmoji(for: sel))
+                .font(.title3)
+            Text(sel)
+                .font(.callout.bold())
+                .foregroundStyle(PopoverChrome.ink)
+            Text(formatHours(item.hours))
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+            Text(percentLabel(item.hours, total: total))
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+        } else {
+            Text("총 앱 사용 시간")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            Text(formatHours(total))
+                .font(.title3.bold())
+                .foregroundStyle(PopoverChrome.ink)
+                .monospacedDigit()
+        }
         }
     }
 
@@ -350,14 +353,15 @@ struct StatsChartView: View {
                     Text(Constants.categoryEmoji(for: item.category))
                     Text(item.category)
                         .font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
                     Spacer(minLength: 4)
                     Text(formatHours(item.hours))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                         .monospacedDigit()
                     Text(percentLabel(item.hours, total: total))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                         .monospacedDigit()
                         .frame(width: 38, alignment: .trailing)
                 }
@@ -369,6 +373,7 @@ struct StatsChartView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("카테고리별 앱 사용")
                 .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
             ForEach(categoryBreakdownData) { group in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -378,29 +383,34 @@ struct StatsChartView: View {
                         Text(Constants.categoryEmoji(for: group.category))
                         Text(group.category)
                             .font(.callout.bold())
+                            .foregroundStyle(PopoverChrome.ink)
                         Spacer()
                         Text(formatDuration(group.totalSeconds))
                             .font(.callout.bold())
+                            .foregroundStyle(PopoverChrome.ink)
                             .monospacedDigit()
                     }
                     ForEach(group.apps) { app in
                         HStack {
                             Text(app.appName)
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PopoverChrome.inkSecondary)
                                 .padding(.leading, 22)
                             Spacer()
                             Text(formatDuration(app.durationSeconds))
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PopoverChrome.inkSecondary)
                                 .monospacedDigit()
                         }
                     }
                 }
                 .padding(.vertical, 4)
-                Divider()
+                Rectangle()
+                    .fill(PopoverChrome.divider)
+                    .frame(height: 1)
             }
         }
+        .popoverCard(padding: 14)
     }
 
     // MARK: - Weekly
@@ -452,10 +462,9 @@ struct StatsChartView: View {
                     Text("막대에 커서를 올리면 해당 일자의 카테고리별 사용량이 표시됩니다")
                         .font(.caption)
                 }
-                .foregroundStyle(.secondary)
-                .padding(10)
+                .foregroundStyle(PopoverChrome.inkSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 6))
+                .popoverCard(padding: 10)
             }
         }
         .frame(minHeight: 96, alignment: .topLeading)
@@ -494,6 +503,12 @@ struct StatsChartView: View {
         .chartYAxisLabel("시간 (h)")
         .chartXSelection(value: $weeklySelection)
         .frame(height: 260)
+        .padding(12)
+        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
     }
 
     private func weekdayAxisLabel(date: Date, level: DailyFocusSummary.Level) -> some View {
@@ -562,15 +577,17 @@ struct StatsChartView: View {
             HStack {
                 Text(dayLabel(date))
                     .font(.caption.bold())
+                    .foregroundStyle(PopoverChrome.ink)
                 Spacer()
                 Text(formatHours(total))
                     .font(.caption.bold())
+                    .foregroundStyle(PopoverChrome.ink)
                     .monospacedDigit()
             }
             if items.isEmpty {
                 Text("기록 없음")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
             } else {
                 ForEach(items) { item in
                     HStack(spacing: 6) {
@@ -578,17 +595,17 @@ struct StatsChartView: View {
                             .fill(Constants.categoryColor(for: item.category))
                             .frame(width: 8, height: 8)
                         Text(item.category).font(.caption)
+                            .foregroundStyle(PopoverChrome.inkSecondary)
                         Spacer(minLength: 8)
                         Text(formatHours(item.hours))
                             .font(.caption)
+                            .foregroundStyle(PopoverChrome.ink)
                             .monospacedDigit()
                     }
                 }
             }
         }
-        .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+        .popoverCard(padding: 10)
         .frame(minWidth: 160)
     }
 
@@ -596,6 +613,7 @@ struct StatsChartView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("이번 주 카테고리 합계")
                 .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
             ForEach(categoryData) { item in
                 HStack(spacing: 8) {
                     Circle()
@@ -603,13 +621,16 @@ struct StatsChartView: View {
                         .frame(width: 10, height: 10)
                     Text(Constants.categoryEmoji(for: item.category))
                     Text(item.category).font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
                     Spacer()
                     Text(formatHours(item.hours))
                         .font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
                         .monospacedDigit()
                 }
             }
         }
+        .popoverCard(padding: 14)
     }
 
     // MARK: - Monthly
@@ -621,9 +642,7 @@ struct StatsChartView: View {
             } else {
                 if !categoryData.isEmpty {
                     monthlyHeatmapSection
-                    Divider()
                     monthlyCategorySection
-                    Divider()
                     monthlyTopAppsSection
                 }
 
@@ -641,10 +660,11 @@ struct StatsChartView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("일별 사용 시간")
                     .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
                 Spacer()
                 Text("총 \(formatHours(total)) · 사용한 날 \(active)일 · 일평균 \(formatHours(avg))")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
             }
             HeatmapCalendar(
                 dailyTotals: totals,
@@ -652,42 +672,49 @@ struct StatsChartView: View {
                 vacationDates: vacationDays
             )
         }
+        .popoverCard(padding: 14)
     }
 
     private var monthlyCategorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("카테고리 분포")
                 .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
             HStack(alignment: .top, spacing: 16) {
                 donutChart(data: categoryData)
                     .frame(width: 220)
                 categoryLegend(data: categoryData)
             }
         }
+        .popoverCard(padding: 14)
     }
 
     private var monthlyTopAppsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Top 10 앱")
                 .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
             ForEach(Array(appDetails.prefix(10).enumerated()), id: \.offset) { idx, app in
                 HStack {
                     Text("\(idx + 1)")
                         .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                         .frame(width: 22, alignment: .trailing)
                     Text(Constants.categoryEmoji(for: app.category))
                     Text(app.appName).font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
                     Spacer()
                     Text(app.category)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                     Text(formatDuration(app.durationSeconds))
                         .font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
                         .monospacedDigit()
                 }
             }
         }
+        .popoverCard(padding: 14)
     }
 
     // MARK: - Empty state
@@ -698,9 +725,10 @@ struct StatsChartView: View {
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("해당 기간에 기록된 데이터가 없습니다")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
         }
         .frame(maxWidth: .infinity, minHeight: 200)
+        .popoverCard()
     }
 
     // MARK: - Pomodoro
@@ -712,16 +740,18 @@ struct StatsChartView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("포모도로 집중")
                             .font(.headline)
+                            .foregroundStyle(PopoverChrome.ink)
                         Spacer()
                         Text("총 \(formatDuration(pomodoroTotalSeconds)) · \(pomodoroSessions.count)회")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(PopoverChrome.inkSecondary)
                     }
 
                     ForEach(pomodoroSessions) { session in
                         pomodoroSessionRow(session)
                     }
                 }
+                .popoverCard(padding: 14)
             }
         }
     }
@@ -733,34 +763,36 @@ struct StatsChartView: View {
                     Text(Constants.categoryEmoji(for: session.category))
                     Text(session.category)
                         .font(.callout.bold())
+                        .foregroundStyle(PopoverChrome.ink)
                     Text(pomodoroTimeRange(session))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                     Spacer()
                     Text(formatDuration(session.durationSeconds))
                         .font(.callout.bold())
+                        .foregroundStyle(PopoverChrome.ink)
                         .monospacedDigit()
                 }
 
                 if session.apps.isEmpty {
                     Text("세션 중 앱 사용 기록 없음")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                         .padding(.leading, 22)
                 } else {
                     ForEach(session.apps) { app in
                         HStack(spacing: 6) {
                             Text(app.appName)
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PopoverChrome.inkSecondary)
                                 .padding(.leading, 22)
                             Text(app.category)
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(PopoverChrome.inkTertiary)
                             Spacer()
                             Text(formatDuration(app.durationSeconds))
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(PopoverChrome.inkSecondary)
                                 .monospacedDigit()
                         }
                     }

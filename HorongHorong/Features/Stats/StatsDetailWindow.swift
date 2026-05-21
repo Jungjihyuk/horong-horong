@@ -16,7 +16,6 @@ struct StatsDetailWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            Divider()
             if shouldShowVacationIllustration {
                 // 일러스트 자체가 휴가 컨텍스트를 충분히 전달하므로 상단 배너는 생략.
                 vacationIllustration
@@ -37,7 +36,8 @@ struct StatsDetailWindow: View {
                 }
             }
         }
-        .frame(minWidth: 720, minHeight: 460)
+        .frame(minWidth: 820, minHeight: 560)
+        .background(PopoverChrome.surface)
         .onAppear { loadRecords() }
         .onChange(of: selectedDate) { _, _ in loadRecords() }
         .onChange(of: viewMode) { _, _ in loadRecords() }
@@ -94,7 +94,9 @@ struct StatsDetailWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.orange.opacity(0.12))
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
 
     // MARK: - 휴가 일러스트 (일간 + 데이터 없음)
@@ -163,6 +165,10 @@ struct StatsDetailWindow: View {
 
     private var toolbar: some View {
         HStack {
+            Text("호롱호롱 통계")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+
             Picker("기간", selection: $viewMode) {
                 ForEach(StatsViewMode.allCases) { mode in
                     Text(mode.rawValue).tag(mode)
@@ -180,12 +186,19 @@ struct StatsDetailWindow: View {
             } label: {
                 Label("편집", systemImage: "pencil")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(LanternSecondaryButtonStyle())
             .controlSize(.small)
             .disabled(viewMode != .daily)
             .help(viewMode == .daily ? "이 날짜의 세그먼트를 수동 편집" : "일간 뷰에서만 사용할 수 있습니다")
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(PopoverChrome.surfaceAlt)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(height: 1)
+        }
     }
 
     private var dateNavigator: some View {
@@ -195,10 +208,12 @@ struct StatsDetailWindow: View {
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .foregroundStyle(PopoverChrome.inkSecondary)
 
             Text(dateRangeText)
                 .font(.callout)
+                .foregroundStyle(PopoverChrome.ink)
                 .frame(minWidth: 120)
 
             Button {
@@ -206,12 +221,13 @@ struct StatsDetailWindow: View {
             } label: {
                 Image(systemName: "chevron.right")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .foregroundStyle(PopoverChrome.inkSecondary)
 
             Button("오늘") {
                 selectedDate = Date()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(LanternSecondaryButtonStyle())
             .controlSize(.small)
         }
     }
