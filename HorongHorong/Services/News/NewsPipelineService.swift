@@ -91,10 +91,30 @@ final class NewsPipelineService: @unchecked Sendable {
         context: ModelContext
     ) {
         guard !isRunning else { return }
-        guard !runnerPath.isEmpty else {
-            lastErrorCode = "E_CONFIG"
-            lastErrorMessage = "Runner 경로를 설정해주세요"
-            lastJobStatus = "failed"
+
+        lastErrorCode = nil
+        lastErrorMessage = nil
+        lastWarnings = []
+
+        guard !runnerPath.isEmpty,
+              FileManager.default.fileExists(atPath: runnerPath) else {
+            finishConfigurationFailed(code: "E_CONFIG", message: Constants.newsRunnerMissingMessage)
+            return
+        }
+
+        let environment = enrichedEnvironment(newsDataBasePath: dataBasePath)
+        guard commandSucceeds(["uv", "--version"], environment: environment) else {
+            finishConfigurationFailed(
+                code: "E_ENV",
+                message: "뉴스 리포트 기능을 사용하려면 uv가 필요합니다. uv를 설치한 뒤 앱을 다시 실행해주세요."
+            )
+            return
+        }
+        guard commandSucceeds(["python3", "--version"], environment: environment) else {
+            finishConfigurationFailed(
+                code: "E_ENV",
+                message: "뉴스 리포트 기능을 사용하려면 Python 3가 필요합니다. Python 3를 설치한 뒤 앱을 다시 실행해주세요."
+            )
             return
         }
 
@@ -102,9 +122,6 @@ final class NewsPipelineService: @unchecked Sendable {
         isRunning = true
         currentStep = "queued"
         elapsedSeconds = 0
-        lastErrorCode = nil
-        lastErrorMessage = nil
-        lastWarnings = []
         startTime = Date()
 
         // Persist job record
@@ -194,7 +211,7 @@ final class NewsPipelineService: @unchecked Sendable {
             "--result", resultPath,
             "--log", logPath,
         ]
-        proc.environment = enrichedEnvironment()
+        proc.environment = environment
 
         let stdoutPipe = Pipe()
         proc.standardOutput = stdoutPipe
@@ -322,6 +339,15 @@ final class NewsPipelineService: @unchecked Sendable {
         isRunning = false
     }
 
+    private func finishConfigurationFailed(code: String, message: String) {
+        lastJobStatus = "failed"
+        lastErrorCode = code
+        lastErrorMessage = message
+        cleanup()
+        currentStep = "failed"
+        isRunning = false
+    }
+
     private func cleanup() {
         elapsedTimer?.invalidate()
         elapsedTimer = nil
@@ -332,7 +358,7 @@ final class NewsPipelineService: @unchecked Sendable {
         process = nil
     }
 
-    private func enrichedEnvironment() -> [String: String] {
+    private func enrichedEnvironment(newsDataBasePath: String) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         let home = env["HOME"] ?? NSHomeDirectory()
         let extraPaths = [
@@ -346,7 +372,30 @@ final class NewsPipelineService: @unchecked Sendable {
             .filter { !$0.isEmpty }
             .joined(separator: ":")
         env["PATH"] = merged
+        let trimmedDataBasePath = newsDataBasePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedDataBasePath.isEmpty {
+            env["UV_PROJECT_ENVIRONMENT"] = URL(fileURLWithPath: trimmedDataBasePath, isDirectory: true)
+                .appendingPathComponent(".venv", isDirectory: true)
+                .path
+        }
         return env
+    }
+
+    private func commandSucceeds(_ arguments: [String], environment: [String: String]) -> Bool {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.arguments = arguments
+        proc.environment = environment
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            return proc.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     private func generateJobId() -> String {
