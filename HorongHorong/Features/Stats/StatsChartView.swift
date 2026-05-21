@@ -1,6 +1,7 @@
 import SwiftUI
 import Charts
 import SwiftData
+import OSLog
 
 // MARK: - Data models
 
@@ -116,6 +117,11 @@ struct StatsChartView: View {
     @AppStorage(Constants.AppStorageKey.timelineBucketMinutes)
     private var timelineBucketMinutes: Int = Constants.defaultTimelineBucketMinutes
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "app.horonghorong",
+        category: "StatsChart"
+    )
+
     private var activeRecords: [AppUsageRecord] {
         records.filter { !Constants.hiddenLegacyCategories.contains($0.category) }
     }
@@ -137,6 +143,12 @@ struct StatsChartView: View {
     private var hasAggregateSource: Bool {
         guard viewMode != .daily, let aggregateSnapshot else { return false }
         return !aggregateSnapshot.isEmpty
+    }
+
+    private var dataSourceLabel: String {
+        if hasAggregateSource { return "aggregate" }
+        if hasSegmentSource { return "segments" }
+        return "records"
     }
 
     var body: some View {
@@ -567,10 +579,13 @@ struct StatsChartView: View {
     }
 
     private var weeklyFocusByDay: [Date: DailyFocusSummary.Level] {
+        let startedAt = Date()
         if hasAggregateSource, let aggregateSnapshot, !aggregateSnapshot.dailyFocusLevels.isEmpty {
-            return Dictionary(uniqueKeysWithValues: aggregateSnapshot.dailyFocusLevels.map {
+            let result = Dictionary(uniqueKeysWithValues: aggregateSnapshot.dailyFocusLevels.map {
                 ($0.day, focusLevel(from: $0.level))
             })
+            logChartBuild("weeklyFocusByDay", rows: result.count, startedAt: startedAt, source: "aggregate")
+            return result
         }
 
         let cal = Calendar.current
@@ -593,6 +608,7 @@ struct StatsChartView: View {
             )
             result[day] = sum.level
         }
+        logChartBuild("weeklyFocusByDay", rows: result.count, startedAt: startedAt, source: "segments")
         return result
     }
 
@@ -938,6 +954,7 @@ struct StatsChartView: View {
     // MARK: - Derived data
 
     private var categoryData: [ChartCategoryData] {
+        let startedAt = Date()
         let durations: [String: Int]
         if hasAggregateSource, let aggregateSnapshot {
             durations = aggregateSnapshot.categoryDurations
@@ -945,7 +962,7 @@ struct StatsChartView: View {
             durations = hasSegmentSource ? segmentDurationsByCategory : recordDurationsByCategory
         }
 
-        return durations
+        let result = durations
             .sorted {
                 if $0.value != $1.value { return $0.value > $1.value }
                 return $0.key < $1.key
@@ -955,9 +972,12 @@ struct StatsChartView: View {
                 hours: Double($0.value) / 3600.0,
                 color: Constants.categoryColor(for: $0.key)
             )}
+        logChartBuild("categoryData", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
+        return result
     }
 
     private var appDetails: [(appName: String, category: String, durationSeconds: Int)] {
+        let startedAt = Date()
         var details: [String: (appName: String, category: String, duration: Int)] = [:]
         if hasSegmentSource {
             for segment in activeSegments {
@@ -973,12 +993,15 @@ struct StatsChartView: View {
         } else {
             addRecordDetails(activeUsageRecords, to: &details)
         }
-        return details
+        let result = details
             .sorted { $0.value.duration > $1.value.duration }
             .map { (appName: $0.value.appName, category: $0.value.category, durationSeconds: $0.value.duration) }
+        logChartBuild("appDetails", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
+        return result
     }
 
     private var categoryBreakdownData: [CategoryAppsBreakdown] {
+        let startedAt = Date()
         var groups: [String: [String: Int]] = [:]
         if hasSegmentSource {
             for segment in activeSegments {
@@ -989,7 +1012,7 @@ struct StatsChartView: View {
         } else {
             addRecordBreakdown(activeUsageRecords, to: &groups)
         }
-        return groups
+        let result = groups
             .map { (cat, apps) in
                 let total = apps.values.reduce(0, +)
                 let appList = apps
@@ -998,6 +1021,8 @@ struct StatsChartView: View {
                 return CategoryAppsBreakdown(category: cat, totalSeconds: total, apps: appList)
             }
             .sorted { $0.totalSeconds > $1.totalSeconds }
+        logChartBuild("categoryBreakdownData", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
+        return result
     }
 
     private var recordDurationsByCategory: [String: Int] {
@@ -1221,23 +1246,33 @@ struct StatsChartView: View {
     }
 
     private var weeklyStackedData: [DailyChartData] {
+        let startedAt = Date()
         if hasAggregateSource, let aggregateSnapshot {
-            return aggregateSnapshot.dailyCategories.map {
+            let result = aggregateSnapshot.dailyCategories.map {
                 DailyChartData(
                     date: $0.day,
                     category: $0.category,
                     hours: Double($0.durationSeconds) / 3600.0
                 )
             }
+            logChartBuild("weeklyStackedData", rows: result.count, startedAt: startedAt, source: "aggregate")
+            return result
         }
-        return hasSegmentSource ? dailySegmentCategoryData : dailyRecordCategoryData
+        let result = hasSegmentSource ? dailySegmentCategoryData : dailyRecordCategoryData
+        logChartBuild("weeklyStackedData", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
+        return result
     }
 
     private var monthlyDailyTotalsMap: [Date: Double] {
+        let startedAt = Date()
         if hasAggregateSource, let aggregateSnapshot {
-            return aggregateSnapshot.dailyDurations.mapValues { Double($0) / 3600.0 }
+            let result = aggregateSnapshot.dailyDurations.mapValues { Double($0) / 3600.0 }
+            logChartBuild("monthlyDailyTotalsMap", rows: result.count, startedAt: startedAt, source: "aggregate")
+            return result
         }
-        return hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
+        let result = hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
+        logChartBuild("monthlyDailyTotalsMap", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
+        return result
     }
 
     private func focusLevel(from value: String) -> DailyFocusSummary.Level {
@@ -1294,8 +1329,9 @@ struct StatsChartView: View {
     }
 
     private var pomodoroTimeSummaries: [PomodoroTimeSummary] {
+        let startedAt = Date()
         guard let bounds = periodBounds else { return [] }
-        return timerSessions.compactMap { session in
+        let result: [PomodoroTimeSummary] = timerSessions.compactMap { session in
             guard isCompletedPomodoro(session),
                   let focusEnd = focusEnd(for: session) else {
                 return nil
@@ -1313,6 +1349,8 @@ struct StatsChartView: View {
             )
         }
         .sorted { $0.startedAt < $1.startedAt }
+        logChartBuild("pomodoroTimeSummaries", rows: result.count, startedAt: startedAt, source: "sessions")
+        return result
     }
 
     private var pomodoroSummaryTotalSeconds: Int {
@@ -1348,6 +1386,11 @@ struct StatsChartView: View {
                 count: counts[day] ?? 0
             )
         }
+    }
+
+    private func logChartBuild(_ name: String, rows: Int, startedAt: Date, source: String) {
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        Self.logger.notice("StatsChart data build mode=\(viewMode.rawValue, privacy: .public) name=\(name, privacy: .public) source=\(source, privacy: .public) rows=\(rows) elapsed=\(elapsedMs)ms")
     }
 
     private func isCompletedPomodoro(_ session: FocusSession) -> Bool {

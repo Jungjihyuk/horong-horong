@@ -66,16 +66,27 @@ struct StatsDetailWindow: View {
         }
         .frame(minWidth: 820, minHeight: 560)
         .background(PopoverChrome.surface)
-        .onAppear { loadRecords() }
-        .onChange(of: selectedDate) { _, _ in loadRecords() }
-        .onChange(of: viewMode) { _, _ in loadRecords() }
+        .onAppear {
+            logViewTrigger("appear")
+            loadRecords()
+        }
+        .onChange(of: selectedDate) { _, _ in
+            logViewTrigger("dateChange")
+            loadRecords()
+        }
+        .onChange(of: viewMode) { _, newMode in
+            logViewTrigger("modeChange:\(newMode.rawValue)")
+            loadRecords()
+        }
         // 설정에서 휴가가 추가/삭제(=기록 삭제 옵션 포함)되면 캐시된 @State 가 stale 이 되므로 이때만 다시 로드.
         .onChange(of: trackerStore.vacationRanges.count) { _, _ in
+            logViewTrigger("vacationChange")
             invalidateAllAggregateCaches()
             invalidateLoadCache()
             loadRecords()
         }
         .sheet(isPresented: $showEditor, onDismiss: {
+            logViewTrigger("editorDismiss")
             invalidateAggregateCaches(containing: selectedDate)
             invalidateLoadCache()
             loadRecords()
@@ -312,11 +323,14 @@ struct StatsDetailWindow: View {
         let endDate = bounds.end
         let key = StatsLoadCacheKey(mode: viewMode, startDate: startDate, endDate: endDate)
         let loadStartedAt = Date()
+        Self.logger.notice("StatsDetail load start mode=\(viewMode.rawValue, privacy: .public) start=\(Int(startDate.timeIntervalSince1970)) end=\(Int(endDate.timeIntervalSince1970))")
 
         if let cached = loadCache[key] {
+            let applyStartedAt = Date()
             applyLoadedData(cached)
-            let elapsedMs = Int(Date().timeIntervalSince(loadStartedAt) * 1_000)
-            Self.logger.notice("StatsDetail cache hit mode=\(viewMode.rawValue, privacy: .public) elapsed=\(elapsedMs)ms")
+            let applyElapsedMs = elapsedMs(since: applyStartedAt)
+            let elapsedMs = elapsedMs(since: loadStartedAt)
+            Self.logger.notice("StatsDetail load cache hit mode=\(viewMode.rawValue, privacy: .public) apply=\(applyElapsedMs)ms total=\(elapsedMs)ms")
             return
         }
 
@@ -326,7 +340,8 @@ struct StatsDetailWindow: View {
             sortBy: [SortDescriptor(\.date)]
         )
         let fetchedRecords = (try? modelContext.fetch(descriptor)) ?? []
-        let recordsElapsedMs = Int(Date().timeIntervalSince(recordsStartedAt) * 1_000)
+        let recordsElapsedMs = elapsedMs(since: recordsStartedAt)
+        Self.logger.notice("StatsDetail records fetch mode=\(viewMode.rawValue, privacy: .public) count=\(fetchedRecords.count) elapsed=\(recordsElapsedMs)ms")
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
         let aggregate = loadAggregateSnapshot(
@@ -354,10 +369,12 @@ struct StatsDetailWindow: View {
             aggregateSnapshot: aggregate
         )
         loadCache[key] = loadedData
+        let applyStartedAt = Date()
         applyLoadedData(loadedData)
+        let applyElapsedMs = elapsedMs(since: applyStartedAt)
 
-        let elapsedMs = Int(Date().timeIntervalSince(loadStartedAt) * 1_000)
-        Self.logger.notice("StatsDetail loaded mode=\(viewMode.rawValue, privacy: .public) records=\(fetchedRecords.count) dailySegments=\(loadedSegments.daily.count) weekSegments=\(loadedSegments.week.count) periodSegments=\(loadedSegments.period.count) sessions=\(fetchedSessions.count) recordsFetch=\(recordsElapsedMs)ms total=\(elapsedMs)ms")
+        let elapsedMs = elapsedMs(since: loadStartedAt)
+        Self.logger.notice("StatsDetail loaded mode=\(viewMode.rawValue, privacy: .public) records=\(fetchedRecords.count) dailySegments=\(loadedSegments.daily.count) weekSegments=\(loadedSegments.week.count) periodSegments=\(loadedSegments.period.count) sessions=\(fetchedSessions.count) recordsFetch=\(recordsElapsedMs)ms apply=\(applyElapsedMs)ms total=\(elapsedMs)ms")
     }
 
     private func applyLoadedData(_ data: StatsLoadedData) {
@@ -367,6 +384,7 @@ struct StatsDetailWindow: View {
         periodSegments = data.periodSegments
         timerSessions = data.timerSessions
         aggregateSnapshot = data.aggregateSnapshot
+        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
     }
 
     private func invalidateLoadCache() {
@@ -413,7 +431,7 @@ struct StatsDetailWindow: View {
             guard let focusEnd = focusEnd(for: $0) else { return false }
             return $0.startedAt < end && focusEnd > start
         }
-        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let elapsedMs = elapsedMs(since: startedAt)
         Self.logger.notice("StatsDetail sessions fetch count=\(sessions.count) elapsed=\(elapsedMs)ms")
         return sessions
     }
@@ -477,7 +495,7 @@ struct StatsDetailWindow: View {
     }
 
     private func logSegmentFetch(mode: StatsViewMode, count: Int, startedAt: Date, source: String) {
-        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let elapsedMs = elapsedMs(since: startedAt)
         Self.logger.notice("StatsDetail segment load mode=\(mode.rawValue, privacy: .public) source=\(source, privacy: .public) count=\(count) elapsed=\(elapsedMs)ms")
     }
 
@@ -496,10 +514,13 @@ struct StatsDetailWindow: View {
             predicate: #Predicate { $0.scope == scope },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        let caches = ((try? modelContext.fetch(scopedDescriptor)) ?? []).filter {
+        let lookupStartedAt = Date()
+        let scopedCaches = (try? modelContext.fetch(scopedDescriptor)) ?? []
+        let caches = scopedCaches.filter {
             abs($0.periodStart.timeIntervalSince(start)) < 1 &&
             abs($0.periodEnd.timeIntervalSince(end)) < 1
         }
+        Self.logger.notice("StatsDetail aggregate cache lookup mode=\(mode.rawValue, privacy: .public) scoped=\(scopedCaches.count) matched=\(caches.count) elapsed=\(elapsedMs(since: lookupStartedAt))ms")
 
         if let cache = caches.first(where: { $0.sourceFingerprint == fingerprint }),
            let snapshot = StatsAggregateCacheCodec.decode(cache.payload) {
@@ -516,6 +537,7 @@ struct StatsDetailWindow: View {
 
         if let previousCache = caches.first,
            let previousSnapshot = StatsAggregateCacheCodec.decode(previousCache.payload) {
+            let buildStartedAt = Date()
             let recordSnapshot = StatsAggregateBuilder.build(
                 mode: mode,
                 start: start,
@@ -524,6 +546,7 @@ struct StatsDetailWindow: View {
                 segments: [],
                 timerSessions: timerSessions
             )
+            Self.logger.notice("StatsDetail aggregate build mode=\(mode.rawValue, privacy: .public) source=recordsRefresh rows=\(recordSnapshot.dailyCategories.count) elapsed=\(elapsedMs(since: buildStartedAt))ms")
             let refreshedSnapshot = StatsAggregateSnapshot(
                 dailyCategories: recordSnapshot.dailyCategories,
                 dailyFocusLevels: previousSnapshot.dailyFocusLevels
@@ -549,9 +572,10 @@ struct StatsDetailWindow: View {
             sortBy: [SortDescriptor(\.startTime)]
         )
         let segments = (try? modelContext.fetch(segmentDescriptor)) ?? []
-        let segmentElapsedMs = Int(Date().timeIntervalSince(segmentsStartedAt) * 1_000)
+        let segmentElapsedMs = elapsedMs(since: segmentsStartedAt)
         Self.logger.notice("StatsDetail aggregate source segments mode=\(mode.rawValue, privacy: .public) count=\(segments.count) elapsed=\(segmentElapsedMs)ms")
 
+        let buildStartedAt = Date()
         let snapshot = StatsAggregateBuilder.build(
             mode: mode,
             start: start,
@@ -560,6 +584,7 @@ struct StatsDetailWindow: View {
             segments: segments,
             timerSessions: timerSessions
         )
+        Self.logger.notice("StatsDetail aggregate build mode=\(mode.rawValue, privacy: .public) source=segments rows=\(snapshot.dailyCategories.count) elapsed=\(elapsedMs(since: buildStartedAt))ms")
 
         guard let payload = StatsAggregateCacheCodec.encode(snapshot) else {
             logAggregateCache(mode: mode, source: "encodeFailed", rows: snapshot.dailyCategories.count, startedAt: startedAt)
@@ -582,8 +607,16 @@ struct StatsDetailWindow: View {
     }
 
     private func logAggregateCache(mode: StatsViewMode, source: String, rows: Int, startedAt: Date) {
-        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let elapsedMs = elapsedMs(since: startedAt)
         Self.logger.notice("StatsDetail aggregate cache mode=\(mode.rawValue, privacy: .public) source=\(source, privacy: .public) rows=\(rows) elapsed=\(elapsedMs)ms")
+    }
+
+    private func logViewTrigger(_ event: String) {
+        Self.logger.notice("StatsDetail view trigger event=\(event, privacy: .public) mode=\(viewMode.rawValue, privacy: .public) selectedDay=\(Int(Calendar.current.startOfDay(for: selectedDate).timeIntervalSince1970))")
+    }
+
+    private func elapsedMs(since startedAt: Date) -> Int {
+        Int(Date().timeIntervalSince(startedAt) * 1_000)
     }
 
     private func periodBounds(for mode: StatsViewMode, date: Date) -> (start: Date, end: Date)? {
