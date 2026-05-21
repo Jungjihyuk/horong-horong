@@ -14,6 +14,7 @@ private struct StatsLoadedData {
     let weekSegments: [AppUsageSegment]
     let periodSegments: [AppUsageSegment]
     let timerSessions: [FocusSession]
+    let aggregateSnapshot: StatsAggregateSnapshot?
 }
 
 struct StatsDetailWindow: View {
@@ -25,6 +26,7 @@ struct StatsDetailWindow: View {
     @State private var weekSegments: [AppUsageSegment] = []
     @State private var periodSegments: [AppUsageSegment] = []
     @State private var timerSessions: [FocusSession] = []
+    @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var showEditor: Bool = false
     @State private var trackerStore = TrackerStateStore.shared
     @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
@@ -55,6 +57,7 @@ struct StatsDetailWindow: View {
                         weekSegments: weekSegments,
                         periodSegments: periodSegments,
                         timerSessions: timerSessions,
+                        aggregateSnapshot: aggregateSnapshot,
                         vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
                     )
                     .padding(20)
@@ -68,10 +71,12 @@ struct StatsDetailWindow: View {
         .onChange(of: viewMode) { _, _ in loadRecords() }
         // 설정에서 휴가가 추가/삭제(=기록 삭제 옵션 포함)되면 캐시된 @State 가 stale 이 되므로 이때만 다시 로드.
         .onChange(of: trackerStore.vacationRanges.count) { _, _ in
+            invalidateAllAggregateCaches()
             invalidateLoadCache()
             loadRecords()
         }
         .sheet(isPresented: $showEditor, onDismiss: {
+            invalidateAggregateCaches(containing: selectedDate)
             invalidateLoadCache()
             loadRecords()
         }) {
@@ -324,12 +329,20 @@ struct StatsDetailWindow: View {
         let recordsElapsedMs = Int(Date().timeIntervalSince(recordsStartedAt) * 1_000)
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
-        let loadedSegments = loadSegments(
+        let aggregate = loadAggregateSnapshot(
             for: viewMode,
             start: startDate,
             end: endDate,
             records: fetchedRecords,
             timerSessions: fetchedSessions
+        )
+        let loadedSegments = loadSegments(
+            for: viewMode,
+            start: startDate,
+            end: endDate,
+            records: fetchedRecords,
+            timerSessions: fetchedSessions,
+            aggregateSnapshot: aggregate
         )
 
         let loadedData = StatsLoadedData(
@@ -337,7 +350,8 @@ struct StatsDetailWindow: View {
             dailySegments: loadedSegments.daily,
             weekSegments: loadedSegments.week,
             periodSegments: loadedSegments.period,
-            timerSessions: fetchedSessions
+            timerSessions: fetchedSessions,
+            aggregateSnapshot: aggregate
         )
         loadCache[key] = loadedData
         applyLoadedData(loadedData)
@@ -352,11 +366,38 @@ struct StatsDetailWindow: View {
         weekSegments = data.weekSegments
         periodSegments = data.periodSegments
         timerSessions = data.timerSessions
+        aggregateSnapshot = data.aggregateSnapshot
     }
 
     private func invalidateLoadCache() {
         loadCache.removeAll()
         Self.logger.notice("StatsDetail load cache invalidated")
+    }
+
+    private func invalidateAggregateCaches(containing date: Date) {
+        let descriptor = FetchDescriptor<StatsAggregateCache>()
+        let caches = (try? modelContext.fetch(descriptor)) ?? []
+        let removed = caches.reduce(into: 0) { count, cache in
+            guard cache.periodStart <= date && date < cache.periodEnd else { return }
+            modelContext.delete(cache)
+            count += 1
+        }
+        if removed > 0 {
+            try? modelContext.save()
+            Self.logger.notice("StatsDetail aggregate cache invalidated count=\(removed)")
+        }
+    }
+
+    private func invalidateAllAggregateCaches() {
+        let descriptor = FetchDescriptor<StatsAggregateCache>()
+        let caches = (try? modelContext.fetch(descriptor)) ?? []
+        for cache in caches {
+            modelContext.delete(cache)
+        }
+        if !caches.isEmpty {
+            try? modelContext.save()
+            Self.logger.notice("StatsDetail aggregate cache invalidated count=\(caches.count)")
+        }
     }
 
     /// 전환 카운트와 포모도로 상세 표시용. 범위 앞쪽으로 약간 버퍼를 둬서 경계에 걸친 세션도 포함.
@@ -389,7 +430,8 @@ struct StatsDetailWindow: View {
         start: Date,
         end: Date,
         records: [AppUsageRecord],
-        timerSessions: [FocusSession]
+        timerSessions: [FocusSession],
+        aggregateSnapshot: StatsAggregateSnapshot?
     ) -> (daily: [AppUsageSegment], week: [AppUsageSegment], period: [AppUsageSegment]) {
         let startedAt = Date()
         switch mode {
@@ -403,6 +445,10 @@ struct StatsDetailWindow: View {
             return (segments, [], segments)
 
         case .weekly:
+            if aggregateSnapshot != nil {
+                logSegmentFetch(mode: mode, count: 0, startedAt: startedAt, source: "aggregateCache")
+                return ([], [], [])
+            }
             let weekDescriptor = FetchDescriptor<AppUsageSegment>(
                 predicate: #Predicate { $0.startTime < end && $0.endTime > start },
                 sortBy: [SortDescriptor(\.startTime)]
@@ -412,6 +458,10 @@ struct StatsDetailWindow: View {
             return ([], segments, segments)
 
         case .monthly:
+            if aggregateSnapshot != nil {
+                logSegmentFetch(mode: mode, count: 0, startedAt: startedAt, source: "aggregateCache")
+                return ([], [], [])
+            }
             if !records.isEmpty {
                 logSegmentFetch(mode: mode, count: 0, startedAt: startedAt, source: "records")
                 return ([], [], [])
@@ -429,6 +479,111 @@ struct StatsDetailWindow: View {
     private func logSegmentFetch(mode: StatsViewMode, count: Int, startedAt: Date, source: String) {
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
         Self.logger.notice("StatsDetail segment load mode=\(mode.rawValue, privacy: .public) source=\(source, privacy: .public) count=\(count) elapsed=\(elapsedMs)ms")
+    }
+
+    private func loadAggregateSnapshot(
+        for mode: StatsViewMode,
+        start: Date,
+        end: Date,
+        records: [AppUsageRecord],
+        timerSessions: [FocusSession]
+    ) -> StatsAggregateSnapshot? {
+        guard let scope = StatsAggregateScope.value(for: mode) else { return nil }
+
+        let fingerprint = StatsAggregateBuilder.fingerprint(records: records, sessions: timerSessions)
+        let startedAt = Date()
+        let scopedDescriptor = FetchDescriptor<StatsAggregateCache>(
+            predicate: #Predicate { $0.scope == scope },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let caches = ((try? modelContext.fetch(scopedDescriptor)) ?? []).filter {
+            abs($0.periodStart.timeIntervalSince(start)) < 1 &&
+            abs($0.periodEnd.timeIntervalSince(end)) < 1
+        }
+
+        if let cache = caches.first(where: { $0.sourceFingerprint == fingerprint }),
+           let snapshot = StatsAggregateCacheCodec.decode(cache.payload) {
+            let staleCaches = caches.filter { $0.id != cache.id }
+            for stale in staleCaches {
+                modelContext.delete(stale)
+            }
+            if !staleCaches.isEmpty {
+                try? modelContext.save()
+            }
+            logAggregateCache(mode: mode, source: "hit", rows: snapshot.dailyCategories.count, startedAt: startedAt)
+            return snapshot
+        }
+
+        if let previousCache = caches.first,
+           let previousSnapshot = StatsAggregateCacheCodec.decode(previousCache.payload) {
+            let recordSnapshot = StatsAggregateBuilder.build(
+                mode: mode,
+                start: start,
+                end: end,
+                records: records,
+                segments: [],
+                timerSessions: timerSessions
+            )
+            let refreshedSnapshot = StatsAggregateSnapshot(
+                dailyCategories: recordSnapshot.dailyCategories,
+                dailyFocusLevels: previousSnapshot.dailyFocusLevels
+            )
+            if let payload = StatsAggregateCacheCodec.encode(refreshedSnapshot) {
+                previousCache.sourceFingerprint = fingerprint
+                previousCache.payload = payload
+                previousCache.updatedAt = Date()
+
+                let staleCaches = caches.filter { $0.id != previousCache.id }
+                for stale in staleCaches {
+                    modelContext.delete(stale)
+                }
+                try? modelContext.save()
+            }
+            logAggregateCache(mode: mode, source: "recordsRefresh", rows: refreshedSnapshot.dailyCategories.count, startedAt: startedAt)
+            return refreshedSnapshot
+        }
+
+        let segmentsStartedAt = Date()
+        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
+            predicate: #Predicate { $0.startTime < end && $0.endTime > start },
+            sortBy: [SortDescriptor(\.startTime)]
+        )
+        let segments = (try? modelContext.fetch(segmentDescriptor)) ?? []
+        let segmentElapsedMs = Int(Date().timeIntervalSince(segmentsStartedAt) * 1_000)
+        Self.logger.notice("StatsDetail aggregate source segments mode=\(mode.rawValue, privacy: .public) count=\(segments.count) elapsed=\(segmentElapsedMs)ms")
+
+        let snapshot = StatsAggregateBuilder.build(
+            mode: mode,
+            start: start,
+            end: end,
+            records: records,
+            segments: segments,
+            timerSessions: timerSessions
+        )
+
+        guard let payload = StatsAggregateCacheCodec.encode(snapshot) else {
+            logAggregateCache(mode: mode, source: "encodeFailed", rows: snapshot.dailyCategories.count, startedAt: startedAt)
+            return snapshot
+        }
+
+        for cache in caches {
+            modelContext.delete(cache)
+        }
+        modelContext.insert(StatsAggregateCache(
+            scope: scope,
+            periodStart: start,
+            periodEnd: end,
+            sourceFingerprint: fingerprint,
+            payload: payload
+        ))
+        try? modelContext.save()
+        logAggregateCache(mode: mode, source: "rebuilt", rows: snapshot.dailyCategories.count, startedAt: startedAt)
+        return snapshot
+    }
+
+    private func logAggregateCache(mode: StatsViewMode, source: String, rows: Int, startedAt: Date) {
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        Self.logger.notice("StatsDetail aggregate cache mode=\(mode.rawValue, privacy: .public) source=\(source, privacy: .public) rows=\(rows) elapsed=\(elapsedMs)ms")
     }
 
     private func periodBounds(for mode: StatsViewMode, date: Date) -> (start: Date, end: Date)? {

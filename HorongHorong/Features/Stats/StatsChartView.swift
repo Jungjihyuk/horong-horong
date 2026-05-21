@@ -101,6 +101,8 @@ struct StatsChartView: View {
     var periodSegments: [AppUsageSegment] = []
     /// 현재 기간과 겹치는 타이머 세션. 전환 카운트 예외 판단에 쓰인다.
     var timerSessions: [FocusSession] = []
+    /// 주간/월간 탭에서 원본 세그먼트 재집계를 피하기 위해 부모가 넘겨주는 집계 캐시.
+    var aggregateSnapshot: StatsAggregateSnapshot? = nil
 
     @State private var weeklySelection: Date? = nil
     @State private var dailyAngleSelection: Double? = nil
@@ -130,6 +132,11 @@ struct StatsChartView: View {
 
     private var hasSegmentSource: Bool {
         !activeSegments.isEmpty
+    }
+
+    private var hasAggregateSource: Bool {
+        guard viewMode != .daily, let aggregateSnapshot else { return false }
+        return !aggregateSnapshot.isEmpty
     }
 
     var body: some View {
@@ -560,6 +567,12 @@ struct StatsChartView: View {
     }
 
     private var weeklyFocusByDay: [Date: DailyFocusSummary.Level] {
+        if hasAggregateSource, let aggregateSnapshot, !aggregateSnapshot.dailyFocusLevels.isEmpty {
+            return Dictionary(uniqueKeysWithValues: aggregateSnapshot.dailyFocusLevels.map {
+                ($0.day, focusLevel(from: $0.level))
+            })
+        }
+
         let cal = Calendar.current
         var result: [Date: DailyFocusSummary.Level] = [:]
         for day in weeklyDays {
@@ -925,7 +938,13 @@ struct StatsChartView: View {
     // MARK: - Derived data
 
     private var categoryData: [ChartCategoryData] {
-        let durations = hasSegmentSource ? segmentDurationsByCategory : recordDurationsByCategory
+        let durations: [String: Int]
+        if hasAggregateSource, let aggregateSnapshot {
+            durations = aggregateSnapshot.categoryDurations
+        } else {
+            durations = hasSegmentSource ? segmentDurationsByCategory : recordDurationsByCategory
+        }
+
         return durations
             .sorted {
                 if $0.value != $1.value { return $0.value > $1.value }
@@ -1202,11 +1221,36 @@ struct StatsChartView: View {
     }
 
     private var weeklyStackedData: [DailyChartData] {
-        hasSegmentSource ? dailySegmentCategoryData : dailyRecordCategoryData
+        if hasAggregateSource, let aggregateSnapshot {
+            return aggregateSnapshot.dailyCategories.map {
+                DailyChartData(
+                    date: $0.day,
+                    category: $0.category,
+                    hours: Double($0.durationSeconds) / 3600.0
+                )
+            }
+        }
+        return hasSegmentSource ? dailySegmentCategoryData : dailyRecordCategoryData
     }
 
     private var monthlyDailyTotalsMap: [Date: Double] {
-        hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
+        if hasAggregateSource, let aggregateSnapshot {
+            return aggregateSnapshot.dailyDurations.mapValues { Double($0) / 3600.0 }
+        }
+        return hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
+    }
+
+    private func focusLevel(from value: String) -> DailyFocusSummary.Level {
+        switch value {
+        case "focused":
+            return .focused
+        case "moderate":
+            return .moderate
+        case "scattered":
+            return .scattered
+        default:
+            return .empty
+        }
     }
 
     private func addRecordDetails(
