@@ -72,7 +72,7 @@ struct AboutPage: View {
                     }
                     .controlSize(.small)
                     Button {
-                        if let url = Bundle.main.url(forResource: "USER_GUIDE", withExtension: "md") {
+                        if let url = URL(string: "https://github.com/Jungjihyuk/horong-horong/blob/main/USER_GUIDE.md") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
