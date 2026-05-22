@@ -610,6 +610,10 @@ private enum AgentPlanLauncher {
             return "codex \(shellQuote(prompt))"
         case "Claude":
             return "claude \(shellQuote(prompt))"
+        case "Antigravity":
+            return "agy -p \(shellQuote(prompt))"
+        case "Opencode":
+            return "opencode run \(shellQuote(prompt))"
         case "Gemini":
             return "gemini \(shellQuote(prompt))"
         default:
