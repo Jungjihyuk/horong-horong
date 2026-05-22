@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SwiftData
 
@@ -92,19 +93,23 @@ enum NewsProviderCLIResolverError: Error, Equatable {
 struct NewsProviderCLIResolver {
     typealias CommandRunner = (_ executablePath: String, _ arguments: [String], _ environment: [String: String]) -> String?
     typealias ExecutabilityChecker = (_ path: String) -> Bool
+    typealias UserShellProvider = () -> String?
 
     private let environment: [String: String]
     private let commandRunner: CommandRunner
     private let isExecutable: ExecutabilityChecker
+    private let userShellProvider: UserShellProvider
 
     init(
         environment: [String: String],
         commandRunner: @escaping CommandRunner = NewsProviderCLIResolver.commandOutput,
-        isExecutable: @escaping ExecutabilityChecker = { FileManager.default.isExecutableFile(atPath: $0) }
+        isExecutable: @escaping ExecutabilityChecker = { FileManager.default.isExecutableFile(atPath: $0) },
+        userShellProvider: @escaping UserShellProvider = NewsProviderCLIResolver.currentUserShellPath
     ) {
         self.environment = environment
         self.commandRunner = commandRunner
         self.isExecutable = isExecutable
+        self.userShellProvider = userShellProvider
     }
 
     func resolve(provider: String) -> Result<NewsProviderCLIResolution, NewsProviderCLIResolverError> {
@@ -143,12 +148,37 @@ struct NewsProviderCLIResolver {
         }
     }
 
-    private func loginShellLookup(command: String) -> String? {
-        guard let shell = environment["SHELL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !shell.isEmpty else {
+    static func currentUserShellPath() -> String? {
+        guard let passwd = getpwuid(getuid()),
+              let shell = passwd.pointee.pw_shell else {
             return nil
         }
-        return lookup(command: command, shellPath: shell, arguments: ["-lic", "command -v \(command)"])
+        let path = String(cString: shell).trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
+    }
+
+    private func loginShellLookup(command: String) -> String? {
+        for shell in loginShellCandidates() {
+            if let result = lookup(command: command, shellPath: shell, arguments: ["-lic", "command -v \(command)"]) {
+                return result
+            }
+        }
+        return nil
+    }
+
+    private func loginShellCandidates() -> [String] {
+        var candidates = [
+            environment["SHELL"],
+            userShellProvider(),
+            "/bin/zsh",
+            "/bin/bash",
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var seen = Set<String>()
+        candidates = candidates.filter { seen.insert($0).inserted }
+        return candidates
     }
 
     private func lookup(command: String, shellPath: String, arguments: [String]) -> String? {
