@@ -138,7 +138,10 @@ htmlcov/
 .claude/**/*.bak.*
 
 ## Codex
-# .codex/
+.codex/*
+!.codex/skills/
+!.codex/skills/**
+.codex/docs-file.json
 
 ## Gemini
 # .gemini/
