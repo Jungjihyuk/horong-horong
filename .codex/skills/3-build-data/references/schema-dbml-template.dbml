@@ -1,0 +1,79 @@
+Project project_db {
+  database_type: 'PostgreSQL'
+  Note: 'Generated from project-definition + requirements + UI-spec'
+}
+
+Table users {
+  id uuid [pk]
+  email varchar [not null, unique]
+  name varchar
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (email) [name: 'idx_users_email']
+    (created_at) [name: 'idx_users_created_at']
+  }
+}
+
+Table companies {
+  id uuid [pk]
+  name varchar [not null]
+  source varchar
+  external_id varchar
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (source, external_id) [name: 'idx_companies_source_external_id', unique]
+  }
+}
+
+Table job_postings {
+  id uuid [pk]
+  company_id uuid [not null, ref: > companies.id]
+  title varchar [not null]
+  status varchar [not null, note: 'open|closed|draft']
+  posted_at timestamptz
+  source varchar [not null]
+  external_id varchar [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (company_id) [name: 'idx_job_postings_company_id']
+    (status, posted_at) [name: 'idx_job_postings_status_posted_at']
+    (source, external_id) [name: 'idx_job_postings_source_external_id', unique]
+  }
+}
+
+Table scraping_batches {
+  id uuid [pk]
+  source varchar [not null]
+  status varchar [not null, note: 'queued|running|done|failed']
+  started_at timestamptz
+  finished_at timestamptz
+  retry_count int [not null, default: 0]
+  error_message text
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (source, status) [name: 'idx_scraping_batches_source_status']
+    (created_at) [name: 'idx_scraping_batches_created_at']
+  }
+}
+
+Table raw_job_records {
+  id uuid [pk]
+  batch_id uuid [not null, ref: > scraping_batches.id]
+  source varchar [not null]
+  payload jsonb [not null]
+  payload_hash varchar [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (batch_id) [name: 'idx_raw_job_records_batch_id']
+    (payload_hash) [name: 'idx_raw_job_records_payload_hash', unique]
+  }
+}
