@@ -47,4 +47,5 @@ final class AppState {
 
     var currentTrackingApp: String = ""
     var isQuickMemoVisible: Bool = false
+    var newsPipelineService = NewsPipelineService()
 }

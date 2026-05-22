@@ -3,6 +3,7 @@ import SwiftData
 import AppKit
 
 struct NewsView: View {
+    @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Constants.NewsStorageKey.dataBasePath) private var dataBasePath = Constants.defaultNewsDataBasePath
     @AppStorage(Constants.NewsStorageKey.selectedProvider) private var selectedProvider = Constants.defaultNewsProvider
@@ -10,7 +11,6 @@ struct NewsView: View {
     @AppStorage(Constants.NewsStorageKey.youtubeChannelIds) private var youtubeChannelIdsRaw = ""
     @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource: Int = Constants.defaultNewsMaxItemsPerSource
 
-    @State private var pipelineService = NewsPipelineService()
     @State private var newChannelInput = ""
     @State private var showExecutionEnvironmentAlert = false
     @State private var executionEnvironmentAlertMessage = ""
@@ -19,6 +19,7 @@ struct NewsView: View {
     @State private var selectedReport: NewsReportIndex?
 
     private let pipelineSteps = ["collect", "normalize", "dedupe", "classify", "rank", "summarize", "render"]
+    private var pipelineService: NewsPipelineService { appState.newsPipelineService }
 
     var body: some View {
         ScrollView {
