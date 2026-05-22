@@ -140,10 +140,11 @@ struct NewsProviderCLIResolver {
 
     static func command(for provider: String) -> String? {
         switch provider {
-        case "claude": return "claude"
         case "codex": return "codex"
+        case "claude": return "claude"
         case "gemini": return "gemini"
         case "opencode": return "opencode"
+        case "antigravity": return "agy"
         default: return nil
         }
     }

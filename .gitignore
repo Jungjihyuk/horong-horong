@@ -143,6 +143,9 @@ htmlcov/
 !.codex/skills/**
 .codex/docs-file.json
 
+## Antigravity 
+.antigravitycli/*
+
 ## Gemini
 # .gemini/
 

@@ -33,4 +33,19 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(Constants.defaultInterestKeywords, "")
         XCTAssertEqual(Constants.defaultNewsInterestKeywords, "")
     }
+
+    func testRepresentativeAgentTypesNormalizeToSupportedUniqueValues() {
+        XCTAssertEqual(
+            Constants.normalizedRepresentativeAgentTypes(from: "Codex,Claude,Antigravity,Unknown,Codex"),
+            ["Codex", "Claude", "Antigravity"]
+        )
+        XCTAssertEqual(
+            Constants.normalizedRepresentativeAgentTypes(from: "Gemini,Opencode"),
+            ["Gemini", "Opencode"]
+        )
+        XCTAssertEqual(
+            Constants.normalizedRepresentativeAgentTypes(from: ""),
+            Constants.defaultRepresentativeAgentTypes
+        )
+    }
 }

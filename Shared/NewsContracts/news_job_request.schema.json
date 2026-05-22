@@ -6,7 +6,7 @@
   "properties": {
     "jobId": { "type": "string" },
     "requestedAt": { "type": "string", "format": "date-time" },
-    "provider": { "type": "string", "enum": ["claude", "codex", "gemini", "opencode"] },
+    "provider": { "type": "string", "enum": ["codex", "claude", "gemini", "opencode", "antigravity"] },
     "interestKeywords": { "type": "array", "items": { "type": "string" } },
     "maxItemsPerSource": { "type": "integer", "minimum": 1, "maximum": 50 },
     "dateRangeHours": { "type": "integer", "minimum": 1, "maximum": 168 },
