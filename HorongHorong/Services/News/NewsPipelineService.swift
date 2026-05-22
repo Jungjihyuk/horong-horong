@@ -65,6 +65,151 @@ struct NewsJobResultPayload: Codable {
     var errorMessage: String?
 }
 
+struct NewsProviderCLIResolution {
+    let provider: String
+    let command: String
+    let executablePath: String
+    let environment: [String: String]
+}
+
+enum NewsProviderCLIResolverError: Error, Equatable {
+    case unsupportedProvider(String)
+    case notFound(provider: String, command: String)
+    case notExecutable(provider: String, path: String)
+
+    var message: String {
+        switch self {
+        case .unsupportedProvider(let provider):
+            return "'\(provider)' 뉴스 Provider는 지원하지 않습니다."
+        case .notFound(let provider, let command):
+            return "\(provider) Provider 실행 파일 '\(command)'을 찾을 수 없습니다. 터미널에서 '\(command) --version'이 동작하는지 확인한 뒤 앱을 다시 실행해주세요."
+        case .notExecutable(let provider, let path):
+            return "\(provider) Provider 실행 파일을 찾았지만 실행할 수 없습니다: \(path)"
+        }
+    }
+}
+
+struct NewsProviderCLIResolver {
+    typealias CommandRunner = (_ executablePath: String, _ arguments: [String], _ environment: [String: String]) -> String?
+    typealias ExecutabilityChecker = (_ path: String) -> Bool
+
+    private let environment: [String: String]
+    private let commandRunner: CommandRunner
+    private let isExecutable: ExecutabilityChecker
+
+    init(
+        environment: [String: String],
+        commandRunner: @escaping CommandRunner = NewsProviderCLIResolver.commandOutput,
+        isExecutable: @escaping ExecutabilityChecker = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) {
+        self.environment = environment
+        self.commandRunner = commandRunner
+        self.isExecutable = isExecutable
+    }
+
+    func resolve(provider: String) -> Result<NewsProviderCLIResolution, NewsProviderCLIResolverError> {
+        guard let command = Self.command(for: provider) else {
+            return .failure(.unsupportedProvider(provider))
+        }
+
+        let candidates = [
+            lookup(command: command, shellPath: "/bin/sh", arguments: ["-lc", "command -v \(command)"]),
+            loginShellLookup(command: command),
+        ]
+        let executablePath = candidates.compactMap { $0 }.first
+
+        guard let executablePath else {
+            return .failure(.notFound(provider: provider, command: command))
+        }
+        guard isExecutable(executablePath) else {
+            return .failure(.notExecutable(provider: provider, path: executablePath))
+        }
+
+        return .success(NewsProviderCLIResolution(
+            provider: provider,
+            command: command,
+            executablePath: executablePath,
+            environment: environment(prependingExecutableDirectoryFor: executablePath)
+        ))
+    }
+
+    static func command(for provider: String) -> String? {
+        switch provider {
+        case "claude": return "claude"
+        case "codex": return "codex"
+        case "gemini": return "gemini"
+        case "opencode": return "opencode"
+        default: return nil
+        }
+    }
+
+    private func loginShellLookup(command: String) -> String? {
+        guard let shell = environment["SHELL"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !shell.isEmpty else {
+            return nil
+        }
+        return lookup(command: command, shellPath: shell, arguments: ["-lic", "command -v \(command)"])
+    }
+
+    private func lookup(command: String, shellPath: String, arguments: [String]) -> String? {
+        guard let output = commandRunner(shellPath, arguments, environment) else { return nil }
+        return output
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { candidate in
+                candidate.hasPrefix("/") && URL(fileURLWithPath: candidate).lastPathComponent == command
+            }
+    }
+
+    private func environment(prependingExecutableDirectoryFor executablePath: String) -> [String: String] {
+        var resolved = environment
+        let directory = URL(fileURLWithPath: executablePath).deletingLastPathComponent().path
+        let currentPath = resolved["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        var components = [directory]
+        components.append(contentsOf: currentPath.components(separatedBy: ":"))
+
+        var seen = Set<String>()
+        resolved["PATH"] = components
+            .filter { !$0.isEmpty }
+            .filter { seen.insert($0).inserted }
+            .joined(separator: ":")
+        return resolved
+    }
+
+    private static func commandOutput(
+        executablePath: String,
+        arguments: [String],
+        environment: [String: String]
+    ) -> String? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: executablePath)
+        proc.arguments = arguments
+        proc.environment = environment
+
+        let stdoutPipe = Pipe()
+        proc.standardOutput = stdoutPipe
+        proc.standardError = Pipe()
+
+        do {
+            try proc.run()
+            let semaphore = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .utility).async {
+                proc.waitUntilExit()
+                semaphore.signal()
+            }
+            if semaphore.wait(timeout: .now() + 5) == .timedOut {
+                proc.terminate()
+                return nil
+            }
+            guard proc.terminationStatus == 0 else { return nil }
+            let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            return String(data: data, encoding: .utf8)
+        } catch {
+            return nil
+        }
+    }
+}
+
 // MARK: - Service
 
 @Observable
@@ -102,7 +247,7 @@ final class NewsPipelineService: @unchecked Sendable {
             return
         }
 
-        let environment = enrichedEnvironment(newsDataBasePath: dataBasePath)
+        var environment = enrichedEnvironment(newsDataBasePath: dataBasePath)
         guard commandSucceeds(["uv", "--version"], environment: environment) else {
             finishConfigurationFailed(
                 code: "E_ENV",
@@ -115,6 +260,14 @@ final class NewsPipelineService: @unchecked Sendable {
                 code: "E_ENV",
                 message: "뉴스 리포트 기능을 사용하려면 Python 3가 필요합니다. Python 3를 설치한 뒤 앱을 다시 실행해주세요."
             )
+            return
+        }
+        let providerResolution = NewsProviderCLIResolver(environment: environment).resolve(provider: provider)
+        switch providerResolution {
+        case .success(let resolution):
+            environment = resolution.environment
+        case .failure(let error):
+            finishConfigurationFailed(code: "E_PROVIDER_CLI", message: error.message)
             return
         }
 
