@@ -370,7 +370,7 @@ enum Constants {
                 .appendingPathComponent("runner.py", isDirectory: false)
         }
 
-        return (bundleCandidates + [repositoryCandidate])
+        return ([repositoryCandidate] + bundleCandidates)
             .compactMap { $0 }
             .first { fileManager.fileExists(atPath: $0.path) }?
             .path
