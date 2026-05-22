@@ -1,0 +1,4 @@
+interface:
+  display_name: "Requirements Spec Writer"
+  short_description: "기획 정의서를 기반으로 FR/NFR 요구사항 명세서를 작성·보완하는 스킬"
+  default_prompt: "프로젝트 정의서를 읽고 요구사항 명세서를 FR/NFR로 구체화해줘."
