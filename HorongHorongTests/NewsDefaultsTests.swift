@@ -76,6 +76,43 @@ final class NewsDefaultsTests: XCTestCase {
         )
     }
 
+    func testNewsProviderCLIResolverMapsSupportedProviders() {
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "claude"), "claude")
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "codex"), "codex")
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "gemini"), "gemini")
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "opencode"), "opencode")
+        XCTAssertNil(NewsProviderCLIResolver.command(for: "unknown"))
+    }
+
+    func testNewsProviderCLIResolverUsesLoginShellWhenCurrentPathMissesProvider() throws {
+        var calls: [(executable: String, arguments: [String])] = []
+        let resolver = NewsProviderCLIResolver(
+            environment: [
+                "PATH": "/usr/bin:/bin",
+                "SHELL": "/mock/zsh",
+            ],
+            commandRunner: { executable, arguments, _ in
+                calls.append((executable, arguments))
+                if executable == "/mock/zsh" {
+                    return "/Users/example/.volta/bin/codex\n"
+                }
+                return nil
+            },
+            isExecutable: { path in
+                path == "/Users/example/.volta/bin/codex"
+            }
+        )
+
+        let resolution = try XCTUnwrap(try? resolver.resolve(provider: "codex").get())
+
+        XCTAssertEqual(resolution.executablePath, "/Users/example/.volta/bin/codex")
+        XCTAssertEqual(
+            resolution.environment["PATH"],
+            "/Users/example/.volta/bin:/usr/bin:/bin"
+        )
+        XCTAssertEqual(calls.map(\.executable), ["/bin/sh", "/mock/zsh"])
+    }
+
     private func temporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
