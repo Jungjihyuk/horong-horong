@@ -22,7 +22,7 @@ final class NewsDefaultsTests: XCTestCase {
         XCTAssertEqual(linkedIn?.enabled, false)
     }
 
-    func testNewsRunnerPathUsesBundleResourceBeforeRepositorySource() throws {
+    func testNewsRunnerPathUsesRepositorySourceBeforeBundleResource() throws {
         let bundleResourceURL = temporaryDirectory().appendingPathComponent("Resources", isDirectory: true)
         let repositoryRootURL = temporaryDirectory().appendingPathComponent("Repository", isDirectory: true)
         let bundleRunnerURL = bundleResourceURL
@@ -40,7 +40,7 @@ final class NewsDefaultsTests: XCTestCase {
                 bundleResourceURL: bundleResourceURL,
                 repositoryRootPath: repositoryRootURL.path
             ),
-            bundleRunnerURL.path
+            repositoryRunnerURL.path
         )
     }
 
@@ -142,6 +142,18 @@ final class NewsDefaultsTests: XCTestCase {
             "/Users/example/.local/bin:/usr/bin:/bin"
         )
         XCTAssertEqual(calls.map(\.executable), ["/bin/sh", "/mock/fish"])
+    }
+
+    func testNewsProviderCLIResolverParsesPathFromNoisyShellOutput() {
+        let output = """
+        mkdir: /Users/example/.cache/oh-my-zsh: Operation not permitted
+        \u{1B}]12;#ff79c6\u{07}/Users/example/.nvm/versions/node/v24.13.0/bin/claude\u{1B}[0m
+        """
+
+        XCTAssertEqual(
+            NewsProviderCLIResolver.executablePath(for: "claude", in: output),
+            "/Users/example/.nvm/versions/node/v24.13.0/bin/claude"
+        )
     }
 
     private func temporaryDirectory() -> URL {

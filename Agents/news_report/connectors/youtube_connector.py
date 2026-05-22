@@ -32,40 +32,116 @@ class YouTubeConnector:
             )
 
         cutoff = datetime.now(timezone.utc) - timedelta(hours=self.date_range_hours)
-        items: list[dict] = []
+        sources: list[tuple[str, str, str]] = [
+            ("channel", channel_id, channel_id)
+            for channel_id in self.channel_ids
+        ]
+        sources.extend(
+            ("playlist", pl.get("playlistId", ""), pl.get("name", pl.get("playlistId", "")))
+            for pl in self.playlists
+            if pl.get("playlistId", "")
+        )
+        if not sources:
+            raise RuntimeError(
+                "YouTube channelIds 또는 playlists가 설정되지 않았습니다."
+            )
 
-        for channel_id in self.channel_ids:
-            try:
-                items.extend(
-                    self._fetch_feed(
-                        self.CHANNEL_FEED.format(id=channel_id),
-                        source_name=None,
-                        cutoff=cutoff,
-                        one_per_source=False,
-                    )
-                )
-            except Exception as e:
-                print(f"[youtube] channel {channel_id} 수집 실패: {e}", flush=True)
+        failures: list[str] = []
+        attempted = 0
+        base_quota, remainder = divmod(self.max_items, len(sources))
+        buckets: list[list[dict]] = [[] for _ in sources]
+        exhausted: set[int] = set()
 
-        for pl in self.playlists:
-            pid = pl.get("playlistId", "")
-            name = pl.get("name", pid)
-            if not pid:
+        for idx, source in enumerate(sources):
+            quota = base_quota + (1 if idx < remainder else 0)
+            if quota <= 0:
+                exhausted.add(idx)
                 continue
+            attempted += 1
             try:
-                items.extend(
-                    self._fetch_feed(
-                        self.PLAYLIST_FEED.format(id=pid),
-                        source_name=name,
-                        cutoff=cutoff,
-                        one_per_source=True,
-                    )
-                )
+                buckets[idx] = self._collect_source(source, cutoff, quota)
+                if len(buckets[idx]) < quota:
+                    exhausted.add(idx)
             except Exception as e:
-                print(f"[youtube] playlist '{name}' 수집 실패: {e}", flush=True)
+                failures.append(_format_source_failure(source, e))
+                exhausted.add(idx)
 
+        remaining = self.max_items - sum(len(bucket) for bucket in buckets)
+        while remaining > 0:
+            made_progress = False
+            for idx, source in enumerate(sources):
+                if remaining <= 0:
+                    break
+                if idx in exhausted:
+                    continue
+                exclude_urls = {item.get("url", "") for item in buckets[idx]}
+                try:
+                    extras = self._collect_source(source, cutoff, 1, exclude_urls)
+                except Exception:
+                    exhausted.add(idx)
+                    continue
+                if not extras:
+                    exhausted.add(idx)
+                    continue
+                buckets[idx].extend(extras)
+                remaining -= len(extras)
+                made_progress = True
+            if not made_progress:
+                break
+
+        if attempted > 0 and failures and len(failures) == attempted:
+            raise RuntimeError(" / ".join(failures))
+
+        items = [item for bucket in buckets for item in bucket]
         items.sort(key=lambda x: x.get("publishedAt", ""), reverse=True)
-        return items
+        return items[: self.max_items]
+
+    def _collect_source(
+        self,
+        source: tuple[str, str, str],
+        cutoff: datetime,
+        item_limit: int,
+        exclude_urls: Optional[set[str]] = None,
+    ) -> list[dict]:
+        kind, identifier, display_name = source
+        if kind == "channel":
+            resolved_channel_id = _resolve_channel_id(identifier)
+            try:
+                return self._fetch_feed(
+                    self.CHANNEL_FEED.format(id=resolved_channel_id),
+                    source_name=None,
+                    cutoff=cutoff,
+                    one_per_source=False,
+                    item_limit=item_limit,
+                    exclude_urls=exclude_urls,
+                )
+            except Exception:
+                return self._fetch_page_videos(
+                    _channel_videos_url(identifier, resolved_channel_id),
+                    source_name=identifier,
+                    cutoff=cutoff,
+                    one_per_source=False,
+                    item_limit=item_limit,
+                    exclude_urls=exclude_urls,
+                )
+        try:
+            return self._fetch_feed(
+                self.PLAYLIST_FEED.format(id=identifier),
+                source_name=display_name,
+                cutoff=cutoff,
+                one_per_source=False,
+                item_limit=item_limit,
+                exclude_urls=exclude_urls,
+            )
+        except Exception:
+            return self._fetch_page_videos(
+                f"https://www.youtube.com/playlist?list={identifier}",
+                source_name=display_name,
+                cutoff=cutoff,
+                one_per_source=False,
+                item_limit=item_limit,
+                exclude_urls=exclude_urls,
+            )
 
     def _fetch_feed(
         self,
@@ -73,7 +149,13 @@ class YouTubeConnector:
         source_name: Optional[str],
         cutoff: datetime,
         one_per_source: bool,
+        item_limit: Optional[int] = None,
+        exclude_urls: Optional[set[str]] = None,
     ) -> list[dict]:
+        limit = 1 if one_per_source else (item_limit or self.max_items)
+        if limit <= 0:
+            return []
+        excluded = exclude_urls or set()
         try:
             with urllib.request.urlopen(url, timeout=10) as resp:
                 body = resp.read().decode("utf-8")
@@ -96,6 +178,8 @@ class YouTubeConnector:
             link_el = entry.find("atom:link", ns)
             link = link_el.get("href", "") if link_el is not None else ""
             published_str = entry.findtext("atom:published", namespaces=ns) or ""
+            if link in excluded:
+                return None
             if not title or not link:
                 return None
             if _is_membership_video(title):
@@ -160,7 +244,75 @@ class YouTubeConnector:
                 item = _parse_entry(entry)
                 if item:
                     result.append(item)
+                if len(result) >= limit:
+                    break
+            if not result:
+                for entry in all_entries:
+                    item = _parse_entry(entry)
+                    if item:
+                        result.append(item)
+                    if len(result) >= limit:
+                        break
             return result
+
+    def _fetch_page_videos(
+        self,
+        url: str,
+        source_name: Optional[str],
+        cutoff: datetime,
+        one_per_source: bool,
+        item_limit: Optional[int] = None,
+        exclude_urls: Optional[set[str]] = None,
+    ) -> list[dict]:
+        limit = 1 if one_per_source else (item_limit or self.max_items)
+        if limit <= 0:
+            return []
+        excluded = exclude_urls or set()
+        try:
+            body = _fetch_youtube_page(url)
+            payload = _extract_yt_initial_data(body)
+        except Exception as e:
+            raise RuntimeError(f"YouTube 페이지 수집 실패 ({url}): {e}") from e
+
+        display_name = source_name or url
+        videos = _extract_video_lockups(payload)
+        if not videos:
+            raise RuntimeError(f"YouTube 페이지에서 영상 목록을 찾지 못했습니다 ({url})")
+
+        result = []
+        for video in videos:
+            video_id = video.get("videoId", "")
+            if f"https://www.youtube.com/watch?v={video_id}" in excluded:
+                continue
+            published_dt = _published_time_to_datetime(video.get("publishedTimeText", ""))
+            if published_dt and published_dt < cutoff:
+                continue
+            item = _video_lockup_to_item(video, display_name)
+            if item:
+                result.append(item)
+            if one_per_source and result:
+                break
+            if len(result) >= limit:
+                break
+
+        if not result:
+            for video in videos:
+                video_id = video.get("videoId", "")
+                if f"https://www.youtube.com/watch?v={video_id}" in excluded:
+                    continue
+                item = _video_lockup_to_item(video, display_name)
+                if item:
+                    result.append(item)
+                if len(result) >= limit:
+                    break
+        return result
+
+
+def _format_source_failure(source: tuple[str, str, str], error: Exception) -> str:
+    kind, identifier, display_name = source
+    if kind == "channel":
+        return f"channel {identifier}: {error}"
+    return f"playlist '{display_name}': {error}"
 
 
 _MEMBERSHIP_TITLE_MARKERS = [
@@ -212,6 +364,268 @@ def _parse_iso(s: str) -> Optional[datetime]:
 def _extract_video_id(url: str) -> str:
     m = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else ""
+
+
+def _resolve_channel_id(identifier: str) -> str:
+    raw = (identifier or "").strip()
+    if not raw or raw.startswith("UC"):
+        return raw
+    if raw.startswith("@"):
+        return _resolve_channel_handle(raw)
+    return raw
+
+
+def _resolve_channel_handle(handle: str) -> str:
+    try:
+        with urllib.request.urlopen(f"https://www.youtube.com/{handle}", timeout=10) as resp:
+            body = resp.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        raise RuntimeError(f"YouTube 핸들 해석 실패 ({handle}): {e}") from e
+
+    patterns = [
+        r'"channelId":"(UC[A-Za-z0-9_-]{22})"',
+        r'"browseId":"(UC[A-Za-z0-9_-]{22})"',
+        r'"externalId":"(UC[A-Za-z0-9_-]{22})"',
+        r'itemprop="channelId"\s+content="(UC[A-Za-z0-9_-]{22})"',
+        r"/channel/(UC[A-Za-z0-9_-]{22})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, body)
+        if match:
+            return match.group(1)
+    raise RuntimeError(f"YouTube 핸들에서 channelId를 찾지 못했습니다: {handle}")
+
+
+def _channel_videos_url(raw_identifier: str, resolved_channel_id: str) -> str:
+    raw = (raw_identifier or "").strip()
+    if raw.startswith("@"):
+        return f"https://www.youtube.com/{raw}/videos"
+    if resolved_channel_id:
+        return f"https://www.youtube.com/channel/{resolved_channel_id}/videos"
+    return raw
+
+
+def _fetch_youtube_page(url: str) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            ),
+            "Accept-Language": "ko,en;q=0.8",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=10) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _extract_yt_initial_data(body: str) -> dict:
+    marker = "ytInitialData"
+    marker_index = body.find(marker)
+    if marker_index < 0:
+        raise ValueError("ytInitialData 없음")
+    start = body.find("{", marker_index)
+    if start < 0:
+        raise ValueError("ytInitialData JSON 시작점을 찾지 못함")
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for idx, ch in enumerate(body[start:], start):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "\"":
+                in_string = False
+            continue
+        if ch == "\"":
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                import json as _json
+
+                return _json.loads(body[start : idx + 1])
+    raise ValueError("ytInitialData JSON 종료점을 찾지 못함")
+
+
+def _extract_video_lockups(payload: object) -> list[dict]:
+    videos: list[dict] = []
+    seen: set[str] = set()
+
+    def _walk(node: object) -> None:
+        if isinstance(node, dict):
+            if "videoRenderer" in node:
+                item = _video_renderer_to_lockup(node["videoRenderer"])
+                if item and item["videoId"] not in seen:
+                    seen.add(item["videoId"])
+                    videos.append(item)
+            if "playlistVideoRenderer" in node:
+                item = _playlist_video_renderer_to_lockup(node["playlistVideoRenderer"])
+                if item and item["videoId"] not in seen:
+                    seen.add(item["videoId"])
+                    videos.append(item)
+            if "lockupViewModel" in node:
+                item = _lockup_view_model_to_lockup(node["lockupViewModel"])
+                if item and item["videoId"] not in seen:
+                    seen.add(item["videoId"])
+                    videos.append(item)
+            for value in node.values():
+                _walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                _walk(value)
+
+    _walk(payload)
+    return videos
+
+
+def _video_renderer_to_lockup(renderer: dict) -> dict:
+    video_id = renderer.get("videoId", "")
+    title = _text_from_runs(renderer.get("title", {}))
+    published = _text_from_runs(renderer.get("publishedTimeText", {}))
+    duration = _text_from_runs(renderer.get("lengthText", {}))
+    if not video_id or not title or _is_membership_video(title):
+        return {}
+    return {
+        "videoId": video_id,
+        "title": title,
+        "publishedTimeText": published,
+        "duration": duration,
+    }
+
+
+def _playlist_video_renderer_to_lockup(renderer: dict) -> dict:
+    video_id = renderer.get("videoId", "")
+    title = _text_from_runs(renderer.get("title", {}))
+    duration = _text_from_runs(renderer.get("lengthText", {}))
+    published = ""
+    video_info = renderer.get("videoInfo", {}).get("runs", [])
+    if isinstance(video_info, list):
+        for run in video_info:
+            if not isinstance(run, dict):
+                continue
+            text = str(run.get("text", ""))
+            if "전" in text:
+                published = text
+                break
+    if not video_id or not title or _is_membership_video(title):
+        return {}
+    return {
+        "videoId": video_id,
+        "title": title,
+        "publishedTimeText": published,
+        "duration": duration,
+    }
+
+
+def _lockup_view_model_to_lockup(view_model: dict) -> dict:
+    if view_model.get("contentType") != "LOCKUP_CONTENT_TYPE_VIDEO":
+        return {}
+    video_id = view_model.get("contentId", "")
+    metadata = (
+        view_model.get("metadata", {})
+        .get("lockupMetadataViewModel", {})
+    )
+    title = metadata.get("title", {}).get("content", "")
+    rows = (
+        metadata.get("metadata", {})
+        .get("contentMetadataViewModel", {})
+        .get("metadataRows", [])
+    )
+    parts = []
+    for row in rows:
+        for part in row.get("metadataParts", []):
+            text = part.get("text", {}).get("content", "")
+            if text:
+                parts.append(text)
+    published = next((p for p in parts if "전" in p), "")
+    duration = (
+        view_model.get("rendererContext", {})
+        .get("accessibilityContext", {})
+        .get("label", "")
+    )
+    if not video_id or not title or _is_membership_video(title):
+        return {}
+    return {
+        "videoId": video_id,
+        "title": title,
+        "publishedTimeText": published,
+        "duration": duration,
+    }
+
+
+def _text_from_runs(value: object) -> str:
+    if not isinstance(value, dict):
+        return ""
+    if "simpleText" in value:
+        return str(value.get("simpleText", ""))
+    runs = value.get("runs", [])
+    if isinstance(runs, list):
+        return "".join(str(run.get("text", "")) for run in runs if isinstance(run, dict))
+    return ""
+
+
+def _video_lockup_to_item(video: dict, display_name: str) -> dict:
+    video_id = video.get("videoId", "")
+    title = video.get("title", "").strip()
+    if not video_id or not title:
+        return {}
+
+    link = f"https://www.youtube.com/watch?v={video_id}"
+    transcript = _clean_membership_text(_get_transcript(video_id, link))
+    published_at = ""
+    published_dt = _published_time_to_datetime(video.get("publishedTimeText", ""))
+    if published_dt:
+        published_at = published_dt.isoformat()
+
+    item = {
+        "title": title,
+        "url": link,
+        "summary": clean_summary(transcript),
+        "contentText": transcript,
+        "publishedAt": published_at,
+        "sourceType": "youtube",
+        "sourceName": f"YouTube / {display_name}",
+        "author": display_name,
+    }
+    video_meta = _get_video_meta(video_id)
+    if video_meta:
+        item["viewCount"] = video_meta.get("viewCount", 0)
+        item["likeCount"] = video_meta.get("likeCount", 0)
+        item["duration"] = video_meta.get("duration", video.get("duration", ""))
+    elif video.get("duration"):
+        item["duration"] = video.get("duration", "")
+    return item
+
+
+def _published_time_to_datetime(text: str) -> Optional[datetime]:
+    text = (text or "").strip()
+    match = re.search(r"(\d+)\s*(분|시간|일|주|개월|년)\s*전", text)
+    if not match:
+        return None
+    amount = int(match.group(1))
+    unit = match.group(2)
+    now = datetime.now(timezone.utc)
+    if unit == "분":
+        return now - timedelta(minutes=amount)
+    if unit == "시간":
+        return now - timedelta(hours=amount)
+    if unit == "일":
+        return now - timedelta(days=amount)
+    if unit == "주":
+        return now - timedelta(weeks=amount)
+    if unit == "개월":
+        return now - timedelta(days=amount * 30)
+    if unit == "년":
+        return now - timedelta(days=amount * 365)
+    return None
 
 
 def _get_transcript(video_id: str, url: str) -> str:

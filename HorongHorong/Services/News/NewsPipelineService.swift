@@ -183,12 +183,30 @@ struct NewsProviderCLIResolver {
 
     private func lookup(command: String, shellPath: String, arguments: [String]) -> String? {
         guard let output = commandRunner(shellPath, arguments, environment) else { return nil }
-        return output
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { candidate in
-                candidate.hasPrefix("/") && URL(fileURLWithPath: candidate).lastPathComponent == command
+        return Self.executablePath(for: command, in: output)
+    }
+
+    static func executablePath(for command: String, in output: String) -> String? {
+        for token in output.components(separatedBy: .whitespacesAndNewlines) {
+            var searchStart = token.startIndex
+            while let slashIndex = token[searchStart...].firstIndex(of: "/") {
+                let rawCandidate = String(token[slashIndex...])
+                let candidate = sanitizedPathCandidate(rawCandidate)
+                if URL(fileURLWithPath: candidate).lastPathComponent == command {
+                    return candidate
+                }
+                searchStart = token.index(after: slashIndex)
             }
+        }
+        return nil
+    }
+
+    private static func sanitizedPathCandidate(_ raw: String) -> String {
+        let scalars = raw.unicodeScalars.prefix { scalar in
+            scalar.value > 32 && scalar.value != 127
+        }
+        return String(String.UnicodeScalarView(scalars))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`,;"))
     }
 
     private func environment(prependingExecutableDirectoryFor executablePath: String) -> [String: String] {
@@ -583,11 +601,10 @@ final class NewsPipelineService: @unchecked Sendable {
 
     private func generateJobId() -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
         let datePart = formatter.string(from: Date())
-        let randomPart = String(UUID().uuidString.prefix(4).lowercased())
-        return "\(datePart)_\(randomPart)"
+        return "\(datePart)-KST"
     }
 
     private func isoString(_ date: Date) -> String {
