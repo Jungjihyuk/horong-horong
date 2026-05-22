@@ -10,7 +10,10 @@ import os
 import re
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+
+KST = timezone(timedelta(hours=9))
 
 
 def main():
@@ -24,7 +27,7 @@ def main():
     log_file = open(args.log, "w", encoding="utf-8", buffering=1)
 
     def log(msg):
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST")
         line = f"[{ts}] {msg}"
         print(line, file=log_file, flush=True)
 
@@ -458,88 +461,214 @@ def _filter_relevance(items, interest_keywords, provider, log_fn, threshold=80):
     keywords_str = ", ".join(interest_keywords)
     kept = []
     dropped = 0
+    youtube_items = []
     for item in items:
         if item.get("sourceType") != "youtube":
             kept.append(item)
-            continue
-        title = item.get("title", "")
-        content = (item.get("contentText", "") or item.get("summary", ""))[:4000]
-        prompt = (
-            f"관심사: {keywords_str}\n\n"
-            f"영상 제목: {title}\n\n"
-            f"영상 자막/설명 (앞 4000자):\n{content}\n\n"
-            "위 영상이 관심사와 얼마나 연관되는지 0~100 점수로 평가하세요.\n"
-            "판단 기준:\n"
-            "- 제목에 관심사 키워드가 명시되어 있고 본문이 그 주제를 실제로 다룬다면 80 이상.\n"
-            "- 관심사와 직접 맞닿는 핵심 소재를 다룬다면 90 이상.\n"
-            "- 관심사와 접점이 희박한 일반 콘텐츠(예: 개인 매매 일지·잡담·무관 기술 뉴스)는 50 미만.\n"
-            "다음 JSON 만 정확히 출력하세요 (다른 텍스트 없이):\n"
-            '{"score": <정수 0-100>, "reason": "<한 줄 근거>"}'
-        )
-        try:
-            raw = provider.run(prompt)
-            m = re.search(r"\{.*?\}", raw, re.DOTALL)
-            if not m:
-                raise ValueError("응답에 JSON 블록 없음")
-            parsed = json.loads(m.group())
-            score = int(parsed.get("score", 0))
-            reason = str(parsed.get("reason", ""))
-        except Exception as e:
-            log_fn(f"  관련성 판정 실패 (drop): {title[:40]} - {e}")
-            dropped += 1
-            continue
-
-        title_lower = title.lower()
-        title_hit = next(
-            (kw for kw in interest_keywords
-             if kw.strip() and kw.strip().lower() in title_lower),
-            None,
-        )
-        if title_hit and score < 80:
-            log_fn(
-                f"  제목 키워드 '{title_hit}' 일치 → 점수 {score} → 80 보정: {title[:40]}"
-            )
-            score = 80
-
-        item["relevanceScore"] = score
-        if reason:
-            item["relevanceReason"] = reason
-        if score >= threshold:
-            log_fn(f"  관련성 {score} (유지): {title[:40]}")
-            kept.append(item)
         else:
-            log_fn(f"  관련성 {score} (제외): {title[:40]}")
-            dropped += 1
+            youtube_items.append(item)
+
+    batch_size = 5
+    for batch_start in range(0, len(youtube_items), batch_size):
+        batch = youtube_items[batch_start : batch_start + batch_size]
+        try:
+            batch_scores = _score_youtube_relevance_batch(
+                batch, keywords_str, provider
+            )
+        except Exception as e:
+            log_fn(
+                f"  관련성 배치 판정 실패, 단건 fallback 적용: {batch_start // batch_size + 1} - {e}"
+            )
+            batch_scores = {}
+
+        for offset, item in enumerate(batch):
+            local_idx = offset + 1
+            title = item.get("title", "")
+            score_reason = batch_scores.get(local_idx)
+            if score_reason is None:
+                try:
+                    score, reason = _score_youtube_relevance_single(
+                        item, keywords_str, provider
+                    )
+                except Exception as e:
+                    log_fn(f"  관련성 판정 실패 (drop): {title[:40]} - {e}")
+                    dropped += 1
+                    continue
+            else:
+                score, reason = score_reason
+
+            score = _adjust_relevance_score_for_title_hit(
+                item, interest_keywords, score, log_fn
+            )
+            item["relevanceScore"] = score
+            if reason:
+                item["relevanceReason"] = reason
+            if score >= threshold:
+                log_fn(f"  관련성 {score} (유지): {title[:40]}")
+                kept.append(item)
+            else:
+                log_fn(f"  관련성 {score} (제외): {title[:40]}")
+                dropped += 1
     log_fn(f"Relevance filter: kept {len(kept)}, dropped {dropped}")
     return kept, dropped
 
 
+def _score_youtube_relevance_batch(batch, keywords_str, provider) -> dict[int, tuple[int, str]]:
+    items_text = []
+    for offset, item in enumerate(batch):
+        local_idx = offset + 1
+        title = item.get("title", "")
+        content = (item.get("contentText", "") or item.get("summary", ""))[:1200]
+        items_text.append(
+            f"[{local_idx}] 영상 제목: {title}\n"
+            f"영상 자막/설명 발췌:\n{content}"
+        )
+
+    prompt = (
+        f"관심사: {keywords_str}\n\n"
+        f"아래 YouTube 영상 {len(batch)}개의 관심사 연관도를 각각 0~100 점수로 평가하세요.\n"
+        "판단 기준:\n"
+        "- 제목에 관심사 키워드가 명시되어 있고 본문이 그 주제를 실제로 다룬다면 80 이상.\n"
+        "- 관심사와 직접 맞닿는 핵심 소재를 다룬다면 90 이상.\n"
+        "- 관심사와 접점이 희박한 일반 콘텐츠(예: 개인 매매 일지·잡담·무관 기술 뉴스)는 50 미만.\n\n"
+        f"영상 목록:\n{chr(10).join(items_text)}\n\n"
+        'JSON 배열만 정확히 출력하세요: [{"index":1,"score":85,"reason":"한 줄 근거"}]'
+    )
+    raw = provider.run(prompt)
+    m = re.search(r"\[.*\]", raw, re.DOTALL)
+    if not m:
+        raise ValueError("응답에 JSON 배열 없음")
+    parsed = json.loads(m.group())
+    scores: dict[int, tuple[int, str]] = {}
+    for entry in parsed:
+        idx = int(entry.get("index", 0))
+        score = max(0, min(100, int(entry.get("score", 0))))
+        reason = str(entry.get("reason", ""))
+        if idx:
+            scores[idx] = (score, reason)
+    return scores
+
+
+def _score_youtube_relevance_single(item, keywords_str, provider) -> tuple[int, str]:
+    title = item.get("title", "")
+    content = (item.get("contentText", "") or item.get("summary", ""))[:4000]
+    prompt = (
+        f"관심사: {keywords_str}\n\n"
+        f"영상 제목: {title}\n\n"
+        f"영상 자막/설명 (앞 4000자):\n{content}\n\n"
+        "위 영상이 관심사와 얼마나 연관되는지 0~100 점수로 평가하세요.\n"
+        "판단 기준:\n"
+        "- 제목에 관심사 키워드가 명시되어 있고 본문이 그 주제를 실제로 다룬다면 80 이상.\n"
+        "- 관심사와 직접 맞닿는 핵심 소재를 다룬다면 90 이상.\n"
+        "- 관심사와 접점이 희박한 일반 콘텐츠(예: 개인 매매 일지·잡담·무관 기술 뉴스)는 50 미만.\n"
+        "다음 JSON 만 정확히 출력하세요 (다른 텍스트 없이):\n"
+        '{"score": <정수 0-100>, "reason": "<한 줄 근거>"}'
+    )
+    raw = provider.run(prompt)
+    m = re.search(r"\{.*?\}", raw, re.DOTALL)
+    if not m:
+        raise ValueError("응답에 JSON 블록 없음")
+    parsed = json.loads(m.group())
+    score = max(0, min(100, int(parsed.get("score", 0))))
+    reason = str(parsed.get("reason", ""))
+    return score, reason
+
+
+def _adjust_relevance_score_for_title_hit(item, interest_keywords, score, log_fn) -> int:
+    title = item.get("title", "")
+    title_lower = title.lower()
+    title_hit = next(
+        (kw for kw in interest_keywords
+         if kw.strip() and kw.strip().lower() in title_lower),
+        None,
+    )
+    if title_hit and score < 80:
+        log_fn(
+            f"  제목 키워드 '{title_hit}' 일치 → 점수 {score} → 80 보정: {title[:40]}"
+        )
+        return 80
+    return score
+
+
 def _summarize_transcripts(items, interest_keywords, provider, log_fn):
     keywords_str = ", ".join(interest_keywords)
-    for item in items:
-        if item.get("sourceType") != "youtube":
-            continue
-        transcript = item.get("contentText", "")
-        if len(transcript) < 200:
-            continue
-        prompt = (
-            f"다음은 유튜브 영상의 자막입니다. 아래 지침에 따라 요약해주세요.\n\n"
-            f"지침:\n"
-            f"- 관심사({keywords_str})와 연관된 핵심 내용 위주로 요약\n"
-            f"- 각 줄은 반드시 30자 이상의 완전한 문장으로 작성\n"
-            f"- 멤버십 가입 안내, 구독 요청 등 홍보 내용은 절대 포함하지 말 것\n"
-            f"- 3~5줄로 요약, 요약문만 출력\n\n"
-            f"영상 제목: {item.get('title', '')}\n\n"
-            f"자막:\n{transcript[:6000]}"
-        )
+    targets = [
+        item for item in items
+        if item.get("sourceType") == "youtube"
+        and len(item.get("contentText", "")) >= 200
+    ]
+    batch_size = 3
+    for batch_start in range(0, len(targets), batch_size):
+        batch = targets[batch_start : batch_start + batch_size]
         try:
-            result = provider.run(prompt).strip()
-            if result:
-                item["llmSummary"] = result
-                log_fn(f"  transcript 요약 완료: {item.get('title', '')[:40]}")
+            summaries = _summarize_transcript_batch(batch, keywords_str, provider)
+            for offset, item in enumerate(batch):
+                summary = summaries.get(offset + 1, "").strip()
+                if summary:
+                    item["llmSummary"] = summary
+                    log_fn(f"  transcript 요약 완료: {item.get('title', '')[:40]}")
         except Exception as e:
-            log_fn(f"  transcript 요약 실패: {e}")
+            log_fn(
+                f"  transcript 요약 배치 실패, 단건 fallback 적용: {batch_start // batch_size + 1} - {e}"
+            )
+            for item in batch:
+                try:
+                    result = _summarize_transcript_single(
+                        item, keywords_str, provider
+                    ).strip()
+                    if result:
+                        item["llmSummary"] = result
+                        log_fn(f"  transcript 요약 완료: {item.get('title', '')[:40]}")
+                except Exception as single_error:
+                    log_fn(f"  transcript 요약 실패: {single_error}")
     return items
+
+
+def _summarize_transcript_batch(batch, keywords_str, provider) -> dict[int, str]:
+    items_text = []
+    for offset, item in enumerate(batch):
+        local_idx = offset + 1
+        items_text.append(
+            f"[{local_idx}] 영상 제목: {item.get('title', '')}\n"
+            f"자막:\n{item.get('contentText', '')[:3000]}"
+        )
+    prompt = (
+        "다음 YouTube 영상 자막들을 아래 지침에 따라 각각 요약해주세요.\n\n"
+        f"지침:\n"
+        f"- 관심사({keywords_str})와 연관된 핵심 내용 위주로 요약\n"
+        f"- 멤버십 가입 안내, 구독 요청 등 홍보 내용은 절대 포함하지 말 것\n"
+        f"- 각 영상 summary는 3~5개의 완전한 문장으로 작성\n"
+        f"- JSON 배열만 출력\n\n"
+        f"영상 목록:\n{chr(10).join(items_text)}\n\n"
+        '형식: [{"index":1,"summary":"요약문"}]'
+    )
+    raw = provider.run(prompt).strip()
+    m = re.search(r"\[.*\]", raw, re.DOTALL)
+    if not m:
+        raise ValueError("응답에 JSON 배열 없음")
+    parsed = json.loads(m.group())
+    summaries: dict[int, str] = {}
+    for entry in parsed:
+        idx = int(entry.get("index", 0))
+        summary = str(entry.get("summary", "")).strip()
+        if idx and summary:
+            summaries[idx] = summary
+    return summaries
+
+
+def _summarize_transcript_single(item, keywords_str, provider) -> str:
+    transcript = item.get("contentText", "")
+    prompt = (
+        f"다음은 유튜브 영상의 자막입니다. 아래 지침에 따라 요약해주세요.\n\n"
+        f"지침:\n"
+        f"- 관심사({keywords_str})와 연관된 핵심 내용 위주로 요약\n"
+        f"- 각 줄은 반드시 30자 이상의 완전한 문장으로 작성\n"
+        f"- 멤버십 가입 안내, 구독 요청 등 홍보 내용은 절대 포함하지 말 것\n"
+        f"- 3~5줄로 요약, 요약문만 출력\n\n"
+        f"영상 제목: {item.get('title', '')}\n\n"
+        f"자막:\n{transcript[:6000]}"
+    )
+    return provider.run(prompt)
 
 
 def _summarize(items, interest_keywords, provider, log_fn):
