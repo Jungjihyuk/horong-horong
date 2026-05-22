@@ -135,11 +135,11 @@ struct TimerView: View {
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
-                .frame(width: 29, height: 29)
+                .frame(width: 35, height: 35)
                 .offset(y: focusIconOffset(at: context.date))
                 .shadow(color: PopoverChrome.accent.opacity(isFocusing ? 0.26 : 0.12), radius: 8, x: 0, y: 2)
         }
-        .frame(width: 29, height: 29)
+        .frame(width: 35, height: 35)
     }
 
     private var controlButtons: some View {
