@@ -242,7 +242,27 @@ enum Constants {
     static let defaultInterestKeywords = ""
     static let defaultAgentType = "Codex"
     static let defaultPlanDayCount = 5
-    static let availableAgentTypes = ["Codex", "Claude", "Gemini"]
+    static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Gemini"]
+    static let maxRepresentativeAgentCount = 3
+    static let defaultRepresentativeAgentTypes = ["Codex", "Claude", "Antigravity"]
+    static let defaultRepresentativeAgentTypesCSV = defaultRepresentativeAgentTypes.joined(separator: ",")
+
+    static func normalizedRepresentativeAgentTypes(from rawValue: String) -> [String] {
+        let candidates = rawValue
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var normalized: [String] = []
+        for agent in candidates where availableAgentTypes.contains(agent) && !normalized.contains(agent) {
+            normalized.append(agent)
+            if normalized.count == maxRepresentativeAgentCount {
+                break
+            }
+        }
+
+        return normalized.isEmpty ? defaultRepresentativeAgentTypes : normalized
+    }
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
@@ -252,6 +272,7 @@ enum Constants {
         static let outputDirectoryPath = "agent.outputDirectoryPath"
         static let interestKeywords = "agent.interestKeywords"
         static let selectedAgentType = "agent.selectedAgentType"
+        static let representativeAgentTypes = "agent.representativeAgentTypes"
         static let planDayCount = "agent.planDayCount"
         static let selectedFocusCategory = "timer.selectedFocusCategory"
         static let pomodoroFocusMinutes = "timer.pomodoroFocusMinutes"
@@ -315,10 +336,10 @@ enum Constants {
         newsDataBasePath()
     }
     static let newsRunnerMissingMessage = "뉴스 리포트 실행 파일을 찾을 수 없습니다. 앱을 다시 설치한 뒤에도 문제가 계속되면 개발자에게 문의해주세요."
-    static let defaultNewsProvider = "claude"
+    static let defaultNewsProvider = "codex"
     // 기본 뉴스 키워드 = 빈 문자열. (이전엔 "AI, 개발, 생산성, 자동화" 가 자동 들어갔지만, 백지 정책으로 전환)
     static let defaultNewsInterestKeywords = ""
-    static let availableNewsProviders = ["claude", "codex", "gemini", "opencode"]
+    static let availableNewsProviders = ["codex", "claude", "antigravity", "opencode", "gemini"]
     enum NewsStorageKey {
         static let dataBasePath = "news.dataBasePath"
         static let selectedProvider = "news.selectedProvider"

@@ -43,7 +43,7 @@ def main():
             request = json.load(f)
 
         job_id = request["jobId"]
-        provider = request.get("provider", "claude")
+        provider = request.get("provider", "codex")
         interest_keywords = request.get("interestKeywords", ["AI", "개발", "생산성", "자동화"])
         max_items = request.get("maxItemsPerSource", 10)
         sources = request.get("sources", [])
@@ -64,6 +64,7 @@ def main():
         from providers.codex_cli import CodexCliProvider
         from providers.gemini_cli import GeminiCliProvider
         from providers.opencode_cli import OpencodeCliProvider
+        from providers.antigravity_cli import AntigravityCliProvider
         from ontology import load_or_build as load_or_build_ontology
         from ontology import keyword_match as ontology_keyword_match
 
@@ -78,6 +79,7 @@ def main():
             "codex": CodexCliProvider,
             "gemini": GeminiCliProvider,
             "opencode": OpencodeCliProvider,
+            "antigravity": AntigravityCliProvider,
         }
 
         step("collect")
@@ -117,7 +119,7 @@ def main():
         log(f"Deduped: {len(deduped)}")
 
         # provider 는 ontology 클러스터링에도 필요하므로 classify 이전에 인스턴스화.
-        llm_cls = provider_map.get(provider, ClaudeCliProvider)
+        llm_cls = provider_map.get(provider, CodexCliProvider)
         llm = llm_cls()
 
         step("ontology")
