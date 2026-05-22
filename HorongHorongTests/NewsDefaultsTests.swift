@@ -113,6 +113,37 @@ final class NewsDefaultsTests: XCTestCase {
         XCTAssertEqual(calls.map(\.executable), ["/bin/sh", "/mock/zsh"])
     }
 
+    func testNewsProviderCLIResolverUsesUserShellWhenEnvironmentShellIsMissing() throws {
+        var calls: [(executable: String, arguments: [String])] = []
+        let resolver = NewsProviderCLIResolver(
+            environment: [
+                "PATH": "/usr/bin:/bin",
+            ],
+            commandRunner: { executable, arguments, _ in
+                calls.append((executable, arguments))
+                if executable == "/mock/fish" {
+                    return "/Users/example/.local/bin/claude\n"
+                }
+                return nil
+            },
+            isExecutable: { path in
+                path == "/Users/example/.local/bin/claude"
+            },
+            userShellProvider: {
+                "/mock/fish"
+            }
+        )
+
+        let resolution = try XCTUnwrap(try? resolver.resolve(provider: "claude").get())
+
+        XCTAssertEqual(resolution.executablePath, "/Users/example/.local/bin/claude")
+        XCTAssertEqual(
+            resolution.environment["PATH"],
+            "/Users/example/.local/bin:/usr/bin:/bin"
+        )
+        XCTAssertEqual(calls.map(\.executable), ["/bin/sh", "/mock/fish"])
+    }
+
     private func temporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
