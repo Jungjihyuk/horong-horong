@@ -1,0 +1,4 @@
+interface:
+  display_name: "System Design Spec Builder"
+  short_description: "정의서·요구사항·UI 명세를 바탕으로 시스템 설계서와 아키텍처 다이어그램을 작성하는 스킬"
+  default_prompt: "프로젝트 정의서, 요구사항 명세서, UI 명세서를 기반으로 시스템 설계서를 작성해줘."
