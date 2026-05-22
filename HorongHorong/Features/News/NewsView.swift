@@ -390,7 +390,7 @@ struct NewsView: View {
             maxItemsPerSource: maxItemsPerSource,
             context: modelContext
         )
-        if pipelineService.lastErrorCode == "E_ENV" {
+        if pipelineService.lastErrorCode == "E_ENV" || pipelineService.lastErrorCode == "E_PROVIDER_CLI" {
             executionEnvironmentAlertMessage = pipelineService.lastErrorMessage ?? "uv 또는 Python 3 실행 환경을 확인해주세요."
             showExecutionEnvironmentAlert = true
         }
