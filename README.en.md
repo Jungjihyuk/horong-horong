@@ -137,7 +137,7 @@ Track the active app in the background and automatically aggregate time by categ
 <td width="45%" valign="middle">
 
 ### 📰 News Curation
-Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
+Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. News providers support Codex, Claude, Antigravity, Opencode, and Gemini. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
 
 </td>
 <td width="55%" align="center">
@@ -149,7 +149,7 @@ Collect data from channels you frequently use, such as YouTube channels/playlist
 <td width="45%" valign="middle">
 
 ### ⚡ AI Agent Experiments
-Call Codex / Claude / Gemini CLI to generate an N-day experiment plan, then run only today's section from the most recent plan. The experiment root is split automatically into `ideas` and `outputs`.
+Call Codex / Claude / Antigravity / Opencode / Gemini CLI to generate an N-day experiment plan, then run only today's section from the most recent plan. The Agent tab shows three quick-select agents chosen in settings, while the default agent can be selected from all five providers. The experiment root is split automatically into `ideas` and `outputs`.
 
 </td>
 <td width="55%" align="center">
@@ -203,8 +203,10 @@ Use this path when you want to build the app directly or contribute to the codeb
 - [`uv`](https://github.com/astral-sh/uv) — *(required for the news feature)* `brew install uv`
 - Python 3 — *(required for the news feature)*
 - At least one LLM CLI
-  - News: `claude`, `codex`, `gemini`, `opencode`
-  - Agent experiments: `codex`, `claude`, `gemini`
+  - News: `codex`, `claude`, Antigravity (`agy`), `opencode`, `gemini`
+  - Agent experiments: `codex`, `claude`, Antigravity (`agy`), `opencode`, `gemini`
+
+<sub><font color="#6B7280">Note: The Gemini provider is scheduled for service shutdown on June 18, 2026, so it may be removed later.</font></sub>
 
 #### Build Steps
 
