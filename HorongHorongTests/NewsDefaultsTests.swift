@@ -77,10 +77,11 @@ final class NewsDefaultsTests: XCTestCase {
     }
 
     func testNewsProviderCLIResolverMapsSupportedProviders() {
-        XCTAssertEqual(NewsProviderCLIResolver.command(for: "claude"), "claude")
         XCTAssertEqual(NewsProviderCLIResolver.command(for: "codex"), "codex")
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "claude"), "claude")
         XCTAssertEqual(NewsProviderCLIResolver.command(for: "gemini"), "gemini")
         XCTAssertEqual(NewsProviderCLIResolver.command(for: "opencode"), "opencode")
+        XCTAssertEqual(NewsProviderCLIResolver.command(for: "antigravity"), "agy")
         XCTAssertNil(NewsProviderCLIResolver.command(for: "unknown"))
     }
 
