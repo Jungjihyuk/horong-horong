@@ -6,6 +6,8 @@ struct AgentPage: View {
     private var agentRootDirectoryPath: String = Constants.defaultAgentRootDirectoryPath
     @AppStorage(Constants.AppStorageKey.selectedAgentType)
     private var selectedAgentType: String = Constants.defaultAgentType
+    @AppStorage(Constants.AppStorageKey.representativeAgentTypes)
+    private var representativeAgentTypesRaw: String = Constants.defaultRepresentativeAgentTypesCSV
     @AppStorage(Constants.AppStorageKey.planDayCount)
     private var planDayCount: Int = Constants.defaultPlanDayCount
     @AppStorage(Constants.AppStorageKey.interestKeywords)
@@ -52,6 +54,25 @@ struct AgentPage: View {
                     }
                     .labelsHidden()
                     .frame(width: 130)
+                }
+                SettingsRow(
+                    "빠른 선택 Agent",
+                    subtitle: "Agent 탭 버튼에 표시할 Agent를 최대 3개까지 고릅니다."
+                ) {
+                    FlowLayout(spacing: 6) {
+                        ForEach(Constants.availableAgentTypes, id: \.self) { agent in
+                            Button {
+                                toggleRepresentativeAgent(agent)
+                            } label: {
+                                Text(agent)
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(representativeAgentTypes.contains(agent) ? .accentColor : .secondary)
+                            .disabled(!representativeAgentTypes.contains(agent) && representativeAgentTypes.count >= Constants.maxRepresentativeAgentCount)
+                        }
+                    }
+                    .frame(maxWidth: 310, alignment: .trailing)
                 }
                 SettingsRow(
                     "계획 일수",
@@ -120,6 +141,20 @@ struct AgentPage: View {
 
     private var trimmedNewKeyword: String {
         newKeyword.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var representativeAgentTypes: [String] {
+        Constants.normalizedRepresentativeAgentTypes(from: representativeAgentTypesRaw)
+    }
+
+    private func toggleRepresentativeAgent(_ agent: String) {
+        var agents = representativeAgentTypes
+        if agents.contains(agent) {
+            agents.removeAll { $0 == agent }
+        } else if agents.count < Constants.maxRepresentativeAgentCount {
+            agents.append(agent)
+        }
+        representativeAgentTypesRaw = agents.joined(separator: ",")
     }
 
     private func addKeyword() {

@@ -238,6 +238,7 @@ struct AgentExperimentView: View {
     @AppStorage(Constants.AppStorageKey.outputDirectoryPath) private var legacyOutputDirectoryPath = ""
     @AppStorage(Constants.AppStorageKey.interestKeywords) private var interestKeywords = Constants.defaultInterestKeywords
     @AppStorage(Constants.AppStorageKey.selectedAgentType) private var selectedAgentType = Constants.defaultAgentType
+    @AppStorage(Constants.AppStorageKey.representativeAgentTypes) private var representativeAgentTypesRaw = Constants.defaultRepresentativeAgentTypesCSV
     @AppStorage(Constants.AppStorageKey.planDayCount) private var planDayCount = Constants.defaultPlanDayCount
 
     @State private var statusMessage: String = ""
@@ -352,7 +353,7 @@ struct AgentExperimentView: View {
 
     private var agentSelector: some View {
         HStack(spacing: 6) {
-            ForEach(Constants.availableAgentTypes, id: \.self) { agent in
+            ForEach(representativeAgentTypes, id: \.self) { agent in
                 Button {
                     selectedAgentType = agent
                 } label: {
@@ -376,6 +377,10 @@ struct AgentExperimentView: View {
         }
         .padding(4)
         .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+
+    private var representativeAgentTypes: [String] {
+        Constants.normalizedRepresentativeAgentTypes(from: representativeAgentTypesRaw)
     }
 
     private func agentTypeFill(for agent: String) -> Color {
@@ -562,7 +567,8 @@ private enum AgentPlanLauncher {
             dayCount: request.dayCount
         )
         let agentCommand = try buildAgentCommand(agentName: request.agentName, prompt: prompt)
-        let shellCommand = "cd \(shellQuote(ideaDir)); mkdir -p \(shellQuote(outputDir)); \(agentCommand)"
+        let workspaceDir = workspaceDirectoryPath(ideaDirectoryPath: ideaDir, outputDirectoryPath: outputDir)
+        let shellCommand = "cd \(shellQuote(workspaceDir)); mkdir -p \(shellQuote(outputDir)); \(agentCommand)"
         try runTerminalCommand(shellCommand)
 
         return AgentPlanLaunchResult(outputFileName: fileName)
@@ -598,7 +604,8 @@ private enum AgentPlanLauncher {
         """
 
         let agentCommand = try buildAgentCommand(agentName: request.agentName, prompt: prompt)
-        let shellCommand = "cd \(shellQuote(outputDir)); \(agentCommand)"
+        let workspaceDir = parentDirectoryPath(for: outputDir)
+        let shellCommand = "cd \(shellQuote(workspaceDir)); \(agentCommand)"
         try runTerminalCommand(shellCommand)
 
         return TodayExperimentRunResult(planFileName: planFileURL.lastPathComponent)
@@ -611,7 +618,7 @@ private enum AgentPlanLauncher {
         case "Claude":
             return "claude \(shellQuote(prompt))"
         case "Antigravity":
-            return "agy -p \(shellQuote(prompt))"
+            return "agy --prompt-interactive \(shellQuote(prompt))"
         case "Opencode":
             return "opencode run \(shellQuote(prompt))"
         case "Gemini":
@@ -709,6 +716,16 @@ private enum AgentPlanLauncher {
 
     private static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private static func workspaceDirectoryPath(ideaDirectoryPath: String, outputDirectoryPath: String) -> String {
+        let ideaParent = parentDirectoryPath(for: ideaDirectoryPath)
+        let outputParent = parentDirectoryPath(for: outputDirectoryPath)
+        return ideaParent == outputParent ? ideaParent : ideaDirectoryPath
+    }
+
+    private static func parentDirectoryPath(for path: String) -> String {
+        URL(fileURLWithPath: path).deletingLastPathComponent().path
     }
 
     private static func isoDateString(_ date: Date) -> String {

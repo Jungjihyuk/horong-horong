@@ -243,6 +243,26 @@ enum Constants {
     static let defaultAgentType = "Codex"
     static let defaultPlanDayCount = 5
     static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Gemini"]
+    static let maxRepresentativeAgentCount = 3
+    static let defaultRepresentativeAgentTypes = ["Codex", "Claude", "Antigravity"]
+    static let defaultRepresentativeAgentTypesCSV = defaultRepresentativeAgentTypes.joined(separator: ",")
+
+    static func normalizedRepresentativeAgentTypes(from rawValue: String) -> [String] {
+        let candidates = rawValue
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var normalized: [String] = []
+        for agent in candidates where availableAgentTypes.contains(agent) && !normalized.contains(agent) {
+            normalized.append(agent)
+            if normalized.count == maxRepresentativeAgentCount {
+                break
+            }
+        }
+
+        return normalized.isEmpty ? defaultRepresentativeAgentTypes : normalized
+    }
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
@@ -252,6 +272,7 @@ enum Constants {
         static let outputDirectoryPath = "agent.outputDirectoryPath"
         static let interestKeywords = "agent.interestKeywords"
         static let selectedAgentType = "agent.selectedAgentType"
+        static let representativeAgentTypes = "agent.representativeAgentTypes"
         static let planDayCount = "agent.planDayCount"
         static let selectedFocusCategory = "timer.selectedFocusCategory"
         static let pomodoroFocusMinutes = "timer.pomodoroFocusMinutes"
