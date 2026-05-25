@@ -159,6 +159,10 @@ htmlcov/
 ## Graphify
 # graphify-out/
 
+## MCP 
+.codegraph/*
+.mcp*
+
 
 # ============================= 6. Infra =============================
 
