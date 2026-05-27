@@ -286,6 +286,7 @@ enum Constants {
         static let timelineBucketMinutes = "timeline.bucketMinutes"
         static let menubarLabelStyle = "menubar.labelStyle"
         static let menubarTimeStyle = "menubar.timeStyle"
+        static let menubarIcon = "menubar.icon"
     }
 
     // MARK: - 메뉴바 표시 형식
@@ -321,6 +322,28 @@ enum Constants {
 
     static let defaultMenubarLabelStyle = MenubarLabelStyle.timeAndIcon.rawValue
     static let defaultMenubarTimeStyle = MenubarTimeStyle.mmss.rawValue
+
+    // MARK: - 메뉴바 아이콘 (idle 상태에서 표시되는 대표 아이콘)
+    enum MenubarIconStyle: String, CaseIterable, Identifiable {
+        case horong = "MenuBarIcon"
+        case horong2 = "MenuBarIcon2"
+        case horong3 = "MenuBarIcon3"
+
+        var id: String { rawValue }
+
+        /// Assets.xcassets 의 imageset 이름.
+        var imageName: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .horong:  return "호롱불"
+            case .horong2: return "호롱불 2"
+            case .horong3: return "호롱불 3"
+            }
+        }
+    }
+
+    static let defaultMenubarIcon = MenubarIconStyle.horong.rawValue
 
     // MARK: - 타임라인 표시 기본값
     static let defaultTimelineStartHour = 0
