@@ -15,17 +15,16 @@ final class QuickMemoPanel {
     }
 
     private func show(modelContext: ModelContext) {
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: Constants.quickMemoPanelWidth, height: 200),
-            styleMask: [.titled, .closable, .fullSizeContentView, .nonactivatingPanel, .hudWindow],
+        let panel = QuickMemoWindow(
+            contentRect: NSRect(x: 0, y: 0, width: Constants.quickMemoPanelWidth, height: Constants.quickMemoPanelHeight),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
 
         panel.isFloatingPanel = true
         panel.level = .floating
-        panel.titlebarAppearsTransparent = true
-        panel.titleVisibility = .hidden
+        panel.isOpaque = false
         panel.isMovableByWindowBackground = true
         panel.animationBehavior = .utilityWindow
         panel.hasShadow = true
@@ -40,8 +39,8 @@ final class QuickMemoPanel {
         }
 
         let contentView = QuickMemoView(
-            onSave: { [weak self] content in
-                let memo = Memo(content: content)
+            onSave: { [weak self] content, icon in
+                let memo = Memo(content: content, icon: icon)
                 modelContext.insert(memo)
                 try? modelContext.save()
                 self?.close()
@@ -52,8 +51,8 @@ final class QuickMemoPanel {
         )
 
         panel.contentView = NSHostingView(rootView: contentView)
-        panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
 
         panel.alphaValue = 0
         NSAnimationContext.runAnimationGroup { context in
@@ -76,4 +75,9 @@ final class QuickMemoPanel {
             }
         })
     }
+}
+
+private final class QuickMemoWindow: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
