@@ -427,6 +427,8 @@ private struct MenuBarLabel: View {
     private var labelStyleRaw: String = Constants.defaultMenubarLabelStyle
     @AppStorage(Constants.AppStorageKey.menubarTimeStyle)
     private var timeStyleRaw: String = Constants.defaultMenubarTimeStyle
+    @AppStorage(Constants.AppStorageKey.menubarIcon)
+    private var menubarIconRaw: String = Constants.defaultMenubarIcon
     @AppStorage(Constants.AppStorageKey.selectedFocusCategory)
     private var selectedFocusCategory: String = ""
 
@@ -438,6 +440,10 @@ private struct MenuBarLabel: View {
         Constants.MenubarTimeStyle(rawValue: timeStyleRaw) ?? .mmss
     }
 
+    private var menubarIcon: Constants.MenubarIconStyle {
+        Constants.MenubarIconStyle(rawValue: menubarIconRaw) ?? .horong
+    }
+
     var body: some View {
         let state = appState.timerState
         let isActive = state == .focusing || state == .paused || state == .breaking
@@ -446,7 +452,7 @@ private struct MenuBarLabel: View {
             Label {
                 Text("호롱호롱")
             } icon: {
-                Image("MenuBarIcon")
+                Image(menubarIcon.imageName)
                     .renderingMode(.original)
             }
         } else {

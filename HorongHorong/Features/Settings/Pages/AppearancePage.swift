@@ -6,6 +6,8 @@ struct AppearancePage: View {
     private var appearanceMode: String = Constants.defaultAppearanceMode
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
+    @AppStorage(Constants.AppStorageKey.menubarIcon)
+    private var menubarIconRaw: String = Constants.defaultMenubarIcon
     @State private var accent: Color = SettingsTheme.accent
     @State private var density: String = "comfortable"
     @State private var appIcon: String = "auto"
@@ -148,6 +150,12 @@ struct AppearancePage: View {
     private var iconCard: some View {
         SettingsGroupCard("아이콘") {
             SettingsRow(
+                "메뉴바 아이콘",
+                subtitle: "메뉴바에 표시되는 기본 아이콘을 선택합니다."
+            ) {
+                menubarIconMenu
+            }
+            SettingsRow(
                 "앱 아이콘",
                 subtitle: "Dock 및 앱 전환기에 표시되는 아이콘 스타일.",
                 comingSoon: true
@@ -170,5 +178,45 @@ struct AppearancePage: View {
                 Toggle("", isOn: $menubarAnim).labelsHidden()
             }
         }
+    }
+
+    private var selectedMenubarIcon: Constants.MenubarIconStyle {
+        Constants.MenubarIconStyle(rawValue: menubarIconRaw) ?? .horong
+    }
+
+    private var menubarIconMenu: some View {
+        Menu {
+            ForEach(Constants.MenubarIconStyle.allCases) { style in
+                Button {
+                    menubarIconRaw = style.rawValue
+                } label: {
+                    Label(
+                        style.label,
+                        systemImage: selectedMenubarIcon == style ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(selectedMenubarIcon.imageName)
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                Text(selectedMenubarIcon.label)
+                    .font(.callout)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: 190, alignment: .leading)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
