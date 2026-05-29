@@ -10,6 +10,7 @@ def valid_request_payload():
         "jobId": "job-20260527-001",
         "requestedAt": "2026-05-27T10:00:00Z",
         "provider": "codex",
+        "providerOptions": {},
         "interestKeywords": ["AI", "Swift"],
         "maxItemsPerSource": 3,
         "dateRangeHours": 24,
