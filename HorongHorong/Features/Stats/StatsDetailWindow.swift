@@ -236,7 +236,7 @@ struct StatsDetailWindow: View {
             .buttonStyle(LanternSecondaryButtonStyle())
             .controlSize(.small)
             .disabled(viewMode != .daily)
-            .help(viewMode == .daily ? "이 날짜의 세그먼트를 수동 편집" : "일간 뷰에서만 사용할 수 있습니다")
+            .help(viewMode == .daily ? "이 날짜의 포모도로와 세그먼트를 수동 편집" : "일간 뷰에서만 사용할 수 있습니다")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
