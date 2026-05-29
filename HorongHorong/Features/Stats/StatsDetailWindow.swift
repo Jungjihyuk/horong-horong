@@ -15,6 +15,7 @@ private struct StatsLoadedData {
     let periodSegments: [AppUsageSegment]
     let timerSessions: [FocusSession]
     let aggregateSnapshot: StatsAggregateSnapshot?
+    let attentionDaySummaries: [AttentionDaySummary]
 }
 
 struct StatsDetailWindow: View {
@@ -27,6 +28,7 @@ struct StatsDetailWindow: View {
     @State private var periodSegments: [AppUsageSegment] = []
     @State private var timerSessions: [FocusSession] = []
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
+    @State private var attentionDaySummaries: [AttentionDaySummary] = []
     @State private var showEditor: Bool = false
     @State private var trackerStore = TrackerStateStore.shared
     @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
@@ -58,6 +60,7 @@ struct StatsDetailWindow: View {
                         periodSegments: periodSegments,
                         timerSessions: timerSessions,
                         aggregateSnapshot: aggregateSnapshot,
+                        attentionDaySummaries: attentionDaySummaries,
                         vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
                     )
                     .padding(20)
@@ -344,6 +347,11 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail records fetch mode=\(viewMode.rawValue, privacy: .public) count=\(fetchedRecords.count) elapsed=\(recordsElapsedMs)ms")
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
+        let finalizedAttentionDays = AttentionDaySummaryRecorder.finalizeCompletedDays(
+            from: startDate,
+            to: endDate,
+            modelContext: modelContext
+        )
         let aggregate = loadAggregateSnapshot(
             for: viewMode,
             start: startDate,
@@ -366,7 +374,8 @@ struct StatsDetailWindow: View {
             weekSegments: loadedSegments.week,
             periodSegments: loadedSegments.period,
             timerSessions: fetchedSessions,
-            aggregateSnapshot: aggregate
+            aggregateSnapshot: aggregate,
+            attentionDaySummaries: finalizedAttentionDays
         )
         loadCache[key] = loadedData
         let applyStartedAt = Date()
@@ -384,7 +393,8 @@ struct StatsDetailWindow: View {
         periodSegments = data.periodSegments
         timerSessions = data.timerSessions
         aggregateSnapshot = data.aggregateSnapshot
-        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
+        attentionDaySummaries = data.attentionDaySummaries
+        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) attentionDays=\(data.attentionDaySummaries.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
     }
 
     private func invalidateLoadCache() {

@@ -104,6 +104,8 @@ struct StatsChartView: View {
     var timerSessions: [FocusSession] = []
     /// 주간/월간 탭에서 원본 세그먼트 재집계를 피하기 위해 부모가 넘겨주는 집계 캐시.
     var aggregateSnapshot: StatsAggregateSnapshot? = nil
+    /// 하루가 지난 뒤 확정 저장된 대표 주의 상태. 과거 날짜의 상태 점에 우선 사용한다.
+    var attentionDaySummaries: [AttentionDaySummary] = []
 
     @State private var weeklySelection: Date? = nil
     @State private var dailyAngleSelection: Double? = nil
@@ -480,7 +482,7 @@ struct StatsChartView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             Spacer()
-            Text("🟢 집중 · 🟡 보통 · 🔴 산만")
+            Text("🌿 흐름 유지 · 〰️ 흐름 변동 · ↩️ 복귀 필요")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -535,7 +537,7 @@ struct StatsChartView: View {
                 AxisValueLabel {
                     if let date = value.as(Date.self) {
                         let key = Calendar.current.startOfDay(for: date)
-                        weekdayAxisLabel(date: date, level: focusByDay[key] ?? .empty)
+                        weekdayAxisLabel(date: date, state: focusByDay[key] ?? .noRecord)
                     }
                 }
             }
@@ -551,12 +553,12 @@ struct StatsChartView: View {
         )
     }
 
-    private func weekdayAxisLabel(date: Date, level: DailyFocusSummary.Level) -> some View {
+    private func weekdayAxisLabel(date: Date, state: AttentionFlowState) -> some View {
         VStack(spacing: 3) {
             Text(weekdayShortLabel(date))
                 .font(.caption2)
             Circle()
-                .fill(focusDotColor(level))
+                .fill(focusDotColor(state))
                 .frame(width: 7, height: 7)
         }
         .padding(.top, 2)
@@ -569,28 +571,33 @@ struct StatsChartView: View {
         return fmt.string(from: date)
     }
 
-    private func focusDotColor(_ level: DailyFocusSummary.Level) -> Color {
-        switch level {
-        case .focused: return .green
-        case .moderate: return .yellow
-        case .scattered: return .red
-        case .empty: return Color.secondary.opacity(0.25)
+    private func focusDotColor(_ state: AttentionFlowState) -> Color {
+        switch state {
+        case .steady: return .green
+        case .variable: return .yellow
+        case .returnNeeded: return .red
+        case .noRecord: return Color.secondary.opacity(0.25)
         }
     }
 
-    private var weeklyFocusByDay: [Date: DailyFocusSummary.Level] {
+    private var weeklyFocusByDay: [Date: AttentionFlowState] {
         let startedAt = Date()
+        let recorded = attentionDaySummaries.reduce(into: [:]) { result, summary in
+            result[Calendar.current.startOfDay(for: summary.day)] = summary.flowState
+        }
         if hasAggregateSource, let aggregateSnapshot, !aggregateSnapshot.dailyFocusLevels.isEmpty {
-            let result = Dictionary(uniqueKeysWithValues: aggregateSnapshot.dailyFocusLevels.map {
-                ($0.day, focusLevel(from: $0.level))
+            var result = Dictionary(uniqueKeysWithValues: aggregateSnapshot.dailyFocusLevels.map {
+                ($0.day, AttentionFlowState.fromLegacyValue($0.level))
             })
+            result.merge(recorded) { _, recorded in recorded }
             logChartBuild("weeklyFocusByDay", rows: result.count, startedAt: startedAt, source: "aggregate")
             return result
         }
 
         let cal = Calendar.current
-        var result: [Date: DailyFocusSummary.Level] = [:]
+        var result: [Date: AttentionFlowState] = recorded
         for day in weeklyDays {
+            if result[day] != nil { continue }
             guard let dayEnd = cal.date(byAdding: .day, value: 1, to: day) else { continue }
             let segs = weekSegments.filter {
                 $0.startTime < dayEnd && $0.endTime > day
@@ -606,7 +613,7 @@ struct StatsChartView: View {
                 buckets: bks,
                 timerSessions: timerSessions
             )
-            result[day] = sum.level
+            result[day] = sum.flowState
         }
         logChartBuild("weeklyFocusByDay", rows: result.count, startedAt: startedAt, source: "segments")
         return result
@@ -1273,19 +1280,6 @@ struct StatsChartView: View {
         let result = hasSegmentSource ? dailySegmentTotalsMap : dailyRecordTotalsMap
         logChartBuild("monthlyDailyTotalsMap", rows: result.count, startedAt: startedAt, source: dataSourceLabel)
         return result
-    }
-
-    private func focusLevel(from value: String) -> DailyFocusSummary.Level {
-        switch value {
-        case "focused":
-            return .focused
-        case "moderate":
-            return .moderate
-        case "scattered":
-            return .scattered
-        default:
-            return .empty
-        }
     }
 
     private func addRecordDetails(

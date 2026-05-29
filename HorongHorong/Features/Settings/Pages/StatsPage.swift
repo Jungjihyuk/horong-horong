@@ -12,6 +12,8 @@ struct StatsPage: View {
     private var timelineBucketMinutes: Int = Constants.defaultTimelineBucketMinutes
 
     @State private var trackerStore = TrackerStateStore.shared
+    @State private var attentionStore = AttentionThresholdStore.shared
+    @State private var categoryStore = CategoryStore.shared
     @State private var retention: String = "90"
     @State private var weeklyReport: Bool = false
 
@@ -64,6 +66,7 @@ struct StatsPage: View {
             }
 
             trackingCard
+            attentionCriteriaCard
             vacationCard
 
             SettingsGroupCard("보관") {
@@ -139,6 +142,113 @@ struct StatsPage: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(trackerStore.shouldRecord() ? .green : .secondary)
             }
+        }
+    }
+
+    // MARK: - 주의 기준 카드
+
+    private var attentionCriteriaCard: some View {
+        SettingsGroupCard("주의 기준") {
+            SettingsRow(
+                "주의 신호 민감도",
+                subtitle: "표시 기준 전체를 빠르게 조정합니다."
+            ) {
+                Picker("", selection: Binding(
+                    get: { attentionStore.sensitivity },
+                    set: { attentionStore.sensitivity = $0 }
+                )) {
+                    Text("관대").tag(AttentionSensitivity.lenient)
+                    Text("표준").tag(AttentionSensitivity.standard)
+                    Text("민감").tag(AttentionSensitivity.sensitive)
+                }
+                .labelsHidden()
+                .frame(width: 100)
+            }
+
+            SettingsRow(
+                "방해 앱 최소 체류",
+                subtitle: "방해 가능 카테고리에 이 시간 이상 머물면 선택적 주의 신호로 봅니다."
+            ) {
+                Stepper(
+                    "\(Int(attentionStore.distractionMinSeconds))초",
+                    value: Binding(
+                        get: { Int(attentionStore.distractionMinSeconds) },
+                        set: { attentionStore.distractionMinSeconds = TimeInterval($0) }
+                    ),
+                    in: 10...180,
+                    step: 10
+                )
+                .frame(width: 110)
+            }
+
+            SettingsRow(
+                "휴식 후 복귀 지연",
+                subtitle: "계획 휴식이 끝난 뒤 이 시간 이상 원래 카테고리로 돌아오지 않으면 복귀 지연으로 봅니다."
+            ) {
+                Stepper(
+                    "\(Int(attentionStore.returnDelaySeconds / 60))분",
+                    value: Binding(
+                        get: { Int(attentionStore.returnDelaySeconds / 60) },
+                        set: { attentionStore.returnDelaySeconds = TimeInterval($0 * 60) }
+                    ),
+                    in: 3...30,
+                    step: 1
+                )
+                .frame(width: 110)
+            }
+
+            SettingsRow(
+                "조기 종료 기준",
+                subtitle: "목표 집중 시간의 이 비율보다 짧게 끝나면 지속적 주의 신호로 봅니다."
+            ) {
+                Stepper(
+                    "\(Int(attentionStore.earlyStopRatio * 100))%",
+                    value: Binding(
+                        get: { Int(attentionStore.earlyStopRatio * 100) },
+                        set: { attentionStore.earlyStopRatio = Double($0) / 100.0 }
+                    ),
+                    in: 50...95,
+                    step: 5
+                )
+                .frame(width: 110)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("방해 가능 카테고리")
+                            .font(.callout)
+                        Text("선택된 카테고리는 포모도로 중 목표와 무관하게 머물렀을 때 방해 신호 후보가 됩니다.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button {
+                        attentionStore.resetDistractionCategories()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("기본값으로 되돌리기")
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(categoryStore.categories) { category in
+                        Toggle(isOn: Binding(
+                            get: { attentionStore.isDistractionCategory(category.name) },
+                            set: { attentionStore.setDistractionCategory(category.name, isEnabled: $0) }
+                        )) {
+                            Text("\(category.emoji) \(category.name)")
+                                .font(.caption)
+                                .lineLimit(1)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
     }
 
@@ -312,10 +422,18 @@ struct StatsPage: View {
         let focusDescriptor = FetchDescriptor<FocusSession>(
             predicate: #Predicate { $0.startedAt >= s && $0.startedAt < e }
         )
+        let attentionDescriptor = FetchDescriptor<AttentionEvent>(
+            predicate: #Predicate { $0.occurredAt >= s && $0.occurredAt < e }
+        )
+        let daySummaryDescriptor = FetchDescriptor<AttentionDaySummary>(
+            predicate: #Predicate { $0.day >= s && $0.day < e }
+        )
         let recordCount = (try? modelContext.fetch(recordDescriptor).count) ?? 0
         let segmentCount = (try? modelContext.fetch(segmentDescriptor).count) ?? 0
         let focusCount = (try? modelContext.fetch(focusDescriptor).count) ?? 0
-        return recordCount + segmentCount + focusCount
+        let attentionCount = (try? modelContext.fetch(attentionDescriptor).count) ?? 0
+        let daySummaryCount = (try? modelContext.fetch(daySummaryDescriptor).count) ?? 0
+        return recordCount + segmentCount + focusCount + attentionCount + daySummaryCount
     }
 
     private func deleteRecords(start: Date, end: Date) {
@@ -329,6 +447,12 @@ struct StatsPage: View {
         let focusDescriptor = FetchDescriptor<FocusSession>(
             predicate: #Predicate { $0.startedAt >= s && $0.startedAt < e }
         )
+        let attentionDescriptor = FetchDescriptor<AttentionEvent>(
+            predicate: #Predicate { $0.occurredAt >= s && $0.occurredAt < e }
+        )
+        let daySummaryDescriptor = FetchDescriptor<AttentionDaySummary>(
+            predicate: #Predicate { $0.day >= s && $0.day < e }
+        )
         for record in (try? modelContext.fetch(recordDescriptor)) ?? [] {
             modelContext.delete(record)
         }
@@ -337,6 +461,12 @@ struct StatsPage: View {
         }
         for session in (try? modelContext.fetch(focusDescriptor)) ?? [] {
             modelContext.delete(session)
+        }
+        for event in (try? modelContext.fetch(attentionDescriptor)) ?? [] {
+            modelContext.delete(event)
+        }
+        for summary in (try? modelContext.fetch(daySummaryDescriptor)) ?? [] {
+            modelContext.delete(summary)
         }
         try? modelContext.save()
     }
