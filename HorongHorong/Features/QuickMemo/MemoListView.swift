@@ -77,9 +77,12 @@ struct MemoListView: View {
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(3)
                     .textSelection(.enabled)
-                Text(memo.createdAt, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(PopoverChrome.inkTertiary)
+                HStack(spacing: 0) {
+                    Text(memo.createdAt, style: .relative)
+                    Text(" 전")
+                }
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             }
             Spacer()
             Menu {
@@ -226,7 +229,7 @@ struct MemoListView: View {
     }
 }
 
-private enum MemoIcon {
+enum MemoIcon {
     static let defaultIcon = "📝"
     static let pinnedIcon = "📌"
     static let options = ["🌱", "🐜", "🚀", "📝", "☕️", "💡", "📚", "🔗", "✅", "⭐️"]
