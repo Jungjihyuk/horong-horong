@@ -250,7 +250,7 @@ enum StatsAggregateBuilder {
                 buckets: buckets,
                 timerSessions: timerSessions
             )
-            return StatsDailyFocusAggregate(day: day, level: levelValue(summary.level))
+            return StatsDailyFocusAggregate(day: day, level: summary.flowState.rawValue)
         }
     }
 
@@ -366,16 +366,4 @@ enum StatsAggregateBuilder {
         return min(endedAt, expectedEnd)
     }
 
-    private static func levelValue(_ level: DailyFocusSummary.Level) -> String {
-        switch level {
-        case .focused:
-            return "focused"
-        case .moderate:
-            return "moderate"
-        case .scattered:
-            return "scattered"
-        case .empty:
-            return "empty"
-        }
-    }
 }
