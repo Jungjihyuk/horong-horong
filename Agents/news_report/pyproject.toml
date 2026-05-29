@@ -7,9 +7,19 @@ dependencies = [
     "youtube-transcript-api>=0.6.3",
     "yt-dlp>=2024.1.1",
     "feedparser>=6.0.0",
+    "pytest>=8.4.2",
+    "pydantic>=2.13.4",
 ]
 
 [dependency-groups]
 dev = [
     "basedpyright>=1.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = [
+    "unit: 단일 함수/클래스 단위 테스트",
+    "integration: 여러 모듈이 함께 동작하는 통합 테스트",
+    "e2e: 실제 사용자 흐름에 가까운 end-to-end 테스트",
 ]

@@ -1,0 +1,21 @@
+{
+  "jobId": "local-ollama-google-news-001",
+  "requestedAt": "2026-05-28T00:00:00Z",
+  "provider": "ollama",
+  "providerOptions": {
+    "model": "qwen3:14b",
+    "endpoint": "http://localhost:11434",
+    "timeout": 120.0
+  },
+  "interestKeywords": ["AI agent", "LLM"],
+  "maxItemsPerSource": 3,
+  "dateRangeHours": 24,
+  "outputDir": "/tmp/horong-news-ollama-google-news",
+  "sources": [
+    {
+      "type": "google_news",
+      "enabled": true,
+      "keywords": ["AI agent"]
+    }
+  ]
+}

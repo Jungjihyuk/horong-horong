@@ -1,6 +1,28 @@
 import SwiftUI
 
 enum Constants {
+    struct NewsOllamaModelOption: Identifiable, Hashable {
+        enum Availability: Hashable {
+            case local
+            case cloud
+        }
+
+        var id: String { name }
+        let name: String
+        let label: String
+        let detail: String
+        let availability: Availability
+        let isRecommended: Bool
+    }
+
+    enum NewsOllamaRecommendationKind: String {
+        case primary = "추천"
+        case lightweight = "가벼움"
+        case quality = "고품질"
+        case caution = "주의"
+        case unsupported = "불가능"
+    }
+
     // MARK: - 포모도로 프리셋
     enum PomodoroPreset: String, CaseIterable, Identifiable {
         case pomodoro = "포모도로"
@@ -337,12 +359,189 @@ enum Constants {
     }
     static let newsRunnerMissingMessage = "뉴스 리포트 실행 파일을 찾을 수 없습니다. 앱을 다시 설치한 뒤에도 문제가 계속되면 개발자에게 문의해주세요."
     static let defaultNewsProvider = "codex"
-    // 기본 뉴스 키워드 = 빈 문자열. (이전엔 "AI, 개발, 생산성, 자동화" 가 자동 들어갔지만, 백지 정책으로 전환)
+    static var defaultNewsOllamaModel: String {
+        recommendedNewsOllamaModel()
+    }
+    static let defaultNewsOllamaEndpoint = "http://localhost:11434"
+    static let defaultNewsOllamaTimeout = 120.0
+    static var newsHardwareMemoryGB: Int {
+        memoryGB(forPhysicalMemoryBytes: ProcessInfo.processInfo.physicalMemory)
+    }
+    static func recommendedNewsOllamaModel(physicalMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory) -> String {
+        newsOllamaRecommendationKinds(physicalMemoryBytes: physicalMemoryBytes)
+            .first { $0.value == .primary }?
+            .key ?? "qwen3:1.7b"
+    }
+    static func newsOllamaRecommendationKinds(
+        physicalMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory
+    ) -> [String: NewsOllamaRecommendationKind] {
+        let memoryGB = memoryGB(forPhysicalMemoryBytes: physicalMemoryBytes)
+        switch memoryGB {
+        case 64...:
+            return [
+                "qwen3:32b": .primary,
+                "qwen3:14b": .lightweight,
+                "gpt-oss:120b": .quality,
+            ]
+        case 48..<64:
+            return [
+                "qwen3:30b": .primary,
+                "qwen3:14b": .lightweight,
+                "qwen3:32b": .quality,
+                "gpt-oss:120b": .caution,
+            ]
+        case 24..<48:
+            return [
+                "qwen3:14b": .primary,
+                "qwen3:8b": .lightweight,
+                "gemma4:26b": .quality,
+                "gpt-oss:20b": .caution,
+                "qwen3:30b": .unsupported,
+                "qwen3:32b": .unsupported,
+                "gemma4:31b": .unsupported,
+                "gpt-oss:120b": .unsupported,
+            ]
+        case 16..<24:
+            return [
+                "qwen3:8b": .primary,
+                "qwen3:4b": .lightweight,
+                "qwen3:14b": .quality,
+                "gemma4:26b": .caution,
+                "qwen3:30b": .unsupported,
+                "qwen3:32b": .unsupported,
+                "gemma4:31b": .unsupported,
+                "gpt-oss:120b": .unsupported,
+            ]
+        case 12..<16:
+            return [
+                "qwen3:4b": .primary,
+                "qwen3:1.7b": .lightweight,
+                "qwen3:8b": .quality,
+                "qwen3:14b": .caution,
+                "qwen3:30b": .unsupported,
+                "qwen3:32b": .unsupported,
+                "gemma4:26b": .unsupported,
+                "gemma4:31b": .unsupported,
+                "gpt-oss:20b": .unsupported,
+                "gpt-oss:120b": .unsupported,
+            ]
+        default:
+            return [
+                "qwen3:1.7b": .primary,
+                "qwen3:4b": .caution,
+                "qwen3:8b": .unsupported,
+                "qwen3:14b": .unsupported,
+                "qwen3:30b": .unsupported,
+                "qwen3:32b": .unsupported,
+                "gemma4:26b": .unsupported,
+                "gemma4:31b": .unsupported,
+                "gpt-oss:20b": .unsupported,
+                "gpt-oss:120b": .unsupported,
+            ]
+        }
+    }
+    private static func memoryGB(forPhysicalMemoryBytes bytes: UInt64) -> Int {
+        let gib = UInt64(1024 * 1024 * 1024)
+        return Int((bytes + gib - 1) / gib)
+    }
+    static let availableNewsOllamaModelOptions: [NewsOllamaModelOption] = [
+        NewsOllamaModelOption(
+            name: "qwen3:1.7b",
+            label: "Qwen3 1.7B",
+            detail: "장점: 매우 가볍고 빠른 저사양 테스트용. 품질보다 실행 가능성 확인에 적합. 권장 RAM: 8GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3:4b",
+            label: "Qwen3 4B",
+            detail: "장점: 가볍지만 생각보다 준수한 추론이 가능해 빠른 실험에 좋음. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3:8b",
+            label: "Qwen3 8B",
+            detail: "장점: 속도와 품질 균형이 좋아 저부하 뉴스 요약 후보로 적합. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3:14b",
+            label: "Qwen3 14B",
+            detail: "장점: 한국어/영어 판단과 구조화 출력 균형이 좋아 뉴스 큐레이션 1차 추천. 권장 RAM: 24GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3:30b",
+            label: "Qwen3 30B",
+            detail: "장점: MoE 계열로 큰 모델 대비 효율적인 고품질 비교 후보. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3:32b",
+            label: "Qwen3 32B",
+            detail: "장점: Qwen dense 대형 후보로 깊은 분석 품질 비교에 적합. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gemma4:e2b",
+            label: "Gemma 4 E2B",
+            detail: "장점: 가장 가볍고 빠른 테스트용. 빠른 반복에 좋지만 분석 깊이는 제한적. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gemma4:e4b",
+            label: "Gemma 4 E4B",
+            detail: "장점: 속도와 품질 균형이 좋은 가벼운 실험용. 짧은 리포트에 적합. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gemma4:26b",
+            label: "Gemma 4 26B",
+            detail: "장점: MoE 계열로 큰 모델 대비 효율적인 품질 비교 후보. 긴 리포트는 속도 확인 필요. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gemma4:31b",
+            label: "Gemma 4 31B",
+            detail: "장점: Gemma 후보 중 고품질 비교용. 24GB 환경에서는 부담이 클 수 있음. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gpt-oss:20b",
+            label: "GPT-OSS 20B",
+            detail: "장점: 추론·구조화 출력·도구 사용 성향 비교에 좋음. 뉴스 품질은 eval 검증 필요. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "gpt-oss:120b",
+            label: "GPT-OSS 120B",
+            detail: "장점: 대형 추론 모델 기준점으로 활용 가능. 일반 노트북 로컬 실행에는 매우 무거움. 권장 RAM: 128GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+    ]
+    static var availableNewsOllamaModels: [String] {
+        availableNewsOllamaModelOptions.map(\.name)
+    }
+    // 기본 뉴스 키워드 = 빈 문자열. 사용자가 관심사를 직접 등록하기 전까지 자동 키워드는 넣지 않는다.
     static let defaultNewsInterestKeywords = ""
-    static let availableNewsProviders = ["codex", "claude", "antigravity", "opencode", "gemini"]
+    static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode", "gemini"]
     enum NewsStorageKey {
         static let dataBasePath = "news.dataBasePath"
         static let selectedProvider = "news.selectedProvider"
+        static let ollamaModel = "news.ollama.model"
+        static let ollamaEndpoint = "news.ollama.endpoint"
+        static let ollamaTimeout = "news.ollama.timeout"
         static let interestKeywords = "news.interestKeywords"
         static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
         static let sources = "news.sources.v1"
