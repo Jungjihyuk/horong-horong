@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from contracts.news_job_request import ProviderOptionsConfig
 from providers.cli_providers import (
     AntigravityCliProvider,
     ClaudeCliProvider,
@@ -9,6 +10,7 @@ from providers.cli_providers import (
     GeminiCliProvider,
     OpencodeCliProvider,
 )
+from providers.ollama_provider import OllamaProvider
 from providers.protocols import TextProvider
 
 
@@ -20,15 +22,20 @@ _PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
     "claude": ClaudeCliProvider,
     "codex": CodexCliProvider,
     "gemini": GeminiCliProvider,
+    "ollama": OllamaProvider,
     "opencode": OpencodeCliProvider,
 }
 
 
-def create_provider(name: str) -> TextProvider:
+def create_provider(
+    name: str,
+    options: ProviderOptionsConfig | None = None,
+) -> TextProvider:
     """provider 이름에 맞는 구현체를 생성한다.
 
     Args:
         name: 요청 JSON의 provider 이름.
+        options: provider별 선택 옵션. 현재는 ollama model/endpoint/timeout에 사용한다.
 
     Returns:
         `run(prompt) -> str` 계약을 만족하는 provider 구현체.
@@ -41,4 +48,18 @@ def create_provider(name: str) -> TextProvider:
     except KeyError as error:
         supported = ", ".join(sorted(_PROVIDER_FACTORIES))
         raise ValueError(f"지원하지 않는 provider: {name} (supported: {supported})") from error
+    if name == "ollama":
+        return create_ollama_provider(options)
     return factory()
+
+
+def create_ollama_provider(options: ProviderOptionsConfig | None) -> OllamaProvider:
+    """request providerOptions를 OllamaProvider 생성 인자로 변환한다."""
+    if options is None:
+        return OllamaProvider()
+
+    return OllamaProvider(
+        model=options.model or "qwen3:14b",
+        endpoint=options.endpoint or "http://localhost:11434",
+        timeout=options.timeout or 120,
+    )
