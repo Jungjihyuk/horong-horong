@@ -48,6 +48,7 @@ struct StatsSummaryView: View {
     @State private var weekLongestSessionSeconds: Int = 0
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
+    @State private var hostWindow: NSWindow?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -71,6 +72,9 @@ struct StatsSummaryView: View {
         }
         .onAppear { loadData() }
         .onChange(of: scope) { _, _ in loadData() }
+        .configureHostWindow { window in
+            hostWindow = window
+        }
     }
 
     private var scopePicker: some View {
@@ -415,7 +419,9 @@ struct StatsSummaryView: View {
 
     private var detailButton: some View {
         Button {
+            let popoverWindow = hostWindow
             openWindow(id: "stats-detail")
+            popoverWindow?.orderOut(nil)
             // MenuBarExtra 앱은 accessory 정책이라 openWindow만으로는 앞으로 오지 않음.
             // 창이 생성/재사용된 뒤 활성화 + orderFrontRegardless 로 최상단으로 끌어올린다.
             DispatchQueue.main.async {
