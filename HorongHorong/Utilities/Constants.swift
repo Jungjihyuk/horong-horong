@@ -246,9 +246,10 @@ enum Constants {
     static let popoverMaxHeight: CGFloat = 560
 
     // MARK: - 퀵 메모 패널 크기
-    static let quickMemoPanelWidth: CGFloat = 560
+    static let quickMemoPanelWidth: CGFloat = 616
+    static let quickMemoPanelHeight: CGFloat = 360
     static let quickMemoPanelMinHeight: CGFloat = 160
-    static let quickMemoPanelMaxHeight: CGFloat = 320
+    static let quickMemoPanelMaxHeight: CGFloat = 360
 
     // MARK: - 통계 윈도우 크기
     static let statsWindowWidth: CGFloat = 880
