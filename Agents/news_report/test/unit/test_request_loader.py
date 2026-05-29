@@ -27,6 +27,7 @@ def test_load_request__valid_swift_json__returns_request_model(
     # Then: camelCase 입력값이 Python snake_case 필드로 올바르게 매핑된다.
     assert request.job_id == "job-20260527-001"
     assert request.provider == "codex"
+    assert request.provider_options.model is None
     assert request.interest_keywords == ["AI", "Swift"]
     assert request.max_items_per_source == 3
     assert request.output_dir == "/tmp/horong-news"
@@ -77,6 +78,7 @@ def test_load_request__missing_optional_fields__uses_defaults(tmp_path):
     # Then: 생략된 선택 필드들은 runner 기본값으로 채워진다.
     assert request.job_id == "job-minimal"
     assert request.provider == "codex"
+    assert request.provider_options.model is None
     assert request.interest_keywords == ["AI", "개발", "생산성", "자동화"]
     assert request.max_items_per_source == 10
     assert request.date_range_hours == 24
@@ -107,3 +109,52 @@ def test_load_request__invalid_source_type__raises_validation_error(
 
     errors = error.value.errors()
     assert any(err["loc"] == ("sources", 0, "type") for err in errors)
+
+
+# 시나리오 5. 로컬 ollama provider는 요청 JSON provider 값으로 허용된다.
+@pytest.mark.unit
+def test_load_request__ollama_provider__returns_request_model(tmp_path):
+    # Given: provider가 ollama인 최소 요청 JSON 파일을 준비한다.
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps({"jobId": "job-ollama", "provider": "ollama"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
+    request = load_request(str(request_path))
+
+    # Then: ollama provider 값이 요청 계약에서 허용된다.
+    assert request.job_id == "job-ollama"
+    assert request.provider == "ollama"
+
+
+# 시나리오 6. ollama providerOptions는 요청 JSON에서 모델과 endpoint 설정을 읽는다.
+@pytest.mark.unit
+def test_load_request__ollama_provider_options__returns_provider_options(tmp_path):
+    # Given: ollama 모델과 endpoint를 명시한 요청 JSON 파일을 준비한다.
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "jobId": "job-ollama-options",
+                "provider": "ollama",
+                "providerOptions": {
+                    "model": "qwen3:32b",
+                    "endpoint": "http://localhost:11435",
+                    "timeout": 180.0,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
+    request = load_request(str(request_path))
+
+    # Then: providerOptions 값이 runner 내부 provider_options로 매핑된다.
+    assert request.provider == "ollama"
+    assert request.provider_options.model == "qwen3:32b"
+    assert request.provider_options.endpoint == "http://localhost:11435"
+    assert request.provider_options.timeout == 180.0
