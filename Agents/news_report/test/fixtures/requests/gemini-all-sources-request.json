@@ -1,0 +1,27 @@
+{
+  "jobId": "local-gemini-all-sources-001",
+  "requestedAt": "2026-05-28T00:00:00Z",
+  "provider": "gemini",
+  "interestKeywords": ["AI agent", "LLM", "개발 생산성", "자동화"],
+  "maxItemsPerSource": 3,
+  "dateRangeHours": 168,
+  "outputDir": "/tmp/horong-news-gemini-all-sources",
+  "sources": [
+    {
+      "type": "google_news",
+      "enabled": true,
+      "keywords": ["AI agent"]
+    },
+    {
+      "type": "youtube",
+      "enabled": true,
+      "channelId": "UC_x5XG1OV2P6uZZ5FSM9Ttw",
+      "keywords": ["AI", "developer"]
+    },
+    {
+      "type": "yozm_it",
+      "enabled": true,
+      "keywords": ["AI", "개발", "생산성", "자동화"]
+    }
+  ]
+}
