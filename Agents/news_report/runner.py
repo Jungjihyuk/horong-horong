@@ -73,7 +73,7 @@ def main():
         from providers.factory import create_provider
 
         pattern = create_pattern(default_pattern_name())
-        llm = create_provider(provider)
+        llm = create_provider(provider, request.provider_options)
 
         if args.trace_log:
             trace = TraceWriter(

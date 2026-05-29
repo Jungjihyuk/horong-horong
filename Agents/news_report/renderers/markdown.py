@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from patterns.research.result import ResearchResult
 
 
 def format_count(value) -> str:
@@ -133,5 +137,105 @@ def render_markdown_report(
             ],
         ]
     )
+
+    return "\n".join(lines)
+
+
+def render_artifact_markdown_report(
+    research_result: "ResearchResult",
+    date_str: str,
+    generated_at: str,
+    interest_keywords: list[str],
+    source_stats: dict,
+    warnings: list[str],
+) -> str:
+    """research artifact 묶음을 Markdown 리포트로 변환한다."""
+    keywords_line = ", ".join(interest_keywords) if interest_keywords else "(등록된 관심사 없음)"
+    report_title = (
+        research_result.report_content.title
+        if research_result.report_content
+        else "뉴스 큐레이션 리포트"
+    )
+    lines = [
+        f"# {report_title} - {date_str}",
+        f"생성일: {generated_at}",
+        f"관심사: {keywords_line}",
+        "",
+        "## 수집 현황",
+    ]
+
+    for source, stats in source_stats.items():
+        icon = "✅" if stats.get("failed", 0) == 0 else "⚠️"
+        lines.append(f"- {icon} {source}: {stats.get('used', 0)}개 사용")
+    for warning in warnings:
+        lines.append(f"> ⚠️ {warning}")
+    lines.append("")
+
+    candidates_by_id = {
+        candidate.candidate_id: candidate
+        for candidate in research_result.source_candidates
+    }
+    insights_by_id = {
+        insight.source_insight_id: insight
+        for insight in research_result.source_insights
+    }
+    keywords_by_scope = {
+        insight.scope_id: insight
+        for insight in research_result.keyword_insights
+    }
+    trends_by_scope = {
+        trend.scope_id: trend
+        for trend in research_result.trend_insights
+    }
+
+    for bundle in research_result.insight_bundles:
+        lines.append(f"## {bundle.title}")
+        keyword = keywords_by_scope.get(bundle.bundle_id)
+        trend = trends_by_scope.get(bundle.bundle_id)
+        if keyword and keyword.keywords:
+            lines.append(f"🔑 키워드: {', '.join(keyword.keywords)}")
+        if trend:
+            lines.append(f"📈 트렌드: {trend.summary}")
+        if (keyword and keyword.keywords) or trend:
+            lines.append("")
+
+        if bundle.summary:
+            lines.append(bundle.summary)
+            lines.append("")
+
+        for index, insight_id in enumerate(bundle.source_insight_ids, 1):
+            insight = insights_by_id.get(insight_id)
+            if not insight:
+                continue
+            candidate = candidates_by_id.get(insight.candidate_id)
+            title = candidate.title if candidate else insight.summary[:40]
+            url = candidate.url if candidate else ""
+            score = int(round(insight.importance_score * 100))
+            relevance = (
+                int(round(candidate.relevance_score * 100))
+                if candidate
+                else None
+            )
+
+            heading = f"### {index}. [{title}]({url})" if url else f"### {index}. {title}"
+            lines.append(heading)
+            info_parts = [f"중요도: {score}/100"]
+            if relevance is not None:
+                info_parts.append(f"관련성: {relevance}/100")
+            if candidate:
+                info_parts.append(candidate.source_type)
+                if candidate.published_at:
+                    info_parts.append(candidate.published_at)
+            lines.append(f"> {' | '.join(info_parts)}")
+            lines.append(f"**{insight.summary}**")
+            for point in insight.key_points:
+                lines.append(f"- {point}")
+            if insight.why_it_matters:
+                lines.append(f"_{insight.why_it_matters}_")
+            lines.append("")
+
+    lines.extend(["## 오늘의 액션 아이템"])
+    for index, candidate in enumerate(research_result.source_candidates[:3], 1):
+        lines.append(f"{index}. {candidate.title} 읽기 및 정리")
 
     return "\n".join(lines)
