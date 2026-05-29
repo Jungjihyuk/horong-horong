@@ -32,11 +32,49 @@ struct NewsJobRequestPayload: Codable {
     var jobId: String
     var requestedAt: String
     var provider: String
+    var providerOptions: NewsProviderOptionsPayload?
     var interestKeywords: [String]
     var maxItemsPerSource: Int
     var dateRangeHours: Int
     var outputDir: String
     var sources: [NewsSource]
+}
+
+struct NewsProviderOptionsPayload: Codable {
+    var model: String?
+    var endpoint: String?
+    var timeout: Double?
+}
+
+struct OllamaTagsResponse: Decodable {
+    var models: [OllamaModelTag]
+}
+
+struct OllamaModelTag: Decodable {
+    var name: String
+    var model: String?
+}
+
+struct OllamaModelInstallProgress: Sendable {
+    var message: String
+    var fraction: Double?
+}
+
+private final class ProcessOutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var text = ""
+
+    func append(_ value: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        text += value
+    }
+
+    func snapshot() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return text
+    }
 }
 
 struct NewsTopItem: Codable {
@@ -140,6 +178,7 @@ struct NewsProviderCLIResolver {
 
     static func command(for provider: String) -> String? {
         switch provider {
+        case "ollama": return "ollama"
         case "codex": return "codex"
         case "claude": return "claude"
         case "gemini": return "gemini"
@@ -277,6 +316,7 @@ final class NewsPipelineService: @unchecked Sendable {
 
     func startJob(
         provider: String,
+        providerOptions: NewsProviderOptionsPayload? = nil,
         runnerPath: String,
         dataBasePath: String,
         interestKeywords: [String],
@@ -311,13 +351,15 @@ final class NewsPipelineService: @unchecked Sendable {
             )
             return
         }
-        let providerResolution = NewsProviderCLIResolver(environment: environment).resolve(provider: provider)
-        switch providerResolution {
-        case .success(let resolution):
-            environment = resolution.environment
-        case .failure(let error):
-            finishConfigurationFailed(code: "E_PROVIDER_CLI", message: error.message)
-            return
+        if provider != "ollama" {
+            let providerResolution = NewsProviderCLIResolver(environment: environment).resolve(provider: provider)
+            switch providerResolution {
+            case .success(let resolution):
+                environment = resolution.environment
+            case .failure(let error):
+                finishConfigurationFailed(code: "E_PROVIDER_CLI", message: error.message)
+                return
+            }
         }
 
         let jobId = generateJobId()
@@ -374,6 +416,7 @@ final class NewsPipelineService: @unchecked Sendable {
             jobId: jobId,
             requestedAt: isoString(Date()),
             provider: provider,
+            providerOptions: providerOptions,
             interestKeywords: interestKeywords,
             maxItemsPerSource: max(1, maxItemsPerSource),
             dateRangeHours: 24,
@@ -470,6 +513,42 @@ final class NewsPipelineService: @unchecked Sendable {
         isRunning = false
         currentStep = ""
         lastJobStatus = "cancelled"
+    }
+
+    func isOllamaModelInstalled(model: String, endpoint: String) async throws -> Bool {
+        let installedModels = try await installedOllamaModelNames(endpoint: endpoint)
+        return installedModels.contains(model)
+    }
+
+    func installedOllamaModelNames(endpoint: String) async throws -> Set<String> {
+        let tagsURL = try ollamaURL(endpoint: endpoint, path: "/api/tags")
+        let (data, response) = try await URLSession.shared.data(from: tagsURL)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw OllamaModelError.serverUnavailable
+        }
+
+        let tags = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+        return Set(tags.models.flatMap { tag in
+            [tag.name, tag.model].compactMap { $0 }
+        })
+    }
+
+    func installOllamaModel(
+        model: String,
+        dataBasePath: String,
+        progress: (@MainActor @Sendable (OllamaModelInstallProgress) -> Void)? = nil
+    ) async throws {
+        var environment = enrichedEnvironment(newsDataBasePath: dataBasePath)
+        let providerResolution = NewsProviderCLIResolver(environment: environment).resolve(provider: "ollama")
+        switch providerResolution {
+        case .success(let resolution):
+            environment = resolution.environment
+        case .failure(let error):
+            throw OllamaModelError.commandUnavailable(error.message)
+        }
+
+        try await runCommand(["ollama", "pull", model], environment: environment, progress: progress)
     }
 
     // MARK: - Private
@@ -600,6 +679,112 @@ final class NewsPipelineService: @unchecked Sendable {
         }
     }
 
+    private func runCommand(
+        _ arguments: [String],
+        environment: [String: String],
+        progress: (@MainActor @Sendable (OllamaModelInstallProgress) -> Void)? = nil
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                proc.arguments = arguments
+                proc.environment = environment
+
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                proc.standardOutput = stdoutPipe
+                proc.standardError = stderrPipe
+
+                let outputBuffer = ProcessOutputBuffer()
+
+                let handleData: @Sendable (Data) -> Void = { [weak self] data in
+                    guard !data.isEmpty,
+                          let text = String(data: data, encoding: .utf8) else {
+                        return
+                    }
+                    outputBuffer.append(text)
+                    if let progressEvent = self?.ollamaInstallProgress(from: text) {
+                        Task { @MainActor in
+                            progress?(progressEvent)
+                        }
+                    }
+                }
+
+                stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                    handleData(handle.availableData)
+                }
+                stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                    handleData(handle.availableData)
+                }
+
+                do {
+                    Task { @MainActor in
+                        progress?(OllamaModelInstallProgress(message: "다운로드 시작 중...", fraction: nil))
+                    }
+                    try proc.run()
+                    proc.waitUntilExit()
+
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                    stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                    if proc.terminationStatus == 0 {
+                        Task { @MainActor in
+                            progress?(OllamaModelInstallProgress(message: "설치 완료", fraction: 1.0))
+                        }
+                        continuation.resume(returning: ())
+                    } else {
+                        let output = outputBuffer.snapshot()
+                        let stderr = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                        continuation.resume(throwing: OllamaModelError.pullFailed(stderr.isEmpty ? "ollama pull 실패" : stderr))
+                    }
+                } catch {
+                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                    stderrPipe.fileHandleForReading.readabilityHandler = nil
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func ollamaInstallProgress(from text: String) -> OllamaModelInstallProgress? {
+        let cleaned = text.replacingOccurrences(
+            of: "\u{001B}\\[[0-9;]*[A-Za-z]",
+            with: "",
+            options: .regularExpression
+        )
+        let lines = cleaned
+            .components(separatedBy: CharacterSet(charactersIn: "\r\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let line = lines.last else { return nil }
+
+        let message = line.count > 90 ? String(line.prefix(90)) : line
+        return OllamaModelInstallProgress(
+            message: message,
+            fraction: percentageFraction(in: line)
+        )
+    }
+
+    private func percentageFraction(in text: String) -> Double? {
+        guard let range = text.range(of: #"\d{1,3}%"#, options: .regularExpression) else {
+            return nil
+        }
+        let rawPercent = text[range].dropLast()
+        guard let percent = Double(rawPercent) else { return nil }
+        return min(max(percent, 0), 100) / 100
+    }
+
+    private func ollamaURL(endpoint: String, path: String) throws -> URL {
+        let normalizedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !normalizedEndpoint.isEmpty,
+              let url = URL(string: normalizedEndpoint + path) else {
+            throw OllamaModelError.invalidEndpoint(endpoint)
+        }
+        return url
+    }
+
     private func generateJobId() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
@@ -610,5 +795,25 @@ final class NewsPipelineService: @unchecked Sendable {
 
     private func isoString(_ date: Date) -> String {
         ISO8601DateFormatter().string(from: date)
+    }
+}
+
+enum OllamaModelError: LocalizedError {
+    case invalidEndpoint(String)
+    case serverUnavailable
+    case commandUnavailable(String)
+    case pullFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidEndpoint(let endpoint):
+            return "Ollama endpoint가 올바르지 않습니다: \(endpoint)"
+        case .serverUnavailable:
+            return "Ollama 서버에 연결할 수 없습니다. Ollama 앱 또는 `ollama serve`가 실행 중인지 확인해주세요."
+        case .commandUnavailable(let message):
+            return message
+        case .pullFailed(let message):
+            return "Ollama 모델 다운로드에 실패했습니다. \(message)"
+        }
     }
 }
