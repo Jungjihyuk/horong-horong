@@ -7,6 +7,9 @@ struct NewsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Constants.NewsStorageKey.dataBasePath) private var dataBasePath = Constants.defaultNewsDataBasePath
     @AppStorage(Constants.NewsStorageKey.selectedProvider) private var selectedProvider = Constants.defaultNewsProvider
+    @AppStorage(Constants.NewsStorageKey.ollamaModel) private var ollamaModel = Constants.defaultNewsOllamaModel
+    @AppStorage(Constants.NewsStorageKey.ollamaEndpoint) private var ollamaEndpoint = Constants.defaultNewsOllamaEndpoint
+    @AppStorage(Constants.NewsStorageKey.ollamaTimeout) private var ollamaTimeout = Constants.defaultNewsOllamaTimeout
     @AppStorage(Constants.NewsStorageKey.interestKeywords) private var interestKeywords = Constants.defaultNewsInterestKeywords
     @AppStorage(Constants.NewsStorageKey.youtubeChannelIds) private var youtubeChannelIdsRaw = ""
     @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource: Int = Constants.defaultNewsMaxItemsPerSource
@@ -14,6 +17,11 @@ struct NewsView: View {
     @State private var newChannelInput = ""
     @State private var showExecutionEnvironmentAlert = false
     @State private var executionEnvironmentAlertMessage = ""
+    @State private var showOllamaInstallAlert = false
+    @State private var ollamaInstallAlertMessage = ""
+    @State private var isPreparingOllama = false
+    @State private var ollamaInstallStatus = ""
+    @State private var ollamaInstallProgress: Double?
     @State private var isRunButtonHovered = false
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
     @State private var selectedReport: NewsReportIndex?
@@ -22,36 +30,43 @@ struct NewsView: View {
     private var pipelineService: NewsPipelineService { appState.newsPipelineService }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center) {
-                    header
-                    Spacer()
-                    providerMenu
-                }
+        ZStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center) {
+                        header
+                        Spacer()
+                        providerMenu
+                    }
 
-                runButton
+                    runButton
 
-                if pipelineService.isRunning {
-                    statusSection
+                    if isPreparingOllama {
+                        ollamaInstallProgressSection
+                    }
+                    if pipelineService.isRunning {
+                        statusSection
+                    }
+                    if !pipelineService.lastWarnings.isEmpty {
+                        warningsSection
+                    }
+                    reportsSection
+                    if pipelineService.lastErrorCode != nil {
+                        errorSection
+                    }
                 }
-                if !pipelineService.lastWarnings.isEmpty {
-                    warningsSection
-                }
-                reportsSection
-                if pipelineService.lastErrorCode != nil {
-                    errorSection
-                }
+                .padding(.trailing, 12)
             }
-            .padding(.trailing, 12)
+
+            if showExecutionEnvironmentAlert {
+                popoverAlertOverlay
+            }
+            if showOllamaInstallAlert {
+                ollamaInstallConfirmOverlay
+            }
         }
         .onAppear {
             applyDefaultPathsIfNeeded()
-        }
-        .alert("뉴스 리포트 실행 환경이 필요합니다", isPresented: $showExecutionEnvironmentAlert) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(executionEnvironmentAlertMessage)
         }
     }
 
@@ -83,6 +98,12 @@ struct NewsView: View {
                 Text(selectedProvider.capitalized)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
+                if selectedProvider == "ollama" {
+                    Text(cleanOllamaModel)
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .lineLimit(1)
+                }
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(PopoverChrome.inkSecondary)
@@ -103,13 +124,13 @@ struct NewsView: View {
             if pipelineService.isRunning {
                 pipelineService.cancelJob()
             } else {
-                launchJob()
+                Task { await launchJob() }
             }
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: pipelineService.isRunning ? "stop.fill" : "sparkles")
+                Image(systemName: pipelineService.isRunning ? "stop.fill" : (isPreparingOllama ? "arrow.down.circle" : "sparkles"))
                     .font(.system(size: 10, weight: .bold))
-                Text(pipelineService.isRunning ? "중단" : "리포트 생성")
+                Text(pipelineService.isRunning ? "중단" : (isPreparingOllama ? "모델 준비 중" : "리포트 생성"))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
             }
             .foregroundStyle(PopoverChrome.accentInk)
@@ -134,6 +155,36 @@ struct NewsView: View {
         .onHover { isHovering in
             isRunButtonHovered = isHovering
         }
+        .disabled(isPreparingOllama)
+    }
+
+    private var ollamaInstallProgressSection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(PopoverChrome.accent)
+                Text(ollamaInstallStatus.isEmpty ? "Ollama 모델 준비 중..." : ollamaInstallStatus)
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(2)
+                Spacer()
+                if let progress = ollamaInstallProgress {
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+            }
+
+            if let progress = ollamaInstallProgress {
+                ProgressView(value: progress, total: 1.0)
+                    .progressViewStyle(.linear)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .popoverCard(padding: 10)
     }
 
     private var statusSection: some View {
@@ -266,6 +317,81 @@ struct NewsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
+    private var popoverAlertOverlay: some View {
+        popoverModalOverlay {
+            VStack(alignment: .leading, spacing: 12) {
+                modalTitleRow(icon: "exclamationmark.triangle", title: "뉴스 리포트 실행 환경이 필요합니다")
+                Text(executionEnvironmentAlertMessage)
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    Spacer()
+                    Button("확인") {
+                        showExecutionEnvironmentAlert = false
+                    }
+                    .buttonStyle(LanternPrimaryButtonStyle())
+                }
+            }
+        }
+    }
+
+    private var ollamaInstallConfirmOverlay: some View {
+        popoverModalOverlay {
+            VStack(alignment: .leading, spacing: 12) {
+                modalTitleRow(icon: "arrow.down.circle", title: "Ollama 모델 설치")
+                Text(ollamaInstallAlertMessage)
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button("취소") {
+                        showOllamaInstallAlert = false
+                    }
+                    .buttonStyle(LanternSecondaryButtonStyle())
+                    Button("설치 후 생성") {
+                        showOllamaInstallAlert = false
+                        Task { await installOllamaAndLaunchJob() }
+                    }
+                    .buttonStyle(LanternPrimaryButtonStyle())
+                }
+            }
+        }
+    }
+
+    private func modalTitleRow(icon: String, title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(PopoverChrome.accent)
+            Text(title)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+        }
+    }
+
+    private func popoverModalOverlay<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+            content()
+                .padding(14)
+                .frame(maxWidth: 310, alignment: .leading)
+                .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(PopoverChrome.border, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 10)
+                .padding(.horizontal, 14)
+        }
+        .transition(.opacity)
+        .zIndex(10)
+    }
+
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("설정")
@@ -374,8 +500,79 @@ struct NewsView: View {
             .filter { !$0.isEmpty }
     }
 
-    private func launchJob() {
+    private var cleanOllamaModel: String {
+        let trimmed = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultNewsOllamaModel : trimmed
+    }
+
+    private var cleanOllamaEndpoint: String {
+        let trimmed = ollamaEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultNewsOllamaEndpoint : trimmed
+    }
+
+    private func launchJob() async {
         applyDefaultPathsIfNeeded()
+        if selectedProvider == "ollama" {
+            await preflightOllamaOrPromptInstall()
+            return
+        }
+        startPipelineJob()
+    }
+
+    private func preflightOllamaOrPromptInstall() async {
+        isPreparingOllama = true
+        ollamaInstallStatus = "Ollama 모델 설치 여부 확인 중..."
+        ollamaInstallProgress = nil
+        defer { isPreparingOllama = false }
+
+        do {
+            let installed = try await pipelineService.isOllamaModelInstalled(
+                model: cleanOllamaModel,
+                endpoint: cleanOllamaEndpoint
+            )
+            if installed {
+                startPipelineJob()
+                return
+            }
+
+            ollamaInstallAlertMessage = """
+            선택한 Ollama 모델이 이 Mac에 설치되어 있지 않습니다.
+
+            모델: \(cleanOllamaModel)
+
+            모델을 다운로드한 뒤 리포트를 생성할까요?
+            """
+            showOllamaInstallAlert = true
+        } catch {
+            executionEnvironmentAlertMessage = error.localizedDescription
+            showExecutionEnvironmentAlert = true
+        }
+    }
+
+    private func installOllamaAndLaunchJob() async {
+        applyDefaultPathsIfNeeded()
+        isPreparingOllama = true
+        ollamaInstallStatus = "Ollama 모델 다운로드 준비 중..."
+        ollamaInstallProgress = nil
+        defer { isPreparingOllama = false }
+
+        do {
+            try await pipelineService.installOllamaModel(
+                model: cleanOllamaModel,
+                dataBasePath: dataBasePath.trimmingCharacters(in: .whitespacesAndNewlines),
+                progress: { progress in
+                    ollamaInstallStatus = progress.message
+                    ollamaInstallProgress = progress.fraction
+                }
+            )
+            startPipelineJob()
+        } catch {
+            executionEnvironmentAlertMessage = error.localizedDescription
+            showExecutionEnvironmentAlert = true
+        }
+    }
+
+    private func startPipelineJob() {
         let resolvedRunnerPath = Constants.defaultNewsRunnerPath
         let resolvedDataBasePath = dataBasePath.trimmingCharacters(in: .whitespacesAndNewlines)
         let keywords = interestKeywords
@@ -384,6 +581,7 @@ struct NewsView: View {
             .filter { !$0.isEmpty }
         pipelineService.startJob(
             provider: selectedProvider,
+            providerOptions: providerOptions,
             runnerPath: resolvedRunnerPath,
             dataBasePath: resolvedDataBasePath,
             interestKeywords: keywords,
@@ -395,6 +593,15 @@ struct NewsView: View {
             executionEnvironmentAlertMessage = pipelineService.lastErrorMessage ?? "uv 또는 Python 3 실행 환경을 확인해주세요."
             showExecutionEnvironmentAlert = true
         }
+    }
+
+    private var providerOptions: NewsProviderOptionsPayload? {
+        guard selectedProvider == "ollama" else { return nil }
+        return NewsProviderOptionsPayload(
+            model: cleanOllamaModel,
+            endpoint: cleanOllamaEndpoint,
+            timeout: ollamaTimeout
+        )
     }
 
     private func applyDefaultPathsIfNeeded() {
