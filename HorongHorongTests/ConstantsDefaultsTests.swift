@@ -2,6 +2,15 @@ import XCTest
 @testable import 호롱호롱
 
 final class ConstantsDefaultsTests: XCTestCase {
+    func testMondayWeekStartUsesMondayThroughSunday() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let sunday = calendar.date(from: DateComponents(year: 2026, month: 5, day: 31, hour: 12))!
+        let expectedMonday = calendar.date(from: DateComponents(year: 2026, month: 5, day: 25))!
+
+        XCTAssertEqual(Constants.mondayWeekStart(for: sunday, calendar: calendar), expectedMonday)
+    }
+
     func testTimerPresetDefaultsMatchDocumentedValues() {
         XCTAssertEqual(Constants.PomodoroPreset.pomodoro.focusMinutes, 50)
         XCTAssertEqual(Constants.PomodoroPreset.pomodoro.breakMinutes, 5)

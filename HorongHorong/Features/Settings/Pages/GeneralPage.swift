@@ -4,7 +4,6 @@ import ServiceManagement
 struct GeneralPage: View {
     @State private var launchAtLogin: Bool = false
     @State private var autoUpdate: Bool = true
-    @State private var telemetry: Bool = false
 
     var body: some View {
         SettingsPageScroll {
@@ -35,13 +34,6 @@ struct GeneralPage: View {
                     comingSoon: true
                 ) {
                     Toggle("", isOn: $autoUpdate).labelsHidden()
-                }
-                SettingsRow(
-                    "익명 사용 데이터 전송",
-                    subtitle: "앱 안정성 향상을 위한 비식별 데이터 전송에 동의합니다.",
-                    comingSoon: true
-                ) {
-                    Toggle("", isOn: $telemetry).labelsHidden()
                 }
             }
 
