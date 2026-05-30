@@ -340,7 +340,7 @@ struct CategoryMappingPage: View {
     private var pairCard: some View {
         SettingsGroupCard("짝 카테고리 (전환 무시)") {
             VStack(spacing: 0) {
-                Text("같이 쓰는 카테고리 쌍을 등록하면 그 사이 전환은 산만 카운트에서 제외합니다.")
+                Text("같이 쓰는 카테고리 쌍을 등록하면 그 사이 전환은 주의 신호에서 제외합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -41,11 +41,13 @@ struct TimerView: View {
     @AppStorage(Constants.AppStorageKey.customBreakMinutes)
     private var customBreakMinutes: Int = Constants.defaultCustomBreakMinutes
     var timerManager: TimerManager
+    var closePopover: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 4) {
             timerDisplay
             controlButtons
+            postBreakTransitionPrompt
             presetSelector
         }
         .frame(maxWidth: .infinity, minHeight: 410, alignment: .top)
@@ -212,9 +214,78 @@ struct TimerView: View {
         .offset(y: -9)
     }
 
+    @ViewBuilder
+    private var postBreakTransitionPrompt: some View {
+        if appState.timerState == .idle, let prompt = appState.breakTransitionPrompt {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(PopoverChrome.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("휴식 후 다음 흐름")
+                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                        Text("다음 행동을 알려주면 주의 전환 신호를 더 정확하게 해석할 수 있어요.")
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                VStack(spacing: 7) {
+                    Button {
+                        selectedFocusCategory = prompt.previousCategory
+                        timerManager.continueAfterBreak(category: prompt.previousCategory)
+                    } label: {
+                        Label("같은 작업 계속", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(TimerGradientButtonStyle())
+
+                    HStack(spacing: 7) {
+                        Menu {
+                            ForEach(productiveTransitionCategories, id: \.self) { category in
+                                Button {
+                                    selectedFocusCategory = category
+                                    timerManager.resolveBreakTransition(.plannedTaskSwitch, nextCategory: category)
+                                } label: {
+                                    Text("\(Constants.categoryEmoji(for: category)) \(category)")
+                                }
+                            }
+                        } label: {
+                            Label("다른 작업", systemImage: "arrow.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(LanternSecondaryButtonStyle())
+
+                        Button {
+                            timerManager.resolveBreakTransition(.externalTransition)
+                            closePopover?()
+                        } label: {
+                            Label("자리 비움", systemImage: "figure.walk")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(LanternSecondaryButtonStyle())
+                    }
+
+                }
+            }
+            .padding(12)
+            .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: 1)
+            )
+            .padding(.horizontal, 2)
+            .padding(.bottom, 8)
+            .offset(y: -6)
+        }
+    }
+
     private var presetSelector: some View {
         Group {
-            if appState.timerState == .idle {
+            if appState.timerState == .idle, appState.breakTransitionPrompt == nil {
                 VStack(spacing: 8) {
                     Text("프리셋")
                         .font(.caption.weight(.semibold))
@@ -262,6 +333,10 @@ struct TimerView: View {
                 }
             }
         }
+    }
+
+    private var productiveTransitionCategories: [String] {
+        Constants.allCategories.filter { Constants.postBreakProductiveCategories.contains($0) }
     }
 
     private var presetChips: some View {

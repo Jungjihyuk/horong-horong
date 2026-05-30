@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// 특정 날짜의 `AppUsageSegment` 를 수동으로 추가/편집/삭제하는 시트.
+/// 특정 날짜의 `AppUsageSegment` 와 완료된 포모도로 기록을 수동으로 추가/편집/삭제하는 시트.
 /// 편집은 각 행에 attached 된 popover, 추가는 별도 sheet 로 띄운다.
 struct ManualSegmentEditorView: View {
     let date: Date
@@ -52,7 +52,7 @@ struct ManualSegmentEditorView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(dateHeaderText)
                     .font(.headline)
-                Text("세그먼트를 편집해도 차트가 자동으로 갱신됩니다")
+                Text("포모도로와 앱 실행 기록을 편집해도 차트가 자동으로 갱신됩니다")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -94,6 +94,13 @@ struct ManualSegmentEditorView: View {
                         PomodoroEditRowView(
                             session: session,
                             childSegments: childSegments(for: session),
+                            onSaveEdit: { draft in
+                                if applyPomodoroEdit(on: session, draft: draft) {
+                                    load()
+                                    return true
+                                }
+                                return false
+                            },
                             onDelete: { deletePomodoro(session); load() }
                         )
                         Divider()
@@ -218,6 +225,32 @@ struct ManualSegmentEditorView: View {
         return true
     }
 
+    private func applyPomodoroEdit(on session: FocusSession, draft: PomodoroDraft) -> Bool {
+        guard validatePomodoroEdit(session: session, draft: draft) else {
+            return false
+        }
+        guard let oldEnd = focusEnd(for: session) else {
+            editError = "종료 시간이 없는 포모도로 기록은 수정할 수 없습니다."
+            return false
+        }
+
+        let oldCategory = session.category ?? Constants.defaultFocusCategory
+        let oldStart = session.startedAt
+        let oldDuration = Int(oldEnd.timeIntervalSince(oldStart))
+        let newDuration = Int(draft.end.timeIntervalSince(draft.start))
+
+        session.category = draft.category
+        session.startedAt = draft.start
+        session.endedAt = draft.end
+        session.focusMinutes = max(1, Int(ceil(draft.end.timeIntervalSince(draft.start) / 60)))
+        session.completed = true
+
+        syncFocusRecord(category: oldCategory, date: oldStart, deltaSeconds: -oldDuration)
+        syncFocusRecord(category: draft.category, date: draft.start, deltaSeconds: newDuration)
+        try? modelContext.save()
+        return true
+    }
+
     private func delete(_ seg: AppUsageSegment) {
         let bundleId = seg.bundleIdentifier
         let appName = seg.appName
@@ -330,6 +363,32 @@ struct ManualSegmentEditorView: View {
         return true
     }
 
+    private func validatePomodoroEdit(session: FocusSession, draft: PomodoroDraft) -> Bool {
+        guard draft.isValid else {
+            editError = "포모도로 종료 시간은 시작 시간보다 늦어야 합니다."
+            return false
+        }
+
+        if let overlapping = focusSessions.first(where: { other in
+            guard other.id != session.id, let otherEnd = focusEnd(for: other) else { return false }
+            return overlaps(draft.start, draft.end, other.startedAt, otherEnd)
+        }) {
+            editError = "다른 포모도로 '\(overlapping.category ?? Constants.defaultFocusCategory)' 기록과 시간이 겹칩니다."
+            return false
+        }
+
+        let sessionSeconds = Int(draft.end.timeIntervalSince(draft.start))
+        let childSeconds = segments.reduce(0) { total, segment in
+            total + overlapSeconds(segment.startTime, segment.endTime, draft.start, draft.end)
+        }
+        if childSeconds > sessionSeconds {
+            editError = "하위 앱 기록 합계 \(formatDuration(childSeconds))가 포모도로 시간 \(formatDuration(sessionSeconds))을 넘을 수 없습니다."
+            return false
+        }
+
+        return true
+    }
+
     private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
         guard let endedAt = session.endedAt else { return false }
         let expectedSeconds = max(0, session.focusMinutes) * 60
@@ -361,6 +420,16 @@ struct ManualSegmentEditorView: View {
         if h > 0 { return "\(h)h \(m)m" }
         if m > 0 { return "\(m)m" }
         return "\(s)s"
+    }
+
+    private func syncFocusRecord(category: String, date: Date, deltaSeconds: Int) {
+        syncRecord(
+            bundleId: Constants.focusSessionBundleId(for: category),
+            appName: Constants.focusSessionAppName,
+            category: category,
+            date: date,
+            deltaSeconds: deltaSeconds
+        )
     }
 
     /// AppUsageRecord 에 증감분을 반영한다. 없으면 deltaSeconds > 0 일 때만 새로 생성.
@@ -502,7 +571,10 @@ private struct SegmentRowView: View {
 private struct PomodoroEditRowView: View {
     let session: FocusSession
     let childSegments: [AppUsageSegment]
+    let onSaveEdit: (PomodoroDraft) -> Bool
     let onDelete: () -> Void
+
+    @State private var showEditPopover: Bool = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -536,6 +608,31 @@ private struct PomodoroEditRowView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+
+            Button {
+                showEditPopover = true
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.callout)
+            }
+            .buttonStyle(.borderless)
+            .help("포모도로 기록 편집")
+            .popover(isPresented: $showEditPopover, arrowEdge: .trailing) {
+                PomodoroFormPopover(
+                    title: "포모도로 편집",
+                    initial: PomodoroDraft(
+                        category: category,
+                        start: session.startedAt,
+                        end: focusEnd
+                    ),
+                    onSave: { draft in
+                        if onSaveEdit(draft) {
+                            showEditPopover = false
+                        }
+                    },
+                    onCancel: { showEditPopover = false }
+                )
+            }
 
             Button(role: .destructive) {
                 onDelete()
@@ -591,6 +688,16 @@ private struct PomodoroEditRowView: View {
 
 // MARK: - Form types
 
+struct PomodoroDraft {
+    var category: String
+    var start: Date
+    var end: Date
+
+    var isValid: Bool {
+        !category.trimmingCharacters(in: .whitespaces).isEmpty && end > start
+    }
+}
+
 struct SegmentDraft {
     var appName: String
     var category: String
@@ -599,6 +706,84 @@ struct SegmentDraft {
 
     var isValid: Bool {
         !appName.trimmingCharacters(in: .whitespaces).isEmpty && end > start
+    }
+}
+
+private struct PomodoroFormPopover: View {
+    let title: String
+    @State private var draft: PomodoroDraft
+    let onSave: (PomodoroDraft) -> Void
+    let onCancel: () -> Void
+
+    init(title: String, initial: PomodoroDraft, onSave: @escaping (PomodoroDraft) -> Void, onCancel: @escaping () -> Void) {
+        self.title = title
+        self._draft = State(initialValue: initial)
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        PomodoroFormBody(title: title, draft: $draft, onSave: onSave, onCancel: onCancel)
+            .frame(width: 340)
+            .padding(14)
+    }
+}
+
+private struct PomodoroFormBody: View {
+    let title: String
+    @Binding var draft: PomodoroDraft
+    let onSave: (PomodoroDraft) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+
+            formGrid
+
+            if draft.end <= draft.start {
+                Text("⚠️ 시작 시간이 종료 시간보다 늦거나 같습니다")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            HStack {
+                Spacer()
+                Button("취소", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("저장") { onSave(draft) }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!draft.isValid)
+            }
+        }
+    }
+
+    private var formGrid: some View {
+        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+            GridRow {
+                Text("카테고리").font(.caption).foregroundStyle(.secondary)
+                Picker("", selection: $draft.category) {
+                    ForEach(Constants.allCategories, id: \.self) { cat in
+                        Text("\(Constants.categoryEmoji(for: cat)) \(cat)").tag(cat)
+                    }
+                }
+                .labelsHidden()
+            }
+            GridRow {
+                Text("시작 시간").font(.caption).foregroundStyle(.secondary)
+                DatePicker("", selection: $draft.start)
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+            }
+            GridRow {
+                Text("종료 시간").font(.caption).foregroundStyle(.secondary)
+                DatePicker("", selection: $draft.end)
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+            }
+        }
     }
 }
 
