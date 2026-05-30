@@ -8,12 +8,19 @@ enum TimerState: String {
     case breaking
 }
 
+struct BreakTransitionPrompt: Identifiable {
+    let id = UUID()
+    let breakEndedAt: Date
+    let previousCategory: String
+}
+
 @Observable
 final class AppState {
     var timerState: TimerState = .idle
     var remainingSeconds: Int = 0
     var focusMinutes: Int = Constants.defaultPomodoroFocusMinutes
     var breakMinutes: Int = Constants.defaultPomodoroBreakMinutes
+    var breakTransitionPrompt: BreakTransitionPrompt?
 
     var menuBarTitle: String {
         switch timerState {

@@ -167,6 +167,7 @@ enum AttentionAnalytics {
         thresholds: AttentionThresholds = .standard,
         isAllowedSwitch: ((String, String) -> Bool)? = nil,
         isDistractionCategory: ((String) -> Bool)? = nil,
+        breakTransitions: [BreakTransitionIntent] = [],
         corrections: [AttentionEventCorrection] = []
     ) -> AttentionSummary {
         let cal = Calendar.current
@@ -211,7 +212,8 @@ enum AttentionAnalytics {
                 targetCategory: targetCategory,
                 dayEnd: dayEnd,
                 thresholds: thresholds,
-                isAllowedSwitch: isAllowedSwitch
+                isAllowedSwitch: isAllowedSwitch,
+                breakTransitions: breakTransitions
             ) {
                 events.append(returnEvent)
             }
@@ -290,11 +292,13 @@ enum AttentionAnalytics {
         targetCategory: String,
         dayEnd: Date,
         thresholds: AttentionThresholds,
-        isAllowedSwitch: ((String, String) -> Bool)?
+        isAllowedSwitch: ((String, String) -> Bool)?,
+        breakTransitions: [BreakTransitionIntent]
     ) -> AttentionEventCandidate? {
         guard session.completed, let endedAt = session.endedAt else { return nil }
         let expectedReturnAt = endedAt.addingTimeInterval(TimeInterval(max(0, session.breakMinutes * 60)))
         guard expectedReturnAt < dayEnd else { return nil }
+        guard !hasResolvedBreakTransition(near: expectedReturnAt, in: breakTransitions) else { return nil }
 
         let laterSegments = segments.filter { $0.end > expectedReturnAt }.sorted { $0.start < $1.start }
         guard laterSegments.contains(where: { $0.category != targetCategory }) else { return nil }
@@ -330,6 +334,13 @@ enum AttentionAnalytics {
             durationSeconds: delaySeconds,
             confidence: 0.72
         )
+    }
+
+    private static func hasResolvedBreakTransition(near expectedReturnAt: Date, in transitions: [BreakTransitionIntent]) -> Bool {
+        transitions.contains { transition in
+            guard transition.decision != .unresolvedBreak else { return false }
+            return abs(transition.breakEndedAt.timeIntervalSince(expectedReturnAt)) <= 120
+        }
     }
 
     private static func buildSummary(
@@ -455,6 +466,7 @@ enum AttentionDaySummaryRecorder {
         let records = fetchRecords(from: start, to: end, modelContext: modelContext)
         let segments = fetchSegments(from: start, to: end, modelContext: modelContext)
         let sessions = fetchSessions(from: start, to: end, modelContext: modelContext)
+        let breakTransitions = fetchBreakTransitions(from: start, to: end, modelContext: modelContext)
         let corrections = fetchCorrections(from: start, to: end, modelContext: modelContext)
         let existingSummaries = loadSummaries(from: start, to: end, modelContext: modelContext).reduce(into: [:]) {
             result, summary in
@@ -472,6 +484,9 @@ enum AttentionDaySummaryRecorder {
             let dayCorrections = corrections
                 .filter { $0.occurredAt >= day && $0.occurredAt < dayEnd }
                 .map { AttentionEventCorrection(fingerprint: $0.fingerprint, verdict: $0.verdict) }
+            let dayBreakTransitions = breakTransitions.filter {
+                $0.breakEndedAt >= day && $0.breakEndedAt < dayEnd
+            }
 
             let hasAnyRecord = !dayRecords.isEmpty || !daySegments.isEmpty || !daySessions.isEmpty
             let key = dayKey(for: day, calendar: calendar)
@@ -482,6 +497,7 @@ enum AttentionDaySummaryRecorder {
                 segments: daySegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) },
                 timerSessions: daySessions,
                 thresholds: AttentionThresholdStore.shared.thresholds,
+                breakTransitions: dayBreakTransitions,
                 corrections: dayCorrections
             )
             let timelineSummary = timelineSummary(
@@ -656,6 +672,18 @@ enum AttentionDaySummaryRecorder {
     ) -> [AttentionEvent] {
         let descriptor = FetchDescriptor<AttentionEvent>(
             predicate: #Predicate { $0.occurredAt >= start && $0.occurredAt < end }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private static func fetchBreakTransitions(
+        from start: Date,
+        to end: Date,
+        modelContext: ModelContext
+    ) -> [BreakTransitionIntent] {
+        let descriptor = FetchDescriptor<BreakTransitionIntent>(
+            predicate: #Predicate { $0.breakEndedAt >= start && $0.breakEndedAt < end },
+            sortBy: [SortDescriptor(\.breakEndedAt)]
         )
         return (try? modelContext.fetch(descriptor)) ?? []
     }

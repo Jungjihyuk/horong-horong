@@ -1,6 +1,15 @@
 import SwiftUI
 
 enum Constants {
+    static func mondayWeekStart(for date: Date, calendar baseCalendar: Calendar = .current) -> Date {
+        var calendar = baseCalendar
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components).map { calendar.startOfDay(for: $0) }
+            ?? calendar.startOfDay(for: date)
+    }
+
     struct NewsOllamaModelOption: Identifiable, Hashable {
         enum Availability: Hashable {
             case local
@@ -186,6 +195,34 @@ enum Constants {
     static let defaultLongFocusBreakMinutes = 10
     static let defaultCustomFocusMinutes = 60
     static let defaultCustomBreakMinutes = 10
+    static let defaultPostBreakTransitionPromptDelayMinutes = 10
+
+    static var postBreakProductiveCategories: Set<String> {
+        Set(["업무", "개발", "공부", "조사", "기록"].map { categoryName($0) })
+    }
+
+    enum PostBreakTransitionPromptMode: String, CaseIterable, Identifiable {
+        case afterDelay
+        case always
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .afterDelay: return "필요할 때만"
+            case .always: return "항상 묻기"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .afterDelay:
+                return "휴식 후 포모도로나 업무성 카테고리 복귀가 없을 때만 묻습니다."
+            case .always:
+                return "휴식이 끝나면 바로 다음 흐름을 묻습니다."
+            }
+        }
+    }
 
     // UserDefaults 에서 프리셋 시간을 읽되, 값이 없으면(=0) 기본값 사용
     static func storedFocusMinutes(for preset: PomodoroPreset) -> Int {
@@ -304,12 +341,17 @@ enum Constants {
         static let longFocusBreakMinutes = "timer.longFocusBreakMinutes"
         static let customFocusMinutes = "timer.customFocusMinutes"
         static let customBreakMinutes = "timer.customBreakMinutes"
+        static let postBreakTransitionPromptMode = "timer.postBreakTransitionPromptMode"
+        static let postBreakTransitionPromptDelayMinutes = "timer.postBreakTransitionPromptDelayMinutes"
         static let timelineStartHour = "timeline.startHour"
         static let timelineEndHour = "timeline.endHour"
         static let timelineBucketMinutes = "timeline.bucketMinutes"
         static let menubarLabelStyle = "menubar.labelStyle"
         static let menubarTimeStyle = "menubar.timeStyle"
         static let menubarIcon = "menubar.icon"
+        static let anonymousTelemetryEnabled = "telemetry.anonymousEnabled"
+        static let anonymousTelemetryPrompted = "telemetry.anonymousPrompted"
+        static let anonymousInstallId = "telemetry.anonymousInstallId"
     }
 
     // MARK: - 메뉴바 표시 형식

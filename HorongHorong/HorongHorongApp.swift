@@ -223,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FocusSession.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
+            BreakTransitionIntent.self,
             AttentionEvent.self,
             AttentionDaySummary.self,
             StatsAggregateCache.self,

@@ -14,6 +14,10 @@ struct TimerPage: View {
     private var customFocusMinutes: Int = Constants.defaultCustomFocusMinutes
     @AppStorage(Constants.AppStorageKey.customBreakMinutes)
     private var customBreakMinutes: Int = Constants.defaultCustomBreakMinutes
+    @AppStorage(Constants.AppStorageKey.postBreakTransitionPromptMode)
+    private var postBreakTransitionPromptModeRaw: String = Constants.PostBreakTransitionPromptMode.afterDelay.rawValue
+    @AppStorage(Constants.AppStorageKey.postBreakTransitionPromptDelayMinutes)
+    private var postBreakTransitionPromptDelayMinutes: Int = Constants.defaultPostBreakTransitionPromptDelayMinutes
 
     @AppStorage(Constants.AppStorageKey.menubarLabelStyle)
     private var menubarLabelStyleRaw: String = Constants.defaultMenubarLabelStyle
@@ -39,6 +43,15 @@ struct TimerPage: View {
 
     private var menubarTimeStyleDisabled: Bool {
         menubarLabelStyle.wrappedValue == .categoryOnly || menubarLabelStyle.wrappedValue == .iconOnly
+    }
+
+    private var postBreakTransitionPromptMode: Binding<Constants.PostBreakTransitionPromptMode> {
+        Binding(
+            get: {
+                Constants.PostBreakTransitionPromptMode(rawValue: postBreakTransitionPromptModeRaw) ?? .afterDelay
+            },
+            set: { postBreakTransitionPromptModeRaw = $0.rawValue }
+        )
     }
 
     var body: some View {
@@ -98,6 +111,34 @@ struct TimerPage: View {
             .padding(.leading, 4)
 
             SettingsGroupCard("동작") {
+                SettingsRow(
+                    "휴식 후 다음 흐름 확인",
+                    subtitle: postBreakTransitionPromptMode.wrappedValue.subtitle
+                ) {
+                    Picker("", selection: postBreakTransitionPromptMode) {
+                        ForEach(Constants.PostBreakTransitionPromptMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 170)
+                }
+
+                if postBreakTransitionPromptMode.wrappedValue == .afterDelay {
+                    SettingsRow(
+                        "확인까지 기다릴 시간",
+                        subtitle: "이 시간 안에 포모도로나 업무·개발·공부·조사·기록 활동이 있으면 묻지 않습니다."
+                    ) {
+                        NumberField(
+                            value: $postBreakTransitionPromptDelayMinutes,
+                            range: 1...60,
+                            suffix: "분",
+                            width: 48
+                        )
+                    }
+                }
+
                 SettingsRow(
                     "집중 완료 시 자동으로 휴식 시작",
                     subtitle: "휴식 종료 후 다음 집중도 자동으로 이어집니다.",
