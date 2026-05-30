@@ -151,6 +151,8 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.longFocusBreakMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.customFocusMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.customBreakMinutes)
+            defaults.removeObject(forKey: Constants.AppStorageKey.postBreakTransitionPromptMode)
+            defaults.removeObject(forKey: Constants.AppStorageKey.postBreakTransitionPromptDelayMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.menubarLabelStyle)
             defaults.removeObject(forKey: Constants.AppStorageKey.menubarTimeStyle)
         case .stats:

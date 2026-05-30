@@ -25,7 +25,9 @@ enum PopoverTab: String, CaseIterable, Identifiable {
 struct MenuBarPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PopoverTab
+    @State private var showTelemetryConsentPrompt = false
     var timerManager: TimerManager
 
     init(timerManager: TimerManager, initialTab: PopoverTab = .timer) {
@@ -34,15 +36,21 @@ struct MenuBarPopover: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            tabBar
-            tabContent
-                .id(selectedTab)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            bottomBar
+        ZStack {
+            VStack(spacing: 0) {
+                tabBar
+                tabContent
+                    .id(selectedTab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                bottomBar
+            }
+
+            if showTelemetryConsentPrompt {
+                telemetryConsentPrompt
+            }
         }
         .frame(width: Constants.popoverWidth, height: Constants.popoverMaxHeight, alignment: .top)
         .background(PopoverChrome.surface)
@@ -52,6 +60,65 @@ struct MenuBarPopover: View {
                 .stroke(PopoverChrome.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.28), radius: 30, x: 0, y: 18)
+        .onAppear {
+            showTelemetryConsentPrompt = TelemetryConsentStore.shouldPromptForConsent
+        }
+    }
+
+    private var telemetryConsentPrompt: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(PopoverChrome.accent)
+                    Text("익명 개선 데이터를 보내시겠어요?")
+                        .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                }
+
+                Text("보내는 내용은 익명 설치 ID, 앱/OS 버전, 피드백 위치, 선택한 답변, 판단 신호와 점수 구간입니다. 앱 이름, 번들 ID, 세부 타임라인, 리포트 원문은 보내지 않습니다. 언제든 설정 > 데이터에서 바꿀 수 있어요.")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button {
+                        TelemetryConsentStore.declineInitialPrompt()
+                        showTelemetryConsentPrompt = false
+                    } label: {
+                        Text("지금은 안 함")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button {
+                        TelemetryConsentStore.setEnabled(true)
+                        showTelemetryConsentPrompt = false
+                        Task {
+                            await TelemetryClient.shared.recordConsent(.enabled)
+                        }
+                    } label: {
+                        Text("허용")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+            .padding(16)
+            .frame(width: Constants.popoverWidth - 56)
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(PopoverChrome.border, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
+        }
     }
 
     private var tabBar: some View {
@@ -91,7 +158,9 @@ struct MenuBarPopover: View {
     private var tabContent: some View {
         switch selectedTab {
         case .timer:
-            TimerView(timerManager: timerManager)
+            TimerView(timerManager: timerManager) {
+                dismiss()
+            }
         case .memo:
             MemoListView()
         case .stats:
