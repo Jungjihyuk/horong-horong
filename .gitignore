@@ -175,6 +175,7 @@ htmlcov/
 ## Secrets / Keys
 *.pem
 *.key
+HorongHorong/Config/Secrets.xcconfig
 
 ## Security Scan Reports
 trivy-reports/

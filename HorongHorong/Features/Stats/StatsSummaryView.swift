@@ -45,9 +45,11 @@ struct StatsSummaryView: View {
         topCategory: nil,
         overallScore: 0
     )
+    @State private var todayAttentionSummary = AttentionSummary.empty
     @State private var weekLongestSessionSeconds: Int = 0
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
+    @State private var hostWindow: NSWindow?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -71,6 +73,9 @@ struct StatsSummaryView: View {
         }
         .onAppear { loadData() }
         .onChange(of: scope) { _, _ in loadData() }
+        .configureHostWindow { window in
+            hostWindow = window
+        }
     }
 
     private var scopePicker: some View {
@@ -264,13 +269,22 @@ struct StatsSummaryView: View {
                     Text("오늘 호롱이 상태")
                         .font(.system(size: 12.5, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.accent)
-                    Text("— \(todayFocusSummary.levelLabel) \(todayFocusSummary.levelEmoji)")
+                    Text("— \(horongStatusLabel) \(horongStatusEmoji)")
                         .font(.system(size: 12.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
                 Text(horongStatusMessage)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
+
+                if todayAttentionSummary.hasSignals {
+                    VStack(spacing: 5) {
+                        ForEach(attentionEvidenceEvents) { event in
+                            attentionEvidenceRow(event)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -331,6 +345,56 @@ struct StatsSummaryView: View {
 
             weekMetricCards
             weekStatusCard
+        }
+    }
+
+    private var attentionEvidenceEvents: [AttentionEventCandidate] {
+        Array(todayAttentionSummary.events.filter { $0.type != .allowedSwitch }.prefix(3))
+    }
+
+    private func attentionEvidenceRow(_ event: AttentionEventCandidate) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: attentionIcon(for: event.type))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(PopoverChrome.accent)
+                .frame(width: 14)
+            Text(event.reason)
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Menu {
+                Button {
+                    saveAttentionCorrection(for: event, verdict: .distraction)
+                } label: {
+                    Label("신호 맞음", systemImage: "checkmark.seal")
+                }
+                Button {
+                    saveAttentionCorrection(for: event, verdict: .notDistraction)
+                } label: {
+                    Label("방해 아님", systemImage: "checkmark.circle")
+                }
+                Button {
+                    saveAttentionCorrection(for: event, verdict: .misclassified)
+                } label: {
+                    Label("분류 오류", systemImage: "xmark.circle")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("이 근거 보정")
+        }
+    }
+
+    private func attentionIcon(for type: AttentionEventType) -> String {
+        switch type {
+        case .selectiveDistraction: return "bell.badge"
+        case .sustainedDrop: return "timer"
+        case .delayedReturn: return "arrow.uturn.backward.circle"
+        case .allowedSwitch: return "checkmark.circle"
         }
     }
 
@@ -415,7 +479,9 @@ struct StatsSummaryView: View {
 
     private var detailButton: some View {
         Button {
+            let popoverWindow = hostWindow
             openWindow(id: "stats-detail")
+            popoverWindow?.orderOut(nil)
             // MenuBarExtra 앱은 accessory 정책이라 openWindow만으로는 앞으로 오지 않음.
             // 창이 생성/재사용된 뒤 활성화 + orderFrontRegardless 로 최상단으로 끌어올린다.
             DispatchQueue.main.async {
@@ -470,16 +536,102 @@ struct StatsSummaryView: View {
     }
 
     private var horongStatusMessage: String {
+        if todayAttentionSummary.hasSignals {
+            return attentionStatusExplanation
+        }
+
         switch todayFocusSummary.level {
         case .focused:
-            return "좋은 흐름이에요. 이 리듬을 유지해보세요."
+            return "큰 흔들림 없이 한 가지 흐름에 오래 머문 기록이에요."
         case .moderate:
-            return "기대수는 적정 궤도에 있어요."
+            return "흐름은 이어졌지만 중간 전환이 조금 있었어요."
         case .scattered:
-            return "전환이 잦았어요. 한 가지 일에 조금 더 머물러보세요."
+            return "전환이 여러 번 겹쳐 원래 흐름으로 돌아볼 신호가 있어요."
         case .empty:
             return "아직 기록이 없어요. 첫 집중을 시작해보세요."
         }
+    }
+
+    private var attentionStatusExplanation: String {
+        let signalEvents = todayAttentionSummary.events.filter { $0.type != .allowedSwitch }
+        let selectiveCount = signalEvents.filter { $0.type == .selectiveDistraction }.count
+        let sustainedCount = signalEvents.filter { $0.type == .sustainedDrop }.count
+        let returnCount = signalEvents.filter { $0.type == .delayedReturn }.count
+        var parts: [String] = []
+
+        if selectiveCount > 0 {
+            parts.append("방해 앱 체류 \(selectiveCount)회")
+        }
+        if sustainedCount > 0 {
+            parts.append("조기 중단 \(sustainedCount)회")
+        }
+        if returnCount > 0 {
+            parts.append("복귀 지연 \(returnCount)회")
+        }
+
+        let summary = parts.isEmpty ? todayAttentionSummary.primaryMessage : "\(parts.joined(separator: ", "))가 보여요."
+        guard let event = todayAttentionSummary.primaryEvent else {
+            return summary
+        }
+        return "\(summary) 주요 근거: \(event.reason)."
+    }
+
+    private var horongStatusLabel: String {
+        todayAttentionSummary.hasSignals ? todayAttentionSummary.levelLabel : todayFocusSummary.levelLabel
+    }
+
+    private var horongStatusEmoji: String {
+        todayAttentionSummary.hasSignals ? todayAttentionSummary.levelEmoji : todayFocusSummary.levelEmoji
+    }
+
+    private func loadAttentionCorrections(from start: Date, to end: Date) -> [AttentionEventCorrection] {
+        let descriptor = FetchDescriptor<AttentionEvent>(
+            predicate: #Predicate { $0.occurredAt >= start && $0.occurredAt < end }
+        )
+        let events = (try? modelContext.fetch(descriptor)) ?? []
+        return events.map {
+            AttentionEventCorrection(fingerprint: $0.fingerprint, verdict: $0.verdict)
+        }
+    }
+
+    private func loadBreakTransitionIntents(from start: Date, to end: Date) -> [BreakTransitionIntent] {
+        let descriptor = FetchDescriptor<BreakTransitionIntent>(
+            predicate: #Predicate { $0.breakEndedAt >= start && $0.breakEndedAt < end },
+            sortBy: [SortDescriptor(\.breakEndedAt)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private func saveAttentionCorrection(for event: AttentionEventCandidate, verdict: AttentionEventVerdict) {
+        let fingerprint = event.fingerprint
+        let descriptor = FetchDescriptor<AttentionEvent>(
+            predicate: #Predicate { $0.fingerprint == fingerprint }
+        )
+
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.eventType = event.type.rawValue
+            existing.occurredAt = event.occurredAt
+            existing.sourceApp = event.sourceApp
+            existing.sourceCategory = event.sourceCategory
+            existing.targetCategory = event.targetCategory
+            existing.durationSeconds = event.durationSeconds
+            existing.verdict = verdict
+        } else {
+            let correction = AttentionEvent(
+                fingerprint: event.fingerprint,
+                eventType: event.type.rawValue,
+                occurredAt: event.occurredAt,
+                sourceApp: event.sourceApp,
+                sourceCategory: event.sourceCategory,
+                targetCategory: event.targetCategory,
+                durationSeconds: event.durationSeconds,
+                verdict: verdict
+            )
+            modelContext.insert(correction)
+        }
+
+        try? modelContext.save()
+        loadData()
     }
 
     private var totalFormatted: String {
@@ -513,6 +665,13 @@ struct StatsSummaryView: View {
         guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else {
             return
         }
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today) {
+            _ = AttentionDaySummaryRecorder.finalizeCompletedDays(
+                from: yesterday,
+                to: today,
+                modelContext: modelContext
+            )
+        }
 
         let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate { $0.startTime < tomorrow && $0.endTime > today }
@@ -523,6 +682,8 @@ struct StatsSummaryView: View {
             !Constants.hiddenLegacyCategories.contains($0.category)
         }
         let timerSessions = loadTimerSessions(from: today, to: tomorrow)
+        let attentionCorrections = loadAttentionCorrections(from: today, to: tomorrow)
+        let breakTransitionIntents = loadBreakTransitionIntents(from: today, to: tomorrow)
         let buckets = TimelineAnalytics.buckets(
             for: today,
             segments: visibleSegments,
@@ -533,6 +694,14 @@ struct StatsSummaryView: View {
             segments: visibleSegments,
             buckets: buckets,
             timerSessions: timerSessions
+        )
+        todayAttentionSummary = AttentionAnalytics.summary(
+            for: today,
+            segments: visibleSegments,
+            timerSessions: timerSessions,
+            thresholds: AttentionThresholdStore.shared.thresholds,
+            breakTransitions: breakTransitionIntents,
+            corrections: attentionCorrections
         )
 
         if !visibleSegments.isEmpty {
@@ -561,6 +730,7 @@ struct StatsSummaryView: View {
         }
 
         categoryUsages = makeCategoryUsages(from: categoryDurations)
+        todayAttentionSummary = .empty
         if todayFocusSummary.totalSeconds == 0 {
             todayFocusSummary = DailyFocusSummary(
                 totalSeconds: categoryDurations.values.reduce(0, +),
@@ -574,8 +744,8 @@ struct StatsSummaryView: View {
 
     private func loadWeekData() {
         let calendar = Calendar.current
-        guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())),
-              let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+        let weekStart = Constants.mondayWeekStart(for: Date(), calendar: calendar)
+        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
             return
         }
 

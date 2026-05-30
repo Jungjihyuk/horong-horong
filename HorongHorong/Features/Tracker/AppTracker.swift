@@ -340,6 +340,16 @@ final class AppTracker: @unchecked Sendable {
         let idleSeconds = currentIdleSeconds()
         defer { lastIdleSeconds = idleSeconds }
 
+        if TrackerStateStore.shared.manualAwayStartedAt != nil {
+            pendingIdleSegment = nil
+            if idleSeconds < Constants.idleActiveReturnThresholdSeconds {
+                TrackerStateStore.shared.clearManualAway()
+                currentAppStartTime = Date()
+                currentSegmentStart = Date()
+            }
+            return
+        }
+
         // 이미 pending 상태 → 복귀 감지
         if let pending = pendingIdleSegment {
             if idleSeconds < Constants.idleActiveReturnThresholdSeconds {

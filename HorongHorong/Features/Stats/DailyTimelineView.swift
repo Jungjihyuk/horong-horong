@@ -65,12 +65,7 @@ struct DailyFocusSummary {
     }
 
     var levelLabel: String {
-        switch level {
-        case .focused: return "집중"
-        case .moderate: return "보통"
-        case .scattered: return "산만"
-        case .empty: return "기록 없음"
-        }
+        flowState.label
     }
 
     var levelColor: Color {
@@ -83,11 +78,15 @@ struct DailyFocusSummary {
     }
 
     var levelEmoji: String {
+        flowState.emoji
+    }
+
+    var flowState: AttentionFlowState {
         switch level {
-        case .focused: return "🟢"
-        case .moderate: return "🟡"
-        case .scattered: return "🔴"
-        case .empty: return "⚪️"
+        case .focused: return .steady
+        case .moderate: return .variable
+        case .scattered: return .returnNeeded
+        case .empty: return .noRecord
         }
     }
 }
@@ -348,7 +347,7 @@ struct DailyTimelineBucketsView: View {
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .monospacedDigit()
             } else {
-                Text("막대가 길수록 오래, 흐릿할수록 산만한 시간대에요 (설정에서 시간 범위·간격 조정)")
+                Text("막대가 길수록 오래 머문 시간대, 흐릿할수록 전환이 많았던 시간대에요")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkTertiary)
             }
@@ -439,11 +438,11 @@ struct DailyTimelineBucketsView: View {
         HStack(spacing: 10) {
             HStack(spacing: 4) {
                 Rectangle().fill(Color.blue).frame(width: 10, height: 10).cornerRadius(2)
-                Text("집중").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
+                Text("흐름 유지").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
             }
             HStack(spacing: 4) {
                 Rectangle().fill(Color.blue).saturation(0.15).frame(width: 10, height: 10).cornerRadius(2)
-                Text("산만").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
+                Text("전환 많음").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
             }
             HStack(spacing: 4) {
                 Circle().fill(Color.red.opacity(0.8)).frame(width: 4, height: 4)
