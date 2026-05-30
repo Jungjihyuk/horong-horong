@@ -14,6 +14,7 @@ private struct StatsLoadedData {
     let weekSegments: [AppUsageSegment]
     let periodSegments: [AppUsageSegment]
     let timerSessions: [FocusSession]
+    let breakTransitionIntents: [BreakTransitionIntent]
     let aggregateSnapshot: StatsAggregateSnapshot?
     let attentionDaySummaries: [AttentionDaySummary]
 }
@@ -27,6 +28,7 @@ struct StatsDetailWindow: View {
     @State private var weekSegments: [AppUsageSegment] = []
     @State private var periodSegments: [AppUsageSegment] = []
     @State private var timerSessions: [FocusSession] = []
+    @State private var breakTransitionIntents: [BreakTransitionIntent] = []
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var attentionDaySummaries: [AttentionDaySummary] = []
     @State private var showEditor: Bool = false
@@ -59,6 +61,7 @@ struct StatsDetailWindow: View {
                         weekSegments: weekSegments,
                         periodSegments: periodSegments,
                         timerSessions: timerSessions,
+                        breakTransitionIntents: breakTransitionIntents,
                         aggregateSnapshot: aggregateSnapshot,
                         attentionDaySummaries: attentionDaySummaries,
                         vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
@@ -205,7 +208,7 @@ struct StatsDetailWindow: View {
             let s = cal.startOfDay(for: selectedDate)
             return (s, cal.date(byAdding: .day, value: 1, to: s) ?? s)
         case .weekly:
-            let weekStart = cal.date(from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)) ?? selectedDate
+            let weekStart = Constants.mondayWeekStart(for: selectedDate, calendar: cal)
             return (weekStart, cal.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart)
         case .monthly:
             let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: selectedDate)) ?? selectedDate
@@ -290,8 +293,8 @@ struct StatsDetailWindow: View {
             return formatter.string(from: selectedDate)
         case .weekly:
             let calendar = Calendar.current
-            guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: selectedDate)),
-                  let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) else {
+            let weekStart = Constants.mondayWeekStart(for: selectedDate, calendar: calendar)
+            guard let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) else {
                 return ""
             }
             formatter.dateFormat = "M/d"
@@ -347,8 +350,10 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail records fetch mode=\(viewMode.rawValue, privacy: .public) count=\(fetchedRecords.count) elapsed=\(recordsElapsedMs)ms")
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
+        let fetchedBreakTransitions = loadBreakTransitionIntents(start: startDate, end: endDate)
+        let attentionSummaryStart = attentionSummaryLoadStart(for: viewMode, start: startDate)
         let finalizedAttentionDays = AttentionDaySummaryRecorder.finalizeCompletedDays(
-            from: startDate,
+            from: attentionSummaryStart,
             to: endDate,
             modelContext: modelContext
         )
@@ -374,6 +379,7 @@ struct StatsDetailWindow: View {
             weekSegments: loadedSegments.week,
             periodSegments: loadedSegments.period,
             timerSessions: fetchedSessions,
+            breakTransitionIntents: fetchedBreakTransitions,
             aggregateSnapshot: aggregate,
             attentionDaySummaries: finalizedAttentionDays
         )
@@ -392,9 +398,22 @@ struct StatsDetailWindow: View {
         weekSegments = data.weekSegments
         periodSegments = data.periodSegments
         timerSessions = data.timerSessions
+        breakTransitionIntents = data.breakTransitionIntents
         aggregateSnapshot = data.aggregateSnapshot
         attentionDaySummaries = data.attentionDaySummaries
-        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) attentionDays=\(data.attentionDaySummaries.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
+        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) breakTransitions=\(data.breakTransitionIntents.count) attentionDays=\(data.attentionDaySummaries.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
+    }
+
+    private func attentionSummaryLoadStart(for mode: StatsViewMode, start: Date) -> Date {
+        let calendar = Calendar.current
+        switch mode {
+        case .daily:
+            return start
+        case .weekly:
+            return calendar.date(byAdding: .day, value: -7, to: start) ?? start
+        case .monthly:
+            return calendar.date(byAdding: .month, value: -1, to: start) ?? start
+        }
     }
 
     private func invalidateLoadCache() {
@@ -444,6 +463,14 @@ struct StatsDetailWindow: View {
         let elapsedMs = elapsedMs(since: startedAt)
         Self.logger.notice("StatsDetail sessions fetch count=\(sessions.count) elapsed=\(elapsedMs)ms")
         return sessions
+    }
+
+    private func loadBreakTransitionIntents(start: Date, end: Date) -> [BreakTransitionIntent] {
+        let descriptor = FetchDescriptor<BreakTransitionIntent>(
+            predicate: #Predicate { $0.breakEndedAt >= start && $0.breakEndedAt < end },
+            sortBy: [SortDescriptor(\.breakEndedAt)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func focusEnd(for session: FocusSession) -> Date? {
@@ -636,8 +663,8 @@ struct StatsDetailWindow: View {
             let start = calendar.startOfDay(for: date)
             return (start, calendar.date(byAdding: .day, value: 1, to: start) ?? start)
         case .weekly:
-            guard let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)),
-                  let end = calendar.date(byAdding: .day, value: 7, to: start) else {
+            let start = Constants.mondayWeekStart(for: date, calendar: calendar)
+            guard let end = calendar.date(byAdding: .day, value: 7, to: start) else {
                 return nil
             }
             return (start, end)

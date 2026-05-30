@@ -594,6 +594,14 @@ struct StatsSummaryView: View {
         }
     }
 
+    private func loadBreakTransitionIntents(from start: Date, to end: Date) -> [BreakTransitionIntent] {
+        let descriptor = FetchDescriptor<BreakTransitionIntent>(
+            predicate: #Predicate { $0.breakEndedAt >= start && $0.breakEndedAt < end },
+            sortBy: [SortDescriptor(\.breakEndedAt)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
     private func saveAttentionCorrection(for event: AttentionEventCandidate, verdict: AttentionEventVerdict) {
         let fingerprint = event.fingerprint
         let descriptor = FetchDescriptor<AttentionEvent>(
@@ -675,6 +683,7 @@ struct StatsSummaryView: View {
         }
         let timerSessions = loadTimerSessions(from: today, to: tomorrow)
         let attentionCorrections = loadAttentionCorrections(from: today, to: tomorrow)
+        let breakTransitionIntents = loadBreakTransitionIntents(from: today, to: tomorrow)
         let buckets = TimelineAnalytics.buckets(
             for: today,
             segments: visibleSegments,
@@ -691,6 +700,7 @@ struct StatsSummaryView: View {
             segments: visibleSegments,
             timerSessions: timerSessions,
             thresholds: AttentionThresholdStore.shared.thresholds,
+            breakTransitions: breakTransitionIntents,
             corrections: attentionCorrections
         )
 
@@ -734,8 +744,8 @@ struct StatsSummaryView: View {
 
     private func loadWeekData() {
         let calendar = Calendar.current
-        guard let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())),
-              let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+        let weekStart = Constants.mondayWeekStart(for: Date(), calendar: calendar)
+        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
             return
         }
 

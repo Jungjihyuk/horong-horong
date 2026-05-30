@@ -41,6 +41,7 @@ final class TrackerStateStore: @unchecked Sendable {
     private let enabledKey = "tracker.enabled"
     private let sensitiveKey = "tracker.sensitiveMode"
     private let vacationsKey = "tracker.vacations.v1"
+    private let manualAwayStartedAtKey = "tracker.manualAwayStartedAt"
 
     var isTrackingEnabled: Bool {
         didSet { UserDefaults.standard.set(isTrackingEnabled, forKey: enabledKey) }
@@ -50,6 +51,16 @@ final class TrackerStateStore: @unchecked Sendable {
         didSet { UserDefaults.standard.set(isSensitiveMode, forKey: sensitiveKey) }
     }
 
+    private(set) var manualAwayStartedAt: Date? {
+        didSet {
+            if let manualAwayStartedAt {
+                UserDefaults.standard.set(manualAwayStartedAt, forKey: manualAwayStartedAtKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: manualAwayStartedAtKey)
+            }
+        }
+    }
+
     private(set) var vacationRanges: [VacationRange]
 
     private init() {
@@ -57,6 +68,7 @@ final class TrackerStateStore: @unchecked Sendable {
         // enabled 키가 없을 땐 기본 true.
         isTrackingEnabled = (defaults.object(forKey: enabledKey) as? Bool) ?? true
         isSensitiveMode = defaults.bool(forKey: sensitiveKey)
+        manualAwayStartedAt = defaults.object(forKey: manualAwayStartedAtKey) as? Date
         if let data = defaults.data(forKey: vacationsKey),
            let decoded = try? JSONDecoder().decode([VacationRange].self, from: data) {
             vacationRanges = decoded.sorted { $0.start < $1.start }
@@ -69,8 +81,17 @@ final class TrackerStateStore: @unchecked Sendable {
     func shouldRecord(at date: Date = Date()) -> Bool {
         guard isTrackingEnabled else { return false }
         guard !isSensitiveMode else { return false }
+        guard manualAwayStartedAt == nil else { return false }
         guard vacationRange(containing: date) == nil else { return false }
         return true
+    }
+
+    func markManualAway(startedAt: Date = Date()) {
+        manualAwayStartedAt = startedAt
+    }
+
+    func clearManualAway() {
+        manualAwayStartedAt = nil
     }
 
     func vacationRange(containing date: Date) -> VacationRange? {
