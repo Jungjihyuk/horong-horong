@@ -36,5 +36,7 @@
 	<integer>86400</integer>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>현재 열려있는 브라우저(Chrome/Safari) 탭의 URL을 읽어 "엔터/조사/기타" 통계 분류에 사용합니다.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>메모를 macOS 미리알림 앱에 등록하고 데드라인을 동기화하는 데 사용합니다.</string>
 </dict>
 </plist>
