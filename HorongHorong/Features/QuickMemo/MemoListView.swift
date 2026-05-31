@@ -3,21 +3,26 @@ import SwiftData
 
 struct MemoListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var editingMemo: Memo?
     @State private var editContent: String = ""
     @State private var showNewMemoField: Bool = false
     @State private var newMemoContent: String = ""
     @State private var newMemoIcon: String = MemoIcon.defaultIcon
+    @State private var hostWindow: NSWindow?
 
     private var visibleMemos: [Memo] {
-        let pinned = allMemos.filter { $0.isPinned }
-        let recent = allMemos.filter { !$0.isPinned }
+        let activeMemos = allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue }
+        let pinned = activeMemos.filter { $0.isPinned }
+        let recent = activeMemos.filter { !$0.isPinned }
         return pinned + recent
     }
 
     var body: some View {
         VStack(spacing: 10) {
+            memoBrowserButton
+
             if allMemos.isEmpty {
                 emptyState
             } else {
@@ -26,6 +31,39 @@ struct MemoListView: View {
 
             newMemoButton
         }
+        .configureHostWindow { window in
+            hostWindow = window
+        }
+    }
+
+    private var memoBrowserButton: some View {
+        Button {
+            let popoverWindow = hostWindow
+            openWindow(id: "memo-browser")
+            popoverWindow?.orderOut(nil)
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                if let window = NSApp.windows.first(where: {
+                    $0.identifier?.rawValue == "memo-browser" || $0.title == "전체 메모 - 호롱호롱"
+                }) {
+                    window.collectionBehavior.insert(.moveToActiveSpace)
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("메모 보기")
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var emptyState: some View {
@@ -95,18 +133,30 @@ struct MemoListView: View {
                     editContent = memo.content
                     editingMemo = memo
                 }
+                Button(memo.isCompletedValue ? "완료 해제" : "완료") {
+                    memo.isCompletedValue.toggle()
+                    memo.updatedAt = Date()
+                    try? modelContext.save()
+                }
+                Button("보관") {
+                    memo.isArchivedValue = true
+                    memo.updatedAt = Date()
+                    try? modelContext.save()
+                }
                 Divider()
                 Button("삭제", role: .destructive) {
                     modelContext.delete(memo)
                     try? modelContext.save()
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.caption)
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(PopoverChrome.inkSecondary)
+                    .frame(width: 22, height: 22)
             }
             .menuStyle(.borderlessButton)
-            .frame(width: 20)
+            .menuIndicator(.hidden)
+            .frame(width: 22)
         }
     }
 
@@ -232,18 +282,19 @@ struct MemoListView: View {
 enum MemoIcon {
     static let defaultIcon = "📝"
     static let pinnedIcon = "📌"
-    static let options = ["🌱", "🐜", "🚀", "📝", "☕️", "💡", "📚", "🔗", "✅", "⭐️"]
+    static let options = ["🌱", "🐜", "🔗", "📝", "☕️", "💡", "📚", "📜", "✅", "⭐️"]
 
     static func label(for icon: String) -> String {
         switch icon {
         case "🌱": return "아이디어"
         case "🐜": return "작업"
+        case "🔗": return "링크"
         case "🚀": return "링크"
         case "📝": return "메모"
         case "☕️": return "읽을거리"
         case "💡": return "힌트"
         case "📚": return "공부"
-        case "🔗": return "참고"
+        case "📜": return "참고"
         case "✅": return "할 일"
         case "⭐️": return "중요"
         default: return "아이콘"

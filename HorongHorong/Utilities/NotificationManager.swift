@@ -36,6 +36,33 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
         }
     }
 
+    func scheduleMemoReminder(identifier: String, title: String, body: String, at date: Date) {
+        guard date > Date() else {
+            cancel(identifier: identifier)
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("메모 알림 예약 실패: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func cancel(identifier: String) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
