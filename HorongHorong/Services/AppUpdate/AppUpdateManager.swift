@@ -16,8 +16,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     var currentVersionText: String {
         let info = Bundle.main.infoDictionary
         let marketing = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "v\(marketing) (\(build))"
+        return "v\(marketing)"
     }
 
     var isConfigured: Bool {
@@ -67,7 +66,9 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         if let error {
-            statusMessage = "업데이트 확인 실패: \(error.localizedDescription)"
+            statusMessage = isNoUpdateError(error)
+                ? "최신 버전입니다."
+                : "업데이트 확인 실패: \(error.localizedDescription)"
         } else {
             statusMessage = "업데이트 확인을 마쳤습니다."
         }
@@ -75,7 +76,9 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
-        statusMessage = "업데이트 확인 실패: \(error.localizedDescription)"
+        statusMessage = isNoUpdateError(error)
+            ? "최신 버전입니다."
+            : "업데이트 확인 실패: \(error.localizedDescription)"
         refreshState()
     }
 
@@ -101,5 +104,10 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
             return nil
         }
         return trimmed
+    }
+
+    private func isNoUpdateError(_ error: any Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == SUSparkleErrorDomain && nsError.code == 1001
     }
 }
