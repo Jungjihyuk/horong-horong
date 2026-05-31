@@ -121,8 +121,8 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
 
     var tabs: [SettingsTab] {
         switch self {
-        case .preferences: return [.general, .appearance, .timer, .hotkey]
-        case .features:    return [.category, .stats, .news, .agent, .memo]
+        case .preferences: return [.general, .appearance, .hotkey]
+        case .features:    return [.timer, .memo, .category, .stats, .news, .agent]
         case .advanced:    return [.data, .about]
         }
     }
