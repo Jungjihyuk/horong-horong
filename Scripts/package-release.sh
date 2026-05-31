@@ -7,40 +7,104 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_PATH="${APP_PATH:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_ROOT}"
 VERSION="${VERSION:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
+SCHEME="${SCHEME:-HorongHorong}"
+CONFIGURATION="${CONFIGURATION:-Release}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$PROJECT_ROOT/build/DerivedData}"
+SKIP_BUILD=0
+SKIP_MAIN_CHECK=0
 
 usage() {
   cat <<'EOF'
 Usage:
-  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>]
+  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>] [--skip-build] [--skip-main-check]
 
 Defaults:
-  --app      newest Release/호롱호롱.app under ~/Library/Developer/Xcode/DerivedData/HorongHorong-*
+  --app      build Release/호롱호롱.app from the current main branch checkout
   --version  MARKETING_VERSION from project.yml
   --output   project root
 
 Environment overrides:
-  APP_PATH=/path/to/호롱호롱.app VERSION=0.1.1 OUTPUT_DIR=dist Scripts/package-release.sh
+  APP_PATH=/path/to/호롱호롱.app VERSION=0.1.2 OUTPUT_DIR=dist Scripts/package-release.sh
+  SCHEME=HorongHorong CONFIGURATION=Release DERIVED_DATA_PATH=build/DerivedData Scripts/package-release.sh
 EOF
 }
 
-find_release_app() {
-  local derived_data_root="$HOME/Library/Developer/Xcode/DerivedData"
-  local -a candidates=()
+project_value() {
+  local key="$1"
+  awk -F'"' -v key="$key" '$0 ~ key ":" { print $2; exit }' "$PROJECT_ROOT/project.yml"
+}
 
-  while IFS= read -r -d '' app; do
-    candidates+=("$app")
-  done < <(find "$derived_data_root" \
-    -path "*/HorongHorong-*/Build/Products/Release/호롱호롱.app" \
-    -type d \
-    -print0 2>/dev/null)
-
-  if [[ ${#candidates[@]} -eq 0 ]]; then
-    return 1
+require_main_checkout() {
+  local branch
+  branch="$(git -C "$PROJECT_ROOT" branch --show-current)"
+  if [[ "$branch" != "main" ]]; then
+    echo "Release packaging must run from main. Current branch: $branch" >&2
+    echo "Pass --skip-main-check only for a deliberate local test build." >&2
+    exit 1
   fi
 
-  printf '%s\n' "${candidates[@]}" | while IFS= read -r app; do
-    printf '%s\t%s\n' "$(stat -f '%m' "$app")" "$app"
-  done | sort -rn | head -n 1 | cut -f2-
+  git -C "$PROJECT_ROOT" fetch origin main
+  local local_head remote_head
+  local_head="$(git -C "$PROJECT_ROOT" rev-parse HEAD)"
+  remote_head="$(git -C "$PROJECT_ROOT" rev-parse origin/main)"
+  if [[ "$local_head" != "$remote_head" ]]; then
+    echo "Local main is not up to date with origin/main." >&2
+    echo "Pull or merge the latest main before packaging a release." >&2
+    exit 1
+  fi
+}
+
+require_clean_tree() {
+  if [[ -n "$(git -C "$PROJECT_ROOT" status --short)" ]]; then
+    echo "Working tree has uncommitted changes. Commit or stash them before packaging." >&2
+    git -C "$PROJECT_ROOT" status --short >&2
+    exit 1
+  fi
+}
+
+generate_project() {
+  if command -v xcodegen >/dev/null 2>&1; then
+    xcodegen generate --spec "$PROJECT_ROOT/project.yml"
+  else
+    echo "xcodegen is required to sync project.yml into the Xcode project." >&2
+    exit 1
+  fi
+}
+
+build_release_app() {
+  xcodebuild \
+    -project "$PROJECT_ROOT/HorongHorong.xcodeproj" \
+    -scheme "$SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'platform=macOS' \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    build
+
+  APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/호롱호롱.app"
+}
+
+plist_value() {
+  local plist="$1"
+  local key="$2"
+  /usr/libexec/PlistBuddy -c "Print :$key" "$plist"
+}
+
+validate_app_version() {
+  local plist="$APP_PATH/Contents/Info.plist"
+  local app_version app_build
+  app_version="$(plist_value "$plist" "CFBundleShortVersionString")"
+  app_build="$(plist_value "$plist" "CFBundleVersion")"
+
+  if [[ "$app_version" != "$VERSION" ]]; then
+    echo "Built app version mismatch: expected $VERSION, got $app_version" >&2
+    exit 1
+  fi
+
+  if [[ -n "$BUILD_NUMBER" && "$app_build" != "$BUILD_NUMBER" ]]; then
+    echo "Built app build mismatch: expected $BUILD_NUMBER, got $app_build" >&2
+    exit 1
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -57,6 +121,14 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="${2:-}"
       shift 2
       ;;
+    --skip-build)
+      SKIP_BUILD=1
+      shift
+      ;;
+    --skip-main-check)
+      SKIP_MAIN_CHECK=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -70,19 +142,28 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(awk -F'"' '/MARKETING_VERSION:/ { print $2; exit }' "$PROJECT_ROOT/project.yml")"
+  VERSION="$(project_value "MARKETING_VERSION")"
+fi
+
+if [[ -z "$BUILD_NUMBER" ]]; then
+  BUILD_NUMBER="$(project_value "CURRENT_PROJECT_VERSION")"
 fi
 
 if [[ -z "$VERSION" ]]; then
-  echo "Could not resolve version. Pass --version 0.1.1." >&2
+  echo "Could not resolve version. Pass --version 0.1.2." >&2
   exit 1
 fi
 
 if [[ -z "$APP_PATH" ]]; then
-  if ! APP_PATH="$(find_release_app)"; then
-    echo "Could not find Release app under ~/Library/Developer/Xcode/DerivedData." >&2
-    echo "Build Release first or pass --app <path>." >&2
-    exit 1
+  if [[ "$SKIP_MAIN_CHECK" -eq 0 ]]; then
+    require_main_checkout
+  fi
+  generate_project
+  require_clean_tree
+  if [[ "$SKIP_BUILD" -eq 0 ]]; then
+    build_release_app
+  else
+    APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/호롱호롱.app"
   fi
 fi
 
@@ -91,6 +172,8 @@ if [[ ! -d "$APP_PATH" ]]; then
   echo "Build Release first or pass --app <path>." >&2
   exit 1
 fi
+
+validate_app_version
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -103,7 +186,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Packaging HorongHorong $VERSION"
+echo "Packaging HorongHorong $VERSION ($BUILD_NUMBER)"
 echo "App: $APP_PATH"
 echo "Output: $OUTPUT_DIR"
 

@@ -129,8 +129,7 @@ struct AboutPage: View {
         #else
         let info = Bundle.main.infoDictionary
         let marketing = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "v\(marketing) (\(build))"
+        return "v\(marketing)"
         #endif
     }
 }
