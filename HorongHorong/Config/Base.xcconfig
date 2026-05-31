@@ -1,5 +1,7 @@
 SUPABASE_URL =
 SUPABASE_PUBLISHABLE_KEY =
+SPARKLE_APPCAST_URL =
+SPARKLE_PUBLIC_ED_KEY =
 
 #include? "Secrets.xcconfig"
 #include? "HorongHorong/Config/Secrets.xcconfig"

@@ -257,6 +257,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTracker.startTracking()
 
         NotificationManager.shared.requestAuthorization()
+        #if DIRECT_DISTRIBUTION
+        AppUpdateManager.shared.refreshState()
+        #endif
 
         HotKeyManager.shared.setup { [weak self] in
             guard let self else { return }
