@@ -292,6 +292,10 @@ enum Constants {
     static let statsWindowWidth: CGFloat = 880
     static let statsWindowHeight: CGFloat = 660
 
+    // MARK: - 메모 윈도우 크기
+    static let memoBrowserWindowWidth: CGFloat = 1012
+    static let memoBrowserWindowHeight: CGFloat = 658
+
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
         repositoryRelativePath("Agents", "experiments")
