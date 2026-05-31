@@ -59,6 +59,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: HorongHorong/HorongHorong.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.horonghorong.app
         PRODUCT_NAME: 호롱호롱
+        EXECUTABLE_NAME: HorongHorong
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: "NO"
         ENABLE_APP_SANDBOX: "NO"
@@ -105,6 +106,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: HorongHorong/HorongHorong.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.horonghorong.app
         PRODUCT_NAME: 호롱호롱
+        EXECUTABLE_NAME: HorongHorong
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: "NO"
         ENABLE_APP_SANDBOX: "YES"
