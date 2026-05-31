@@ -346,7 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let existingRules = (try? context.fetch(descriptor)) ?? []
         let existingBundleIds = Set(existingRules.map(\.bundleIdentifier))
 
-        for rule in Constants.defaultCategoryRules {
+        for rule in Constants.defaultCategoryRules where !Constants.isDefaultCategoryRuleHidden(rule.bundleId) {
             guard !existingBundleIds.contains(rule.bundleId) else { continue }
             let categoryRule = AppCategoryRule(
                 bundleIdentifier: rule.bundleId,
