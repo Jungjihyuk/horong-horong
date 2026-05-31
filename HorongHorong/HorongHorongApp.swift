@@ -524,6 +524,13 @@ struct HorongHorongApp: App {
         }
         .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
 
+        Window("전체 메모 - 호롱호롱", id: "memo-browser") {
+            MemoBrowserWindow()
+                .environment(appDelegate.appState)
+                .modelContainer(appDelegate.modelContainer)
+        }
+        .defaultSize(width: Constants.memoBrowserWindowWidth, height: Constants.memoBrowserWindowHeight)
+
         Settings {
             SettingsRoot()
                 .environment(appDelegate.appState)
