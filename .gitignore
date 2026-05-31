@@ -184,4 +184,7 @@ trivy-reports/
 # ========================= 7. Documentation ==========================
 
 ## Project Documentation (internal/draft)
-docs/
+docs/*
+!docs/updates/
+docs/updates/*
+!docs/updates/appcast.xml
