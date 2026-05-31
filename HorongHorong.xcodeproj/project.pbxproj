@@ -7,79 +7,149 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0001FB54B1AE562E58F819BA /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
 		0026DFF52574A7D11D6AE0E4 /* HotkeyPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41F124D194AD141C45AD373 /* HotkeyPage.swift */; };
+		00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */; };
 		016363067D14320E1F8074D5 /* AppUsageSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */; };
 		05DC5734A43326DF0D03A03D /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
+		09A0D81D790A874E6630F035 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
+		09CA990DEC583F533576BEEF /* AboutPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */; };
 		0A73805E0D529289643AF890 /* SettingsTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FAEB9F45DE8BC411F55FF0 /* SettingsTheme.swift */; };
 		0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */; };
+		0C9BD0C654A4E26439111DD6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B31DB4E51995E349060A4BF /* AppState.swift */; };
+		0DA902D388B24F3F3018AE26 /* AppUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */; };
+		138134C030882AFF017AC890 /* AgentPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C07F54EF9D4748E93E3790 /* AgentPage.swift */; };
+		1A6C7DA23BA0F48C7DEFCC48 /* GeneralPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290A4E8AA4D19FB5DC5BB3CF /* GeneralPage.swift */; };
+		1AEDAFD28B0428145B525554 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA25DD516AA5500C0E0491CE /* Constants.swift */; };
+		1CAD7AB6A972872AB1B1522C /* AttentionThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0327985821E5D309FC544549 /* AttentionThresholdStore.swift */; };
+		1DDBA968DC3315CAA55EE0E0 /* NewsSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE27FF26C6BCFBE650785D /* NewsSourceStore.swift */; };
 		1F56E73BFE279638ECA2FD17 /* CategoryPairStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */; };
+		20D4C350080049D6DC2D7E4E /* NewsPipelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A98093A84397D93D2E0190A /* NewsPipelineService.swift */; };
+		238B891522C7CEB45D85FAA8 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */; };
+		25B0E14F3F8559765D991402 /* SwiftDataStoreLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3727A9B5A94FC100A696BC36 /* SwiftDataStoreLocation.swift */; };
+		26AE35860542CB3B670B62AF /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5439DBA4DA11226E1FD32E0F /* TimerView.swift */; };
 		272BFC3DBE4F345B7E84FF77 /* DailyAttentionReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881B92C8DB05873BF8307228 /* DailyAttentionReport.swift */; };
+		289FD0AD08D447CE4FB7EAF3 /* AppearancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */; };
+		28B3CBFBC69FB131DF93FACF /* AttentionAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB95F028C60D0DD5F0EEC47 /* AttentionAnalytics.swift */; };
 		2914E61149677340D1EF8D4D /* BrowserURLClassificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BFDB918694C1C7CA83E3B9C /* BrowserURLClassificationTests.swift */; };
 		2B7D0194C22B17AC0DB756EB /* AboutPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */; };
+		2B8DEA8E72AC0CC016E86887 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC8779891445802AEFEEDE5 /* NewsView.swift */; };
 		2CA6F9AFFFC2AE48382D2FF9 /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102B15EB31C2926F8C02CA7D /* SettingsSection.swift */; };
+		2E1E8E3312ACD7939ACF39C4 /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 85C5FF338C0ED8D128A3F4A4 /* HotKey */; };
 		2F3BE3CCCC9AE730A258F509 /* MemoPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F73EF78F2F5A2264DB659E4 /* MemoPage.swift */; };
+		30D731ADD408AF38CC53CE5B /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */; };
 		315AFD0EDCF1F229F02DEC9F /* NumberField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658FBB3D526E45D220DD3A3A /* NumberField.swift */; };
+		31AB4AAABF2512AA4FC8C028 /* AttentionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098E315A72C4170158DD4C8 /* AttentionEvent.swift */; };
 		3269DB63DD8C3318494DF45C /* TelemetryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */; };
+		32DE92C68823205EC789ECBA /* SettingsTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FAEB9F45DE8BC411F55FF0 /* SettingsTheme.swift */; };
+		337238A044233AF174112531 /* NewsReportIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3153713609563689ADB615C /* NewsReportIndex.swift */; };
+		35D80B553132B90DF264D277 /* StatsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE1DBB9705778C054D58377 /* StatsPage.swift */; };
 		35F856165E7997406F5237AA /* StatsChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3449422DE95BD818E909C196 /* StatsChartView.swift */; };
 		391102A0C2CE4E98866D76DE /* TrackerStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D229B2D61814B74FA649C1 /* TrackerStateStore.swift */; };
 		3A1DAABFEF3A8028ADD4CD79 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */; };
+		3A671FA2CC5885AEA2BBA419 /* HotkeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */; };
 		3B87C804AFE0D1FC7D246FA0 /* NewsReportIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3153713609563689ADB615C /* NewsReportIndex.swift */; };
+		44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */; };
 		4430C7455BABB9BE90F240D0 /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */; };
+		44D9797D84B677ADC0CDFF21 /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D6422AFDFDFF4A0C229A93 /* FocusSession.swift */; };
+		455676486F964D8A9685CFDB /* NewsJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FEDB4A28FC82C768BD56C3 /* NewsJob.swift */; };
 		4567B73E8D887DC9F160399B /* TimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5439DBA4DA11226E1FD32E0F /* TimerView.swift */; };
+		459C4946B373AF605B68A0E9 /* MenuBarPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 345F52EC98978D2B8A0439EB /* MenuBarPopover.swift */; };
 		45A7BCF4EB46440E9A298087 /* QuickMemoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A030D0949903C9FA062FB4D1 /* QuickMemoPanel.swift */; };
 		45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */; };
 		46A453BF1EF4944AB3ABC7D7 /* HorongHorongApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */; };
+		47E469E49FE2CA4A3564A585 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */; };
+		4999BFE7F0B2D40FCBA447B6 /* CategoryPairStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */; };
 		4AF7DB95F4F14DA73338634E /* ToastPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28560EC4AA259D92267C28F5 /* ToastPanel.swift */; };
 		4EC10E78479CA252D21CCBFC /* NewsPipelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A98093A84397D93D2E0190A /* NewsPipelineService.swift */; };
+		51C01295B928B8C3A7FEA701 /* SettingsSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */; };
 		532725CCFBCA016CF30E224A /* SettingsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BE61B97897A531F7A58A68 /* SettingsCard.swift */; };
+		533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */; };
+		5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */; };
+		59473582E6A58C3CB519A58D /* AppUsageSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */; };
+		5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
+		5CEAD3C8F944905C91EE32A6 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BCD9DC2B0CED624438303A /* TimerManager.swift */; };
 		5EA71A166C05975583B8178A /* NewsJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FEDB4A28FC82C768BD56C3 /* NewsJob.swift */; };
 		5F9575D56F909341E5F91036 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B31DB4E51995E349060A4BF /* AppState.swift */; };
 		610B81BD6C5B911E9B5FB594 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BCD9DC2B0CED624438303A /* TimerManager.swift */; };
 		6255BEFEB2A8D1DE41BD3A09 /* GeneralPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 290A4E8AA4D19FB5DC5BB3CF /* GeneralPage.swift */; };
 		65087745A1FB1998A76AA08D /* SwiftDataStoreLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3727A9B5A94FC100A696BC36 /* SwiftDataStoreLocation.swift */; };
 		675C4D477215891B268F51A1 /* QuickMemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */; };
+		695BCFFE660CE68416839EFC /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */; };
+		6B9AE3B79B370DC4284245ED /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102B15EB31C2926F8C02CA7D /* SettingsSection.swift */; };
+		7067CFF66B6206B3E78C1353 /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */; };
 		743204795E302BF902290E6E /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */; };
+		760BEF844A5B3167F3E07AC4 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
+		7676F5BE56FDF366D1FE8497 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D1F22FB5645934CB4A1A7D0F /* Assets.xcassets */; };
+		78C38709A39CB5916E78C7FF /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F7CEFF27A23967523929A0 /* SettingsRow.swift */; };
 		7B3C4397A9973380E6209E19 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */; };
+		7B8D2345A0F433866A97C450 /* Chips.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A6B136440DF771D0649296 /* Chips.swift */; };
 		7C65AC212D50F78F309C7105 /* MenuBarPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 345F52EC98978D2B8A0439EB /* MenuBarPopover.swift */; };
+		7C922A7F268962B08B1E4CF8 /* QuickMemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */; };
 		7D5001BA1778BFD2D3D9607B /* AttentionAnalyticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 387F464C45BF01C903A0D019 /* AttentionAnalyticsTests.swift */; };
 		7F1BC18A9C50425940C70DEC /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */; };
 		8004232786078535BE1E6842 /* AgentPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C07F54EF9D4748E93E3790 /* AgentPage.swift */; };
 		84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
 		853DD6929C384C8932D1626E /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D6422AFDFDFF4A0C229A93 /* FocusSession.swift */; };
+		87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658FBB3D526E45D220DD3A3A /* NumberField.swift */; };
 		89797B000FD3E42C96016E72 /* HotkeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */; };
 		89CC7ED84F662AE66906C38D /* SettingsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC54C82F858CC10262B1A3E /* SettingsRoot.swift */; };
 		8AE9D2079C15D42F575B9737 /* AttentionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098E315A72C4170158DD4C8 /* AttentionEvent.swift */; };
+		907C5CA32BE34AE21DEDCB6A /* StatsAggregateCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */; };
 		9187F8ED3C5941A72C6CF2C8 /* AppCategoryRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */; };
+		93D9F4D663EFE21581AA00F8 /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */; };
 		946449EA22D62F0085AFBC3E /* AppearancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */; };
 		9539A27FD1F5F353F5AC3C03 /* Chips.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A6B136440DF771D0649296 /* Chips.swift */; };
 		9712EAE85911517158098C74 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
 		A350A5EAE13EA123D76BFB02 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
 		A388D280BCC9EB6032282ECD /* TelemetryConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7295A6537FEB7087333AD889 /* TelemetryConfig.swift */; };
+		A5A899F873928691D361DCEE /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
 		A80C053F7415CA29695F7B8A /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
 		AA7A24CBAC88249FDEE03744 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */; };
 		AFED5C415142D67BF18348E0 /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F7CEFF27A23967523929A0 /* SettingsRow.swift */; };
 		B05C72919DCDF746B16E76A7 /* DataPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C3B4093C76333C488BBFBF /* DataPage.swift */; };
+		B1F39B69BED7B0EFA0DFD706 /* TelemetryConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7295A6537FEB7087333AD889 /* TelemetryConfig.swift */; };
 		B1FDF2D27147EDC228F00650 /* TelemetryConsentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */; };
 		B29EB188EB9DA958F8D7BBDA /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
+		B3528784509B495DC0B74EBF /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
 		B7080BB41ACDB7FB3340B3CE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D1F22FB5645934CB4A1A7D0F /* Assets.xcassets */; };
+		B8975E412D2FEA7E1E6773D8 /* TrackerStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D229B2D61814B74FA649C1 /* TrackerStateStore.swift */; };
+		B993B2B4F9A1B5B33F7810B8 /* SettingsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BE61B97897A531F7A58A68 /* SettingsCard.swift */; };
+		BD616B01DF26BD6082F4FD0E /* TelemetryConsentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */; };
 		C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */; };
+		C188D409EA4A7C34F06ADB97 /* ToastPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28560EC4AA259D92267C28F5 /* ToastPanel.swift */; };
+		C78A6683548FD6B079DBE7AB /* QuickMemoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A030D0949903C9FA062FB4D1 /* QuickMemoPanel.swift */; };
 		C9152C92297F1D3166835ECD /* MemoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B92287537E68101A2064BE /* MemoListView.swift */; };
 		CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
+		CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
 		CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */; };
 		D1693B32CB672067FC2B9645 /* NewsSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07CE27FF26C6BCFBE650785D /* NewsSourceStore.swift */; };
 		D1B01DA0AC4C7C042A3F2A5E /* StatsAggregateCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */; };
+		D29381D3B26885804DF53D7E /* StatsChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3449422DE95BD818E909C196 /* StatsChartView.swift */; };
+		D2F1BB8FB913F1F9E55F5A29 /* MemoPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F73EF78F2F5A2264DB659E4 /* MemoPage.swift */; };
+		D7282E6EE4EE7518C643767E /* HotkeyPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41F124D194AD141C45AD373 /* HotkeyPage.swift */; };
 		D73B107FF69D256E8EB3818C /* NewsSourceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */; };
+		D7AC6BC9D65AE62285D791EA /* DataPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C3B4093C76333C488BBFBF /* DataPage.swift */; };
+		D86AE09E168B67F6030C8D75 /* TelemetryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */; };
 		DC75971C572F7C2271E87F3C /* AttentionThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0327985821E5D309FC544549 /* AttentionThresholdStore.swift */; };
+		DE77B8B431013949F4432E0C /* DailyAttentionReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881B92C8DB05873BF8307228 /* DailyAttentionReport.swift */; };
 		E0E8E2D315CAAD284FAA4995 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
 		E31A23BC39CC496DE6A0AC67 /* AttentionAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB95F028C60D0DD5F0EEC47 /* AttentionAnalytics.swift */; };
 		E31A54EE84EC9A62F4FA971C /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 249ADDF9DA45E15FEBDF62D3 /* HotKey */; };
 		E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC8779891445802AEFEEDE5 /* NewsView.swift */; };
+		E66989622DD4CF4E1A1E623E /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
+		E959B94296644B9C3AF5AA8C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 99C698B2D6E31BC55CA99E28 /* Sparkle */; };
 		EA80346AF95E33D253BC6571 /* StatsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE1DBB9705778C054D58377 /* StatsPage.swift */; };
+		EC2A470059AF29664EC97895 /* SettingsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC54C82F858CC10262B1A3E /* SettingsRoot.swift */; };
+		EC50549718FC0C979520BDAF /* NewsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104D18F3AD23C0B95CC2E344 /* NewsPage.swift */; };
+		ECC230395CCF73ED85FA1661 /* NewsSourceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */; };
 		ECCAFFFD8FD947204F06304B /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */; };
 		ED32C74F4BFD97AFA63FF617 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA25DD516AA5500C0E0491CE /* Constants.swift */; };
+		EE8925923588F90EEF3046B3 /* MemoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B92287537E68101A2064BE /* MemoListView.swift */; };
 		F2C018E05B5982E4D56AFFE0 /* SettingsSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */; };
 		F4D9E259D17E0B935BAB22BE /* NewsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104D18F3AD23C0B95CC2E344 /* NewsPage.swift */; };
 		FA4C0EC8BCBD4E91B2FBD41A /* ManualSegmentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */; };
+		FFB67723BAB290AFB9E66A55 /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,6 +175,7 @@
 		28560EC4AA259D92267C28F5 /* ToastPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastPanel.swift; sourceTree = "<group>"; };
 		290A4E8AA4D19FB5DC5BB3CF /* GeneralPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPage.swift; sourceTree = "<group>"; };
 		30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderField.swift; sourceTree = "<group>"; };
+		34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateManager.swift; sourceTree = "<group>"; };
 		3449422DE95BD818E909C196 /* StatsChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsChartView.swift; sourceTree = "<group>"; };
 		3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyStore.swift; sourceTree = "<group>"; };
 		345F52EC98978D2B8A0439EB /* MenuBarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPopover.swift; sourceTree = "<group>"; };
@@ -120,6 +191,7 @@
 		5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUsageRecord.swift; sourceTree = "<group>"; };
 		5439DBA4DA11226E1FD32E0F /* TimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerView.swift; sourceTree = "<group>"; };
 		564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorong.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5781B69C3CC47679EB30841C /* Info-AppStore.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-AppStore.plist"; sourceTree = "<group>"; };
 		58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		658FBB3D526E45D220DD3A3A /* NumberField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumberField.swift; sourceTree = "<group>"; };
 		65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCategoryRule.swift; sourceTree = "<group>"; };
@@ -137,6 +209,7 @@
 		8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakTransitionIntent.swift; sourceTree = "<group>"; };
 		9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		93C3B4093C76333C488BBFBF /* DataPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPage.swift; sourceTree = "<group>"; };
+		97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorongAppStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTimelineView.swift; sourceTree = "<group>"; };
 		9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdlePromptPanel.swift; sourceTree = "<group>"; };
 		9F73EF78F2F5A2264DB659E4 /* MemoPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoPage.swift; sourceTree = "<group>"; };
@@ -179,6 +252,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				E31A54EE84EC9A62F4FA971C /* HotKey in Frameworks */,
+				E959B94296644B9C3AF5AA8C /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6014F09331C13E9CD77C4153 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2E1E8E3312ACD7939ACF39C4 /* HotKey in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -202,6 +284,14 @@
 				3C42F5CB9DC6F0371F6146C1 /* News */,
 			);
 			path = Pages;
+			sourceTree = "<group>";
+		};
+		096E81D0C25EC67C71392176 /* AppUpdate */ = {
+			isa = PBXGroup;
+			children = (
+				34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */,
+			);
+			path = AppUpdate;
 			sourceTree = "<group>";
 		};
 		1E4B4965F265FB7B10860E3E /* MenuBar */ = {
@@ -298,6 +388,7 @@
 		7E4B8A99BE669550C84D8049 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				096E81D0C25EC67C71392176 /* AppUpdate */,
 				E56EC08269797638E4600255 /* News */,
 				BAA43AF28AB4560AC194F9DB /* Telemetry */,
 			);
@@ -385,6 +476,7 @@
 			children = (
 				3B31DB4E51995E349060A4BF /* AppState.swift */,
 				7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */,
+				5781B69C3CC47679EB30841C /* Info-AppStore.plist */,
 				B07A535A9CDE7A856AF5AD5F /* Info.plist */,
 				A70162EC166B024EE7E3C3F4 /* Config */,
 				DFD55C04376EEF39F0CC487B /* Features */,
@@ -400,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */,
+				97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */,
 				466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */,
 			);
 			name = Products;
@@ -456,6 +549,7 @@
 			name = HorongHorong;
 			packageProductDependencies = (
 				249ADDF9DA45E15FEBDF62D3 /* HotKey */,
+				99C698B2D6E31BC55CA99E28 /* Sparkle */,
 			);
 			productName = HorongHorong;
 			productReference = 564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */;
@@ -479,6 +573,27 @@
 			productReference = 466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D026B071F981481544DCD6D6 /* HorongHorongAppStore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BEC54E89746AC94AC8B95D17 /* Build configuration list for PBXNativeTarget "HorongHorongAppStore" */;
+			buildPhases = (
+				25B5752A767B907757448F93 /* Sources */,
+				0784A3029776D5DDDDC97518 /* Copy News Runner Resources */,
+				5DAD3E47AFE419EEEBD82152 /* Resources */,
+				6014F09331C13E9CD77C4153 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HorongHorongAppStore;
+			packageProductDependencies = (
+				85C5FF338C0ED8D128A3F4A4 /* HotKey */,
+			);
+			productName = HorongHorongAppStore;
+			productReference = 97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -500,18 +615,28 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F1A21E0872267F4709DFA02E /* XCRemoteSwiftPackageReference "HotKey" */,
+				116E4D877BB3440B3621E016 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				3999572A8689F893F9B202D0 /* HorongHorong */,
+				D026B071F981481544DCD6D6 /* HorongHorongAppStore */,
 				9E17BC1D729C410B05AED9F6 /* HorongHorongTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		5DAD3E47AFE419EEEBD82152 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7676F5BE56FDF366D1FE8497 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BA29CBEDE63D494DAA4A8A3B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -523,6 +648,24 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0784A3029776D5DDDDC97518 /* Copy News Runner Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy News Runner Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nSRC=\"${PROJECT_DIR}/Agents/news_report\"\nDST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/news_report\"\nif [ ! -d \"$SRC\" ]; then\n  echo \"warning: News runner source not found: $SRC\"\n  exit 0\nfi\nmkdir -p \"$DST\"\nrsync -a --delete \\\n  --exclude '.venv' \\\n  --exclude '__pycache__' \\\n  --exclude '*.pyc' \\\n  --exclude '.DS_Store' \\\n  --exclude 'data' \\\n  \"$SRC/\" \"$DST/\"\n";
+		};
 		613E1507391BCB27408AF181 /* Copy News Runner Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -544,6 +687,79 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		25B5752A767B907757448F93 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09CA990DEC583F533576BEEF /* AboutPage.swift in Sources */,
+				138134C030882AFF017AC890 /* AgentPage.swift in Sources */,
+				533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */,
+				0C9BD0C654A4E26439111DD6 /* AppState.swift in Sources */,
+				760BEF844A5B3167F3E07AC4 /* AppTracker.swift in Sources */,
+				E66989622DD4CF4E1A1E623E /* AppUsageRecord.swift in Sources */,
+				59473582E6A58C3CB519A58D /* AppUsageSegment.swift in Sources */,
+				289FD0AD08D447CE4FB7EAF3 /* AppearancePage.swift in Sources */,
+				28B3CBFBC69FB131DF93FACF /* AttentionAnalytics.swift in Sources */,
+				31AB4AAABF2512AA4FC8C028 /* AttentionEvent.swift in Sources */,
+				1CAD7AB6A972872AB1B1522C /* AttentionThresholdStore.swift in Sources */,
+				B3528784509B495DC0B74EBF /* BreakTransitionIntent.swift in Sources */,
+				09A0D81D790A874E6630F035 /* CategoryManager.swift in Sources */,
+				695BCFFE660CE68416839EFC /* CategoryMappingPage.swift in Sources */,
+				4999BFE7F0B2D40FCBA447B6 /* CategoryPairStore.swift in Sources */,
+				7B8D2345A0F433866A97C450 /* Chips.swift in Sources */,
+				1AEDAFD28B0428145B525554 /* Constants.swift in Sources */,
+				DE77B8B431013949F4432E0C /* DailyAttentionReport.swift in Sources */,
+				FFB67723BAB290AFB9E66A55 /* DailyTimelineView.swift in Sources */,
+				D7AC6BC9D65AE62285D791EA /* DataPage.swift in Sources */,
+				44D9797D84B677ADC0CDFF21 /* FocusSession.swift in Sources */,
+				1A6C7DA23BA0F48C7DEFCC48 /* GeneralPage.swift in Sources */,
+				44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */,
+				CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */,
+				D7282E6EE4EE7518C643767E /* HotkeyPage.swift in Sources */,
+				7067CFF66B6206B3E78C1353 /* HotkeyRecorderField.swift in Sources */,
+				3A671FA2CC5885AEA2BBA419 /* HotkeyStore.swift in Sources */,
+				238B891522C7CEB45D85FAA8 /* IdlePromptPanel.swift in Sources */,
+				00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */,
+				5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */,
+				5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */,
+				EE8925923588F90EEF3046B3 /* MemoListView.swift in Sources */,
+				D2F1BB8FB913F1F9E55F5A29 /* MemoPage.swift in Sources */,
+				459C4946B373AF605B68A0E9 /* MenuBarPopover.swift in Sources */,
+				455676486F964D8A9685CFDB /* NewsJob.swift in Sources */,
+				EC50549718FC0C979520BDAF /* NewsPage.swift in Sources */,
+				20D4C350080049D6DC2D7E4E /* NewsPipelineService.swift in Sources */,
+				337238A044233AF174112531 /* NewsReportIndex.swift in Sources */,
+				ECC230395CCF73ED85FA1661 /* NewsSourceSheets.swift in Sources */,
+				1DDBA968DC3315CAA55EE0E0 /* NewsSourceStore.swift in Sources */,
+				2B8DEA8E72AC0CC016E86887 /* NewsView.swift in Sources */,
+				30D731ADD408AF38CC53CE5B /* NotificationManager.swift in Sources */,
+				87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */,
+				C78A6683548FD6B079DBE7AB /* QuickMemoPanel.swift in Sources */,
+				7C922A7F268962B08B1E4CF8 /* QuickMemoView.swift in Sources */,
+				B993B2B4F9A1B5B33F7810B8 /* SettingsCard.swift in Sources */,
+				EC2A470059AF29664EC97895 /* SettingsRoot.swift in Sources */,
+				78C38709A39CB5916E78C7FF /* SettingsRow.swift in Sources */,
+				6B9AE3B79B370DC4284245ED /* SettingsSection.swift in Sources */,
+				51C01295B928B8C3A7FEA701 /* SettingsSidebar.swift in Sources */,
+				32DE92C68823205EC789ECBA /* SettingsTheme.swift in Sources */,
+				907C5CA32BE34AE21DEDCB6A /* StatsAggregateCache.swift in Sources */,
+				D29381D3B26885804DF53D7E /* StatsChartView.swift in Sources */,
+				0001FB54B1AE562E58F819BA /* StatsDetailWindow.swift in Sources */,
+				35D80B553132B90DF264D277 /* StatsPage.swift in Sources */,
+				93D9F4D663EFE21581AA00F8 /* StatsSummaryView.swift in Sources */,
+				25B0E14F3F8559765D991402 /* SwiftDataStoreLocation.swift in Sources */,
+				D86AE09E168B67F6030C8D75 /* TelemetryClient.swift in Sources */,
+				B1F39B69BED7B0EFA0DFD706 /* TelemetryConfig.swift in Sources */,
+				BD616B01DF26BD6082F4FD0E /* TelemetryConsentStore.swift in Sources */,
+				5CEAD3C8F944905C91EE32A6 /* TimerManager.swift in Sources */,
+				A5A899F873928691D361DCEE /* TimerPage.swift in Sources */,
+				26AE35860542CB3B670B62AF /* TimerView.swift in Sources */,
+				C188D409EA4A7C34F06ADB97 /* ToastPanel.swift in Sources */,
+				B8975E412D2FEA7E1E6773D8 /* TrackerStateStore.swift in Sources */,
+				47E469E49FE2CA4A3564A585 /* WindowAccessor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		846A6832735890A7535AB965 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -553,6 +769,7 @@
 				9187F8ED3C5941A72C6CF2C8 /* AppCategoryRule.swift in Sources */,
 				5F9575D56F909341E5F91036 /* AppState.swift in Sources */,
 				E0E8E2D315CAAD284FAA4995 /* AppTracker.swift in Sources */,
+				0DA902D388B24F3F3018AE26 /* AppUpdateManager.swift in Sources */,
 				CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */,
 				016363067D14320E1F8074D5 /* AppUsageSegment.swift in Sources */,
 				946449EA22D62F0085AFBC3E /* AppearancePage.swift in Sources */,
@@ -640,6 +857,28 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		2F37DDB2B1509C63AF2BF7E5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 11B0CDCA7E10FBDDE98D737D /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				INFOPLIST_FILE = "HorongHorong/Info-AppStore.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app;
+				PRODUCT_NAME = "호롱호롱";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
 		4DC2625C77DF0E8AD7B63B22 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -700,6 +939,7 @@
 		};
 		55F7E83CE179E682FE6B348E /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 11B0CDCA7E10FBDDE98D737D /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
@@ -711,6 +951,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -DDIRECT_DISTRIBUTION";
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app;
 				PRODUCT_NAME = "호롱호롱";
 				SDKROOT = macosx;
@@ -737,8 +978,31 @@
 			};
 			name = Debug;
 		};
+		9368D8CE82DE58C8045839AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 11B0CDCA7E10FBDDE98D737D /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				INFOPLIST_FILE = "HorongHorong/Info-AppStore.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app;
+				PRODUCT_NAME = "호롱호롱";
+				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 		AD9C768759DCEDA2FEFFE8FB /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 11B0CDCA7E10FBDDE98D737D /* Base.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = NO;
@@ -750,6 +1014,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -DDIRECT_DISTRIBUTION";
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app;
 				PRODUCT_NAME = "호롱호롱";
 				SDKROOT = macosx;
@@ -871,9 +1136,26 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		BEC54E89746AC94AC8B95D17 /* Build configuration list for PBXNativeTarget "HorongHorongAppStore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F37DDB2B1509C63AF2BF7E5 /* Debug */,
+				9368D8CE82DE58C8045839AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		116E4D877BB3440B3621E016 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
 		F1A21E0872267F4709DFA02E /* XCRemoteSwiftPackageReference "HotKey" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soffes/HotKey.git";
@@ -889,6 +1171,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F1A21E0872267F4709DFA02E /* XCRemoteSwiftPackageReference "HotKey" */;
 			productName = HotKey;
+		};
+		85C5FF338C0ED8D128A3F4A4 /* HotKey */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1A21E0872267F4709DFA02E /* XCRemoteSwiftPackageReference "HotKey" */;
+			productName = HotKey;
+		};
+		99C698B2D6E31BC55CA99E28 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 116E4D877BB3440B3621E016 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

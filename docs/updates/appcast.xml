@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>HorongHorong Updates</title>
+    <link>https://jungjihyuk.github.io/horong-horong/updates/appcast.xml</link>
+    <description>Update feed for direct distribution builds.</description>
+  </channel>
+</rss>
