@@ -5,13 +5,13 @@ import Foundation
 final class MemoReminderLinkService {
     static let shared = MemoReminderLinkService()
 
-    private let eventStore = EKEventStore()
+    private var eventStore = EKEventStore()
 
     private init() {}
 
     func reminderLists() async throws -> [ReminderListOption] {
         try await requestAccessIfNeeded()
-        return eventStore.calendars(for: .reminder)
+        return writableReminderCalendars()
             .filter(\.allowsContentModifications)
             .map {
                 ReminderListOption(
@@ -22,6 +22,77 @@ final class MemoReminderLinkService {
             }
             .sorted {
                 if $0.isDefault != $1.isDefault { return $0.isDefault }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+    }
+
+    func reminderImportLists() async throws -> [ReminderListOption] {
+        try await requestFullAccessIfNeeded()
+        let calendars = reminderCalendarsWithRetry()
+        return calendars
+            .map {
+                ReminderListOption(
+                    id: $0.calendarIdentifier,
+                    title: $0.title,
+                    isDefault: $0.calendarIdentifier == eventStore.defaultCalendarForNewReminders()?.calendarIdentifier
+                )
+            }
+            .sorted {
+                if $0.isDefault != $1.isDefault { return $0.isDefault }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+    }
+
+    func reminderAccessDiagnostics() -> ReminderAccessDiagnostics {
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        refreshSources()
+        let calendars = eventStore.calendars(for: .reminder)
+        return ReminderAccessDiagnostics(
+            authorizationStatus: Self.statusDescription(status),
+            sourceCount: eventStore.sources.count,
+            reminderCalendarCount: calendars.count,
+            writableReminderCalendarCount: calendars.filter(\.allowsContentModifications).count
+        )
+    }
+
+    func reminderItems(calendarIDs: Set<String>? = nil) async throws -> [ReminderListItem] {
+        try await requestFullAccessIfNeeded()
+        let calendars = reminderCalendarsWithRetry()
+            .filter { calendar in
+                guard let calendarIDs else { return true }
+                return calendarIDs.contains(calendar.calendarIdentifier)
+            }
+        let predicate = eventStore.predicateForReminders(in: calendars)
+        let items: [ReminderListItem] = await withCheckedContinuation { continuation in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                Task { @MainActor in
+                    let items = (reminders ?? []).compactMap { reminder -> ReminderListItem? in
+                        guard let calendar = reminder.calendar else {
+                            return nil
+                        }
+                        return ReminderListItem(
+                            id: reminder.calendarItemIdentifier,
+                            title: reminder.title.nilIfEmpty ?? "제목 없음",
+                            notes: reminder.notes,
+                            url: reminder.url,
+                            startDate: Self.date(from: reminder.startDateComponents),
+                            dueDate: Self.date(from: reminder.dueDateComponents),
+                            calendarIdentifier: calendar.calendarIdentifier,
+                            calendarTitle: calendar.title,
+                            isCompleted: reminder.isCompleted
+                        )
+                    }
+                    continuation.resume(returning: items)
+                }
+            }
+        }
+
+        return items
+            .sorted {
+                if $0.isCompleted != $1.isCompleted { return !$0.isCompleted }
+                let left = $0.dueDate ?? .distantFuture
+                let right = $1.dueDate ?? .distantFuture
+                if left != right { return left < right }
                 return $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
     }
@@ -89,6 +160,50 @@ final class MemoReminderLinkService {
         }
     }
 
+    private func requestFullAccessIfNeeded() async throws {
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        switch status {
+        case .fullAccess, .authorized:
+            return
+        case .notDetermined:
+            let granted: Bool = try await withCheckedThrowingContinuation { continuation in
+                eventStore.requestFullAccessToReminders { granted, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: granted)
+                    }
+                }
+            }
+            guard granted else { throw MemoReminderError.accessDenied }
+        case .writeOnly:
+            throw MemoReminderError.fullAccessRequired
+        default:
+            throw MemoReminderError.accessDenied
+        }
+    }
+
+    private func writableReminderCalendars() -> [EKCalendar] {
+        refreshSources()
+        return eventStore.calendars(for: .reminder)
+    }
+
+    private func reminderCalendarsWithRetry() -> [EKCalendar] {
+        refreshSources()
+        var calendars = eventStore.calendars(for: .reminder)
+        if calendars.isEmpty {
+            eventStore.reset()
+            eventStore = EKEventStore()
+            refreshSources()
+            calendars = eventStore.calendars(for: .reminder)
+        }
+        return calendars
+    }
+
+    private func refreshSources() {
+        eventStore.refreshSourcesIfNecessary()
+    }
+
     private func existingReminder(for memo: Memo) -> EKReminder? {
         guard let identifier = memo.reminderIdentifier,
               let item = eventStore.calendarItem(withIdentifier: identifier) as? EKReminder else {
@@ -102,6 +217,12 @@ final class MemoReminderLinkService {
             return eventStore.defaultCalendarForNewReminders()
         }
         return eventStore.calendar(withIdentifier: identifier) ?? eventStore.defaultCalendarForNewReminders()
+    }
+
+    private static func date(from components: DateComponents?) -> Date? {
+        guard var components else { return nil }
+        components.calendar = components.calendar ?? Calendar.current
+        return components.date
     }
 
     private func reminderContent(for memo: Memo) -> ReminderContent {
@@ -167,12 +288,50 @@ final class MemoReminderLinkService {
             return error
         }
     }
+
+    private static func statusDescription(_ status: EKAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined:
+            return "notDetermined"
+        case .restricted:
+            return "restricted"
+        case .denied:
+            return "denied"
+        case .authorized:
+            return "authorized"
+        case .writeOnly:
+            return "writeOnly"
+        case .fullAccess:
+            return "fullAccess"
+        @unknown default:
+            return "unknown"
+        }
+    }
 }
 
-struct ReminderListOption: Identifiable, Hashable {
+struct ReminderListOption: Identifiable, Hashable, Sendable {
     let id: String
     let title: String
     let isDefault: Bool
+}
+
+struct ReminderListItem: Identifiable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let notes: String?
+    let url: URL?
+    let startDate: Date?
+    let dueDate: Date?
+    let calendarIdentifier: String
+    let calendarTitle: String
+    let isCompleted: Bool
+}
+
+struct ReminderAccessDiagnostics: Hashable, Sendable {
+    let authorizationStatus: String
+    let sourceCount: Int
+    let reminderCalendarCount: Int
+    let writableReminderCalendarCount: Int
 }
 
 private struct ReminderContent {
@@ -192,6 +351,7 @@ enum MemoReminderError: LocalizedError {
     case saveFailed
     case removeFailed
     case calendarUnavailable
+    case fullAccessRequired
 
     var errorDescription: String? {
         switch self {
@@ -203,6 +363,8 @@ enum MemoReminderError: LocalizedError {
             return "미리알림 삭제에 실패했습니다."
         case .calendarUnavailable:
             return "선택한 미리알림 목록에 저장할 수 없습니다. 다른 목록을 선택해 주세요."
+        case .fullAccessRequired:
+            return "미리알림 목록을 가져오려면 전체 접근 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 미리 알림에서 호롱호롱 권한을 다시 허용해 주세요."
         }
     }
 }

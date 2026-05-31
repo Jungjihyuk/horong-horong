@@ -237,21 +237,16 @@ struct CategoryMappingPage: View {
                 }
                 .buttonStyle(.borderless)
                 .help("기본 카테고리로 되돌리기")
-            } else if rule.isUserDefined {
-                Button(role: .destructive) {
-                    deleteRule(rule)
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
-                .help("사용자 규칙 삭제")
-            } else {
-                Image(systemName: "lock")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .help("기본 규칙은 삭제 불가, 카테고리 수정 또는 기본값 복원만 지원")
             }
+
+            Button(role: .destructive) {
+                deleteRule(rule)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.borderless)
+            .help(rule.isUserDefined ? "사용자 규칙 삭제" : "기본 규칙 삭제")
         }
     }
 
@@ -601,7 +596,9 @@ struct CategoryMappingPage: View {
         let existingRules = (try? modelContext.fetch(descriptor)) ?? []
         let existingBundleIds = Set(existingRules.map(\.bundleIdentifier))
 
-        for rule in Constants.defaultCategoryRules where !existingBundleIds.contains(rule.bundleId) {
+        for rule in Constants.defaultCategoryRules
+            where !existingBundleIds.contains(rule.bundleId)
+                && !Constants.isDefaultCategoryRuleHidden(rule.bundleId) {
             modelContext.insert(AppCategoryRule(
                 bundleIdentifier: rule.bundleId,
                 appName: rule.appName,
@@ -618,9 +615,11 @@ struct CategoryMappingPage: View {
         guard !bundleId.isEmpty, !appName.isEmpty else { return }
 
         if let existing = categoryRules.first(where: { $0.bundleIdentifier == bundleId }) {
+            Constants.restoreDefaultCategoryRule(bundleId)
             existing.appName = appName
             updateRule(existing, category: newCategory)
         } else {
+            Constants.restoreDefaultCategoryRule(bundleId)
             let rule = AppCategoryRule(
                 bundleIdentifier: bundleId,
                 appName: appName,
@@ -636,9 +635,11 @@ struct CategoryMappingPage: View {
         rule.category = category
         if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
            defaultRule.category == category {
+            Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
             rule.isUserDefined = false
             CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
         } else {
+            Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
             rule.isUserDefined = true
             CategoryManager.shared.setUserRule(bundleIdentifier: rule.bundleIdentifier, category: category)
         }
@@ -647,12 +648,13 @@ struct CategoryMappingPage: View {
     }
 
     private func canResetRule(_ rule: AppCategoryRule) -> Bool {
-        guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier) else { return false }
+        guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) else { return false }
         return rule.isUserDefined || rule.category != defaultRule.category
     }
 
     private func resetRuleToDefault(_ rule: AppCategoryRule) {
-        guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier) else { return }
+        guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) else { return }
+        Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
         rule.appName = defaultRule.appName
         rule.category = defaultRule.category
         rule.isUserDefined = false
@@ -662,6 +664,9 @@ struct CategoryMappingPage: View {
     }
 
     private func deleteRule(_ rule: AppCategoryRule) {
+        if Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) != nil {
+            Constants.hideDefaultCategoryRule(rule.bundleIdentifier)
+        }
         modelContext.delete(rule)
         try? modelContext.save()
         CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)

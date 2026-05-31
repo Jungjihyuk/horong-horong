@@ -168,8 +168,36 @@ enum Constants {
     // MARK: - 모든 카테고리 목록
     static var allCategories: [String] { CategoryStore.shared.categoryNames }
 
-    static func defaultCategoryRule(for bundleIdentifier: String) -> (bundleId: String, appName: String, category: String)? {
-        defaultCategoryRules.first { $0.bundleId == bundleIdentifier }
+    static func defaultCategoryRule(
+        for bundleIdentifier: String,
+        includingHidden: Bool = false
+    ) -> (bundleId: String, appName: String, category: String)? {
+        guard includingHidden || !isDefaultCategoryRuleHidden(bundleIdentifier) else { return nil }
+        return defaultCategoryRules.first { $0.bundleId == bundleIdentifier }
+    }
+
+    static func isDefaultCategoryRuleHidden(_ bundleIdentifier: String) -> Bool {
+        hiddenDefaultCategoryRuleBundleIDs.contains(bundleIdentifier)
+    }
+
+    static func hideDefaultCategoryRule(_ bundleIdentifier: String) {
+        var ids = hiddenDefaultCategoryRuleBundleIDs
+        ids.insert(bundleIdentifier)
+        saveHiddenDefaultCategoryRuleBundleIDs(ids)
+    }
+
+    static func restoreDefaultCategoryRule(_ bundleIdentifier: String) {
+        var ids = hiddenDefaultCategoryRuleBundleIDs
+        ids.remove(bundleIdentifier)
+        saveHiddenDefaultCategoryRuleBundleIDs(ids)
+    }
+
+    private static var hiddenDefaultCategoryRuleBundleIDs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs) ?? [])
+    }
+
+    private static func saveHiddenDefaultCategoryRuleBundleIDs(_ ids: Set<String>) {
+        UserDefaults.standard.set(Array(ids).sorted(), forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
     }
 
     // MARK: - 화면에서 숨길 과거/폐기 카테고리 (데이터에 남아있어도 렌더링 제외)
@@ -356,6 +384,9 @@ enum Constants {
         static let anonymousTelemetryEnabled = "telemetry.anonymousEnabled"
         static let anonymousTelemetryPrompted = "telemetry.anonymousPrompted"
         static let anonymousInstallId = "telemetry.anonymousInstallId"
+        static let remindersImportEnabled = "memo.remindersImportEnabled"
+        static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
+        static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
     }
 
     // MARK: - 메뉴바 표시 형식
