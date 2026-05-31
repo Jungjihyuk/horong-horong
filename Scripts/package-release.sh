@@ -11,22 +11,27 @@ BUILD_NUMBER="${BUILD_NUMBER:-}"
 SCHEME="${SCHEME:-HorongHorong}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$PROJECT_ROOT/build/DerivedData}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$PROJECT_ROOT/HorongHorong/HorongHorong.entitlements}"
+SKIP_SIGN=0
 SKIP_BUILD=0
 SKIP_MAIN_CHECK=0
 
 usage() {
   cat <<'EOF'
 Usage:
-  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>] [--skip-build] [--skip-main-check]
+  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>] [--skip-build] [--skip-main-check] [--skip-sign]
 
 Defaults:
   --app      build Release/호롱호롱.app from the current main branch checkout
   --version  MARKETING_VERSION from project.yml
   --output   project root
+  signing    ad-hoc sign with HorongHorong.entitlements before packaging
 
 Environment overrides:
   APP_PATH=/path/to/호롱호롱.app VERSION=0.1.2 OUTPUT_DIR=dist Scripts/package-release.sh
   SCHEME=HorongHorong CONFIGURATION=Release DERIVED_DATA_PATH=build/DerivedData Scripts/package-release.sh
+  SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" Scripts/package-release.sh
 EOF
 }
 
@@ -107,6 +112,41 @@ validate_app_version() {
   fi
 }
 
+sign_app() {
+  if [[ "$SKIP_SIGN" -eq 1 ]]; then
+    echo "Skipping app signing"
+    return
+  fi
+
+  if [[ ! -f "$ENTITLEMENTS_PATH" ]]; then
+    echo "Entitlements file not found: $ENTITLEMENTS_PATH" >&2
+    exit 1
+  fi
+
+  local executable_name executable_path signed_executable
+  executable_name="$(plist_value "$APP_PATH/Contents/Info.plist" "CFBundleExecutable")"
+  executable_path="$APP_PATH/Contents/MacOS/$executable_name"
+  signed_executable="$(mktemp "${TMPDIR:-/tmp}/horonghorong-main.XXXXXX")"
+
+  echo "Signing app with identity: $SIGN_IDENTITY"
+  cp "$executable_path" "$signed_executable"
+  codesign --force --sign "$SIGN_IDENTITY" --timestamp=none "$signed_executable"
+  cp "$signed_executable" "$executable_path"
+  rm -f "$signed_executable"
+
+  codesign \
+    --force \
+    --sign "$SIGN_IDENTITY" \
+    --timestamp=none \
+    --entitlements "$ENTITLEMENTS_PATH" \
+    "$APP_PATH"
+
+  if ! codesign -d --entitlements :- "$APP_PATH" 2>/dev/null | grep -q "com.apple.security.personal-information.calendars"; then
+    echo "Signed app is missing reminders/calendar entitlement." >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --app)
@@ -127,6 +167,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-main-check)
       SKIP_MAIN_CHECK=1
+      shift
+      ;;
+    --skip-sign)
+      SKIP_SIGN=1
       shift
       ;;
     -h|--help)
@@ -174,6 +218,7 @@ if [[ ! -d "$APP_PATH" ]]; then
 fi
 
 validate_app_version
+sign_app
 
 mkdir -p "$OUTPUT_DIR"
 
