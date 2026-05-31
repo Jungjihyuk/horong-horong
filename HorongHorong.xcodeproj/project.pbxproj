@@ -878,6 +878,7 @@
 				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = YES;
+				EXECUTABLE_NAME = HorongHorong;
 				INFOPLIST_FILE = "HorongHorong/Info-AppStore.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -958,6 +959,7 @@
 				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				EXECUTABLE_NAME = HorongHorong;
 				INFOPLIST_FILE = HorongHorong/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -999,6 +1001,7 @@
 				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = YES;
+				EXECUTABLE_NAME = HorongHorong;
 				INFOPLIST_FILE = "HorongHorong/Info-AppStore.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1021,6 +1024,7 @@
 				CODE_SIGN_ENTITLEMENTS = HorongHorong/HorongHorong.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				EXECUTABLE_NAME = HorongHorong;
 				INFOPLIST_FILE = HorongHorong/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

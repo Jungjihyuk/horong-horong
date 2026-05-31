@@ -26,7 +26,7 @@ Defaults:
   --app      build Release/호롱호롱.app from the current main branch checkout
   --version  MARKETING_VERSION from project.yml
   --output   project root
-  signing    ad-hoc sign with HorongHorong.entitlements before packaging
+  signing    build with ad-hoc signing and HorongHorong.entitlements before packaging
 
 Environment overrides:
   APP_PATH=/path/to/호롱호롱.app VERSION=0.1.2 OUTPUT_DIR=dist Scripts/package-release.sh
@@ -84,6 +84,8 @@ build_release_app() {
     -configuration "$CONFIGURATION" \
     -destination 'platform=macOS' \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    CODE_SIGNING_ALLOWED=YES \
+    CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     build
 
   APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/호롱호롱.app"
@@ -112,9 +114,9 @@ validate_app_version() {
   fi
 }
 
-sign_app() {
+validate_app_signature() {
   if [[ "$SKIP_SIGN" -eq 1 ]]; then
-    echo "Skipping app signing"
+    echo "Skipping app signature validation"
     return
   fi
 
@@ -123,23 +125,8 @@ sign_app() {
     exit 1
   fi
 
-  local executable_name executable_path signed_executable
-  executable_name="$(plist_value "$APP_PATH/Contents/Info.plist" "CFBundleExecutable")"
-  executable_path="$APP_PATH/Contents/MacOS/$executable_name"
-  signed_executable="$(mktemp "${TMPDIR:-/tmp}/horonghorong-main.XXXXXX")"
-
-  echo "Signing app with identity: $SIGN_IDENTITY"
-  cp "$executable_path" "$signed_executable"
-  codesign --force --sign "$SIGN_IDENTITY" --timestamp=none "$signed_executable"
-  cp "$signed_executable" "$executable_path"
-  rm -f "$signed_executable"
-
-  codesign \
-    --force \
-    --sign "$SIGN_IDENTITY" \
-    --timestamp=none \
-    --entitlements "$ENTITLEMENTS_PATH" \
-    "$APP_PATH"
+  echo "Validating app signature"
+  codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
   if ! codesign -d --entitlements :- "$APP_PATH" 2>/dev/null | grep -q "com.apple.security.personal-information.calendars"; then
     echo "Signed app is missing reminders/calendar entitlement." >&2
@@ -218,7 +205,7 @@ if [[ ! -d "$APP_PATH" ]]; then
 fi
 
 validate_app_version
-sign_app
+validate_app_signature
 
 mkdir -p "$OUTPUT_DIR"
 
