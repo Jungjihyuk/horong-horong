@@ -356,6 +356,8 @@ enum Constants {
         static let anonymousTelemetryEnabled = "telemetry.anonymousEnabled"
         static let anonymousTelemetryPrompted = "telemetry.anonymousPrompted"
         static let anonymousInstallId = "telemetry.anonymousInstallId"
+        static let remindersImportEnabled = "memo.remindersImportEnabled"
+        static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
     }
 
     // MARK: - 메뉴바 표시 형식

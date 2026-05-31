@@ -61,7 +61,8 @@ targets:
         PRODUCT_NAME: 호롱호롱
         EXECUTABLE_NAME: HorongHorong
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_ALLOWED: "YES"
+        CODE_SIGN_IDENTITY: "-"
         ENABLE_APP_SANDBOX: "NO"
         OTHER_SWIFT_FLAGS: "$(inherited) -DDIRECT_DISTRIBUTION"
         SWIFT_STRICT_CONCURRENCY: minimal
