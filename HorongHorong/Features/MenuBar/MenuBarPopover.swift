@@ -53,15 +53,29 @@ struct MenuBarPopover: View {
             }
         }
         .frame(width: Constants.popoverWidth, height: Constants.popoverMaxHeight, alignment: .top)
-        .background(PopoverChrome.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(PopoverChrome.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous)
+                .strokeBorder(PopoverChrome.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.28), radius: 30, x: 0, y: 18)
+        .configureHostWindow(configurePopoverHostWindow)
         .onAppear {
             showTelemetryConsentPrompt = TelemetryConsentStore.shouldPromptForConsent
+        }
+    }
+
+    private func configurePopoverHostWindow(_ window: NSWindow) {
+        window.isOpaque = false
+        window.backgroundColor = .clear
+
+        for view in [window.contentView, window.contentView?.superview].compactMap({ $0 }) {
+            view.wantsLayer = true
+            view.layer?.backgroundColor = NSColor.clear.cgColor
+            view.layer?.cornerRadius = PopoverChrome.panelRadius
+            view.layer?.cornerCurve = .continuous
+            view.layer?.masksToBounds = true
         }
     }
 
@@ -241,6 +255,7 @@ struct MenuBarPopover: View {
 }
 
 enum PopoverChrome {
+    static let panelRadius: CGFloat = 22
     static let ink = Color(red: 0.23, green: 0.16, blue: 0.10)
     static let inkSecondary = Color(red: 0.48, green: 0.36, blue: 0.27)
     static let inkTertiary = Color(red: 0.64, green: 0.52, blue: 0.39)
