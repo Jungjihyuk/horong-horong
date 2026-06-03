@@ -381,8 +381,7 @@ struct AgentExperimentView: View {
                             .foregroundStyle(PopoverChrome.ink)
                     }
                     Spacer()
-                    Stepper("", value: $planDayCount, in: 1...30)
-                        .labelsHidden()
+                    planDayControl
                 }
                 .popoverCard()
 
@@ -435,6 +434,45 @@ struct AgentExperimentView: View {
         }
     }
 
+    private var planDayControl: some View {
+        VStack(spacing: 0) {
+            Button {
+                updatePlanDayCount(by: 1)
+            } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 30, height: 15)
+                    .contentShape(Rectangle())
+            }
+            .disabled(planDayCount >= 30)
+            .help("계획 일수 늘리기")
+            .contentShape(Rectangle())
+
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(width: 18, height: 1)
+
+            Button {
+                updatePlanDayCount(by: -1)
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 30, height: 15)
+                    .contentShape(Rectangle())
+            }
+            .disabled(planDayCount <= 1)
+            .help("계획 일수 줄이기")
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(PopoverChrome.inkSecondary)
+        .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(PopoverChrome.divider, lineWidth: 1)
+        )
+    }
+
     private var agentSelector: some View {
         HStack(spacing: 6) {
             ForEach(representativeAgentTypes, id: \.self) { agent in
@@ -465,6 +503,10 @@ struct AgentExperimentView: View {
 
     private var representativeAgentTypes: [String] {
         Constants.normalizedRepresentativeAgentTypes(from: representativeAgentTypesRaw)
+    }
+
+    private func updatePlanDayCount(by delta: Int) {
+        planDayCount = min(30, max(1, planDayCount + delta))
     }
 
     private func agentTypeFill(for agent: String) -> Color {
