@@ -57,15 +57,24 @@ struct AgentPage: View {
                 }
                 SettingsRow(
                     "빠른 선택 Agent",
-                    subtitle: "Agent 탭 버튼에 표시할 Agent를 최대 3개까지 고릅니다."
+                    subtitle: "선택한 순서대로 Agent 탭에 표시할 Agent를 최대 3개까지 고릅니다."
                 ) {
                     FlowLayout(spacing: 6) {
                         ForEach(Constants.availableAgentTypes, id: \.self) { agent in
                             Button {
                                 toggleRepresentativeAgent(agent)
                             } label: {
-                                Text(agent)
-                                    .font(.caption.weight(.semibold))
+                                HStack(spacing: 5) {
+                                    if let order = representativeAgentOrder(for: agent) {
+                                        Text("\(order)")
+                                            .font(.caption2.monospacedDigit().weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 16, height: 16)
+                                            .background(Circle().fill(Color.accentColor))
+                                    }
+                                    Text(agent)
+                                        .font(.caption.weight(.semibold))
+                                }
                             }
                             .buttonStyle(.bordered)
                             .tint(representativeAgentTypes.contains(agent) ? .accentColor : .secondary)
@@ -78,12 +87,12 @@ struct AgentPage: View {
                     "계획 일수",
                     subtitle: "한 번에 생성할 실험 계획의 일수."
                 ) {
-                    Stepper("\(planDayCount)일", value: $planDayCount, in: 1...30)
-                        .labelsHidden()
                     Text("\(planDayCount)일")
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .frame(width: 40, alignment: .trailing)
+                    Stepper("\(planDayCount)일", value: $planDayCount, in: 1...30)
+                        .labelsHidden()
                 }
             }
 
@@ -155,6 +164,10 @@ struct AgentPage: View {
             agents.append(agent)
         }
         representativeAgentTypesRaw = agents.joined(separator: ",")
+    }
+
+    private func representativeAgentOrder(for agent: String) -> Int? {
+        representativeAgentTypes.firstIndex(of: agent).map { $0 + 1 }
     }
 
     private func addKeyword() {

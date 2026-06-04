@@ -11,6 +11,8 @@ struct KeywordChip: View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.caption)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             Button(action: onDelete) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
@@ -147,11 +149,17 @@ struct FlowLayout: Layout {
         var maxX: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            var size = subview.sizeThatFits(.unspecified)
+            if width.isFinite, size.width > width {
+                size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            }
             if x + size.width > width, x > 0 {
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
+                if width.isFinite, size.width > width {
+                    size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+                }
             }
             positions.append(CGRect(x: x, y: y, width: size.width, height: size.height))
             x += size.width + spacing
