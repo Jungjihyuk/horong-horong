@@ -44,6 +44,9 @@ python -m evals.research_run_metrics \
 - provider 평균 latency
 - schema별 호출 수
 - repair rate. 현재 repair trace가 없으면 `null`로 표시한다.
+- structured output reliability. `provider_completed` payload의 `repair_attempted`(bool)로
+  1차 성공 / repair 복구 / 최종 실패를 분해해 `firstPassRate`, `repairRecoveryRate`,
+  `finalFailureRate`를 계산한다. repair 필드가 없으면 repair 의존 비율은 `null`이다.
 
 ### compare_provider_metrics.py
 
