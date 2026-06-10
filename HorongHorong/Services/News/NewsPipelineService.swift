@@ -379,8 +379,10 @@ final class NewsPipelineService: @unchecked Sendable {
         let resultPath = "\(tempDir)/\(jobId)_result.json"
         let logDir = "\(dataBasePath)/data/logs"
         let logPath = "\(logDir)/job-\(jobId).log"
+        let traceDir = "\(dataBasePath)/data/traces"
+        let tracePath = "\(traceDir)/job-\(jobId).jsonl"
 
-        // Create directories: <root>/data/reports for .md, <root>/data/logs for logs, <root>/data/meta for .meta.json
+        // Create directories: <root>/data/reports for .md, <root>/data/logs for logs, <root>/data/meta for .meta.json, <root>/data/traces for analysis JSONL
         try? FileManager.default.createDirectory(atPath: logDir, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(
             atPath: "\(dataBasePath)/data/reports",
@@ -390,6 +392,7 @@ final class NewsPipelineService: @unchecked Sendable {
             atPath: "\(dataBasePath)/data/meta",
             withIntermediateDirectories: true
         )
+        try? FileManager.default.createDirectory(atPath: traceDir, withIntermediateDirectories: true)
 
         // 설정 창의 NewsSourceStore 에서 사용자가 등록한 소스를 그대로 받아온다.
         // 사용자 interest_keywords 를 google_news / yozm_it 의 검색어로 전파해 fetch 범위가 키워드에 따라 달라지게 한다.
@@ -455,6 +458,7 @@ final class NewsPipelineService: @unchecked Sendable {
             "--request", requestPath,
             "--result", resultPath,
             "--log", logPath,
+            "--trace-log", tracePath,
         ]
         proc.environment = environment
 
