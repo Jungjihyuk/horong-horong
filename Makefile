@@ -39,3 +39,26 @@ compare-provider-metrics:
 		exit 1; \
 	fi; \
 	cd Agents/news_report && uv run python -m evals.compare_provider_metrics $$METRICS_ARGS --output /tmp/Horong/metrics/provider-comparison.json
+
+# 앱이 생성한 data 폴더에서 최신 meta+trace를 찾아 run metrics(구조화 출력 신뢰도 포함)를 집계한다.
+# BASE는 환경/설정에 따라 다르므로 인자로 받는다. (= <agent root>/.../data, 보통 traces/ meta/ 하위 폴더를 가진 곳)
+# 사용: make run-metrics BASE="/path/to/data"
+# 예:   make run-metrics BASE="$$HOME/Documents/.../Experiment/Reports/data"
+run-metrics:
+	@if [ -z "$(BASE)" ]; then \
+		echo "Usage: make run-metrics BASE=\"/path/to/data\"  (traces/, meta/ 를 포함한 폴더)"; \
+		exit 1; \
+	fi; \
+	META="$$(ls -t "$(BASE)"/meta/*.json 2>/dev/null | head -1)"; \
+	TRACE="$$(ls -t "$(BASE)"/traces/*.jsonl 2>/dev/null | head -1)"; \
+	if [ -z "$$TRACE" ]; then \
+		echo "trace 파일을 찾지 못했습니다: $(BASE)/traces/*.jsonl"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$META" ]; then \
+		echo "meta 파일을 찾지 못했습니다: $(BASE)/meta/*.json (job이 끝나야 meta가 생성됩니다)"; \
+		exit 1; \
+	fi; \
+	echo "meta : $$META"; \
+	echo "trace: $$TRACE"; \
+	cd Agents/news_report && uv run python -m evals.research_run_metrics --meta "$$META" --trace "$$TRACE"

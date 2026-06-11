@@ -17,6 +17,11 @@ StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
 class BaseCliProvider(ABC):
     timeout: int = 120
 
+    # 직전 generate_json 호출에서 repair(검증 실패 후 재생성)가 발생했는지를 노출한다.
+    # TracedStructuredProvider(envelope)가 호출 직후 이 값을 읽어 trace payload에 싣는다.
+    # 주의: 호출 사이에 유지되는 상태라 순차 호출(현재 파이프라인 구조)에서만 정확하다.
+    _last_repair_attempted: bool = False
+
     @abstractmethod
     def _build_command(self, prompt: str) -> list[str]:
         pass
@@ -51,6 +56,7 @@ class BaseCliProvider(ABC):
         options: ProviderOptions | None = None,
     ) -> StructuredModel:
         """CLI agent 응답을 JSON으로 파싱하고 Pydantic 모델로 검증한다."""
+        self._last_repair_attempted = False
         raw = self.generate_text(
             build_structured_prompt(prompt, schema_model),
             options=options,
@@ -58,6 +64,7 @@ class BaseCliProvider(ABC):
         try:
             return validate_json_response(raw, schema_model)
         except (json.JSONDecodeError, ValueError, ValidationError) as error:
+            self._last_repair_attempted = True
             repair_raw = self.generate_text(
                 build_json_repair_prompt(raw, schema_model, error),
                 options=options,

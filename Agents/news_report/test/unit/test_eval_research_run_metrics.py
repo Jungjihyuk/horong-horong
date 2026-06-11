@@ -8,7 +8,11 @@ from typing import cast
 
 import pytest
 
-from evals.research_run_metrics import main, research_run_metrics
+from evals.research_run_metrics import (
+    main,
+    research_run_metrics,
+    structured_output_reliability,
+)
 
 
 # 시나리오 1. meta와 trace 파일에서 provider 비교용 정량 지표를 계산한다.
@@ -159,3 +163,66 @@ def test_research_run_metrics_cli__output_path__writes_metrics_json(tmp_path: Pa
     )
     assert metrics["jobId"] == "job-1"
     assert metrics["providerCalls"] == 0
+
+
+# 시나리오 3. repair_attempted 필드가 있을 때 1차/복구/실패 비율을 분해한다.
+@pytest.mark.unit
+def test_structured_output_reliability__mixed_outcomes__computes_three_rates():
+    # Given: 1차 성공 2건, repair 복구 1건, 최종 실패 1건의 trace 이벤트.
+    events = [
+        {"event": "provider_completed", "payload": {"repair_attempted": False}},
+        {"event": "provider_completed", "payload": {"repair_attempted": False}},
+        {"event": "provider_completed", "payload": {"repair_attempted": True}},
+        {"event": "provider_failed", "payload": {}},
+    ]
+
+    # When: 구조화 출력 신뢰도 지표를 계산한다.
+    reliability = structured_output_reliability(events)
+
+    # Then: 총 4회 중 1차 성공률 0.5, repair 복구율 0.5, 최종 실패율 0.25.
+    assert reliability["totalCalls"] == 4
+    assert reliability["firstPassSuccesses"] == 2
+    assert reliability["repairedSuccesses"] == 1
+    assert reliability["failures"] == 1
+    assert reliability["firstPassRate"] == 0.5
+    assert reliability["repairRecoveryRate"] == 0.5
+    assert reliability["finalFailureRate"] == 0.25
+
+
+# 시나리오 4. repair_attempted 필드가 없으면 repair 의존 비율은 None이다.
+@pytest.mark.unit
+def test_structured_output_reliability__no_repair_field__repair_rates_none():
+    # Given: repair_attempted 필드가 없는 완료 2건과 실패 1건.
+    events = [
+        {"event": "provider_completed", "payload": {"schema": "RelevanceJudgment"}},
+        {"event": "provider_completed", "payload": {"schema": "RelevanceJudgment"}},
+        {"event": "provider_failed", "payload": {"schema": "RelevanceJudgment"}},
+    ]
+
+    # When: 구조화 출력 신뢰도 지표를 계산한다.
+    reliability = structured_output_reliability(events)
+
+    # Then: repair 구분 불가 → 관련 비율은 None, 최종 실패율만 계산된다.
+    assert reliability["totalCalls"] == 3
+    assert reliability["firstPassSuccesses"] == 0
+    assert reliability["repairedSuccesses"] == 0
+    assert reliability["failures"] == 1
+    assert reliability["firstPassRate"] is None
+    assert reliability["repairRecoveryRate"] is None
+    assert reliability["finalFailureRate"] == pytest.approx(1 / 3)
+
+
+# 시나리오 5. 호출이 전혀 없으면 모든 비율이 None이다.
+@pytest.mark.unit
+def test_structured_output_reliability__no_calls__all_rates_none():
+    # Given: provider 호출 이벤트가 없는 trace.
+    events = [{"event": "stage_started", "payload": {}}]
+
+    # When: 구조화 출력 신뢰도 지표를 계산한다.
+    reliability = structured_output_reliability(events)
+
+    # Then: 분모가 0 → 모든 비율 None.
+    assert reliability["totalCalls"] == 0
+    assert reliability["firstPassRate"] is None
+    assert reliability["repairRecoveryRate"] is None
+    assert reliability["finalFailureRate"] is None
