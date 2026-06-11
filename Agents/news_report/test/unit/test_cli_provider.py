@@ -177,3 +177,45 @@ def test_cli_provider__invalid_json_schema__raises_validation_error():
         _ = provider.generate_json("judge relevance", RelevanceJudgment)
 
     assert any(err["loc"] == ("score",) for err in error.value.errors())
+
+
+_VALID_JUDGMENT_PAYLOAD = {
+    "item_id": "item-1",
+    "is_relevant": True,
+    "score": 0.8,
+    "threshold": 0.7,
+    "matched_keywords": ["AI agent"],
+    "reason": "AI agent workflow를 직접 다루므로 관심사와 관련이 높다.",
+    "method": "llm",
+}
+
+
+# 시나리오 7. 1차에 성공하면 repair 플래그가 False다.
+@pytest.mark.unit
+def test_cli_provider__first_pass_success__repair_flag_false():
+    # Given: 유효한 JSON을 바로 반환하는 CLI provider fake를 준비한다.
+    provider = FakeCliProvider(json.dumps(_VALID_JUDGMENT_PAYLOAD, ensure_ascii=False))
+
+    # When: structured generation을 실행한다.
+    _ = provider.generate_json("judge relevance", RelevanceJudgment)
+
+    # Then: repair가 일어나지 않았으므로 플래그는 False다.
+    assert provider._last_repair_attempted is False
+
+
+# 시나리오 8. 1차 실패 후 repair로 복구하면 repair 플래그가 True다.
+@pytest.mark.unit
+def test_cli_provider__repair_success__repair_flag_true():
+    # Given: 첫 응답은 설명문, 두 번째는 유효 JSON인 CLI provider fake를 준비한다.
+    provider = QueueCliProvider(
+        [
+            "관련성이 높습니다. 점수는 0.8입니다.",
+            json.dumps(_VALID_JUDGMENT_PAYLOAD, ensure_ascii=False),
+        ]
+    )
+
+    # When: structured generation을 실행한다.
+    _ = provider.generate_json("judge relevance", RelevanceJudgment)
+
+    # Then: repair가 발생했으므로 플래그는 True다.
+    assert provider._last_repair_attempted is True

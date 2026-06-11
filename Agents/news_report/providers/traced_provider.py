@@ -77,6 +77,7 @@ class TracedStructuredProvider:
                 duration_ms=elapsed_ms(started_at),
                 payload={
                     **payload,
+                    **self._repair_payload(),
                     "error_type": type(error).__name__,
                     "error_message": str(error)[:500],
                 },
@@ -89,10 +90,23 @@ class TracedStructuredProvider:
             duration_ms=elapsed_ms(started_at),
             payload={
                 **payload,
+                **self._repair_payload(),
                 "result_model": result.__class__.__name__,
             },
         )
         return result
+
+    def _repair_payload(self) -> dict[str, object]:
+        """wrapped provider가 repair 여부를 노출하면 payload에 싣는다.
+
+        BaseCliProvider는 직전 generate_json에서 repair가 발생했는지를
+        `_last_repair_attempted`로 노출한다. Ollama처럼 native structured output을
+        쓰는 provider는 이 속성이 없어 repair_attempted를 생략한다.
+        """
+        repair_attempted = getattr(self._provider, "_last_repair_attempted", None)
+        if isinstance(repair_attempted, bool):
+            return {"repair_attempted": repair_attempted}
+        return {}
 
     def _payload_for(
         self,

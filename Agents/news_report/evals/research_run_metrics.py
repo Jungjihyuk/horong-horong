@@ -69,6 +69,7 @@ def research_run_metrics(meta_path: Path, trace_path: Path | None = None) -> Jso
         "avgProviderLatencyMs": average_provider_latency(trace_events),
         "schemaCounts": schema_counts(trace_events),
         "repairRate": repair_rate(trace_events),
+        "structuredOutputReliability": structured_output_reliability(trace_events),
     }
 
 
@@ -162,6 +163,48 @@ def repair_rate(events: Iterable[Mapping[str, object]]) -> float | None:
     if known_attempts == 0:
         return None
     return repairs / known_attempts
+
+
+def structured_output_reliability(events: Iterable[Mapping[str, object]]) -> JsonObject:
+    """provider 구조화 출력의 1차 성공 / repair 복구 / 최종 실패 분해 지표를 계산한다.
+
+    - provider_completed payload의 repair_attempted(bool)로 1차 성공(False)과
+      repair 복구(True)를 구분한다.
+    - provider_failed는 repair까지 실패한 최종 실패로 본다.
+    - repair_attempted 데이터가 하나도 없으면(producer 미배선) repair 의존 비율은
+      None으로 둔다. 최종 실패율은 repair 필드와 무관하므로 호출이 있으면 계산한다.
+    """
+    completed_total = 0
+    first_pass = 0
+    repaired = 0
+    failures = 0
+    for event in events:
+        name = event.get("event")
+        if name == "provider_completed":
+            completed_total += 1
+            repair_attempted = payload_object(event).get("repair_attempted")
+            if repair_attempted is True:
+                repaired += 1
+            elif repair_attempted is False:
+                first_pass += 1
+        elif name == "provider_failed":
+            failures += 1
+
+    total = completed_total + failures
+    repair_data_available = (first_pass + repaired) > 0
+    repair_hits = repaired + failures
+
+    return {
+        "totalCalls": total,
+        "firstPassSuccesses": first_pass,
+        "repairedSuccesses": repaired,
+        "failures": failures,
+        "firstPassRate": (first_pass / total) if (total and repair_data_available) else None,
+        "repairRecoveryRate": (repaired / repair_hits)
+        if (repair_data_available and repair_hits)
+        else None,
+        "finalFailureRate": (failures / total) if total else None,
+    }
 
 
 def payload_object(event: Mapping[str, object]) -> Mapping[str, object]:
