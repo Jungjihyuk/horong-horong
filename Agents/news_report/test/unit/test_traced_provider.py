@@ -148,3 +148,50 @@ def test_traced_provider__generate_json_failure__writes_failed_event():
     assert trace.events[1]["payload"]["operation"] == "structured_output"
     assert trace.events[1]["payload"]["error_type"] == "ValueError"
     assert trace.events[1]["payload"]["error_message"] == "invalid json"
+
+
+def _sample_judgment() -> RelevanceJudgment:
+    return RelevanceJudgment(
+        item_id="item-1",
+        is_relevant=True,
+        score=0.82,
+        threshold=0.7,
+        matched_keywords=["AI agent"],
+        reason="AI agent workflow를 직접 다루므로 관련이 높다.",
+        method="llm",
+    )
+
+
+# 시나리오 3. wrapped provider가 repair 여부를 노출하면 completed payload에 싣는다.
+@pytest.mark.unit
+def test_traced_provider__provider_exposes_repair__records_repair_attempted():
+    # Given: BaseCliProvider처럼 _last_repair_attempted를 노출하는 provider를 모사한다.
+    inner = FakeStructuredProvider(_sample_judgment())
+    inner._last_repair_attempted = True
+    trace = FakeTrace()
+    provider = TracedStructuredProvider(inner, trace, provider_name="claude")
+
+    # When: traced provider로 structured output을 생성한다.
+    _ = provider.generate_json("judge relevance", RelevanceJudgment)
+
+    # Then: provider_completed payload에 repair_attempted=True가 기록된다.
+    assert trace.events[1]["event"] == "provider_completed"
+    assert trace.events[1]["payload"]["repair_attempted"] is True
+
+
+# 시나리오 4. provider가 repair 여부를 노출하지 않으면 repair_attempted를 생략한다.
+@pytest.mark.unit
+def test_traced_provider__no_repair_attribute__omits_repair_attempted():
+    # Given: repair 속성이 없는 provider(예: Ollama)를 준비한다.
+    trace = FakeTrace()
+    provider = TracedStructuredProvider(
+        FakeStructuredProvider(_sample_judgment()),
+        trace,
+        provider_name="ollama",
+    )
+
+    # When: traced provider로 structured output을 생성한다.
+    _ = provider.generate_json("judge relevance", RelevanceJudgment)
+
+    # Then: repair_attempted 키 자체가 payload에 없다.
+    assert "repair_attempted" not in trace.events[1]["payload"]
