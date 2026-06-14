@@ -86,16 +86,16 @@ def test_load_request__missing_optional_fields__uses_defaults(tmp_path):
     assert request.sources == []
 
 
-# 시나리오 4. 지원하지 않는 뉴스 소스 타입은 요청 검증 단계에서 거부된다.
+# 시나리오 4. 알 수 없는 뉴스 소스 타입은 요청 검증 단계에서 거부된다.
 @pytest.mark.unit
 def test_load_request__invalid_source_type__raises_validation_error(
     valid_request_payload,
     tmp_path,
 ):
-    # Given: sources 안에 지원하지 않는 type을 포함한 요청을 준비한다.
+    # Given: sources 안에 Swift 앱이 보낼 수 없는 type을 포함한 요청을 준비한다.
     invalid_payload = {
         **valid_request_payload,
-        "sources": [{"type": "rss", "enabled": True}],
+        "sources": [{"type": "tiktok", "enabled": True}],
     }
     request_path = tmp_path / "request.json"
     request_path.write_text(
@@ -109,6 +109,72 @@ def test_load_request__invalid_source_type__raises_validation_error(
 
     errors = error.value.errors()
     assert any(err["loc"] == ("sources", 0, "type") for err in errors)
+
+
+# 시나리오 4-1. Swift 앱이 보낼 수 있는 모든 source type은 요청 검증을 통과한다.
+# connector 미구현 type(rss, hacker_news)도 요청 전체를 깨지 않고
+# collector의 is_supported_source 단계에서 건너뛴다.
+@pytest.mark.unit
+def test_load_request__swift_source_types__accepted(
+    valid_request_payload,
+    tmp_path,
+):
+    # Given: Swift NewsSourceStore가 보낼 수 있는 type들을 포함한 요청을 준비한다.
+    payload = {
+        **valid_request_payload,
+        "sources": [
+            {"type": "rss", "enabled": True},
+            {"type": "hacker_news", "enabled": True},
+        ],
+    }
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
+    request = load_request(str(request_path))
+
+    # Then: rss/hacker_news source가 요청 검증을 통과한다.
+    assert [source.type for source in request.sources] == ["rss", "hacker_news"]
+
+
+# 시나리오 4-2. YouTube channelIds/playlists 설정은 contract를 통과해 connector까지 보존된다.
+# 회귀 방지: 과거 NewsSourceConfig에 두 필드가 없어 extra="ignore"가
+# Swift 설정을 조용히 버렸다 (#83).
+@pytest.mark.unit
+def test_load_request__youtube_channel_ids_and_playlists__preserved_to_connector_config(
+    valid_request_payload,
+    tmp_path,
+):
+    # Given: Swift 앱이 채널/재생목록을 등록한 YouTube source 요청을 준비한다.
+    payload = {
+        **valid_request_payload,
+        "sources": [
+            {
+                "type": "youtube",
+                "enabled": True,
+                "channelIds": ["UC-channel-1", "UC-channel-2"],
+                "playlists": [
+                    {"name": "AI 트렌드", "playlistId": "PL-list-1"},
+                ],
+            }
+        ],
+    }
+    request_path = tmp_path / "request.json"
+    request_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    # When: loader로 파싱한 source를 runner와 같은 방식으로 connector config로 dump한다.
+    request = load_request(str(request_path))
+    config = request.sources[0].model_dump(by_alias=True, exclude_none=True)
+
+    # Then: connector가 읽는 camelCase 키가 그대로 보존된다.
+    assert config["channelIds"] == ["UC-channel-1", "UC-channel-2"]
+    assert config["playlists"] == [{"name": "AI 트렌드", "playlistId": "PL-list-1"}]
 
 
 # 시나리오 5. 로컬 ollama provider는 요청 JSON provider 값으로 허용된다.
