@@ -15,7 +15,9 @@ StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
 
 
 class BaseCliProvider(ABC):
-    timeout: int = 120
+    # source insight처럼 본문이 긴 구조화 출력 호출은 120s를 넘길 수 있다 (#83).
+    # request providerOptions.timeout으로 재정의할 수 있다 (factory에서 주입).
+    timeout: float = 300
 
     # 직전 generate_json 호출에서 repair(검증 실패 후 재생성)가 발생했는지를 노출한다.
     # TracedStructuredProvider(envelope)가 호출 직후 이 값을 읽어 trace payload에 싣는다.
@@ -28,17 +30,25 @@ class BaseCliProvider(ABC):
 
     def run(self, prompt: str) -> str:
         cmd = self._build_command(prompt)
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=self.timeout,
-        )
+        try:
+            result = self._run_subprocess(cmd)
+        except subprocess.TimeoutExpired:
+            # CLI agent가 네트워크/API 스톨로 간헐적으로 멈출 수 있다 (#83).
+            # 동일 작업의 정상 호출은 timeout보다 훨씬 짧으므로 1회만 재시도한다.
+            result = self._run_subprocess(cmd)
         if result.returncode != 0:
             raise RuntimeError(
                 f"{self.__class__.__name__} 실행 실패 (exit {result.returncode}): {result.stderr[:200]}"
             )
         return result.stdout.strip()
+
+    def _run_subprocess(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+        )
 
     def generate_text(
         self,

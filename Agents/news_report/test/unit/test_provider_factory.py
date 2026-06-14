@@ -67,14 +67,29 @@ def test_create_provider__ollama_options__configures_ollama_provider():
     assert provider.timeout == 180.0
 
 
-# 시나리오 5. CLI provider는 providerOptions가 있어도 기존 구현체를 그대로 생성한다.
+# 시나리오 5. CLI provider는 timeout 외의 providerOptions를 무시하고 구현체를 생성한다.
 @pytest.mark.unit
 def test_create_provider__cli_options__ignores_provider_options():
-    # Given: CLI provider에는 아직 사용하지 않는 provider option을 준비한다.
+    # Given: CLI provider가 사용하지 않는 model option만 준비한다.
     options = ProviderOptionsConfig(model="ignored-model")
 
     # When: factory가 codex provider를 생성한다.
     provider = create_provider("codex", options)
 
-    # Then: 기존 codex CLI provider 구현체가 반환된다.
+    # Then: 기존 codex CLI provider 구현체가 기본 timeout으로 반환된다.
     assert isinstance(provider, CodexCliProvider)
+    assert provider.timeout == 300
+
+
+# 시나리오 6. providerOptions.timeout은 CLI provider 실행 timeout으로 반영된다 (#83).
+@pytest.mark.unit
+def test_create_provider__cli_timeout_option__configures_cli_provider():
+    # Given: 요청 JSON에서 검증된 timeout option을 준비한다.
+    options = ProviderOptionsConfig(timeout=600.0)
+
+    # When: factory가 codex provider를 생성한다.
+    provider = create_provider("codex", options)
+
+    # Then: codex CLI provider의 subprocess timeout이 재정의된다.
+    assert isinstance(provider, CodexCliProvider)
+    assert provider.timeout == 600.0
