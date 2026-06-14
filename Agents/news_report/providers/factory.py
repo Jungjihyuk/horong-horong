@@ -35,7 +35,8 @@ def create_provider(
 
     Args:
         name: 요청 JSON의 provider 이름.
-        options: provider별 선택 옵션. 현재는 ollama model/endpoint/timeout에 사용한다.
+        options: provider별 선택 옵션. ollama는 model/endpoint/timeout,
+            CLI provider는 timeout만 사용한다.
 
     Returns:
         `run(prompt) -> str` 계약을 만족하는 provider 구현체.
@@ -50,7 +51,10 @@ def create_provider(
         raise ValueError(f"지원하지 않는 provider: {name} (supported: {supported})") from error
     if name == "ollama":
         return create_ollama_provider(options)
-    return factory()
+    provider = factory()
+    if options and options.timeout:
+        provider.timeout = options.timeout
+    return provider
 
 
 def create_ollama_provider(options: ProviderOptionsConfig | None) -> OllamaProvider:
