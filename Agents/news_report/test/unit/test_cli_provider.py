@@ -1,6 +1,7 @@
 """CLI provider structured output 단위 테스트."""
 
 import json
+import subprocess
 from typing import override
 
 import pytest
@@ -219,3 +220,61 @@ def test_cli_provider__repair_success__repair_flag_true():
 
     # Then: repair가 발생했으므로 플래그는 True다.
     assert provider._last_repair_attempted is True
+
+
+class SubprocessCliProvider(BaseCliProvider):
+    """_run_subprocess만 가짜로 바꿔 run()의 재시도 로직을 검증하는 fake."""
+
+    def __init__(self, outcomes: list[object]):
+        # outcomes: subprocess.TimeoutExpired 예외 또는 stdout 문자열의 순서.
+        self.outcomes: list[object] = outcomes
+        self.attempts: int = 0
+
+    @override
+    def _build_command(self, prompt: str) -> list[str]:
+        return ["fake-cli", prompt]
+
+    @override
+    def _run_subprocess(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        self.attempts += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return subprocess.CompletedProcess(cmd, returncode=0, stdout=str(outcome), stderr="")
+
+
+# 시나리오 9. CLI 실행이 timeout으로 멈추면 같은 명령을 1회 재시도해 복구한다 (#83).
+@pytest.mark.unit
+def test_cli_provider__timeout_then_success__retries_once():
+    # Given: 첫 실행은 TimeoutExpired, 두 번째 실행은 정상 응답인 provider를 준비한다.
+    provider = SubprocessCliProvider(
+        [
+            subprocess.TimeoutExpired(cmd=["fake-cli"], timeout=300),
+            "정상 응답",
+        ]
+    )
+
+    # When: CLI 실행을 수행한다.
+    result = provider.run("analyze source")
+
+    # Then: 재시도로 복구되어 응답이 반환된다.
+    assert result == "정상 응답"
+    assert provider.attempts == 2
+
+
+# 시나리오 10. 재시도도 timeout이면 TimeoutExpired를 그대로 전파한다.
+@pytest.mark.unit
+def test_cli_provider__timeout_twice__raises_timeout_expired():
+    # Given: 두 번 모두 TimeoutExpired인 provider를 준비한다.
+    provider = SubprocessCliProvider(
+        [
+            subprocess.TimeoutExpired(cmd=["fake-cli"], timeout=300),
+            subprocess.TimeoutExpired(cmd=["fake-cli"], timeout=300),
+        ]
+    )
+
+    # When / Then: 두 번째 timeout은 호출자(stage warning 처리)로 전파된다.
+    with pytest.raises(subprocess.TimeoutExpired):
+        _ = provider.run("analyze source")
+
+    assert provider.attempts == 2
