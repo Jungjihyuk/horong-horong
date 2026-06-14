@@ -151,7 +151,7 @@ htmlcov/
 # .gemini/
 
 ## Opencode
-# .agent/
+.agents/
 # .opencode/
 
 ## Sisyphus
