@@ -130,14 +130,14 @@ final class TimerManager: @unchecked Sendable {
             appState.timerState = .breakAlert
             let focusMins = appState.focusMinutes
             NotificationManager.shared.send(
-                title: "🔥 집중 시간 완료!",
-                body: "\(focusMins)분 동안 수고했어요. 잠시 쉬어가세요."
+                title: "포모도로 완료",
+                body: "\(focusMins)분 집중 완료 · 집중 기록 저장 완료 · 잠시 쉬어가세요"
             )
             Task { @MainActor in
-                ToastPanel.shared.show(
-                    icon: "🔥",
-                    title: "집중 시간 완료!",
-                    subtitle: "\(focusMins)분 동안 수고했어요. 잠시 쉬어가세요."
+                ToastPanel.shared.showTimerAlert(
+                    title: "포모도로 완료",
+                    subtitle: "\(focusMins)분 집중 완료",
+                    detail: "집중 기록 저장 완료 · 잠시 쉬어가세요"
                 )
             }
         case .breaking:
@@ -150,12 +150,11 @@ final class TimerManager: @unchecked Sendable {
                 previousCategory: previousCategory
             )
             NotificationManager.shared.send(
-                title: "☕ 휴식 끝!",
+                title: "휴식 끝!",
                 body: "다시 집중할 준비가 되셨나요?"
             )
             Task { @MainActor in
-                ToastPanel.shared.show(
-                    icon: "☕",
+                ToastPanel.shared.showTimerAlert(
                     title: "휴식 끝!",
                     subtitle: "다시 집중할 준비가 되셨나요?"
                 )
