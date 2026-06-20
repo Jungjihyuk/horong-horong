@@ -24,8 +24,8 @@ final class IdlePromptPanel {
         close(animated: false)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
-            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel, .hudWindow],
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 366),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -34,10 +34,11 @@ final class IdlePromptPanel {
         panel.level = .floating
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.animationBehavior = .utilityWindow
         panel.hasShadow = true
         panel.backgroundColor = .clear
+        panel.isOpaque = false
         panel.hidesOnDeactivate = false
 
         if let screen = NSScreen.main {
@@ -125,60 +126,156 @@ private struct IdlePromptView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Text("🌙")
-                    .font(.title2)
-                Text("자리 비우셨나요?")
-                    .font(.headline)
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(categoryEmoji)
-                    Text(appName)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                    Text("(\(category))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(rangeText)
-                    .font(.system(.title3, design: .monospaced))
-                    .fontWeight(.semibold)
-                Text("입력이 없었던 시간: \(durationText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("이 시간을 작업 시간으로 인정할까요?")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button {
-                    onAway()
-                } label: {
-                    Text("자리 비웠어요")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.large)
-
-                Button {
-                    onConfirm()
-                } label: {
-                    Text("작업 중이었어요  ⏎")
-                        .frame(maxWidth: .infinity)
-                        .fontWeight(.semibold)
-                }
-                .controlSize(.large)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            appBadge
+                .frame(maxWidth: .infinity, alignment: .center)
+            timeCard
+            description
+            actions
         }
-        .padding(18)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 29)
+        .padding(.top, 28)
+        .padding(.bottom, 29)
+        .frame(width: 500, height: 366)
+        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
     }
+
+    private var header: some View {
+        HStack(spacing: 9) {
+            Circle()
+                .fill(PopoverChrome.accent)
+                .frame(width: 9, height: 9)
+                .padding(4)
+                .background(PopoverChrome.accentSoft.opacity(0.42), in: Circle())
+
+            Text("잠시 자리를 비우셨나요?")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(PopoverChrome.ink)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var appBadge: some View {
+        HStack(spacing: 6) {
+            Text("마지막 사용 앱 ·")
+            Text("\(categoryEmoji) \(appName)")
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(PopoverChrome.inkSecondary)
+        .lineLimit(1)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background(PopoverChrome.surfaceAlt, in: Capsule())
+    }
+
+    private var timeCard: some View {
+        VStack(spacing: 12) {
+            Text(rangeText)
+                .font(.system(size: 38, weight: .bold, design: .monospaced))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            Text("감지된 시간 \(durationText)")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 22)
+        .background(PopoverChrome.surfaceAlt.opacity(0.78), in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
+    }
+
+    private var description: some View {
+        Text("표시된 시간 동안 움직임이 없어 자리 비움으로 감지했어요.")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(PopoverChrome.inkTertiary)
+    }
+
+    private var actions: some View {
+        HStack(spacing: 12) {
+            Button {
+                onAway()
+            } label: {
+                Text("자리 비움")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(IdlePromptSecondaryButtonStyle())
+
+            Button {
+                onConfirm()
+            } label: {
+                Text("작업 시간으로 유지")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(IdlePromptPrimaryButtonStyle())
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(.top, 2)
+    }
+}
+
+private struct IdlePromptPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(PopoverChrome.accentInk)
+            .padding(.vertical, 13)
+            .padding(.horizontal, 18)
+            .background(
+                PopoverChrome.accent
+                    .opacity(configuration.isPressed ? 0.86 : 1),
+                in: Capsule()
+            )
+            .shadow(
+                color: PopoverChrome.accent.opacity(configuration.isPressed ? 0.08 : 0.22),
+                radius: configuration.isPressed ? 4 : 10,
+                x: 0,
+                y: configuration.isPressed ? 1 : 4
+            )
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .offset(y: configuration.isPressed ? 1 : 0)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct IdlePromptSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .padding(.vertical, 13)
+            .padding(.horizontal, 18)
+            .background(Color.white.opacity(configuration.isPressed ? 0.44 : 0.55), in: Capsule())
+            .shadow(
+                color: PopoverChrome.ink.opacity(configuration.isPressed ? 0.03 : 0.08),
+                radius: configuration.isPressed ? 2 : 6,
+                x: 0,
+                y: configuration.isPressed ? 1 : 3
+            )
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .offset(y: configuration.isPressed ? 1 : 0)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+#Preview {
+    IdlePromptView(
+        appName: "카카오톡",
+        categoryEmoji: "💬",
+        category: "소통",
+        startedAt: Date(timeIntervalSince1970: 1_718_000_520),
+        endedAt: Date(timeIntervalSince1970: 1_718_000_595),
+        onConfirm: {},
+        onAway: {}
+    )
 }
