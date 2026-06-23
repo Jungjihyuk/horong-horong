@@ -21,6 +21,8 @@ private struct StatsLoadedData {
 
 struct StatsDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(Constants.AppStorageKey.popoverTheme)
+    private var popoverTheme: String = Constants.defaultPopoverTheme
     @State private var viewMode: StatsViewMode = .daily
     @State private var selectedDate: Date = Date()
     @State private var records: [AppUsageRecord] = []
@@ -72,6 +74,7 @@ struct StatsDetailWindow: View {
         }
         .frame(minWidth: 820, minHeight: 560)
         .background(PopoverChrome.surface)
+        .id(popoverTheme)
         .onAppear {
             logViewTrigger("appear")
             loadRecords()

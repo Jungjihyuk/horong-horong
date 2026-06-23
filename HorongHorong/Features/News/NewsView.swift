@@ -110,10 +110,10 @@ struct NewsView: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 11)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(PopoverChrome.divider, lineWidth: 1)
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
             )
         }
         .buttonStyle(.plain)
@@ -136,18 +136,39 @@ struct NewsView: View {
             .foregroundStyle(PopoverChrome.accentInk)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 1.00, green: 0.59, blue: 0.22),
-                        Color(red: 0.94, green: 0.45, blue: 0.16),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                in: Capsule()
+            .background {
+                if PopoverChrome.isGamePixel {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .fill(PopoverChrome.pixelShadow)
+                            .offset(x: 3, y: 3)
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .fill(PopoverChrome.accent)
+                    }
+                } else {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 1.00, green: 0.59, blue: 0.22),
+                                    Color(red: 0.94, green: 0.45, blue: 0.16),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                    .stroke(PopoverChrome.isGamePixel ? PopoverChrome.border : Color.clear, lineWidth: PopoverChrome.borderWidth)
             )
-            .shadow(color: PopoverChrome.accent.opacity(isRunButtonHovered ? 0.38 : 0.28), radius: isRunButtonHovered ? 15 : 12, x: 0, y: isRunButtonHovered ? 9 : 7)
+            .shadow(
+                color: PopoverChrome.isGamePixel ? .clear : PopoverChrome.accent.opacity(isRunButtonHovered ? 0.38 : 0.28),
+                radius: PopoverChrome.isGamePixel ? 0 : (isRunButtonHovered ? 15 : 12),
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : (isRunButtonHovered ? 9 : 7)
+            )
         }
         .buttonStyle(.plain)
         .offset(y: isRunButtonHovered ? -2 : 0)
