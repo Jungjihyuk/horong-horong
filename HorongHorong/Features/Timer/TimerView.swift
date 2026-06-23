@@ -7,19 +7,209 @@ private struct TimerGradientButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .padding(.vertical, 12)
             .padding(.horizontal, 22)
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 1.00, green: 0.60, blue: 0.24),
-                        Color(red: 0.96, green: 0.40, blue: 0.10),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                in: Capsule()
+            .background {
+                ZStack {
+                    if PopoverChrome.isGamePixel && !configuration.isPressed {
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .fill(PopoverChrome.pixelShadow)
+                            .offset(x: 3, y: 3)
+                    }
+
+                    RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                        .fill(timerButtonFill)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                    .stroke(PopoverChrome.isGamePixel ? PopoverChrome.border : Color.clear, lineWidth: PopoverChrome.borderWidth)
             )
-            .shadow(color: Color(red: 0.92, green: 0.40, blue: 0.08).opacity(configuration.isPressed ? 0.22 : 0.32), radius: 13, x: 0, y: 8)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .shadow(
+                color: PopoverChrome.isGamePixel
+                    ? .clear
+                    : Color(red: 0.92, green: 0.40, blue: 0.08).opacity(configuration.isPressed ? 0.22 : 0.32),
+                radius: PopoverChrome.isGamePixel ? 0 : 13,
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : 8
+            )
+            .offset(x: PopoverChrome.isGamePixel && configuration.isPressed ? 2 : 0, y: PopoverChrome.isGamePixel && configuration.isPressed ? 2 : 0)
+            .scaleEffect(!PopoverChrome.isGamePixel && configuration.isPressed ? 0.98 : 1)
+    }
+
+    private var timerButtonFill: some ShapeStyle {
+        PopoverChrome.primaryButtonFill
+    }
+}
+
+private struct PixelTimerColon: View {
+    let opacity: Double
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Rectangle()
+                .frame(width: 8, height: 8)
+            Rectangle()
+                .frame(width: 8, height: 8)
+        }
+        .foregroundStyle(PopoverChrome.accentSoft)
+        .opacity(opacity)
+        .frame(width: 26, height: 56, alignment: .center)
+    }
+}
+
+private struct HybridPixelTimerNumber: View {
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 5) {
+            ForEach(Array(value.enumerated()), id: \.offset) { _, character in
+                HybridPixelDigit(character: character)
+            }
+        }
+        .frame(height: 56, alignment: .center)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct HybridPixelDigit: View {
+    let character: Character
+
+    private let width: CGFloat = 34
+    private let height: CGFloat = 56
+
+    private enum Segment {
+        case top
+        case upperLeft
+        case upperRight
+        case middle
+        case lowerLeft
+        case lowerRight
+        case bottom
+    }
+
+    private var segments: [Segment] {
+        switch character {
+        case "1": return [.upperRight, .lowerRight]
+        case "2": return [.top, .upperRight, .middle, .lowerLeft, .bottom]
+        case "3": return [.top, .upperRight, .middle, .lowerRight, .bottom]
+        case "4": return [.upperLeft, .upperRight, .middle, .lowerRight]
+        case "5": return [.top, .upperLeft, .middle, .lowerRight, .bottom]
+        case "7": return [.top, .upperRight, .lowerRight]
+        case "8": return [.top, .upperLeft, .upperRight, .middle, .lowerLeft, .lowerRight, .bottom]
+        case "9": return [.top, .upperLeft, .upperRight, .middle, .lowerRight, .bottom]
+        default: return []
+        }
+    }
+
+    private var blocks: [CGRect] {
+        switch character {
+        case "0":
+            return [
+                CGRect(x: 8, y: 0, width: 18, height: 4),
+                CGRect(x: 4, y: 4, width: 4, height: 4),
+                CGRect(x: 26, y: 4, width: 4, height: 4),
+                CGRect(x: 0, y: 8, width: 4, height: 40),
+                CGRect(x: 30, y: 8, width: 4, height: 40),
+                CGRect(x: 4, y: 48, width: 4, height: 4),
+                CGRect(x: 26, y: 48, width: 4, height: 4),
+                CGRect(x: 8, y: 52, width: 18, height: 4),
+            ]
+        case "1":
+            return [
+                CGRect(x: 17, y: 0, width: 4, height: 56),
+                CGRect(x: 13, y: 4, width: 4, height: 4),
+                CGRect(x: 11, y: 52, width: 16, height: 4),
+            ]
+        case "2":
+            return [
+                CGRect(x: 8, y: 0, width: 18, height: 4),
+                CGRect(x: 26, y: 4, width: 4, height: 4),
+                CGRect(x: 30, y: 8, width: 4, height: 16),
+                CGRect(x: 26, y: 24, width: 4, height: 4),
+                CGRect(x: 4, y: 28, width: 22, height: 4),
+                CGRect(x: 0, y: 32, width: 4, height: 16),
+                CGRect(x: 4, y: 48, width: 4, height: 4),
+                CGRect(x: 8, y: 52, width: 26, height: 4),
+            ]
+        case "5":
+            return [
+                CGRect(x: 4, y: 0, width: 26, height: 4),
+                CGRect(x: 0, y: 4, width: 4, height: 22),
+                CGRect(x: 4, y: 26, width: 22, height: 4),
+                CGRect(x: 26, y: 30, width: 4, height: 4),
+                CGRect(x: 30, y: 34, width: 4, height: 14),
+                CGRect(x: 26, y: 48, width: 4, height: 4),
+                CGRect(x: 4, y: 52, width: 22, height: 4),
+            ]
+        case "6":
+            return [
+                CGRect(x: 8, y: 0, width: 18, height: 4),
+                CGRect(x: 4, y: 4, width: 4, height: 4),
+                CGRect(x: 0, y: 8, width: 4, height: 40),
+                CGRect(x: 4, y: 26, width: 26, height: 4),
+                CGRect(x: 0, y: 26, width: 4, height: 4),
+                CGRect(x: 30, y: 30, width: 4, height: 18),
+                CGRect(x: 4, y: 48, width: 4, height: 4),
+                CGRect(x: 26, y: 48, width: 4, height: 4),
+                CGRect(x: 8, y: 52, width: 18, height: 4),
+            ]
+        case "9":
+            return [
+                CGRect(x: 8, y: 0, width: 18, height: 4),
+                CGRect(x: 4, y: 4, width: 4, height: 4),
+                CGRect(x: 26, y: 4, width: 4, height: 4),
+                CGRect(x: 0, y: 8, width: 4, height: 18),
+                CGRect(x: 30, y: 8, width: 4, height: 40),
+                CGRect(x: 4, y: 26, width: 26, height: 4),
+                CGRect(x: 26, y: 48, width: 4, height: 4),
+                CGRect(x: 8, y: 52, width: 18, height: 4),
+            ]
+        default:
+            return segments.flatMap(blocks(for:))
+        }
+    }
+
+    private func blocks(for segment: Segment) -> [CGRect] {
+        switch segment {
+        case .top:
+            return [
+                CGRect(x: 8, y: 0, width: 18, height: 4),
+                CGRect(x: 4, y: 4, width: 4, height: 4),
+                CGRect(x: 26, y: 4, width: 4, height: 4),
+            ]
+        case .upperLeft:
+            return [CGRect(x: 0, y: 8, width: 4, height: 18)]
+        case .upperRight:
+            return [CGRect(x: 30, y: 8, width: 4, height: 18)]
+        case .middle:
+            return [
+                CGRect(x: 4, y: 26, width: 26, height: 4),
+                CGRect(x: 0, y: 26, width: 4, height: 4),
+                CGRect(x: 30, y: 26, width: 4, height: 4),
+            ]
+        case .lowerLeft:
+            return [CGRect(x: 0, y: 32, width: 4, height: 16)]
+        case .lowerRight:
+            return [CGRect(x: 30, y: 32, width: 4, height: 16)]
+        case .bottom:
+            return [
+                CGRect(x: 4, y: 48, width: 4, height: 4),
+                CGRect(x: 26, y: 48, width: 4, height: 4),
+                CGRect(x: 8, y: 52, width: 18, height: 4),
+            ]
+        }
+    }
+
+    var body: some View {
+        Canvas { context, _ in
+            for block in blocks {
+                context.fill(
+                    Path(block),
+                    with: .color(PopoverChrome.pixelShadow)
+                )
+            }
+        }
+        .frame(width: width, height: height)
+        .id(character)
     }
 }
 
@@ -85,24 +275,27 @@ struct TimerView: View {
         .padding(.bottom, 8)
     }
 
+    @ViewBuilder
     private var timerGlow: some View {
-        Ellipse()
-            .fill(
-                RadialGradient(
-                    colors: [
-                        Color(red: 1.00, green: 0.67, blue: 0.31).opacity(isFocusing ? 0.44 : 0.34),
-                        Color(red: 1.00, green: 0.75, blue: 0.39).opacity(0.18),
-                        .clear,
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: 128
+        if !PopoverChrome.isGamePixel {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 1.00, green: 0.67, blue: 0.31).opacity(isFocusing ? 0.44 : 0.34),
+                            Color(red: 1.00, green: 0.75, blue: 0.39).opacity(0.18),
+                            .clear,
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 128
+                    )
                 )
-            )
-            .frame(width: 260, height: 90)
-            .blur(radius: 8)
-            .offset(y: 44)
-            .allowsHitTesting(false)
+                .frame(width: 260, height: 90)
+                .blur(radius: 8)
+                .offset(y: 44)
+                .allowsHitTesting(false)
+        }
     }
 
     private var timerText: some View {
@@ -110,23 +303,43 @@ struct TimerView: View {
             timerGlow
 
             TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                HStack(spacing: 0) {
-                    Text(minutesString)
-                        .foregroundStyle(PopoverChrome.ink)
-                        .contentTransition(.numericText())
-                    Text(":")
-                        .font(.system(size: 46, weight: .semibold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.accent)
-                        .opacity(colonOpacity(at: context.date))
-                    Text(secondsString)
-                        .foregroundStyle(PopoverChrome.ink)
-                        .contentTransition(.numericText())
+                if PopoverChrome.isGamePixel {
+                    HStack(alignment: .center, spacing: 10) {
+                        HybridPixelTimerNumber(value: minutesString)
+                        PixelTimerColon(opacity: 1)
+                        HybridPixelTimerNumber(value: secondsString)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
+                    .transaction { transaction in
+                        transaction.animation = nil
+                    }
+                } else {
+                    HStack(spacing: 0) {
+                        Text(minutesString)
+                            .foregroundStyle(PopoverChrome.ink)
+                            .contentTransition(.numericText())
+                        Text(":")
+                            .font(.system(size: 46, weight: .semibold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.accent)
+                            .opacity(colonOpacity(at: context.date))
+                        Text(secondsString)
+                            .foregroundStyle(PopoverChrome.ink)
+                            .contentTransition(.numericText())
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .font(.system(size: 66, weight: .bold, design: .rounded))
+            .font(PopoverChrome.displayFont(size: 66, weight: .bold))
             .monospacedDigit()
-            .shadow(color: Color(red: 0.95, green: 0.45, blue: 0.13).opacity(0.15), radius: 18, x: 0, y: 10)
-            .animation(.default, value: appState.remainingSeconds)
+            .shadow(
+                color: PopoverChrome.isGamePixel ? .clear : Color(red: 0.95, green: 0.45, blue: 0.13).opacity(0.15),
+                radius: PopoverChrome.isGamePixel ? 0 : 18,
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : 10
+            )
+            .animation(PopoverChrome.isGamePixel ? nil : .default, value: appState.remainingSeconds)
         }
         .frame(height: 78)
     }
@@ -135,11 +348,16 @@ struct TimerView: View {
         TimelineView(.animation(minimumInterval: 1 / 60)) { context in
             Image(focusIconName)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(PopoverChrome.isGamePixel ? .none : .high)
                 .scaledToFit()
                 .frame(width: 35, height: 35)
                 .offset(y: focusIconOffset(at: context.date))
-                .shadow(color: PopoverChrome.accent.opacity(isFocusing ? 0.26 : 0.12), radius: 8, x: 0, y: 2)
+                .shadow(
+                    color: PopoverChrome.isGamePixel ? .clear : PopoverChrome.accent.opacity(isFocusing ? 0.26 : 0.12),
+                    radius: PopoverChrome.isGamePixel ? 0 : 8,
+                    x: 0,
+                    y: PopoverChrome.isGamePixel ? 0 : 2
+                )
         }
         .frame(width: 35, height: 35)
     }
@@ -272,10 +490,10 @@ struct TimerView: View {
                 }
             }
             .padding(12)
-            .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(14), style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(PopoverChrome.divider, lineWidth: 1)
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(14), style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
             )
             .padding(.horizontal, 2)
             .padding(.bottom, 8)
@@ -320,15 +538,15 @@ struct TimerView: View {
                         .buttonStyle(.plain)
                         .padding(.vertical, 7)
                         .padding(.horizontal, 10)
-                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(PopoverChrome.divider, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                                .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
                         )
                     }
                     .padding(.vertical, 10)
                     .padding(.horizontal, 12)
-                    .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
 
                 }
             }
@@ -347,14 +565,19 @@ struct TimerView: View {
                 } label: {
                     Text(preset.rawValue)
                         .font(.system(size: 12.5, weight: currentPreset == preset ? .bold : .medium, design: .rounded))
-                        .foregroundStyle(currentPreset == preset ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .foregroundStyle(currentPreset == preset ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
                                 .fill(presetChipFill(for: preset))
                         )
-                        .shadow(color: currentPreset == preset ? PopoverChrome.accent.opacity(0.28) : .clear, radius: 8, x: 0, y: 4)
+                        .shadow(
+                            color: PopoverChrome.isGamePixel ? .clear : (currentPreset == preset ? PopoverChrome.accent.opacity(0.28) : .clear),
+                            radius: PopoverChrome.isGamePixel ? 0 : 8,
+                            x: 0,
+                            y: PopoverChrome.isGamePixel ? 0 : 4
+                        )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -364,7 +587,7 @@ struct TimerView: View {
             }
         }
         .padding(4)
-        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous))
     }
 
     private var currentPreset: Constants.PomodoroPreset {
@@ -393,7 +616,7 @@ struct TimerView: View {
 
     private func presetChipFill(for preset: Constants.PomodoroPreset) -> Color {
         if currentPreset == preset {
-            return PopoverChrome.accent
+            return PopoverChrome.selectionFill
         }
         if hoveredPreset == preset {
             return PopoverChrome.card
@@ -442,7 +665,7 @@ struct TimerView: View {
     }
 
     private var focusIconName: String {
-        isFocusSessionActive ? "FocusOnTransparent" : "FocusOffTransparent"
+        isFocusSessionActive ? PopoverChrome.focusOnImageName : PopoverChrome.focusOffImageName
     }
 
     private var minutesString: String {
