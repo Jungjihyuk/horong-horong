@@ -28,6 +28,8 @@ struct MenuBarPopover: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PopoverTab
     @State private var showTelemetryConsentPrompt = false
+    @AppStorage(Constants.AppStorageKey.popoverTheme)
+    private var popoverTheme: String = Constants.defaultPopoverTheme
     var timerManager: TimerManager
 
     init(timerManager: TimerManager, initialTab: PopoverTab = .timer) {
@@ -53,13 +55,33 @@ struct MenuBarPopover: View {
             }
         }
         .frame(width: Constants.popoverWidth, height: Constants.popoverMaxHeight, alignment: .top)
-        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous)
+                .fill(PopoverChrome.surface)
+            if PopoverChrome.isGamePixel {
+                PixelScanlineOverlay()
+                    .clipShape(RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous))
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous)
-                .strokeBorder(PopoverChrome.border, lineWidth: 1)
+                .strokeBorder(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
         )
-        .shadow(color: .black.opacity(0.28), radius: 30, x: 0, y: 18)
+        .background {
+            if PopoverChrome.isGamePixel {
+                RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous)
+                    .fill(PopoverChrome.pixelShadow)
+                    .offset(x: 5, y: 5)
+            }
+        }
+        .shadow(
+            color: PopoverChrome.isGamePixel ? .clear : .black.opacity(0.28),
+            radius: PopoverChrome.isGamePixel ? 0 : 30,
+            x: 0,
+            y: PopoverChrome.isGamePixel ? 0 : 18
+        )
+        .id(popoverTheme)
         .configureHostWindow(configurePopoverHostWindow)
         .onAppear {
             showTelemetryConsentPrompt = TelemetryConsentStore.shouldPromptForConsent
@@ -126,12 +148,19 @@ struct MenuBarPopover: View {
             }
             .padding(16)
             .frame(width: Constants.popoverWidth - 56)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(PopoverChrome.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                    .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
-            .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 12)
+            .background {
+                if PopoverChrome.isGamePixel {
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                        .fill(PopoverChrome.pixelShadow)
+                        .offset(x: 3, y: 3)
+                }
+            }
+            .shadow(color: PopoverChrome.isGamePixel ? .clear : .black.opacity(0.18), radius: PopoverChrome.isGamePixel ? 0 : 20, x: 0, y: PopoverChrome.isGamePixel ? 0 : 12)
         }
     }
 
@@ -149,9 +178,9 @@ struct MenuBarPopover: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .foregroundStyle(selectedTab == tab ? PopoverChrome.accent : PopoverChrome.inkSecondary)
-                    .background(selectedTab == tab ? PopoverChrome.accentSoft : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(selectedTab == tab ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
+                    .background(selectedTab == tab ? PopoverChrome.selectionFill : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -160,11 +189,16 @@ struct MenuBarPopover: View {
         .padding(.horizontal, 10)
         .padding(.top, 10)
         .padding(.bottom, 6)
-        .background(PopoverChrome.surfaceAlt)
+        .background {
+            PopoverChrome.surfaceAlt
+            if PopoverChrome.isGamePixel {
+                PixelScanlineOverlay()
+            }
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(PopoverChrome.divider)
-                .frame(height: 1)
+                .frame(height: PopoverChrome.borderWidth)
         }
     }
 
@@ -213,7 +247,7 @@ struct MenuBarPopover: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
                         .fill(.primary.opacity(0.00001))
                 )
             }
@@ -237,7 +271,7 @@ struct MenuBarPopover: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
                         .fill(.primary.opacity(0.00001))
                 )
             }
@@ -245,28 +279,245 @@ struct MenuBarPopover: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
-        .background(PopoverChrome.surfaceAlt)
+        .background {
+            PopoverChrome.surfaceAlt
+            if PopoverChrome.isGamePixel {
+                PixelScanlineOverlay()
+            }
+        }
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(PopoverChrome.divider)
-                .frame(height: 1)
+                .frame(height: PopoverChrome.borderWidth)
         }
     }
 }
 
 enum PopoverChrome {
-    static let panelRadius: CGFloat = 22
-    static let ink = Color(red: 0.23, green: 0.16, blue: 0.10)
-    static let inkSecondary = Color(red: 0.48, green: 0.36, blue: 0.27)
-    static let inkTertiary = Color(red: 0.64, green: 0.52, blue: 0.39)
-    static let surface = Color(red: 1.00, green: 0.965, blue: 0.91)
-    static let surfaceAlt = Color(red: 0.996, green: 0.94, blue: 0.86)
-    static let card = Color.white.opacity(0.78)
-    static let border = Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.18)
-    static let divider = Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.16)
-    static let accent = Color(red: 0.94, green: 0.47, blue: 0.18)
-    static let accentSoft = Color(red: 1.00, green: 0.86, blue: 0.70)
-    static let accentInk = Color.white
+    static var theme: Constants.PopoverTheme {
+        Constants.PopoverTheme.normalized(
+            rawValue: UserDefaults.standard.string(forKey: Constants.AppStorageKey.popoverTheme) ?? Constants.defaultPopoverTheme
+        )
+    }
+
+    static var isGamePixel: Bool {
+        theme == .gamePixel
+    }
+
+    static var isWineLantern: Bool {
+        theme == .wineLantern
+    }
+
+    static var panelRadius: CGFloat {
+        isGamePixel ? 0 : 22
+    }
+
+    static var cardRadius: CGFloat {
+        isGamePixel ? 0 : 14
+    }
+
+    static var controlRadius: CGFloat {
+        isGamePixel ? 0 : 999
+    }
+
+    static var borderWidth: CGFloat {
+        isGamePixel ? 2 : 1
+    }
+
+    static var pixelShadow: Color {
+        Color(red: 0.114, green: 0.098, blue: 0.200) // #1d1933
+    }
+
+    static var ink: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.114, green: 0.098, blue: 0.200) // #1d1933
+        case .wineLantern:
+            return Color(red: 0.945, green: 0.918, blue: 0.902) // #f1eae6
+        case .warmLantern:
+            return Color(red: 0.23, green: 0.16, blue: 0.10)
+        }
+    }
+
+    static var inkSecondary: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.357, green: 0.310, blue: 0.529) // #5b4f87
+        case .wineLantern:
+            return Color(red: 0.714, green: 0.667, blue: 0.639) // #b6aaa3
+        case .warmLantern:
+            return Color(red: 0.48, green: 0.36, blue: 0.27)
+        }
+    }
+
+    static var inkTertiary: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.541, green: 0.494, blue: 0.722) // #8a7eb8
+        case .wineLantern:
+            return Color(red: 0.494, green: 0.447, blue: 0.412) // #7e7269
+        case .warmLantern:
+            return Color(red: 0.64, green: 0.52, blue: 0.39)
+        }
+    }
+
+    static var surface: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.957, green: 0.933, blue: 0.976) // #f4eef9
+        case .wineLantern:
+            return Color(red: 0.102, green: 0.082, blue: 0.094) // #1a1518
+        case .warmLantern:
+            return Color(red: 1.00, green: 0.965, blue: 0.91)
+        }
+    }
+
+    static var surfaceAlt: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.906, green: 0.871, blue: 0.980) // #e7defa
+        case .wineLantern:
+            return Color(red: 0.133, green: 0.106, blue: 0.122) // #221b1f
+        case .warmLantern:
+            return Color(red: 0.996, green: 0.94, blue: 0.86)
+        }
+    }
+
+    static var card: Color {
+        switch theme {
+        case .gamePixel:
+            return Color.white
+        case .wineLantern:
+            return Color(red: 0.141, green: 0.110, blue: 0.129) // #241c21
+        case .warmLantern:
+            return Color.white.opacity(0.78)
+        }
+    }
+
+    static var border: Color {
+        switch theme {
+        case .gamePixel:
+            return pixelShadow
+        case .wineLantern:
+            return Color.white.opacity(0.09)
+        case .warmLantern:
+            return Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.18)
+        }
+    }
+
+    static var divider: Color {
+        switch theme {
+        case .gamePixel:
+            return pixelShadow
+        case .wineLantern:
+            return Color.white.opacity(0.07)
+        case .warmLantern:
+            return Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.16)
+        }
+    }
+
+    static var accent: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.478, green: 0.322, blue: 0.839) // #7a52d6
+        case .wineLantern:
+            return Color(red: 0.635, green: 0.227, blue: 0.322) // #a23a52
+        case .warmLantern:
+            return Color(red: 0.94, green: 0.47, blue: 0.18)
+        }
+    }
+
+    static var accentSoft: Color {
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.847, green: 0.776, blue: 0.961) // #d8c6f5
+        case .wineLantern:
+            return Color(red: 0.227, green: 0.129, blue: 0.161) // #3a2129
+        case .warmLantern:
+            return Color(red: 1.00, green: 0.86, blue: 0.70)
+        }
+    }
+
+    static var accentInk: Color {
+        isGamePixel ? Color.white : Color.white
+    }
+
+    static var selectionFill: Color {
+        isGamePixel ? pixelShadow : accent
+    }
+
+    static var selectionInk: Color {
+        isGamePixel ? Color.white : accentInk
+    }
+
+    static var scanline: Color {
+        Color(red: 0.114, green: 0.098, blue: 0.200).opacity(0.055)
+    }
+
+    static var glow: Color {
+        isWineLantern ? accent.opacity(0.22) : Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08)
+    }
+
+    static var primaryButtonFill: AnyShapeStyle {
+        if isGamePixel || isWineLantern {
+            return AnyShapeStyle(accent)
+        }
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    Color(red: 1.00, green: 0.60, blue: 0.24),
+                    Color(red: 0.96, green: 0.40, blue: 0.10),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    static var focusOnImageName: String {
+        switch theme {
+        case .gamePixel:
+            return "FocusOnTransparent2"
+        case .wineLantern:
+            return "FocusOnTransparent3"
+        case .warmLantern:
+            return "FocusOnTransparent"
+        }
+    }
+
+    static var focusOffImageName: String {
+        switch theme {
+        case .gamePixel:
+            return "FocusOffTransparent2"
+        case .wineLantern:
+            return "FocusOffTransparent3"
+        case .warmLantern:
+            return "FocusOffTransparent"
+        }
+    }
+
+    static func radius(_ defaultRadius: CGFloat) -> CGFloat {
+        isGamePixel ? 0 : defaultRadius
+    }
+
+    static func displayFont(size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight, design: isGamePixel ? .monospaced : .rounded)
+    }
+}
+
+private struct PixelScanlineOverlay: View {
+    var body: some View {
+        Canvas { context, size in
+            var y: CGFloat = 0
+            while y < size.height {
+                let rect = CGRect(x: 0, y: y, width: size.width, height: 1)
+                context.fill(Path(rect), with: .color(PopoverChrome.scanline))
+                y += 3
+            }
+        }
+        .allowsHitTesting(false)
+    }
 }
 
 struct PopoverCardModifier: ViewModifier {
@@ -276,12 +527,28 @@ struct PopoverCardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background {
+                ZStack {
+                    if PopoverChrome.isGamePixel {
+                        RoundedRectangle(cornerRadius: PopoverChrome.radius(radius), style: .continuous)
+                            .fill(PopoverChrome.pixelShadow)
+                            .offset(x: 3, y: 3)
+                    }
+
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(radius), style: .continuous)
+                        .fill(PopoverChrome.card)
+                }
+            }
             .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(PopoverChrome.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(radius), style: .continuous)
+                    .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
-            .shadow(color: Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08), radius: 6, x: 0, y: 2)
+            .shadow(
+                color: PopoverChrome.isGamePixel ? .clear : PopoverChrome.glow,
+                radius: PopoverChrome.isGamePixel ? 0 : 6,
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : 2
+            )
     }
 }
 
@@ -298,9 +565,30 @@ struct LanternPrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(PopoverChrome.accentInk)
             .padding(.vertical, 10)
             .padding(.horizontal, 14)
-            .background(PopoverChrome.accent, in: Capsule())
-            .shadow(color: PopoverChrome.accent.opacity(configuration.isPressed ? 0.12 : 0.22), radius: 10, x: 0, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .background {
+                ZStack {
+                    if PopoverChrome.isGamePixel && !configuration.isPressed {
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .fill(PopoverChrome.pixelShadow)
+                            .offset(x: 3, y: 3)
+                    }
+
+                    RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                        .fill(PopoverChrome.accent)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                    .stroke(PopoverChrome.isGamePixel ? PopoverChrome.border : Color.clear, lineWidth: PopoverChrome.borderWidth)
+            )
+            .shadow(
+                color: PopoverChrome.isGamePixel ? .clear : PopoverChrome.accent.opacity(configuration.isPressed ? 0.12 : 0.22),
+                radius: PopoverChrome.isGamePixel ? 0 : 10,
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : 4
+            )
+            .offset(x: PopoverChrome.isGamePixel && configuration.isPressed ? 2 : 0, y: PopoverChrome.isGamePixel && configuration.isPressed ? 2 : 0)
+            .scaleEffect(!PopoverChrome.isGamePixel && configuration.isPressed ? 0.98 : 1)
     }
 }
 
@@ -311,8 +599,29 @@ struct LanternSecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(PopoverChrome.inkSecondary)
             .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(Color.white.opacity(configuration.isPressed ? 0.55 : 0.72), in: Capsule())
-            .overlay(Capsule().stroke(PopoverChrome.divider, lineWidth: 1))
+            .background {
+                ZStack {
+                    if PopoverChrome.isGamePixel && !configuration.isPressed {
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .fill(PopoverChrome.pixelShadow)
+                            .offset(x: 2, y: 2)
+                    }
+
+                    RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                        .fill(PopoverChrome.card.opacity(configuration.isPressed ? 0.72 : 1))
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                    .stroke(PopoverChrome.isGamePixel ? PopoverChrome.border : PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
+            )
+            .shadow(
+                color: .clear,
+                radius: 0,
+                x: 0,
+                y: 0
+            )
+            .offset(x: PopoverChrome.isGamePixel && configuration.isPressed ? 1.5 : 0, y: PopoverChrome.isGamePixel && configuration.isPressed ? 1.5 : 0)
     }
 }
 
@@ -339,8 +648,9 @@ struct AgentExperimentView: View {
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
                     Spacer()
-                    Image("FocusOnTransparent")
+                    Image(PopoverChrome.focusOnImageName)
                         .resizable()
+                        .interpolation(PopoverChrome.isGamePixel ? .none : .high)
                         .scaledToFit()
                         .frame(width: 28, height: 28)
                         .shadow(color: PopoverChrome.accent.opacity(0.22), radius: 8, x: 0, y: 3)
@@ -428,8 +738,11 @@ struct AgentExperimentView: View {
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(PopoverChrome.surfaceAlt, in: Capsule())
-                    .overlay(Capsule().stroke(PopoverChrome.divider, lineWidth: 1))
+                    .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                            .stroke(PopoverChrome.divider, lineWidth: 1)
+                    )
             }
         }
     }
@@ -466,10 +779,10 @@ struct AgentExperimentView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(PopoverChrome.inkSecondary)
-        .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(PopoverChrome.divider, lineWidth: 1)
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
         )
     }
 
@@ -481,14 +794,19 @@ struct AgentExperimentView: View {
                 } label: {
                     Text(agent)
                         .font(.system(size: 12.5, weight: selectedAgentType == agent ? .bold : .medium, design: .rounded))
-                        .foregroundStyle(selectedAgentType == agent ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .foregroundStyle(selectedAgentType == agent ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
                                 .fill(agentTypeFill(for: agent))
                         )
-                        .shadow(color: selectedAgentType == agent ? PopoverChrome.accent.opacity(0.28) : .clear, radius: 8, x: 0, y: 4)
+                        .shadow(
+                            color: PopoverChrome.isGamePixel ? .clear : (selectedAgentType == agent ? PopoverChrome.accent.opacity(0.28) : .clear),
+                            radius: PopoverChrome.isGamePixel ? 0 : 8,
+                            x: 0,
+                            y: PopoverChrome.isGamePixel ? 0 : 4
+                        )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -498,7 +816,7 @@ struct AgentExperimentView: View {
             }
         }
         .padding(4)
-        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous))
     }
 
     private var representativeAgentTypes: [String] {
@@ -511,7 +829,7 @@ struct AgentExperimentView: View {
 
     private func agentTypeFill(for agent: String) -> Color {
         if selectedAgentType == agent {
-            return PopoverChrome.accent
+            return PopoverChrome.selectionFill
         }
         if hoveredAgentType == agent {
             return PopoverChrome.card
