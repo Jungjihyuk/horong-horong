@@ -53,6 +53,26 @@ private struct ReminderOffsetOption: Identifiable {
     let minutes: Int?
 }
 
+private struct MemoCompactControlButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(isEnabled ? PopoverChrome.inkSecondary : PopoverChrome.inkTertiary.opacity(0.72))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                    .fill(PopoverChrome.card.opacity(configuration.isPressed ? 0.62 : 0.86))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                    .stroke(isEnabled ? PopoverChrome.divider : PopoverChrome.divider.opacity(0.55), lineWidth: 1)
+            )
+    }
+}
+
 struct MemoBrowserWindow: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
@@ -297,7 +317,7 @@ struct MemoBrowserWindow: View {
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 40)
-                .background(Color.white.opacity(PopoverChrome.isGamePixel ? 1 : 0.78), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous))
+                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous)
                         .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
@@ -425,10 +445,10 @@ struct MemoBrowserWindow: View {
             }
         }
         .padding(14)
-        .background(Color.white.opacity(PopoverChrome.isGamePixel ? 1 : 0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
+        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
-                .stroke(PopoverChrome.isGamePixel ? PopoverChrome.border : Color.clear, lineWidth: PopoverChrome.borderWidth)
+                .stroke(PopoverChrome.isGamePixel || PopoverChrome.isWineLantern ? PopoverChrome.border : Color.clear, lineWidth: PopoverChrome.borderWidth)
         )
         .overlay(alignment: .topTrailing) {
             Text("미리알림")
@@ -503,11 +523,11 @@ struct MemoBrowserWindow: View {
                 .frame(width: 22)
             }
             .padding(14)
-            .background(Color.white.opacity(PopoverChrome.isGamePixel ? 1 : 0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
                     .stroke(
-                        selectedMemoID == memo.id || PopoverChrome.isGamePixel ? (selectedMemoID == memo.id ? PopoverChrome.accent : PopoverChrome.border) : Color.clear,
+                        selectedMemoID == memo.id || PopoverChrome.isGamePixel || PopoverChrome.isWineLantern ? (selectedMemoID == memo.id ? PopoverChrome.accent : PopoverChrome.border) : Color.clear,
                         lineWidth: selectedMemoID == memo.id ? 1.4 : PopoverChrome.borderWidth
                     )
             )
@@ -551,7 +571,7 @@ struct MemoBrowserWindow: View {
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.white.opacity(0.45))
+            .background(PopoverChrome.card.opacity(PopoverChrome.isWineLantern ? 0.45 : 0.58))
         }
     }
 
@@ -588,7 +608,7 @@ struct MemoBrowserWindow: View {
             detailFooter(memo)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white.opacity(0.56))
+        .background(PopoverChrome.card.opacity(PopoverChrome.isWineLantern ? 0.55 : 0.72))
     }
 
     private func detailToolbar(_ memo: Memo) -> some View {
@@ -655,18 +675,22 @@ struct MemoBrowserWindow: View {
             HStack(spacing: 10) {
                 Toggle("시작일", isOn: startDateEnabledBinding(for: memo))
                     .toggleStyle(.checkbox)
+                    .tint(PopoverChrome.accent)
                     .frame(width: 76, alignment: .leading)
                 DatePicker("", selection: startDateBinding(for: memo), displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
+                    .tint(PopoverChrome.accent)
                     .disabled(memo.startDate == nil)
             }
 
             HStack(spacing: 10) {
                 Toggle("마감", isOn: deadlineEnabledBinding(for: memo))
                     .toggleStyle(.checkbox)
+                    .tint(PopoverChrome.accent)
                     .frame(width: 76, alignment: .leading)
                 DatePicker("", selection: deadlineBinding(for: memo), displayedComponents: [.date, .hourAndMinute])
                     .labelsHidden()
+                    .tint(PopoverChrome.accent)
                     .disabled(memo.deadline == nil)
             }
 
@@ -679,6 +703,7 @@ struct MemoBrowserWindow: View {
                     }
                 }
                 .labelsHidden()
+                .tint(PopoverChrome.accent)
                 .disabled(memo.deadline == nil)
                 Spacer()
             }
@@ -686,6 +711,7 @@ struct MemoBrowserWindow: View {
             HStack(spacing: 10) {
                 Toggle("미리알림 앱에 연결", isOn: reminderLinkBinding(for: memo))
                     .toggleStyle(.switch)
+                    .tint(PopoverChrome.accent)
                 Spacer()
                 if !reminderStatusMessage.isEmpty {
                     Text(reminderStatusMessage)
@@ -696,6 +722,7 @@ struct MemoBrowserWindow: View {
                     syncReminder(memo)
                 }
                 .controlSize(.small)
+                .buttonStyle(MemoCompactControlButtonStyle())
                 .disabled(!memo.isLinkedToRemindersValue)
             }
 
@@ -710,12 +737,14 @@ struct MemoBrowserWindow: View {
                     }
                 }
                 .labelsHidden()
+                .tint(PopoverChrome.accent)
                 .disabled(reminderLists.isEmpty)
                 Spacer()
             }
         }
         .font(.system(size: 13, weight: .medium, design: .rounded))
         .foregroundStyle(PopoverChrome.inkSecondary)
+        .environment(\.colorScheme, PopoverChrome.isWineLantern ? .dark : .light)
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
     }

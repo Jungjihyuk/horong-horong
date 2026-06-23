@@ -986,11 +986,11 @@ struct StatsChartView: View {
         HStack(spacing: 6) {
             Text("요일 아래 점은 그날의 집중도")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             Spacer()
             Text("🌿 흐름 유지 · 〰️ 흐름 변동 · ↩️ 복귀 필요")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PopoverChrome.inkSecondary)
         }
     }
 
@@ -1150,7 +1150,7 @@ struct StatsChartView: View {
             }
             if let snapped = weeklySnappedDate {
                 RuleMark(x: .value("선택", snapped, unit: .day))
-                    .foregroundStyle(.gray.opacity(0.35))
+                    .foregroundStyle(weeklyChartRuleColor)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
         }
@@ -1158,6 +1158,7 @@ struct StatsChartView: View {
         .chartXAxis {
             AxisMarks(values: weeklyDays) { value in
                 AxisGridLine()
+                    .foregroundStyle(weeklyChartGridColor)
                 AxisValueLabel {
                     if let date = value.as(Date.self) {
                         let key = Calendar.current.startOfDay(for: date)
@@ -1166,21 +1167,58 @@ struct StatsChartView: View {
                 }
             }
         }
+        .chartYAxis {
+            AxisMarks(position: .trailing) {
+                AxisGridLine()
+                    .foregroundStyle(weeklyChartGridColor)
+                AxisTick()
+                    .foregroundStyle(weeklyChartGridColor)
+                AxisValueLabel()
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+        }
         .chartYAxisLabel("시간 (h)")
+        .chartPlotStyle { plotArea in
+            plotArea
+                .background(weeklyChartPlotBackground)
+        }
         .chartXSelection(value: $weeklySelection)
         .frame(height: 260)
         .padding(12)
-        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(weeklyChartBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(PopoverChrome.border, lineWidth: 1)
         )
     }
 
+    private var weeklyChartBackground: Color {
+        if PopoverChrome.isWineLantern {
+            return PopoverChrome.card.opacity(0.88)
+        }
+        return Color.white.opacity(0.55)
+    }
+
+    private var weeklyChartPlotBackground: Color {
+        if PopoverChrome.isWineLantern {
+            return PopoverChrome.surface.opacity(0.34)
+        }
+        return Color.clear
+    }
+
+    private var weeklyChartGridColor: Color {
+        PopoverChrome.isWineLantern ? PopoverChrome.divider.opacity(0.9) : Color.gray.opacity(0.22)
+    }
+
+    private var weeklyChartRuleColor: Color {
+        PopoverChrome.isWineLantern ? PopoverChrome.accent.opacity(0.62) : Color.gray.opacity(0.35)
+    }
+
     private func weekdayAxisLabel(date: Date, state: AttentionFlowState) -> some View {
         VStack(spacing: 3) {
             Text(weekdayShortLabel(date))
                 .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
             Circle()
                 .fill(focusDotColor(state))
                 .frame(width: 7, height: 7)
@@ -2236,7 +2274,7 @@ struct HeatmapCalendar: View {
                 ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) { w in
                     Text(w)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -2270,7 +2308,7 @@ struct HeatmapCalendar: View {
             HStack(spacing: 2) {
                 Text("\(day)")
                     .font(.caption2.bold())
-                    .foregroundStyle(intensity > 0.55 && !isVacation ? Color.white : Color.primary)
+                    .foregroundStyle(dayTextColor(intensity: intensity, isVacation: isVacation))
                 if isVacation {
                     Text("🏖️")
                         .font(.system(size: 9))
@@ -2279,7 +2317,7 @@ struct HeatmapCalendar: View {
             if hours > 0 {
                 Text(hours >= 1 ? String(format: "%.1fh", hours) : "\(Int(round(hours * 60)))m")
                     .font(.system(size: 9))
-                    .foregroundStyle(intensity > 0.55 && !isVacation ? Color.white.opacity(0.95) : Color.secondary)
+                    .foregroundStyle(hourTextColor(intensity: intensity, isVacation: isVacation))
                     .monospacedDigit()
             } else if isVacation {
                 Text("휴가")
@@ -2290,11 +2328,7 @@ struct HeatmapCalendar: View {
         .frame(maxWidth: .infinity, minHeight: 44)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(
-                    isVacation
-                        ? vacationOrange.opacity(hours > 0 ? 0.14 + intensity * 0.18 : 0.16)
-                        : Color.accentColor.opacity(hours > 0 ? 0.2 + intensity * 0.7 : 0.06)
-                )
+                .fill(cellFill(hours: hours, intensity: intensity, isVacation: isVacation))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
@@ -2303,15 +2337,40 @@ struct HeatmapCalendar: View {
     }
 
     private func borderColor(isToday: Bool, isVacation: Bool) -> Color {
-        if isToday { return Color.accentColor }
+        if isToday { return PopoverChrome.accent }
         if isVacation { return Color.orange.opacity(0.45) }
-        return Color.clear
+        return PopoverChrome.isWineLantern ? PopoverChrome.border.opacity(0.55) : Color.clear
     }
 
     private func borderWidth(isToday: Bool, isVacation: Bool) -> CGFloat {
         if isToday { return 1.5 }
         if isVacation { return 0.8 }
-        return 0
+        return PopoverChrome.isWineLantern ? 0.6 : 0
+    }
+
+    private func cellFill(hours: Double, intensity: Double, isVacation: Bool) -> Color {
+        if isVacation {
+            return Color.orange.opacity(hours > 0 ? 0.14 + intensity * 0.18 : 0.16)
+        }
+        if PopoverChrome.isWineLantern {
+            let opacity = hours > 0 ? 0.28 + intensity * 0.5 : 0.30
+            return hours > 0 ? PopoverChrome.accent.opacity(opacity) : PopoverChrome.surfaceAlt.opacity(0.55)
+        }
+        return Color.accentColor.opacity(hours > 0 ? 0.2 + intensity * 0.7 : 0.06)
+    }
+
+    private func dayTextColor(intensity: Double, isVacation: Bool) -> Color {
+        if PopoverChrome.isWineLantern {
+            return intensity > 0.6 && !isVacation ? Color.white : PopoverChrome.ink
+        }
+        return intensity > 0.55 && !isVacation ? Color.white : Color.primary
+    }
+
+    private func hourTextColor(intensity: Double, isVacation: Bool) -> Color {
+        if PopoverChrome.isWineLantern {
+            return intensity > 0.6 && !isVacation ? Color.white.opacity(0.92) : PopoverChrome.inkSecondary
+        }
+        return intensity > 0.55 && !isVacation ? Color.white.opacity(0.95) : Color.secondary
     }
 
     private struct Cell: Identifiable {

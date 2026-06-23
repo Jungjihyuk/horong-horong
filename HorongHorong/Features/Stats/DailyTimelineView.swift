@@ -370,11 +370,18 @@ struct DailyTimelineBucketsView: View {
         }
         .frame(maxHeight: 420)
         .padding(8)
-        .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(timelineBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(PopoverChrome.border, lineWidth: 1)
         )
+    }
+
+    private var timelineBackground: Color {
+        if PopoverChrome.isWineLantern {
+            return PopoverChrome.card.opacity(0.78)
+        }
+        return Color.white.opacity(0.55)
     }
 
     private func bucketRow(_ bucket: TimelineBucket) -> some View {

@@ -304,6 +304,10 @@ enum PopoverChrome {
         theme == .gamePixel
     }
 
+    static var isWineLantern: Bool {
+        theme == .wineLantern
+    }
+
     static var panelRadius: CGFloat {
         isGamePixel ? 0 : 22
     }
@@ -325,43 +329,113 @@ enum PopoverChrome {
     }
 
     static var ink: Color {
-        isGamePixel ? Color(red: 0.114, green: 0.098, blue: 0.200) : Color(red: 0.23, green: 0.16, blue: 0.10)
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.114, green: 0.098, blue: 0.200) // #1d1933
+        case .wineLantern:
+            return Color(red: 0.945, green: 0.918, blue: 0.902) // #f1eae6
+        case .warmLantern:
+            return Color(red: 0.23, green: 0.16, blue: 0.10)
+        }
     }
 
     static var inkSecondary: Color {
-        isGamePixel ? Color(red: 0.357, green: 0.310, blue: 0.529) : Color(red: 0.48, green: 0.36, blue: 0.27)
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.357, green: 0.310, blue: 0.529) // #5b4f87
+        case .wineLantern:
+            return Color(red: 0.714, green: 0.667, blue: 0.639) // #b6aaa3
+        case .warmLantern:
+            return Color(red: 0.48, green: 0.36, blue: 0.27)
+        }
     }
 
     static var inkTertiary: Color {
-        isGamePixel ? Color(red: 0.541, green: 0.494, blue: 0.722) : Color(red: 0.64, green: 0.52, blue: 0.39)
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.541, green: 0.494, blue: 0.722) // #8a7eb8
+        case .wineLantern:
+            return Color(red: 0.494, green: 0.447, blue: 0.412) // #7e7269
+        case .warmLantern:
+            return Color(red: 0.64, green: 0.52, blue: 0.39)
+        }
     }
 
     static var surface: Color {
-        isGamePixel ? Color(red: 0.957, green: 0.933, blue: 0.976) : Color(red: 1.00, green: 0.965, blue: 0.91) // #f4eef9
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.957, green: 0.933, blue: 0.976) // #f4eef9
+        case .wineLantern:
+            return Color(red: 0.102, green: 0.082, blue: 0.094) // #1a1518
+        case .warmLantern:
+            return Color(red: 1.00, green: 0.965, blue: 0.91)
+        }
     }
 
     static var surfaceAlt: Color {
-        isGamePixel ? Color(red: 0.906, green: 0.871, blue: 0.980) : Color(red: 0.996, green: 0.94, blue: 0.86) // #e7defa
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.906, green: 0.871, blue: 0.980) // #e7defa
+        case .wineLantern:
+            return Color(red: 0.133, green: 0.106, blue: 0.122) // #221b1f
+        case .warmLantern:
+            return Color(red: 0.996, green: 0.94, blue: 0.86)
+        }
     }
 
     static var card: Color {
-        isGamePixel ? Color.white : Color.white.opacity(0.78)
+        switch theme {
+        case .gamePixel:
+            return Color.white
+        case .wineLantern:
+            return Color(red: 0.141, green: 0.110, blue: 0.129) // #241c21
+        case .warmLantern:
+            return Color.white.opacity(0.78)
+        }
     }
 
     static var border: Color {
-        isGamePixel ? pixelShadow : Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.18)
+        switch theme {
+        case .gamePixel:
+            return pixelShadow
+        case .wineLantern:
+            return Color.white.opacity(0.09)
+        case .warmLantern:
+            return Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.18)
+        }
     }
 
     static var divider: Color {
-        isGamePixel ? pixelShadow : Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.16)
+        switch theme {
+        case .gamePixel:
+            return pixelShadow
+        case .wineLantern:
+            return Color.white.opacity(0.07)
+        case .warmLantern:
+            return Color(red: 0.71, green: 0.47, blue: 0.24).opacity(0.16)
+        }
     }
 
     static var accent: Color {
-        isGamePixel ? Color(red: 0.478, green: 0.322, blue: 0.839) : Color(red: 0.94, green: 0.47, blue: 0.18) // #7a52d6
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.478, green: 0.322, blue: 0.839) // #7a52d6
+        case .wineLantern:
+            return Color(red: 0.635, green: 0.227, blue: 0.322) // #a23a52
+        case .warmLantern:
+            return Color(red: 0.94, green: 0.47, blue: 0.18)
+        }
     }
 
     static var accentSoft: Color {
-        isGamePixel ? Color(red: 0.847, green: 0.776, blue: 0.961) : Color(red: 1.00, green: 0.86, blue: 0.70) // #d8c6f5
+        switch theme {
+        case .gamePixel:
+            return Color(red: 0.847, green: 0.776, blue: 0.961) // #d8c6f5
+        case .wineLantern:
+            return Color(red: 0.227, green: 0.129, blue: 0.161) // #3a2129
+        case .warmLantern:
+            return Color(red: 1.00, green: 0.86, blue: 0.70)
+        }
     }
 
     static var accentInk: Color {
@@ -380,12 +454,47 @@ enum PopoverChrome {
         Color(red: 0.114, green: 0.098, blue: 0.200).opacity(0.055)
     }
 
+    static var glow: Color {
+        isWineLantern ? accent.opacity(0.22) : Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08)
+    }
+
+    static var primaryButtonFill: AnyShapeStyle {
+        if isGamePixel || isWineLantern {
+            return AnyShapeStyle(accent)
+        }
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [
+                    Color(red: 1.00, green: 0.60, blue: 0.24),
+                    Color(red: 0.96, green: 0.40, blue: 0.10),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
     static var focusOnImageName: String {
-        isGamePixel ? "FocusOnTransparent2" : "FocusOnTransparent"
+        switch theme {
+        case .gamePixel:
+            return "FocusOnTransparent2"
+        case .wineLantern:
+            return "FocusOnTransparent3"
+        case .warmLantern:
+            return "FocusOnTransparent"
+        }
     }
 
     static var focusOffImageName: String {
-        isGamePixel ? "FocusOffTransparent2" : "FocusOffTransparent"
+        switch theme {
+        case .gamePixel:
+            return "FocusOffTransparent2"
+        case .wineLantern:
+            return "FocusOffTransparent3"
+        case .warmLantern:
+            return "FocusOffTransparent"
+        }
     }
 
     static func radius(_ defaultRadius: CGFloat) -> CGFloat {
@@ -435,7 +544,7 @@ struct PopoverCardModifier: ViewModifier {
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
             .shadow(
-                color: PopoverChrome.isGamePixel ? .clear : Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08),
+                color: PopoverChrome.isGamePixel ? .clear : PopoverChrome.glow,
                 radius: PopoverChrome.isGamePixel ? 0 : 6,
                 x: 0,
                 y: PopoverChrome.isGamePixel ? 0 : 2
@@ -499,7 +608,7 @@ struct LanternSecondaryButtonStyle: ButtonStyle {
                     }
 
                     RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
-                        .fill(PopoverChrome.isGamePixel ? PopoverChrome.card : Color.white.opacity(configuration.isPressed ? 0.55 : 0.72))
+                        .fill(PopoverChrome.card.opacity(configuration.isPressed ? 0.72 : 1))
                 }
             }
             .overlay(

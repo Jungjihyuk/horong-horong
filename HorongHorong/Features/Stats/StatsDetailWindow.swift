@@ -34,6 +34,7 @@ struct StatsDetailWindow: View {
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var attentionDaySummaries: [AttentionDaySummary] = []
     @State private var showEditor: Bool = false
+    @State private var hoveredViewMode: StatsViewMode?
     @State private var trackerStore = TrackerStateStore.shared
     @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
 
@@ -225,13 +226,7 @@ struct StatsDetailWindow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(PopoverChrome.inkSecondary)
 
-            Picker("기간", selection: $viewMode) {
-                ForEach(StatsViewMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 200)
+            modePicker
 
             Spacer()
 
@@ -255,6 +250,47 @@ struct StatsDetailWindow: View {
                 .fill(PopoverChrome.divider)
                 .frame(height: 1)
         }
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 0) {
+            ForEach(StatsViewMode.allCases) { mode in
+                Button {
+                    viewMode = mode
+                } label: {
+                    Text(mode.rawValue)
+                        .font(.system(size: 12, weight: viewMode == mode ? .bold : .medium, design: .rounded))
+                        .foregroundStyle(viewMode == mode ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
+                        .frame(width: 54)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                                .fill(modeChipFill(for: mode))
+                        )
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    hoveredViewMode = isHovering ? mode : nil
+                }
+            }
+        }
+        .padding(3)
+        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous)
+                .stroke(PopoverChrome.divider, lineWidth: 1)
+        )
+    }
+
+    private func modeChipFill(for mode: StatsViewMode) -> Color {
+        if viewMode == mode {
+            return PopoverChrome.selectionFill
+        }
+        if hoveredViewMode == mode {
+            return PopoverChrome.card
+        }
+        return .clear
     }
 
     private var dateNavigator: some View {

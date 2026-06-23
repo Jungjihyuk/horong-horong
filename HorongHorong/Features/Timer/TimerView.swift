@@ -36,19 +36,7 @@ private struct TimerGradientButtonStyle: ButtonStyle {
     }
 
     private var timerButtonFill: some ShapeStyle {
-        if PopoverChrome.isGamePixel {
-            return AnyShapeStyle(PopoverChrome.accent)
-        }
-        return AnyShapeStyle(
-            LinearGradient(
-                colors: [
-                    Color(red: 1.00, green: 0.60, blue: 0.24),
-                    Color(red: 0.96, green: 0.40, blue: 0.10),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        PopoverChrome.primaryButtonFill
     }
 }
 

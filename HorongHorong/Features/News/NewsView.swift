@@ -137,11 +137,13 @@ struct NewsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
             .background {
-                if PopoverChrome.isGamePixel {
+                if PopoverChrome.isGamePixel || PopoverChrome.isWineLantern {
                     ZStack {
-                        RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
-                            .fill(PopoverChrome.pixelShadow)
-                            .offset(x: 3, y: 3)
+                        if PopoverChrome.isGamePixel {
+                            RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
+                                .fill(PopoverChrome.pixelShadow)
+                                .offset(x: 3, y: 3)
+                        }
                         RoundedRectangle(cornerRadius: PopoverChrome.controlRadius, style: .continuous)
                             .fill(PopoverChrome.accent)
                     }
