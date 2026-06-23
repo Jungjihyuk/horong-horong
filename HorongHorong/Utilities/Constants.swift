@@ -654,6 +654,7 @@ enum Constants {
 
     enum PopoverTheme: String, CaseIterable, Identifiable {
         case warmLantern
+        case wineLantern
         case gamePixel
 
         var id: String { rawValue }
@@ -661,6 +662,7 @@ enum Constants {
         var label: String {
             switch self {
             case .warmLantern: return "따뜻한 등불"
+            case .wineLantern: return "와인 랜턴"
             case .gamePixel: return "게임 픽셀"
             }
         }
@@ -668,6 +670,7 @@ enum Constants {
         var symbol: String {
             switch self {
             case .warmLantern: return "🏮"
+            case .wineLantern: return "🍷"
             case .gamePixel: return "▣"
             }
         }
