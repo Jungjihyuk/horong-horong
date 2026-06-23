@@ -652,8 +652,33 @@ enum Constants {
 
     static let defaultNewsMaxItemsPerSource = 10
 
+    enum PopoverTheme: String, CaseIterable, Identifiable {
+        case warmLantern
+        case gamePixel
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .warmLantern: return "따뜻한 등불"
+            case .gamePixel: return "게임 픽셀"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .warmLantern: return "🏮"
+            case .gamePixel: return "▣"
+            }
+        }
+
+        static func normalized(rawValue: String) -> Self {
+            Self(rawValue: rawValue) ?? .warmLantern
+        }
+    }
+
     static let defaultAppearanceMode = "light"
-    static let defaultPopoverTheme = "warmLantern"
+    static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
 
     static let availableNewsSchedules: [(value: String, label: String)] = [
         ("manual", "수동"),

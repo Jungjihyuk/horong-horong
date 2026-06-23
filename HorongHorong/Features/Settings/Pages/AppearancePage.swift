@@ -26,7 +26,7 @@ struct AppearancePage: View {
             if appearanceMode != "light" && appearanceMode != "dark" {
                 appearanceMode = "light"
             }
-            if popoverTheme != Constants.defaultPopoverTheme {
+            if Constants.PopoverTheme(rawValue: popoverTheme) == nil {
                 popoverTheme = Constants.defaultPopoverTheme
             }
         }
@@ -94,7 +94,7 @@ struct AppearancePage: View {
         SettingsGroupCard("테마") {
             SettingsRow(
                 "팝오버 테마",
-                subtitle: "현재 팝오버에 적용되는 테마입니다. 다른 테마는 준비 중입니다."
+                subtitle: "팝오버와 관련 상세창의 UI 스타일을 선택합니다."
             ) {
                 popoverThemeMenu
             }
@@ -103,10 +103,12 @@ struct AppearancePage: View {
 
     private var popoverThemeMenu: some View {
         Menu {
-            Button {
-                popoverTheme = Constants.defaultPopoverTheme
-            } label: {
-                Label("따뜻한 등불", systemImage: popoverTheme == Constants.defaultPopoverTheme ? "checkmark" : "")
+            ForEach(Constants.PopoverTheme.allCases) { theme in
+                Button {
+                    popoverTheme = theme.rawValue
+                } label: {
+                    Label(theme.label, systemImage: popoverTheme == theme.rawValue ? "checkmark" : "")
+                }
             }
 
             Button {} label: {
@@ -116,19 +118,12 @@ struct AppearancePage: View {
                 }
             }
             .disabled(true)
-
-            Button {} label: {
-                HStack {
-                    Text("게임 픽셀")
-                    Text("준비 중")
-                }
-            }
-            .disabled(true)
         } label: {
+            let selectedTheme = Constants.PopoverTheme.normalized(rawValue: popoverTheme)
             HStack(spacing: 8) {
-                Text("🏮")
+                Text(selectedTheme.symbol)
                     .font(.system(size: 14))
-                Text("따뜻한 등불")
+                Text(selectedTheme.label)
                     .font(.callout)
                     .lineLimit(1)
                 Spacer(minLength: 8)

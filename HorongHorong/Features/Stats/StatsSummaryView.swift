@@ -86,14 +86,19 @@ struct StatsSummaryView: View {
                 } label: {
                     Text(item.rawValue)
                         .font(.system(size: 13, weight: scope == item ? .bold : .medium, design: .rounded))
-                        .foregroundStyle(scope == item ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .foregroundStyle(scope == item ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
                                 .fill(scopeChipFill(for: item))
                         )
-                        .shadow(color: scope == item ? PopoverChrome.accent.opacity(0.28) : .clear, radius: 8, x: 0, y: 4)
+                        .shadow(
+                            color: PopoverChrome.isGamePixel ? .clear : (scope == item ? PopoverChrome.accent.opacity(0.28) : .clear),
+                            radius: PopoverChrome.isGamePixel ? 0 : 8,
+                            x: 0,
+                            y: PopoverChrome.isGamePixel ? 0 : 4
+                        )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -103,12 +108,12 @@ struct StatsSummaryView: View {
             }
         }
         .padding(4)
-        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(13), style: .continuous))
     }
 
     private func scopeChipFill(for item: StatsSummaryScope) -> Color {
         if scope == item {
-            return PopoverChrome.accent
+            return PopoverChrome.selectionFill
         }
         if hoveredScope == item {
             return PopoverChrome.card
@@ -256,9 +261,9 @@ struct StatsSummaryView: View {
 
     private var horongStatusCard: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image("FocusOnTransparent")
+            Image(PopoverChrome.focusOnImageName)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(PopoverChrome.isGamePixel ? .none : .high)
                 .scaledToFit()
                 .padding(3)
                 .frame(width: 30, height: 30)
@@ -290,7 +295,7 @@ struct StatsSummaryView: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
-        .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
     }
 
     private var usageBars: some View {
@@ -449,9 +454,9 @@ struct StatsSummaryView: View {
 
     private var weekStatusCard: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image("FocusOnTransparent")
+            Image(PopoverChrome.focusOnImageName)
                 .resizable()
-                .interpolation(.high)
+                .interpolation(PopoverChrome.isGamePixel ? .none : .high)
                 .scaledToFit()
                 .padding(3)
                 .frame(width: 30, height: 30)
@@ -474,7 +479,7 @@ struct StatsSummaryView: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
-        .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
     }
 
     private var detailButton: some View {
