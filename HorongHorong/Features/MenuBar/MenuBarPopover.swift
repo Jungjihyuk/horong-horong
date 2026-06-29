@@ -8,6 +8,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
     case stats = "통계"
     case news = "뉴스"
     case agent = "Agent"
+    case achievement = "성취"
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
         switch self {
         case .timer: return "timer"
         case .memo: return "note.text"
+        case .achievement: return "target"
         case .stats: return "chart.bar"
         case .news: return "newspaper"
         case .agent: return "bolt.horizontal.circle"
@@ -211,6 +213,8 @@ struct MenuBarPopover: View {
             }
         case .memo:
             MemoListView()
+        case .achievement:
+            AchievementSummaryView()
         case .stats:
             StatsSummaryView()
         case .news:
@@ -555,6 +559,42 @@ struct PopoverCardModifier: ViewModifier {
 extension View {
     func popoverCard(padding: CGFloat = 12, radius: CGFloat = 14) -> some View {
         modifier(PopoverCardModifier(padding: padding, radius: radius))
+    }
+
+    func popoverScrollbar() -> some View {
+        background(PopoverScrollViewConfigurator())
+    }
+}
+
+private struct PopoverScrollViewConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            configureScrollView(from: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configureScrollView(from: nsView)
+        }
+    }
+
+    private func configureScrollView(from view: NSView) {
+        var candidate = view.superview
+        while let current = candidate {
+            if let scrollView = current as? NSScrollView {
+                scrollView.hasVerticalScroller = true
+                scrollView.hasHorizontalScroller = false
+                scrollView.autohidesScrollers = true
+                scrollView.scrollerStyle = .overlay
+                scrollView.verticalScroller?.controlSize = .mini
+                scrollView.verticalScroller?.knobStyle = .default
+                return
+            }
+            candidate = current.superview
+        }
     }
 }
 

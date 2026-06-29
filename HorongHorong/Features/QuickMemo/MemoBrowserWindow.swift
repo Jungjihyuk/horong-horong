@@ -3,6 +3,7 @@ import SwiftData
 
 private enum MemoBrowserFilter: Hashable {
     case all
+    case completed
     case reminders
     case pinned
     case dueSoon
@@ -12,6 +13,8 @@ private enum MemoBrowserFilter: Hashable {
         switch self {
         case .all:
             return "전체"
+        case .completed:
+            return "완료"
         case .reminders:
             return "미리알림"
         case .pinned:
@@ -27,6 +30,8 @@ private enum MemoBrowserFilter: Hashable {
         switch self {
         case .all:
             return "tray.full"
+        case .completed:
+            return "checkmark.circle"
         case .reminders:
             return "list.bullet.circle"
         case .pinned:
@@ -118,6 +123,8 @@ struct MemoBrowserWindow: View {
             switch selectedFilter {
             case .all:
                 return !memo.isCompletedValue && !memo.isArchivedValue
+            case .completed:
+                return memo.isCompletedValue && !memo.isArchivedValue
             case .reminders:
                 return false
             case .pinned:
@@ -175,7 +182,7 @@ struct MemoBrowserWindow: View {
                 return !item.isCompleted
             case .dueSoon:
                 return item.dueDate != nil && !item.isCompleted
-            case .pinned, .icon:
+            case .completed, .pinned, .icon:
                 return false
             }
         }
@@ -222,6 +229,7 @@ struct MemoBrowserWindow: View {
         VStack(alignment: .leading, spacing: 18) {
             sidebarSectionTitle("보기")
             sidebarButton(.all, count: activeMemos.count + unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
+            sidebarButton(.completed, count: allMemos.filter { $0.isCompletedValue && !$0.isArchivedValue }.count)
             sidebarButton(.reminders, count: unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
             sidebarButton(.pinned, count: activeMemos.filter(\.isPinned).count)
             sidebarButton(.dueSoon, count: activeMemos.filter { $0.deadline != nil }.count + unlinkedExternalReminderItems.filter { $0.dueDate != nil && !$0.isCompleted }.count)

@@ -7,6 +7,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case hotkey
     case category
     case stats
+    case achievement
     case news
     case agent
     case memo
@@ -23,6 +24,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .hotkey:     return "단축키"
         case .category:   return "카테고리 매핑"
         case .stats:      return "통계"
+        case .achievement: return "성취"
         case .news:       return "뉴스"
         case .agent:      return "AI Agent"
         case .memo:       return "메모"
@@ -40,6 +42,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .hotkey:     return "전역 단축키를 확인하고 변경합니다."
         case .category:   return "카테고리·앱 매핑·자리 비움 임계값을 한 곳에서 관리합니다."
         case .stats:      return "타임라인 표시와 데이터 보관 정책을 설정합니다."
+        case .achievement: return "할일을 목표로 묶는 추천 방식과 생성 기본값을 설정합니다."
         case .news:       return "관심사 키워드와 뉴스 큐레이션 옵션을 설정합니다."
         case .agent:      return "AI Agent 실험에 사용할 기본값을 설정합니다."
         case .memo:       return "퀵 메모 동작을 설정합니다."
@@ -56,6 +59,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .hotkey:     return "keyboard"
         case .category:   return "square.grid.2x2"
         case .stats:      return "chart.bar"
+        case .achievement: return "target"
         case .news:       return "newspaper"
         case .agent:      return "bolt.horizontal.circle"
         case .memo:       return "note.text"
@@ -88,6 +92,10 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
             return ["타임라인 표시", "시작 시간", "종료 시간", "시간 간격",
                     "앱 사용 시간 추적", "민감 작업 모드", "전체 추적 상태",
                     "휴가 기간", "데이터 보관 기간", "주간 리포트 자동 생성"]
+        case .achievement:
+            return ["성취", "목표 추천", "추천 묶음", "추천 개수", "할일 최대 개수",
+                    "주간 목표", "월간 목표", "월간 추천", "활성화 기준",
+                    "목표 초안", "Foundation Models", "Apple 모델"]
         case .news:
             return ["소스", "YouTube", "Google News", "Hacker News", "RSS", "YOZM IT",
                     "관심 키워드", "관심사", "파이프라인",
@@ -122,7 +130,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
     var tabs: [SettingsTab] {
         switch self {
         case .preferences: return [.general, .appearance, .hotkey]
-        case .features:    return [.timer, .memo, .category, .stats, .news, .agent]
+        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .achievement]
         case .advanced:    return [.data, .about]
         }
     }
