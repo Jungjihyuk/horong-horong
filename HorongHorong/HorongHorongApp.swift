@@ -20,7 +20,7 @@ private struct ScreenshotCaptureConfiguration {
             return CGSize(width: Constants.popoverWidth, height: Constants.popoverMaxHeight)
         case .settings:
             return SettingsTheme.windowDefaultSize
-        case .statsDetail:
+        case .statsDetail, .achievementDetail:
             return CGSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
         }
     }
@@ -29,7 +29,7 @@ private struct ScreenshotCaptureConfiguration {
         switch target {
         case .popover:
             return [.borderless]
-        case .settings, .statsDetail:
+        case .settings, .statsDetail, .achievementDetail:
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         }
     }
@@ -104,6 +104,7 @@ private enum ScreenshotCaptureTarget {
     case popover(PopoverTab)
     case settings(SettingsTab)
     case statsDetail(StatsViewMode)
+    case achievementDetail
 
     var identifier: String {
         switch self {
@@ -113,12 +114,18 @@ private enum ScreenshotCaptureTarget {
             return "settings-\(tab.screenshotIdentifier)"
         case .statsDetail(let mode):
             return "stats-detail-\(mode.screenshotIdentifier)"
+        case .achievementDetail:
+            return "achievement-detail"
         }
     }
 
     init?(identifier: String) {
         let parts = identifier.lowercased().split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else {
+            if identifier == "achievement-detail" {
+                self = .achievementDetail
+                return
+            }
             if let tab = PopoverTab(screenshotIdentifier: identifier) {
                 self = .popover(tab)
                 return
@@ -136,6 +143,8 @@ private enum ScreenshotCaptureTarget {
         case "stats-detail":
             guard let mode = StatsViewMode(screenshotIdentifier: parts[1]) else { return nil }
             self = .statsDetail(mode)
+        case "achievement-detail":
+            self = .achievementDetail
         default:
             return nil
         }
@@ -147,6 +156,7 @@ private extension PopoverTab {
         switch self {
         case .timer: return "timer"
         case .memo: return "memo"
+        case .achievement: return "achievement"
         case .stats: return "stats"
         case .news: return "news"
         case .agent: return "agent"
@@ -159,6 +169,8 @@ private extension PopoverTab {
             self = .timer
         case "memo":
             self = .memo
+        case "achievement":
+            self = .achievement
         case "stats":
             self = .stats
         case "news":
@@ -220,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let schema = Schema([
             Memo.self,
+            AchievementGoalRecord.self,
             FocusSession.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
@@ -288,7 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .popover:
             window.isOpaque = false
             window.backgroundColor = .clear
-        case .settings, .statsDetail:
+        case .settings, .statsDetail, .achievementDetail:
             window.isOpaque = true
             window.backgroundColor = config.resolvedWindowBackgroundColor
             hostingView.wantsLayer = true
@@ -331,6 +344,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .statsDetail(let mode):
             return AnyView(
                 StatsDetailWindow(initialViewMode: mode)
+                    .environment(appState)
+                    .modelContainer(modelContainer)
+                    .frame(
+                        width: Constants.statsWindowWidth,
+                        height: Constants.statsWindowHeight
+                    )
+            )
+        case .achievementDetail:
+            return AnyView(
+                AchievementDetailWindow()
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(
@@ -519,6 +542,13 @@ struct HorongHorongApp: App {
 
         Window("호롱호롱 통계", id: "stats-detail") {
             StatsDetailWindow()
+                .environment(appDelegate.appState)
+                .modelContainer(appDelegate.modelContainer)
+        }
+        .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
+
+        Window("호롱호롱 성취", id: "achievement-detail") {
+            AchievementDetailWindow()
                 .environment(appDelegate.appState)
                 .modelContainer(appDelegate.modelContainer)
         }

@@ -114,6 +114,7 @@ struct SettingsRoot: View {
         case .hotkey:     HotkeyPage()
         case .category:   CategoryMappingPage()
         case .stats:      StatsPage()
+        case .achievement: AchievementPage()
         case .news:       NewsPage()
         case .agent:      AgentPage()
         case .memo:       MemoPage()
@@ -159,6 +160,15 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineStartHour)
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineEndHour)
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineBucketMinutes)
+        case .achievement:
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementDismissedSuggestionKeys)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyMaxFlagCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyFlagSelections)
         case .news:
             defaults.removeObject(forKey: Constants.NewsStorageKey.interestKeywords)
             defaults.removeObject(forKey: Constants.NewsStorageKey.selectedProvider)
@@ -178,5 +188,224 @@ struct SettingsRoot: View {
         default:
             break
         }
+    }
+}
+
+private struct AchievementPage: View {
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
+    private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
+    private var suggestionMaxTodoCount: Int = Constants.defaultAchievementSuggestionMaxTodoCount
+    @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
+    private var monthlySuggestionMinWeeklyGoalCount: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
+    @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionCount)
+    private var monthlySuggestionCount: Int = Constants.defaultAchievementMonthlySuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
+    private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
+    @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
+    private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
+
+    var body: some View {
+        SettingsPageScroll {
+            SettingsPageHeader(title: SettingsTab.achievement.label, subtitle: SettingsTab.achievement.subtitle)
+
+            SettingsGroupCard("목표 추천") {
+                SettingsRow(
+                    "주간 목표 추천 개수",
+                    subtitle: "할일을 묶어 한 번에 보여줄 주간 목표 초안 수입니다."
+                ) {
+                    Text("\(clampedSuggestionCount)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedSuggestionCount)개",
+                        value: Binding(
+                            get: { clampedSuggestionCount },
+                            set: { suggestionCount = clamped($0, in: Constants.achievementSuggestionCountRange) }
+                        ),
+                        in: Constants.achievementSuggestionCountRange
+                    )
+                    .labelsHidden()
+                }
+
+                SettingsRow(
+                    "묶음당 할일 최대 개수",
+                    subtitle: "추천 목표 하나에 포함할 할일 수를 제한합니다. 값이 클수록 더 큰 목표 초안이 만들어집니다."
+                ) {
+                    Text("\(clampedMaxTodoCount)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedMaxTodoCount)개",
+                        value: Binding(
+                            get: { clampedMaxTodoCount },
+                            set: { suggestionMaxTodoCount = clamped($0, in: Constants.achievementSuggestionMaxTodoCountRange) }
+                        ),
+                        in: Constants.achievementSuggestionMaxTodoCountRange
+                    )
+                    .labelsHidden()
+                }
+            }
+
+            SettingsGroupCard("월간 목표 추천") {
+                SettingsRow(
+                    "활성화 기준",
+                    subtitle: "주간 목표가 이 개수 이상 있을 때부터 월간 목표 추천을 함께 보여줍니다."
+                ) {
+                    Text("\(clampedMonthlyMinWeeklyGoalCount)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedMonthlyMinWeeklyGoalCount)개",
+                        value: Binding(
+                            get: { clampedMonthlyMinWeeklyGoalCount },
+                            set: { monthlySuggestionMinWeeklyGoalCount = clamped($0, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange) }
+                        ),
+                        in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange
+                    )
+                    .labelsHidden()
+                }
+
+                SettingsRow(
+                    "월간 목표 추천 개수",
+                    subtitle: "주간 목표들을 다시 묶어 제안할 월간 목표 초안의 최대 개수입니다."
+                ) {
+                    Text("\(clampedMonthlySuggestionCount)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedMonthlySuggestionCount)개",
+                        value: Binding(
+                            get: { clampedMonthlySuggestionCount },
+                            set: { monthlySuggestionCount = clamped($0, in: Constants.achievementMonthlySuggestionCountRange) }
+                        ),
+                        in: Constants.achievementMonthlySuggestionCountRange
+                    )
+                    .labelsHidden()
+                }
+            }
+
+            SettingsGroupCard("추천 제외 카테고리") {
+                Text("할일보다 보관 성격이 강한 메모 카테고리는 목표 추천과 수동 연결 목록에서 제외합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+
+                ForEach(MemoIcon.options, id: \.self) { icon in
+                    SettingsRow(
+                        "\(icon) \(MemoIcon.label(for: icon))",
+                        subtitle: excludedMemoIcons.contains(icon) ? "목표 연결에서 제외됨" : "목표 연결에 포함됨"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { excludedMemoIcons.contains(icon) },
+                            set: { isExcluded in
+                                var next = excludedMemoIcons
+                                if isExcluded {
+                                    next.insert(icon)
+                                } else {
+                                    next.remove(icon)
+                                }
+                                excludedMemoIconsRaw = encodeExcludedMemoIcons(next)
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+                }
+            }
+
+            SettingsGroupCard("여정") {
+                SettingsRow(
+                    "최대 깃발 개수",
+                    subtitle: "여정 길 위에 직접 지정할 수 있는 월간 목표 깃발 수입니다."
+                ) {
+                    Text("\(clampedJourneyMaxFlagCount)개")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedJourneyMaxFlagCount)개",
+                        value: Binding(
+                            get: { clampedJourneyMaxFlagCount },
+                            set: { journeyMaxFlagCount = clamped($0, in: Constants.achievementJourneyMaxFlagCountRange) }
+                        ),
+                        in: Constants.achievementJourneyMaxFlagCountRange
+                    )
+                    .labelsHidden()
+                }
+            }
+
+            SettingsGroupCard("적용 방식") {
+                Text("추천은 목표 초안만 만듭니다. 할일을 주간 목표로 묶고, 주간 목표가 충분히 쌓이면 월간 목표 초안도 함께 제안합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            }
+        }
+        .onAppear(perform: normalizeValues)
+        .onChange(of: suggestionCount) { _, _ in normalizeValues() }
+        .onChange(of: suggestionMaxTodoCount) { _, _ in normalizeValues() }
+        .onChange(of: monthlySuggestionMinWeeklyGoalCount) { _, _ in normalizeValues() }
+        .onChange(of: monthlySuggestionCount) { _, _ in normalizeValues() }
+        .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
+        .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
+    }
+
+    private var clampedSuggestionCount: Int {
+        clamped(suggestionCount, in: Constants.achievementSuggestionCountRange)
+    }
+
+    private var clampedMaxTodoCount: Int {
+        clamped(suggestionMaxTodoCount, in: Constants.achievementSuggestionMaxTodoCountRange)
+    }
+
+    private var clampedMonthlyMinWeeklyGoalCount: Int {
+        clamped(monthlySuggestionMinWeeklyGoalCount, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
+    }
+
+    private var clampedMonthlySuggestionCount: Int {
+        clamped(monthlySuggestionCount, in: Constants.achievementMonthlySuggestionCountRange)
+    }
+
+    private var clampedJourneyMaxFlagCount: Int {
+        clamped(journeyMaxFlagCount, in: Constants.achievementJourneyMaxFlagCountRange)
+    }
+
+    private var excludedMemoIcons: Set<String> {
+        let raw = excludedMemoIconsRaw == Constants.legacyAchievementSuggestionExcludedMemoIconsRaw
+            ? Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
+            : excludedMemoIconsRaw
+        let icons = raw
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { MemoIcon.options.contains($0) }
+        return Set(icons)
+    }
+
+    private func normalizeValues() {
+        suggestionCount = clampedSuggestionCount
+        suggestionMaxTodoCount = clampedMaxTodoCount
+        monthlySuggestionMinWeeklyGoalCount = clampedMonthlyMinWeeklyGoalCount
+        monthlySuggestionCount = clampedMonthlySuggestionCount
+        journeyMaxFlagCount = clampedJourneyMaxFlagCount
+        excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)
+    }
+
+    private func clamped(_ value: Int, in range: ClosedRange<Int>) -> Int {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    private func encodeExcludedMemoIcons(_ icons: Set<String>) -> String {
+        MemoIcon.options
+            .filter { icons.contains($0) }
+            .joined(separator: ",")
     }
 }
