@@ -57,6 +57,7 @@ struct NewsView: View {
                 }
                 .padding(.trailing, 12)
             }
+            .popoverScrollbar()
 
             if showExecutionEnvironmentAlert {
                 popoverAlertOverlay

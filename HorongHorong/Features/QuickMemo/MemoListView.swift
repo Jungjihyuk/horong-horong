@@ -1,10 +1,16 @@
 import SwiftUI
 import SwiftData
 
+private enum MemoListTab: String, CaseIterable {
+    case active = "메모"
+    case completed = "완료"
+}
+
 struct MemoListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
+    @State private var selectedTab: MemoListTab = .active
     @State private var editingMemo: Memo?
     @State private var editContent: String = ""
     @State private var showNewMemoField: Bool = false
@@ -12,10 +18,27 @@ struct MemoListView: View {
     @State private var newMemoIcon: String = MemoIcon.defaultIcon
     @State private var hostWindow: NSWindow?
 
+    private var activeMemos: [Memo] {
+        sortedActiveMemos(allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue })
+    }
+
+    private var completedMemos: [Memo] {
+        allMemos
+            .filter { $0.isCompletedValue && !$0.isArchivedValue }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     private var visibleMemos: [Memo] {
-        let activeMemos = allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue }
-        let pinned = activeMemos.filter { $0.isPinned }
-        let recent = activeMemos.filter { !$0.isPinned }
+        selectedTab == .active ? activeMemos : completedMemos
+    }
+
+    private var hasMemoRows: Bool {
+        !activeMemos.isEmpty || !completedMemos.isEmpty
+    }
+
+    private func sortedActiveMemos(_ memos: [Memo]) -> [Memo] {
+        let pinned = memos.filter { $0.isPinned }
+        let recent = memos.filter { !$0.isPinned }
         return pinned + recent
     }
 
@@ -23,7 +46,11 @@ struct MemoListView: View {
         VStack(spacing: 10) {
             memoBrowserButton
 
-            if allMemos.isEmpty {
+            if hasMemoRows {
+                tabPicker
+            }
+
+            if !hasMemoRows {
                 emptyState
             } else {
                 memoList
@@ -66,6 +93,29 @@ struct MemoListView: View {
         .buttonStyle(.plain)
     }
 
+    private var tabPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(MemoListTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(tab.rawValue)
+                        Text("\(tab == .active ? activeMemos.count : completedMemos.count)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(selectedTab == tab ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(selectedTab == tab ? PopoverChrome.accent : PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "note.text")
@@ -83,15 +133,31 @@ struct MemoListView: View {
     }
 
     private var memoList: some View {
-        ScrollView {
-            LazyVStack(spacing: 4) {
-                ForEach(visibleMemos) { memo in
-                    memoRow(memo)
+        Group {
+            if visibleMemos.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: selectedTab == .completed ? "checkmark.circle" : "note.text")
+                        .font(.system(size: 28, weight: .regular))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    Text(selectedTab == .completed ? "완료된 메모가 없습니다" : "메모가 없습니다")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
                 }
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .popoverCard()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(visibleMemos) { memo in
+                            memoRow(memo)
+                        }
+                    }
+                    .padding(.trailing, 12)
+                }
+                .popoverScrollbar()
+                .frame(maxHeight: .infinity)
             }
-            .padding(.trailing, 12)
         }
-        .frame(maxHeight: .infinity)
     }
 
     private func memoRow(_ memo: Memo) -> some View {
@@ -282,20 +348,20 @@ struct MemoListView: View {
 enum MemoIcon {
     static let defaultIcon = "📝"
     static let pinnedIcon = "📌"
-    static let options = ["🌱", "🐜", "🔗", "📝", "☕️", "💡", "📚", "📜", "✅", "⭐️"]
+    static let options = ["💡", "🐜", "🔗", "📝", "☕️", "🌱", "📚", "📜", "⭐️"]
 
     static func label(for icon: String) -> String {
         switch icon {
-        case "🌱": return "아이디어"
+        case "💡": return "아이디어"
         case "🐜": return "작업"
         case "🔗": return "링크"
         case "🚀": return "링크"
         case "📝": return "메모"
         case "☕️": return "읽을거리"
-        case "💡": return "힌트"
+        case "🌱": return "영감"
         case "📚": return "공부"
         case "📜": return "참고"
-        case "✅": return "할 일"
+        case "✅": return "완료"
         case "⭐️": return "중요"
         default: return "아이콘"
         }
