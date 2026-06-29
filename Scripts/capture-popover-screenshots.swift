@@ -4,12 +4,13 @@ import CoreGraphics
 import Foundation
 import AppKit
 
-private let popoverTabs = ["timer", "memo", "stats", "news", "agent"]
+private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achievement"]
 private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "news", "agent", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
 private let allTargets = popoverTabs.map { "popover:\($0)" }
     + ["settings:general"]
     + statsDetailModes.map { "stats-detail:\($0)" }
+    + ["achievement-detail"]
 
 private struct ScriptError: LocalizedError {
     let message: String
@@ -85,7 +86,7 @@ private struct CaptureOptions {
 
     private static func isValidTarget(_ target: String) -> Bool {
         let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return false }
+        guard parts.count == 2 else { return target == "achievement-detail" }
         switch parts[0] {
         case "popover":
             return popoverTabs.contains(parts[1])
@@ -93,6 +94,8 @@ private struct CaptureOptions {
             return settingsTabs.contains(parts[1])
         case "stats-detail":
             return statsDetailModes.contains(parts[1])
+        case "achievement-detail":
+            return true
         default:
             return false
         }
@@ -104,9 +107,9 @@ private struct CaptureOptions {
 
     Options:
       --output <dir>        PNG 저장 경로. 기본값: Artifacts/Screenshots
-      --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체
-                            예: popover:timer,settings:appearance,stats-detail:weekly
-      --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,stats
+      --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail
+                            예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail
+      --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,stats,achievement
       --skip-build          기존 빌드 산출물을 사용합니다.
       --derived-data <dir>  xcodebuild DerivedData 경로. 기본값: /private/tmp/horonghorong-screenshot-derived-data
       --app <path>          직접 지정한 .app을 캡처합니다. 지정 시 빌드를 생략합니다.

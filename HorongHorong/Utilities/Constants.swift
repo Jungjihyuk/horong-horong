@@ -378,6 +378,14 @@ enum Constants {
         static let timelineStartHour = "timeline.startHour"
         static let timelineEndHour = "timeline.endHour"
         static let timelineBucketMinutes = "timeline.bucketMinutes"
+        static let achievementSuggestionCount = "achievement.suggestionCount"
+        static let achievementSuggestionMaxTodoCount = "achievement.suggestionMaxTodoCount"
+        static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
+        static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
+        static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
+        static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
+        static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
+        static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
         static let menubarLabelStyle = "menubar.labelStyle"
         static let menubarTimeStyle = "menubar.timeStyle"
         static let menubarIcon = "menubar.icon"
@@ -450,6 +458,21 @@ enum Constants {
     static let defaultTimelineEndHour = 24
     static let defaultTimelineBucketMinutes = 30
     static let timelineBucketMinuteOptions: [Int] = [10, 15, 20, 30, 45, 60, 90, 120]
+
+    // MARK: - 성취 추천 기본값
+    static let defaultAchievementSuggestionCount = 4
+    static let defaultAchievementSuggestionMaxTodoCount = 5
+    static let defaultAchievementMonthlySuggestionMinWeeklyGoalCount = 3
+    static let defaultAchievementMonthlySuggestionCount = 2
+    static let legacyAchievementSuggestionExcludedMemoIconsRaw = "☕️,💡,📜"
+    static let defaultAchievementSuggestionExcludedMemoIcons = ["☕️", "🌱", "📜"]
+    static let defaultAchievementSuggestionExcludedMemoIconsRaw = defaultAchievementSuggestionExcludedMemoIcons.joined(separator: ",")
+    static let achievementSuggestionCountRange = 1...8
+    static let achievementSuggestionMaxTodoCountRange = 2...12
+    static let achievementMonthlySuggestionMinWeeklyGoalCountRange = 2...8
+    static let achievementMonthlySuggestionCountRange = 1...6
+    static let defaultAchievementJourneyMaxFlagCount = 5
+    static let achievementJourneyMaxFlagCountRange = 1...8
 
     // MARK: - 뉴스 큐레이션 설정
     static var defaultNewsRunnerPath: String {
