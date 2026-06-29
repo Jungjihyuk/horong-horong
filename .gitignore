@@ -90,6 +90,9 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
+## Source asset archive (not bundled directly)
+assets/icons/
+
 
 # ========================= 3. Agents (Python) =========================
 
