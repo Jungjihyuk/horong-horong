@@ -5,14 +5,14 @@
     <link>https://jungjihyuk.github.io/horong-horong/updates/appcast.xml</link>
     <description>Update feed for direct distribution builds.</description>
     <item>
-      <title>Version 0.1.3</title>
+      <title>Version 0.2.0</title>
       <sparkle:version>6</sparkle:version>
-      <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
-      <pubDate>Mon, 01 Jun 2026 16:11:45 +0000</pubDate>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <pubDate>Wed, 01 Jul 2026 16:00:16 +0000</pubDate>
       <enclosure
-        url="https://github.com/Jungjihyuk/horong-horong/releases/download/v0.1.3/HorongHorong-0.1.3.zip"
-        sparkle:edSignature="791Qyv8E1dGVPXRZeFIuZYxDTNJeu45eFE1y+tXTGOgwDGDq84MxbzjmjZ5AbNPiY4G0FpW2sw9MTH+I3phKDA=="
-        length="11117992"
+        url="https://github.com/Jungjihyuk/horong-horong/releases/download/v0.2.0/HorongHorong-0.2.0.zip"
+        sparkle:edSignature="rCa+6vjsrYrbFKtq+teUbTwqjNtVjWxcHxZhx+lBQmnTXkai1ThVzJ8anyCxlUVJ4tNDxG9jtqBSj020lnjCDg=="
+        length="22333933"
         type="application/octet-stream" />
     </item>
   </channel>
