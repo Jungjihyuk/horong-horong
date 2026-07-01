@@ -6,7 +6,7 @@
     <description>Update feed for direct distribution builds.</description>
     <item>
       <title>Version 0.2.0</title>
-      <sparkle:version>6</sparkle:version>
+      <sparkle:version>7</sparkle:version>
       <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
       <pubDate>Wed, 01 Jul 2026 16:00:16 +0000</pubDate>
       <enclosure
