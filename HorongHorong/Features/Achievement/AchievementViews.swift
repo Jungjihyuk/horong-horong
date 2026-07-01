@@ -1742,12 +1742,35 @@ private struct AchievementProgressBar: View {
     }
 }
 
+struct AchievementDetailScreenshotState {
+    let tabIdentifier: String
+    let weekGoalFilterIdentifier: String?
+
+    init(tabIdentifier: String, weekGoalFilterIdentifier: String? = nil) {
+        self.tabIdentifier = tabIdentifier
+        self.weekGoalFilterIdentifier = weekGoalFilterIdentifier
+    }
+}
+
 private enum AchievementDetailTab: String, CaseIterable, Identifiable {
     case progress = "진행"
     case journey = "여정"
     case records = "달성 기록"
 
     var id: String { rawValue }
+
+    init?(screenshotIdentifier: String) {
+        switch screenshotIdentifier.lowercased() {
+        case "progress":
+            self = .progress
+        case "journey":
+            self = .journey
+        case "records":
+            self = .records
+        default:
+            return nil
+        }
+    }
 }
 
 private enum AchievementPeriod: String, CaseIterable, Identifiable {
@@ -1763,6 +1786,19 @@ private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
     case reward = "보상만"
 
     var id: String { rawValue }
+
+    init?(screenshotIdentifier: String) {
+        switch screenshotIdentifier.lowercased() {
+        case "all":
+            self = .all
+        case "goal":
+            self = .goal
+        case "reward":
+            self = .reward
+        default:
+            return nil
+        }
+    }
 }
 
 private enum AchievementRecordScope: String, CaseIterable, Identifiable {
@@ -1803,6 +1839,17 @@ struct AchievementDetailWindow: View {
     @State private var selectedJourneyVisionID: UUID?
     @State private var selectedJourneyFlagIndex: Int?
     @State private var journeyFlagRefreshID = UUID()
+
+    init(initialScreenshotState: AchievementDetailScreenshotState? = nil) {
+        if let tabIdentifier = initialScreenshotState?.tabIdentifier,
+           let tab = AchievementDetailTab(screenshotIdentifier: tabIdentifier) {
+            _selectedTab = State(initialValue: tab)
+        }
+        if let filterIdentifier = initialScreenshotState?.weekGoalFilterIdentifier,
+           let filter = AchievementWeekGoalFilter(screenshotIdentifier: filterIdentifier) {
+            _selectedWeekGoalFilter = State(initialValue: filter)
+        }
+    }
 
     private var goals: [AchievementGoal] {
         AchievementDataBuilder.goals(from: goalRecords, memos: memos)
