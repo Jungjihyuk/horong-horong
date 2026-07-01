@@ -68,15 +68,6 @@ require_clean_tree() {
   fi
 }
 
-generate_project() {
-  if command -v xcodegen >/dev/null 2>&1; then
-    xcodegen generate --spec "$PROJECT_ROOT/project.yml"
-  else
-    echo "xcodegen is required to sync project.yml into the Xcode project." >&2
-    exit 1
-  fi
-}
-
 build_release_app() {
   xcodebuild \
     -project "$PROJECT_ROOT/HorongHorong.xcodeproj" \
@@ -189,7 +180,6 @@ if [[ -z "$APP_PATH" ]]; then
   if [[ "$SKIP_MAIN_CHECK" -eq 0 ]]; then
     require_main_checkout
   fi
-  generate_project
   require_clean_tree
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     build_release_app
