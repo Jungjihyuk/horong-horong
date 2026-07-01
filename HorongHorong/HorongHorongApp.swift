@@ -7,8 +7,10 @@ private struct ScreenshotCaptureConfiguration {
     static let tabArgumentName = "--screenshot-tab"
     static let environmentName = "HORONGHORONG_SCREENSHOT_TARGET"
     static let legacyEnvironmentName = "HORONGHORONG_SCREENSHOT_TAB"
+    static let popoverThemeEnvironmentName = "HORONGHORONG_SCREENSHOT_POPOVER_THEME"
 
     let target: ScreenshotCaptureTarget
+    let popoverTheme: String?
 
     var windowTitle: String {
         "HorongHorong Screenshot - \(target.identifier)"
@@ -20,7 +22,7 @@ private struct ScreenshotCaptureConfiguration {
             return CGSize(width: Constants.popoverWidth, height: Constants.popoverMaxHeight)
         case .settings:
             return SettingsTheme.windowDefaultSize
-        case .statsDetail, .achievementDetail:
+        case .statsDetail, .achievementDetail(_):
             return CGSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
         }
     }
@@ -29,7 +31,7 @@ private struct ScreenshotCaptureConfiguration {
         switch target {
         case .popover:
             return [.borderless]
-        case .settings, .statsDetail, .achievementDetail:
+        case .settings, .statsDetail, .achievementDetail(_):
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         }
     }
@@ -78,25 +80,33 @@ private struct ScreenshotCaptureConfiguration {
         if let argumentIndex = arguments.firstIndex(of: targetArgumentName),
            arguments.indices.contains(argumentIndex + 1),
            let target = ScreenshotCaptureTarget(identifier: arguments[argumentIndex + 1]) {
-            return ScreenshotCaptureConfiguration(target: target)
+            return ScreenshotCaptureConfiguration(target: target, popoverTheme: validatedPopoverTheme)
         }
 
         if let argumentIndex = arguments.firstIndex(of: tabArgumentName),
            arguments.indices.contains(argumentIndex + 1),
            let tab = PopoverTab(screenshotIdentifier: arguments[argumentIndex + 1]) {
-            return ScreenshotCaptureConfiguration(target: .popover(tab))
+            return ScreenshotCaptureConfiguration(target: .popover(tab), popoverTheme: validatedPopoverTheme)
         }
 
         if let environmentValue = ProcessInfo.processInfo.environment[environmentName],
            let target = ScreenshotCaptureTarget(identifier: environmentValue) {
-            return ScreenshotCaptureConfiguration(target: target)
+            return ScreenshotCaptureConfiguration(target: target, popoverTheme: validatedPopoverTheme)
         }
 
         if let environmentValue = ProcessInfo.processInfo.environment[legacyEnvironmentName],
            let tab = PopoverTab(screenshotIdentifier: environmentValue) {
-            return ScreenshotCaptureConfiguration(target: .popover(tab))
+            return ScreenshotCaptureConfiguration(target: .popover(tab), popoverTheme: validatedPopoverTheme)
         }
         return nil
+    }
+
+    private static var validatedPopoverTheme: String? {
+        guard let theme = ProcessInfo.processInfo.environment[popoverThemeEnvironmentName],
+              Constants.PopoverTheme(rawValue: theme) != nil else {
+            return nil
+        }
+        return theme
     }
 }
 
@@ -104,7 +114,7 @@ private enum ScreenshotCaptureTarget {
     case popover(PopoverTab)
     case settings(SettingsTab)
     case statsDetail(StatsViewMode)
-    case achievementDetail
+    case achievementDetail(AchievementDetailScreenshotMode = .progress)
 
     var identifier: String {
         switch self {
@@ -114,8 +124,8 @@ private enum ScreenshotCaptureTarget {
             return "settings-\(tab.screenshotIdentifier)"
         case .statsDetail(let mode):
             return "stats-detail-\(mode.screenshotIdentifier)"
-        case .achievementDetail:
-            return "achievement-detail"
+        case .achievementDetail(let mode):
+            return mode == .progress ? "achievement-detail" : "achievement-detail-\(mode.screenshotIdentifier)"
         }
     }
 
@@ -123,7 +133,7 @@ private enum ScreenshotCaptureTarget {
         let parts = identifier.lowercased().split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else {
             if identifier == "achievement-detail" {
-                self = .achievementDetail
+                self = .achievementDetail()
                 return
             }
             if let tab = PopoverTab(screenshotIdentifier: identifier) {
@@ -144,10 +154,37 @@ private enum ScreenshotCaptureTarget {
             guard let mode = StatsViewMode(screenshotIdentifier: parts[1]) else { return nil }
             self = .statsDetail(mode)
         case "achievement-detail":
-            self = .achievementDetail
+            guard let mode = AchievementDetailScreenshotMode(screenshotIdentifier: parts[1]) else { return nil }
+            self = .achievementDetail(mode)
         default:
             return nil
         }
+    }
+}
+
+private enum AchievementDetailScreenshotMode: String {
+    case progress
+    case timelineAll = "timeline-all"
+    case journey
+    case records
+
+    var screenshotIdentifier: String { rawValue }
+
+    var initialState: AchievementDetailScreenshotState {
+        switch self {
+        case .progress:
+            return AchievementDetailScreenshotState(tabIdentifier: "progress")
+        case .timelineAll:
+            return AchievementDetailScreenshotState(tabIdentifier: "progress", weekGoalFilterIdentifier: "all")
+        case .journey:
+            return AchievementDetailScreenshotState(tabIdentifier: "journey")
+        case .records:
+            return AchievementDetailScreenshotState(tabIdentifier: "records")
+        }
+    }
+
+    init?(screenshotIdentifier: String) {
+        self.init(rawValue: screenshotIdentifier.lowercased())
     }
 }
 
@@ -281,6 +318,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func presentScreenshotWindow(config: ScreenshotCaptureConfiguration) {
+        if let popoverTheme = config.popoverTheme {
+            var argumentDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+            argumentDomain[Constants.AppStorageKey.popoverTheme] = popoverTheme
+            UserDefaults.standard.setVolatileDomain(argumentDomain, forName: UserDefaults.argumentDomain)
+        }
+
         let contentSize = config.contentSize
         let rootView = screenshotRootView(for: config.target, colorScheme: config.colorScheme)
         let hostingView = NSHostingView(rootView: rootView)
@@ -301,7 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .popover:
             window.isOpaque = false
             window.backgroundColor = .clear
-        case .settings, .statsDetail, .achievementDetail:
+        case .settings, .statsDetail, .achievementDetail(_):
             window.isOpaque = true
             window.backgroundColor = config.resolvedWindowBackgroundColor
             hostingView.wantsLayer = true
@@ -351,9 +394,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         height: Constants.statsWindowHeight
                     )
             )
-        case .achievementDetail:
+        case .achievementDetail(let mode):
             return AnyView(
-                AchievementDetailWindow()
+                AchievementDetailWindow(initialScreenshotState: mode.initialState)
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(
