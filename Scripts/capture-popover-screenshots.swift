@@ -7,22 +7,52 @@ import AppKit
 private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achievement"]
 private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "news", "agent", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
+private let achievementDetailModes = ["progress", "timeline-all", "journey", "records"]
+private let popoverThemes: [PopoverThemeOption] = [
+    PopoverThemeOption(identifier: "warm-lantern", rawValue: "warmLantern"),
+    PopoverThemeOption(identifier: "wine-lantern", rawValue: "wineLantern"),
+    PopoverThemeOption(identifier: "game-pixel", rawValue: "gamePixel"),
+]
 private let allTargets = popoverTabs.map { "popover:\($0)" }
     + ["settings:general"]
     + statsDetailModes.map { "stats-detail:\($0)" }
     + ["achievement-detail"]
+    + achievementDetailModes
+        .filter { $0 != "progress" }
+        .map { "achievement-detail:\($0)" }
 
 private struct ScriptError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
 }
 
+private struct PopoverThemeOption {
+    let identifier: String
+    let rawValue: String
+}
+
+private struct CaptureRequest {
+    let target: String
+    let theme: PopoverThemeOption?
+
+    var titleIdentifier: String {
+        target.replacingOccurrences(of: ":", with: "-")
+    }
+
+    var fileIdentifier: String {
+        guard let theme else { return titleIdentifier }
+        return "\(titleIdentifier)-\(theme.identifier)"
+    }
+}
+
 private struct CaptureOptions {
     var outputDirectory: URL?
-    var targets = allTargets
+    var requests = [CaptureRequest]()
     var skipBuild = false
     var derivedDataPath = URL(fileURLWithPath: "/private/tmp/horonghorong-screenshot-derived-data")
     var appPath: URL?
+    private var baseTargets = allTargets
+    private var selectedThemes: [PopoverThemeOption]?
 
     init(arguments: [String]) throws {
         var index = 1
@@ -40,7 +70,7 @@ private struct CaptureOptions {
                 guard invalidTargets.isEmpty else {
                     throw ScriptError(message: "알 수 없는 캡처 대상입니다: \(invalidTargets.joined(separator: ", "))")
                 }
-                targets = rawTargets
+                baseTargets = rawTargets
             case "--tabs":
                 let rawTabs = try Self.parseList(Self.value(after: argument, at: &index, in: arguments))
                 guard !rawTabs.isEmpty else {
@@ -50,7 +80,13 @@ private struct CaptureOptions {
                 guard invalidTabs.isEmpty else {
                     throw ScriptError(message: "알 수 없는 탭입니다: \(invalidTabs.joined(separator: ", "))")
                 }
-                targets = rawTabs.map { "popover:\($0)" }
+                baseTargets = rawTabs.map { "popover:\($0)" }
+            case "--themes":
+                selectedThemes = try Self.parseThemes(Self.value(after: argument, at: &index, in: arguments), optionName: argument)
+            case "--timer-themes":
+                let themes = try Self.parseThemes(Self.value(after: argument, at: &index, in: arguments), optionName: argument)
+                baseTargets = ["popover:timer"]
+                selectedThemes = themes
             case "--skip-build":
                 skipBuild = true
             case "--derived-data":
@@ -66,6 +102,7 @@ private struct CaptureOptions {
             }
             index += 1
         }
+        requests = Self.makeRequests(targets: baseTargets, themes: selectedThemes)
     }
 
     private static func value(after option: String, at index: inout Int, in arguments: [String]) throws -> String {
@@ -84,6 +121,39 @@ private struct CaptureOptions {
             .filter { !$0.isEmpty }
     }
 
+    private static func parseThemes(_ value: String, optionName: String) throws -> [PopoverThemeOption] {
+        let rawThemes = parseList(value)
+        guard !rawThemes.isEmpty else {
+            throw ScriptError(message: "\(optionName) 값이 비어 있습니다.")
+        }
+        if rawThemes == ["all"] {
+            return popoverThemes
+        }
+        let themes = rawThemes.compactMap { themeOption(for: $0) }
+        guard themes.count == rawThemes.count else {
+            let invalidThemes = rawThemes.filter { themeOption(for: $0) == nil }
+            throw ScriptError(
+                message: "알 수 없는 테마입니다: \(invalidThemes.joined(separator: ", ")). 사용 가능: \(popoverThemes.map(\.identifier).joined(separator: ", "))"
+            )
+        }
+        return themes
+    }
+
+    private static func themeOption(for value: String) -> PopoverThemeOption? {
+        popoverThemes.first { theme in
+            theme.identifier == value || theme.rawValue.lowercased() == value
+        }
+    }
+
+    private static func makeRequests(targets: [String], themes: [PopoverThemeOption]?) -> [CaptureRequest] {
+        guard let themes else {
+            return targets.map { CaptureRequest(target: $0, theme: nil) }
+        }
+        return themes.flatMap { theme in
+            targets.map { CaptureRequest(target: $0, theme: theme) }
+        }
+    }
+
     private static func isValidTarget(_ target: String) -> Bool {
         let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return target == "achievement-detail" }
@@ -95,7 +165,7 @@ private struct CaptureOptions {
         case "stats-detail":
             return statsDetailModes.contains(parts[1])
         case "achievement-detail":
-            return true
+            return achievementDetailModes.contains(parts[1])
         default:
             return false
         }
@@ -107,9 +177,11 @@ private struct CaptureOptions {
 
     Options:
       --output <dir>        PNG 저장 경로. 기본값: Artifacts/Screenshots
-      --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail
-                            예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail
+      --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail 전체 상태
+                            예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail:timeline-all
       --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,stats,achievement
+      --themes <list>       현재 캡처 대상 전체를 지정한 팝오버 테마별로 캡처합니다. 예: warm-lantern,wine-lantern,game-pixel 또는 all
+      --timer-themes <list> 타이머 탭을 지정한 팝오버 테마별로 캡처합니다. 예: warm-lantern,wine-lantern,game-pixel 또는 all
       --skip-build          기존 빌드 산출물을 사용합니다.
       --derived-data <dir>  xcodebuild DerivedData 경로. 기본값: /private/tmp/horonghorong-screenshot-derived-data
       --app <path>          직접 지정한 .app을 캡처합니다. 지정 시 빌드를 생략합니다.
@@ -314,14 +386,18 @@ private func doubleValue(_ value: Any?) -> Double? {
     }
 }
 
-private func launchApp(appPath: URL, target: String) throws -> NSRunningApplication {
+private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?) throws -> NSRunningApplication {
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.arguments = ["--screenshot-target", target]
     configuration.activates = true
     configuration.addsToRecentItems = false
     configuration.createsNewApplicationInstance = true
+    var environment = ["HORONGHORONG_SCREENSHOT_TARGET": target]
+    if let theme {
+        environment["HORONGHORONG_SCREENSHOT_POPOVER_THEME"] = theme.rawValue
+    }
     configuration.environment = ProcessInfo.processInfo.environment.merging(
-        ["HORONGHORONG_SCREENSHOT_TARGET": target],
+        environment,
         uniquingKeysWith: { _, newValue in newValue }
     )
 
@@ -345,10 +421,9 @@ private func launchApp(appPath: URL, target: String) throws -> NSRunningApplicat
     return launchedApp
 }
 
-private func capture(target: String, appPath: URL, outputDirectory: URL) throws {
-    let fileIdentifier = target.replacingOccurrences(of: ":", with: "-")
-    let title = "HorongHorong Screenshot - \(fileIdentifier)"
-    let runningApp = try launchApp(appPath: appPath, target: target)
+private func capture(request: CaptureRequest, appPath: URL, outputDirectory: URL) throws {
+    let title = "HorongHorong Screenshot - \(request.titleIdentifier)"
+    let runningApp = try launchApp(appPath: appPath, target: request.target, theme: request.theme)
 
     defer {
         runningApp.terminate()
@@ -356,9 +431,10 @@ private func capture(target: String, appPath: URL, outputDirectory: URL) throws 
 
     let windowID = try waitForWindow(title: title, processID: runningApp.processIdentifier)
     Thread.sleep(forTimeInterval: 0.4)
-    let outputURL = outputDirectory.appendingPathComponent("\(fileIdentifier).png")
+    let outputURL = outputDirectory.appendingPathComponent("\(request.fileIdentifier).png")
     try captureWindow(id: windowID, to: outputURL)
-    print("✓ \(target) -> \(outputURL.path)")
+    let themeText = request.theme.map { " [\($0.identifier)]" } ?? ""
+    print("✓ \(request.target)\(themeText) -> \(outputURL.path)")
 }
 
 do {
@@ -384,8 +460,8 @@ do {
     }
 
     let appPath = try options.appPath ?? builtAppPath(derivedDataPath: options.derivedDataPath)
-    for target in options.targets {
-        try capture(target: target, appPath: appPath, outputDirectory: outputDirectory)
+    for request in options.requests {
+        try capture(request: request, appPath: appPath, outputDirectory: outputDirectory)
     }
 } catch {
     fputs("error: \(error.localizedDescription)\n", stderr)
