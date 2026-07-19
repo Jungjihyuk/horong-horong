@@ -12,7 +12,15 @@ final class AppTracker: @unchecked Sendable {
     var isTracking: Bool = false
 
     // 세그먼트 최소 길이(초). 깜빡 포커스 이동은 저장하지 않음
-    private static let minSegmentSeconds: TimeInterval = 3
+    static let minimumSegmentSeconds: TimeInterval = 3
+
+    static func shouldPersistSegment(
+        elapsed: TimeInterval,
+        hasPreviousSegment: Bool
+    ) -> Bool {
+        guard elapsed >= 0 else { return false }
+        return hasPreviousSegment || elapsed >= minimumSegmentSeconds
+    }
 
     // MARK: - 유휴(자리 비움 후보) 세그먼트
     private struct PendingIdleSegment {
@@ -69,8 +77,9 @@ final class AppTracker: @unchecked Sendable {
     }
 
     func stopTracking() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
+        let endedAt = Date()
+        saveCurrentAppUsage(endedAt: endedAt)
+        saveCurrentSegment(endedAt: endedAt)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         pollTimer?.invalidate()
         pollTimer = nil
@@ -78,14 +87,15 @@ final class AppTracker: @unchecked Sendable {
     }
 
     @objc private func appDidActivate(_ notification: Notification) {
-        saveCurrentAppUsage()
+        let transitionedAt = Date()
+        saveCurrentAppUsage(endedAt: transitionedAt)
         // 직전 앱의 세그먼트를 먼저 저장한 뒤에 포커스 앱을 교체
-        saveCurrentSegment()
+        saveCurrentSegment(endedAt: transitionedAt)
 
         if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
             currentApp = app
-            currentAppStartTime = Date()
-            currentSegmentStart = Date()
+            currentAppStartTime = transitionedAt
+            currentSegmentStart = transitionedAt
         }
 
         // 앱 전환은 클릭/단축키 등 사용자 입력 → 유휴 상태에서 돌아온 신호일 수 있음
@@ -93,12 +103,12 @@ final class AppTracker: @unchecked Sendable {
     }
 
     @objc private func systemWillSleep() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
+        let endedAt = Date()
+        saveCurrentAppUsage(endedAt: endedAt)
+        saveCurrentSegment(endedAt: endedAt)
 
         // 슬립은 확실한 자리 비움 → 프롬프트 없이 pending 구간 자동 차감
         if let pending = pendingIdleSegment {
-            let endedAt = Date()
             subtractIdleTime(from: pending, endedAt: endedAt)
             pendingIdleSegment = nil
         }
@@ -118,12 +128,13 @@ final class AppTracker: @unchecked Sendable {
     }
 
     private func onPoll() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
+        let endedAt = Date()
+        saveCurrentAppUsage(endedAt: endedAt)
+        saveCurrentSegment(endedAt: endedAt)
         checkIdleState()
     }
 
-    private func saveCurrentAppUsage() {
+    private func saveCurrentAppUsage(endedAt: Date) {
         guard let app = currentApp,
               let startTime = currentAppStartTime,
               let bundleId = app.bundleIdentifier,
@@ -132,22 +143,22 @@ final class AppTracker: @unchecked Sendable {
 
         // 추적이 꺼져있거나(민감 작업/휴가) 비활성 기간이면 저장 건너뛰고 타이머만 리셋.
         guard TrackerStateStore.shared.shouldRecord() else {
-            currentAppStartTime = Date()
+            currentAppStartTime = endedAt
             return
         }
 
-        let elapsed = Int(Date().timeIntervalSince(startTime))
+        let elapsed = Int(endedAt.timeIntervalSince(startTime))
         guard elapsed > 0 else { return }
 
         // 카테고리/대상 결정: 브라우저 엔터 URL 은 pseudo bundleId 로 분리 저장
         // (예: com.google.Chrome.youtube → "Google Chrome (YouTube)")
         guard let target = resolveTarget(bundleId: bundleId, appName: appName) else {
             // 추적 대상 아님: 타이머만 리셋하고 저장은 건너뜀
-            currentAppStartTime = Date()
+            currentAppStartTime = endedAt
             return
         }
 
-        let today = Calendar.current.startOfDay(for: Date())
+        let today = Calendar.current.startOfDay(for: endedAt)
         let targetBundleId = target.bundleId
         let targetDate = today
 
@@ -175,7 +186,7 @@ final class AppTracker: @unchecked Sendable {
         }
 
         try? trackingContext.save()
-        currentAppStartTime = Date()
+        currentAppStartTime = endedAt
     }
 
     // MARK: - 타임라인 세그먼트 저장
@@ -183,8 +194,9 @@ final class AppTracker: @unchecked Sendable {
     /// 현재 앱의 세그먼트(진입~현재)를 AppUsageSegment 로 기록한다.
     /// - 폴링/전환/슬립/종료 시점에 호출된다.
     /// - 같은 앱에 머무는 동안에는 직전 세그먼트를 연장해 `AppUsageSegment` 를 통계 원천으로 유지한다.
-    /// - `Self.minSegmentSeconds` 미만의 깜빡 전환은 저장하지 않는다.
-    private func saveCurrentSegment() {
+    /// - `Self.minimumSegmentSeconds` 미만의 새 앱 깜빡 전환은 저장하지 않는다.
+    /// - 이미 저장 중인 앱의 짧은 마지막 조각은 실제 종료 시각까지 연장한다.
+    private func saveCurrentSegment(endedAt: Date) {
         guard let app = currentApp,
               let start = currentSegmentStart,
               let bundleId = app.bundleIdentifier,
@@ -193,19 +205,13 @@ final class AppTracker: @unchecked Sendable {
 
         // 추적 비활성(민감/휴가) 시 세그먼트 저장도 건너뛴다.
         guard TrackerStateStore.shared.shouldRecord() else {
-            currentSegmentStart = Date()
+            currentSegmentStart = endedAt
             return
         }
 
-        let now = Date()
-        let elapsed = now.timeIntervalSince(start)
-        guard elapsed >= Self.minSegmentSeconds else {
-            currentSegmentStart = now
-            return
-        }
-
+        let elapsed = endedAt.timeIntervalSince(start)
         guard let target = resolveTarget(bundleId: bundleId, appName: appName) else {
-            currentSegmentStart = now
+            currentSegmentStart = endedAt
             return
         }
 
@@ -223,21 +229,30 @@ final class AppTracker: @unchecked Sendable {
             sortBy: [SortDescriptor(\.endTime, order: .reverse)]
         )
 
-        if let previous = try? trackingContext.fetch(descriptor).first {
+        let previous = try? trackingContext.fetch(descriptor).first
+        guard Self.shouldPersistSegment(
+            elapsed: elapsed,
+            hasPreviousSegment: previous != nil
+        ) else {
+            currentSegmentStart = endedAt
+            return
+        }
+
+        if let previous {
             previous.appName = target.appName
-            previous.endTime = now
+            previous.endTime = endedAt
         } else {
             let segment = AppUsageSegment(
                 appName: target.appName,
                 bundleIdentifier: target.bundleId,
                 category: target.category,
                 startTime: start,
-                endTime: now
+                endTime: endedAt
             )
             trackingContext.insert(segment)
         }
         try? trackingContext.save()
-        currentSegmentStart = now
+        currentSegmentStart = endedAt
     }
 
     // MARK: - 브라우저 URL 조회 (AppleScript)
@@ -430,7 +445,7 @@ final class AppTracker: @unchecked Sendable {
             }
         )
         let overlapping = (try? trackingContext.fetch(segDescriptor)) ?? []
-        let minSec = Self.minSegmentSeconds
+        let minSec = Self.minimumSegmentSeconds
 
         for seg in overlapping {
             let origStart = seg.startTime
@@ -458,6 +473,8 @@ final class AppTracker: @unchecked Sendable {
                 let app = seg.appName
                 let bundle = seg.bundleIdentifier
                 let cat = seg.category
+                let isManual = seg.isManual
+                let isUserModified = seg.isUserModified || seg.isManual
 
                 if frontDuration >= minSec {
                     seg.endTime = idleStart
@@ -470,7 +487,9 @@ final class AppTracker: @unchecked Sendable {
                         bundleIdentifier: bundle,
                         category: cat,
                         startTime: idleEnd,
-                        endTime: origEnd
+                        endTime: origEnd,
+                        isManual: isManual,
+                        isUserModified: isUserModified
                     )
                     trackingContext.insert(tail)
                 }

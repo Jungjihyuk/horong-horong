@@ -14,6 +14,8 @@ private struct StatsLoadedData {
     let weekSegments: [AppUsageSegment]
     let periodSegments: [AppUsageSegment]
     let timerSessions: [FocusSession]
+    let pomodoroReflections: [PomodoroReflection]
+    let pomodoroTaskCompletions: [PomodoroTaskCompletion]
     let breakTransitionIntents: [BreakTransitionIntent]
     let aggregateSnapshot: StatsAggregateSnapshot?
     let attentionDaySummaries: [AttentionDaySummary]
@@ -30,6 +32,8 @@ struct StatsDetailWindow: View {
     @State private var weekSegments: [AppUsageSegment] = []
     @State private var periodSegments: [AppUsageSegment] = []
     @State private var timerSessions: [FocusSession] = []
+    @State private var pomodoroReflections: [PomodoroReflection] = []
+    @State private var pomodoroTaskCompletions: [PomodoroTaskCompletion] = []
     @State private var breakTransitionIntents: [BreakTransitionIntent] = []
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var attentionDaySummaries: [AttentionDaySummary] = []
@@ -64,6 +68,8 @@ struct StatsDetailWindow: View {
                         weekSegments: weekSegments,
                         periodSegments: periodSegments,
                         timerSessions: timerSessions,
+                        pomodoroReflections: pomodoroReflections,
+                        pomodoroTaskCompletions: pomodoroTaskCompletions,
                         breakTransitionIntents: breakTransitionIntents,
                         aggregateSnapshot: aggregateSnapshot,
                         attentionDaySummaries: attentionDaySummaries,
@@ -78,6 +84,10 @@ struct StatsDetailWindow: View {
         .id(popoverTheme)
         .onAppear {
             logViewTrigger("appear")
+            loadRecords()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pomodoroReflectionDidChange)) { _ in
+            invalidateLoadCache()
             loadRecords()
         }
         .onChange(of: selectedDate) { _, _ in
@@ -389,6 +399,14 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail records fetch mode=\(viewMode.rawValue, privacy: .public) count=\(fetchedRecords.count) elapsed=\(recordsElapsedMs)ms")
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
+        let fetchedPomodoroReflections = loadPomodoroReflections(
+            for: fetchedSessions,
+            mode: viewMode
+        )
+        let fetchedPomodoroTaskCompletions = loadPomodoroTaskCompletions(
+            for: fetchedSessions,
+            mode: viewMode
+        )
         let fetchedBreakTransitions = loadBreakTransitionIntents(start: startDate, end: endDate)
         let attentionSummaryStart = attentionSummaryLoadStart(for: viewMode, start: startDate)
         let finalizedAttentionDays = AttentionDaySummaryRecorder.finalizeCompletedDays(
@@ -418,6 +436,8 @@ struct StatsDetailWindow: View {
             weekSegments: loadedSegments.week,
             periodSegments: loadedSegments.period,
             timerSessions: fetchedSessions,
+            pomodoroReflections: fetchedPomodoroReflections,
+            pomodoroTaskCompletions: fetchedPomodoroTaskCompletions,
             breakTransitionIntents: fetchedBreakTransitions,
             aggregateSnapshot: aggregate,
             attentionDaySummaries: finalizedAttentionDays
@@ -437,10 +457,12 @@ struct StatsDetailWindow: View {
         weekSegments = data.weekSegments
         periodSegments = data.periodSegments
         timerSessions = data.timerSessions
+        pomodoroReflections = data.pomodoroReflections
+        pomodoroTaskCompletions = data.pomodoroTaskCompletions
         breakTransitionIntents = data.breakTransitionIntents
         aggregateSnapshot = data.aggregateSnapshot
         attentionDaySummaries = data.attentionDaySummaries
-        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) breakTransitions=\(data.breakTransitionIntents.count) attentionDays=\(data.attentionDaySummaries.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
+        Self.logger.notice("StatsDetail view update apply mode=\(viewMode.rawValue, privacy: .public) records=\(data.records.count) dailySegments=\(data.dailySegments.count) weekSegments=\(data.weekSegments.count) periodSegments=\(data.periodSegments.count) sessions=\(data.timerSessions.count) reflections=\(data.pomodoroReflections.count) taskCompletions=\(data.pomodoroTaskCompletions.count) breakTransitions=\(data.breakTransitionIntents.count) attentionDays=\(data.attentionDaySummaries.count) aggregate=\(data.aggregateSnapshot == nil ? "none" : "ready", privacy: .public)")
     }
 
     private func attentionSummaryLoadStart(for mode: StatsViewMode, start: Date) -> Date {
@@ -502,6 +524,40 @@ struct StatsDetailWindow: View {
         let elapsedMs = elapsedMs(since: startedAt)
         Self.logger.notice("StatsDetail sessions fetch count=\(sessions.count) elapsed=\(elapsedMs)ms")
         return sessions
+    }
+
+    private func loadPomodoroReflections(
+        for sessions: [FocusSession],
+        mode: StatsViewMode
+    ) -> [PomodoroReflection] {
+        guard mode == .daily, !sessions.isEmpty else { return [] }
+
+        return sessions.compactMap { session in
+            let sessionID = session.id
+            var descriptor = FetchDescriptor<PomodoroReflection>(
+                predicate: #Predicate { $0.focusSessionID == sessionID }
+            )
+            descriptor.fetchLimit = 1
+            return try? modelContext.fetch(descriptor).first
+        }
+        .sorted { $0.answeredAt < $1.answeredAt }
+    }
+
+    private func loadPomodoroTaskCompletions(
+        for sessions: [FocusSession],
+        mode: StatsViewMode
+    ) -> [PomodoroTaskCompletion] {
+        guard mode == .daily, !sessions.isEmpty else { return [] }
+
+        return sessions.compactMap { session in
+            let sessionID = session.id
+            var descriptor = FetchDescriptor<PomodoroTaskCompletion>(
+                predicate: #Predicate { $0.focusSessionID == sessionID }
+            )
+            descriptor.fetchLimit = 1
+            return try? modelContext.fetch(descriptor).first
+        }
+        .sorted { $0.completedAt < $1.completedAt }
     }
 
     private func loadBreakTransitionIntents(start: Date, end: Date) -> [BreakTransitionIntent] {

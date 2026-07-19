@@ -271,6 +271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Memo.self,
             AchievementGoalRecord.self,
             FocusSession.self,
+            PomodoroReflection.self,
+            PomodoroTaskCompletion.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
             BreakTransitionIntent.self,
@@ -295,6 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         migrateRemovedDocumentCategory(in: context)
         seedDefaultCategoryRules(in: context)
+        repairOrphanedPomodoroRecords(in: context)
 
         timerManager.setModelContext(context)
 
@@ -306,6 +309,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTracker.setModelContainer(modelContainer)
         appTracker.startTracking()
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(openTodayTaskComposer(_:)),
+            name: .todayPlanningReminderSelected,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSCalendarDayChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSSystemClockDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSSystemTimeZoneDidChange,
+            object: nil
+        )
+        TodayPlanningReminderCoordinator.shared.start(modelContext: context)
         NotificationManager.shared.requestAuthorization()
         #if DIRECT_DISTRIBUTION
         AppUpdateManager.shared.refreshState()
@@ -315,6 +343,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.quickMemoPanel.toggle(modelContext: context)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        TodayPlanningReminderCoordinator.shared.stop()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func openTodayTaskComposer(_ notification: Notification) {
+        guard UserDefaults.standard.bool(
+            forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+        ) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+
+        let context = modelContainer.mainContext
+        guard let memos = try? context.fetch(FetchDescriptor<Memo>()) else { return }
+        guard !TodayPlanningReminderPolicy.hasTodayTask(in: memos, now: Date()) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+        quickMemoPanel.showTodayTask(modelContext: context)
+    }
+
+    @objc private func todayPlanningDateDidChange(_ notification: Notification) {
+        TodayPlanningReminderCoordinator.shared.systemDateDidChange()
     }
 
     private func presentScreenshotWindow(config: ScreenshotCaptureConfiguration) {
@@ -423,6 +481,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             context.insert(categoryRule)
         }
         try? context.save()
+    }
+
+    private func repairOrphanedPomodoroRecords(in context: ModelContext) {
+        do {
+            let affectedMemos = try PomodoroSessionDeletion.repairOrphanedRecords(
+                modelContext: context
+            )
+            try context.save()
+            for memo in affectedMemos {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
+                    to: memo,
+                    modelContext: context
+                )
+            }
+        } catch {
+            context.rollback()
+        }
     }
 
     private func migrateRemovedDocumentCategory(in context: ModelContext) {

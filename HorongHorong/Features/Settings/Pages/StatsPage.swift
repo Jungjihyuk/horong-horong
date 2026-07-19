@@ -453,22 +453,45 @@ struct StatsPage: View {
         let daySummaryDescriptor = FetchDescriptor<AttentionDaySummary>(
             predicate: #Predicate { $0.day >= s && $0.day < e }
         )
-        for record in (try? modelContext.fetch(recordDescriptor)) ?? [] {
-            modelContext.delete(record)
+        do {
+            for record in try modelContext.fetch(recordDescriptor) {
+                modelContext.delete(record)
+            }
+            for segment in try modelContext.fetch(segmentDescriptor) {
+                modelContext.delete(segment)
+            }
+
+            var affectedMemosByID: [UUID: Memo] = [:]
+            for session in try modelContext.fetch(focusDescriptor) {
+                if let memo = try PomodoroSessionDeletion.delete(
+                    session,
+                    modelContext: modelContext
+                ) {
+                    affectedMemosByID[memo.id] = memo
+                }
+            }
+            for event in try modelContext.fetch(attentionDescriptor) {
+                modelContext.delete(event)
+            }
+            for summary in try modelContext.fetch(daySummaryDescriptor) {
+                modelContext.delete(summary)
+            }
+            try modelContext.save()
+            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
+            for memo in affectedMemosByID.values {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
+                    to: memo,
+                    modelContext: modelContext
+                )
+            }
+        } catch {
+            modelContext.rollback()
+            ToastPanel.shared.show(
+                icon: "⚠️",
+                title: "기록을 삭제하지 못했어요",
+                subtitle: "잠시 후 다시 시도해 주세요."
+            )
         }
-        for segment in (try? modelContext.fetch(segmentDescriptor)) ?? [] {
-            modelContext.delete(segment)
-        }
-        for session in (try? modelContext.fetch(focusDescriptor)) ?? [] {
-            modelContext.delete(session)
-        }
-        for event in (try? modelContext.fetch(attentionDescriptor)) ?? [] {
-            modelContext.delete(event)
-        }
-        for summary in (try? modelContext.fetch(daySummaryDescriptor)) ?? [] {
-            modelContext.delete(summary)
-        }
-        try? modelContext.save()
     }
 
     private static let dayFormatter: DateFormatter = {

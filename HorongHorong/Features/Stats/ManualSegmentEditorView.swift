@@ -211,6 +211,7 @@ struct ManualSegmentEditorView: View {
         seg.category = draft.category
         seg.startTime = draft.start
         seg.endTime = draft.end
+        seg.isUserModified = true
 
         // Record 재동기화: 기존에 반영된 만큼 빼고, 새 값으로 더한다.
         syncRecord(bundleId: oldBundle, appName: oldApp, category: oldCat, date: oldDate, deltaSeconds: -oldDuration)
@@ -266,13 +267,27 @@ struct ManualSegmentEditorView: View {
         guard let end = focusEnd(for: session) else { return }
         let start = session.startedAt
 
-        for segment in segments {
-            removeSegmentOverlap(segment, from: start, to: end)
+        do {
+            for segment in segments {
+                removeSegmentOverlap(segment, from: start, to: end)
+            }
+            deleteFocusRecord(for: session)
+            let affectedMemo = try PomodoroSessionDeletion.delete(
+                session,
+                modelContext: modelContext
+            )
+            try modelContext.save()
+            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
+            if let affectedMemo {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
+                    to: affectedMemo,
+                    modelContext: modelContext
+                )
+            }
+        } catch {
+            modelContext.rollback()
+            editError = "포모도로 기록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."
         }
-
-        deleteFocusRecord(for: session)
-        modelContext.delete(session)
-        try? modelContext.save()
     }
 
     private func removeSegmentOverlap(_ segment: AppUsageSegment, from start: Date, to end: Date) {
@@ -287,6 +302,7 @@ struct ManualSegmentEditorView: View {
         let appName = segment.appName
         let category = segment.category
         let isManual = segment.isManual
+        let isUserModified = segment.isUserModified || segment.isManual
 
         if overlapStart <= originalStart, overlapEnd >= originalEnd {
             modelContext.delete(segment)
@@ -302,7 +318,8 @@ struct ManualSegmentEditorView: View {
                 category: category,
                 startTime: overlapEnd,
                 endTime: originalEnd,
-                isManual: isManual
+                isManual: isManual,
+                isUserModified: isUserModified
             )
             modelContext.insert(tail)
         }
@@ -499,8 +516,8 @@ private struct SegmentRowView: View {
                     Text(segment.appName)
                         .font(.callout.weight(.medium))
                         .lineLimit(1)
-                    if segment.isManual {
-                        Text("수동")
+                    if segment.isManual || segment.isUserModified {
+                        Text(segment.isManual ? "직접 추가" : "사용자 수정")
                             .font(.caption2.bold())
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)

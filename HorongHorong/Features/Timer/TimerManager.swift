@@ -1,6 +1,11 @@
 import Foundation
 import SwiftData
 
+private struct PomodoroTaskContext {
+    let linkedMemoID: UUID
+    let taskTitleSnapshot: String?
+}
+
 @Observable
 final class TimerManager: @unchecked Sendable {
     private var timer: Timer?
@@ -8,16 +13,42 @@ final class TimerManager: @unchecked Sendable {
     private var appState: AppState
     private var modelContext: ModelContext?
     private var currentSession: FocusSession?
+    private var lastCompletedTaskContext: PomodoroTaskContext?
+    private var linkedTaskCompletionObserver: NSObjectProtocol?
+
+    private(set) var canContinueLastTask = true
 
     init(appState: AppState) {
         self.appState = appState
+        linkedTaskCompletionObserver = NotificationCenter.default.addObserver(
+            forName: .pomodoroLinkedTaskDidComplete,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let linkedMemoID = notification.object as? UUID,
+                  self?.lastCompletedTaskContext?.linkedMemoID == linkedMemoID else {
+                return
+            }
+            self?.lastCompletedTaskContext = nil
+            self?.canContinueLastTask = false
+        }
+    }
+
+    deinit {
+        if let linkedTaskCompletionObserver {
+            NotificationCenter.default.removeObserver(linkedTaskCompletionObserver)
+        }
     }
 
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
     }
 
-    func startFocus(category: String = Constants.defaultFocusCategory) {
+    func startFocus(
+        category: String = Constants.defaultFocusCategory,
+        linkedMemoID: UUID? = nil,
+        taskTitleSnapshot: String? = nil
+    ) {
         cancelPostBreakPrompt()
         TrackerStateStore.shared.clearManualAway()
         appState.timerState = .focusing
@@ -26,7 +57,9 @@ final class TimerManager: @unchecked Sendable {
         let session = FocusSession(
             focusMinutes: appState.focusMinutes,
             breakMinutes: appState.breakMinutes,
-            category: category
+            category: category,
+            linkedMemoID: linkedMemoID,
+            taskTitleSnapshot: taskTitleSnapshot
         )
         currentSession = session
         modelContext?.insert(session)
@@ -71,7 +104,11 @@ final class TimerManager: @unchecked Sendable {
 
     func continueAfterBreak(category: String) {
         guard let prompt = appState.breakTransitionPrompt else {
-            startFocus(category: category)
+            startFocus(
+                category: category,
+                linkedMemoID: lastCompletedTaskContext?.linkedMemoID,
+                taskTitleSnapshot: lastCompletedTaskContext?.taskTitleSnapshot
+            )
             return
         }
         recordBreakTransition(
@@ -80,7 +117,11 @@ final class TimerManager: @unchecked Sendable {
             previousCategory: prompt.previousCategory,
             nextCategory: category
         )
-        startFocus(category: category)
+        startFocus(
+            category: category,
+            linkedMemoID: lastCompletedTaskContext?.linkedMemoID,
+            taskTitleSnapshot: lastCompletedTaskContext?.taskTitleSnapshot
+        )
     }
 
     func resolveBreakTransition(_ decision: BreakTransitionDecisionKind, nextCategory: String? = nil) {
@@ -120,26 +161,35 @@ final class TimerManager: @unchecked Sendable {
     private func handleTimerComplete() {
         switch appState.timerState {
         case .focusing:
+            let completedSessionID = currentSession?.id
             if let session = currentSession {
                 session.endedAt = Date()
                 session.completed = true
+                canContinueLastTask = canContinueTask(linkedMemoID: session.linkedMemoID)
+                if let linkedMemoID = session.linkedMemoID, canContinueLastTask {
+                    lastCompletedTaskContext = PomodoroTaskContext(
+                        linkedMemoID: linkedMemoID,
+                        taskTitleSnapshot: session.taskTitleSnapshot
+                    )
+                } else {
+                    lastCompletedTaskContext = nil
+                }
                 try? modelContext?.save()
                 // 완료된 집중 세션을 통계(AppUsageRecord)에 반영한다.
                 recordCompletedFocus(session: session)
+            } else {
+                canContinueLastTask = true
             }
             appState.timerState = .breakAlert
             let focusMins = appState.focusMinutes
-            NotificationManager.shared.send(
-                title: "포모도로 완료",
-                body: "\(focusMins)분 집중 완료 · 집중 기록 저장 완료 · 잠시 쉬어가세요"
+            let shouldRequestReflection = UserDefaults.standard.bool(
+                forKey: Constants.AppStorageKey.pomodoroReflectionEnabled
             )
-            Task { @MainActor in
-                ToastPanel.shared.showTimerAlert(
-                    title: "포모도로 완료",
-                    subtitle: "\(focusMins)분 집중 완료",
-                    detail: "집중 기록 저장 완료 · 잠시 쉬어가세요"
-                )
-            }
+            presentFocusCompletionNotification(
+                focusMinutes: focusMins,
+                completedSessionID: completedSessionID,
+                shouldRequestReflection: shouldRequestReflection
+            )
         case .breaking:
             let breakEndedAt = Date()
             let previousCategory = currentSession?.category ?? Constants.defaultFocusCategory
@@ -149,19 +199,83 @@ final class TimerManager: @unchecked Sendable {
                 breakEndedAt: breakEndedAt,
                 previousCategory: previousCategory
             )
-            NotificationManager.shared.send(
-                title: "휴식 끝!",
-                body: "다시 집중할 준비가 되셨나요?"
-            )
-            Task { @MainActor in
-                ToastPanel.shared.showTimerAlert(
-                    title: "휴식 끝!",
-                    subtitle: "다시 집중할 준비가 되셨나요?"
-                )
-            }
+            presentBreakCompletionNotification()
         default:
             break
         }
+    }
+
+    private func presentFocusCompletionNotification(
+        focusMinutes: Int,
+        completedSessionID: UUID?,
+        shouldRequestReflection: Bool
+    ) {
+        let content = Constants.focusCompletionNotificationContent(focusMinutes: focusMinutes)
+
+        switch timerCompletionNotificationStyle {
+        case .system:
+            NotificationManager.shared.send(
+                title: content.title,
+                subtitle: content.subtitle,
+                body: content.body,
+                identifier: Constants.timerCompletionNotificationIdentifier,
+                replacesExisting: true
+            )
+            guard shouldRequestReflection else { return }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(
+                    for: .seconds(Constants.timerCompletionNativeReflectionDelaySeconds)
+                )
+                guard !Task.isCancelled else { return }
+                self?.showReflection(focusSessionID: completedSessionID)
+            }
+
+        case .horong:
+            Task { @MainActor [weak self] in
+                ToastPanel.shared.showTimerAlert(
+                    title: content.title,
+                    subtitle: content.subtitle,
+                    detail: content.body
+                )
+                guard shouldRequestReflection else { return }
+                await ToastPanel.shared.waitUntilDismissed()
+                guard !Task.isCancelled else { return }
+                self?.showReflection(focusSessionID: completedSessionID)
+            }
+        }
+    }
+
+    private func presentBreakCompletionNotification() {
+        let content = Constants.breakCompletionNotificationContent
+
+        switch timerCompletionNotificationStyle {
+        case .system:
+            NotificationManager.shared.send(
+                title: content.title,
+                subtitle: content.subtitle,
+                body: content.body,
+                identifier: Constants.timerCompletionNotificationIdentifier,
+                replacesExisting: true
+            )
+
+        case .horong:
+            Task { @MainActor in
+                ToastPanel.shared.showTimerAlert(
+                    title: content.title,
+                    subtitle: content.subtitle,
+                    detail: content.body
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func showReflection(focusSessionID: UUID?) {
+        guard let focusSessionID, let modelContext else { return }
+        PomodoroReflectionPanel.shared.show(
+            focusSessionID: focusSessionID,
+            modelContext: modelContext
+        )
     }
 
     private func schedulePostBreakTransitionPrompt(breakEndedAt: Date, previousCategory: String) {
@@ -208,6 +322,14 @@ final class TimerManager: @unchecked Sendable {
         return Constants.PostBreakTransitionPromptMode(rawValue: rawValue ?? "") ?? .afterDelay
     }
 
+    private var timerCompletionNotificationStyle: Constants.TimerCompletionNotificationStyle {
+        let rawValue = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.timerCompletionNotificationStyle
+        )
+        return Constants.TimerCompletionNotificationStyle(rawValue: rawValue ?? "")
+            ?? Constants.defaultTimerCompletionNotificationStyle
+    }
+
     private var postBreakTransitionPromptDelayMinutes: Int {
         let stored = UserDefaults.standard.integer(forKey: Constants.AppStorageKey.postBreakTransitionPromptDelayMinutes)
         return stored > 0 ? stored : Constants.defaultPostBreakTransitionPromptDelayMinutes
@@ -219,6 +341,18 @@ final class TimerManager: @unchecked Sendable {
             predicate: #Predicate { $0.startedAt > date }
         )
         return ((try? context.fetchCount(descriptor)) ?? 0) > 0
+    }
+
+    private func canContinueTask(linkedMemoID: UUID?) -> Bool {
+        guard let linkedMemoID else { return true }
+        guard let context = modelContext else { return true }
+        let memoID = linkedMemoID
+        var descriptor = FetchDescriptor<Memo>(
+            predicate: #Predicate { $0.id == memoID }
+        )
+        descriptor.fetchLimit = 1
+        guard let memo = try? context.fetch(descriptor).first else { return false }
+        return !memo.isCompletedValue && !memo.isArchivedValue
     }
 
     private func hasProductiveActivity(since date: Date) -> Bool {
