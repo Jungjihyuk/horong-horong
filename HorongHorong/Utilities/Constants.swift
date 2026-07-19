@@ -218,12 +218,74 @@ enum Constants {
 
     // 프리셋별 기본 시간 (사용자가 설정에서 덮어쓸 수 있음)
     static let defaultPomodoroFocusMinutes = 50
+    static let defaultPomodoroReflectionEnabled = false
+    static let defaultTimerCompletionNotificationStyle: TimerCompletionNotificationStyle = .system
+    static let defaultTodayPlanningReminderEnabled = false
+    static let defaultTodayPlanningReminderDelayMinutes = 5
+    static let todayPlanningReminderDelayMinutesRange = 1...60
     static let defaultPomodoroBreakMinutes = 5
     static let defaultLongFocusFocusMinutes = 100
     static let defaultLongFocusBreakMinutes = 10
     static let defaultCustomFocusMinutes = 60
     static let defaultCustomBreakMinutes = 10
     static let defaultPostBreakTransitionPromptDelayMinutes = 10
+    static let timerCompletionNotificationIdentifier = "app.horonghorong.timerCompletion"
+    static let timerCompletionPreviewNotificationIdentifier = "app.horonghorong.timerCompletion.preview"
+    static let timerCompletionNativeReflectionDelaySeconds: TimeInterval = 4
+    static let todayPlanningReminderNotificationIdentifier = "app.horonghorong.todayPlanningReminder"
+
+    enum TimerCompletionNotificationStyle: String, CaseIterable, Identifiable {
+        case system
+        case horong
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .system: return "macOS 알림"
+            case .horong: return "호롱호롱 알림"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .system:
+                return "알림 센터에 남아 놓친 알림도 다시 확인할 수 있어요."
+            case .horong:
+                return "화면 오른쪽 위에 더 또렷한 강조 스타일로 잠시 표시돼요."
+            }
+        }
+    }
+
+    struct TimerCompletionNotificationContent: Equatable {
+        let title: String
+        let subtitle: String
+        let body: String
+    }
+
+    static func focusCompletionNotificationContent(
+        focusMinutes: Int
+    ) -> TimerCompletionNotificationContent {
+        TimerCompletionNotificationContent(
+            title: "포모도로 완료",
+            subtitle: "\(focusMinutes)분 집중 완료",
+            body: "집중 기록을 저장했어요. 잠시 쉬어가세요."
+        )
+    }
+
+    static let breakCompletionNotificationContent = TimerCompletionNotificationContent(
+        title: "휴식 끝!",
+        subtitle: "다시 집중할 준비가 되셨나요?",
+        body: "준비되었다면 다음 포모도로를 시작해 보세요."
+    )
+
+    static func todayPlanningReminderDelaySeconds(for minutes: Int) -> TimeInterval {
+        let normalizedMinutes = min(
+            max(minutes, todayPlanningReminderDelayMinutesRange.lowerBound),
+            todayPlanningReminderDelayMinutesRange.upperBound
+        )
+        return TimeInterval(normalizedMinutes * 60)
+    }
 
     static var postBreakProductiveCategories: Set<String> {
         Set(["업무", "개발", "공부", "조사", "기록"].map { categoryName($0) })
@@ -369,6 +431,11 @@ enum Constants {
         static let selectedFocusCategory = "timer.selectedFocusCategory"
         static let pomodoroFocusMinutes = "timer.pomodoroFocusMinutes"
         static let pomodoroBreakMinutes = "timer.pomodoroBreakMinutes"
+        static let pomodoroReflectionEnabled = "timer.pomodoroReflectionEnabled"
+        static let timerCompletionNotificationStyle = "timer.completionNotificationStyle"
+        static let todayPlanningReminderEnabled = "timer.todayPlanningReminderEnabled"
+        static let todayPlanningReminderDelayMinutes = "timer.todayPlanningReminderDelayMinutes"
+        static let todayPlanningReminderLastPromptDay = "timer.todayPlanningReminderLastPromptDay"
         static let longFocusFocusMinutes = "timer.longFocusFocusMinutes"
         static let longFocusBreakMinutes = "timer.longFocusBreakMinutes"
         static let customFocusMinutes = "timer.customFocusMinutes"

@@ -1,4 +1,52 @@
+import SwiftData
 import SwiftUI
+
+struct PomodoroTaskCandidate: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let isToday: Bool
+    let isGoalLinked: Bool
+}
+
+enum PomodoroTaskCandidateBuilder {
+    static func candidates(
+        memos: [Memo],
+        goalRecords: [AchievementGoalRecord],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [PomodoroTaskCandidate] {
+        let linkedMemoIDs = Set(goalRecords.flatMap(\.linkedMemoIDs))
+
+        return memos.compactMap { memo in
+            guard !memo.isCompletedValue,
+                  !memo.isArchivedValue else {
+                return nil
+            }
+            let isToday = TodayPlanningReminderPolicy.isTodayTask(
+                memo,
+                now: now,
+                calendar: calendar
+            )
+            let isGoalLinked = linkedMemoIDs.contains(memo.id)
+            guard isToday || isGoalLinked else { return nil }
+
+            let title = taskTitle(memo.content)
+            return PomodoroTaskCandidate(
+                id: memo.id,
+                title: title.isEmpty ? "제목 없는 할 일" : title,
+                isToday: isToday,
+                isGoalLinked: isGoalLinked
+            )
+        }
+    }
+
+    static func taskTitle(_ value: String) -> String {
+        value
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
 
 private struct TimerGradientButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -215,7 +263,15 @@ private struct HybridPixelDigit: View {
 
 struct TimerView: View {
     @Environment(AppState.self) private var appState
+    @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
+    @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse)
+    private var goalRecords: [AchievementGoalRecord]
     @State private var hoveredPreset: Constants.PomodoroPreset?
+    @State private var selectedTaskID: UUID?
+    @State private var showsTaskPicker = false
+    @State private var taskSearchText = ""
+    @State private var hoveredTaskID: UUID?
+    @State private var taskReferenceDate = Date()
     @AppStorage(Constants.AppStorageKey.selectedFocusCategory)
     private var selectedFocusCategory: String = Constants.defaultFocusCategory
     @AppStorage(Constants.AppStorageKey.pomodoroFocusMinutes)
@@ -241,6 +297,18 @@ struct TimerView: View {
             presetSelector
         }
         .frame(maxWidth: .infinity, minHeight: 410, alignment: .top)
+        .onAppear {
+            taskReferenceDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            taskReferenceDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in
+            taskReferenceDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+            taskReferenceDate = Date()
+        }
     }
 
     private var timerDisplay: some View {
@@ -367,7 +435,7 @@ struct TimerView: View {
             switch appState.timerState {
             case .idle:
                 Button {
-                    timerManager.startFocus(category: selectedFocusCategory)
+                    startFocus()
                 } label: {
                     Label("집중 시작", systemImage: "play.fill")
                 }
@@ -452,14 +520,16 @@ struct TimerView: View {
                 }
 
                 VStack(spacing: 7) {
-                    Button {
-                        selectedFocusCategory = prompt.previousCategory
-                        timerManager.continueAfterBreak(category: prompt.previousCategory)
-                    } label: {
-                        Label("같은 작업 계속", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+                    if timerManager.canContinueLastTask {
+                        Button {
+                            selectedFocusCategory = prompt.previousCategory
+                            timerManager.continueAfterBreak(category: prompt.previousCategory)
+                        } label: {
+                            Label("같은 작업 계속", systemImage: "play.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(TimerGradientButtonStyle())
                     }
-                    .buttonStyle(TimerGradientButtonStyle())
 
                     HStack(spacing: 7) {
                         Menu {
@@ -548,9 +618,280 @@ struct TimerView: View {
                     .padding(.horizontal, 12)
                     .background(PopoverChrome.surfaceAlt.opacity(0.82), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
 
+                    pomodoroTaskPlanningCard
                 }
             }
         }
+    }
+
+    private var pomodoroTaskPlanningCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Text("이번 포모도로 할 일")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+
+                Spacer(minLength: 8)
+
+                Text("선택 사항")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            if taskCandidates.isEmpty {
+                Text("오늘 시작할 할 일이나 목표에 연결된 미완료 할 일이 없어요.")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Button {
+                    taskSearchText = ""
+                    hoveredTaskID = nil
+                    showsTaskPicker.toggle()
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: selectedTask == nil ? "checklist" : "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(selectedTask == nil ? PopoverChrome.inkSecondary : PopoverChrome.accent)
+                            .frame(width: 18)
+
+                        Text(selectedTask?.title ?? "할 일 선택")
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                    .padding(.vertical, 9)
+                    .padding(.horizontal, 10)
+                    .contentShape(Rectangle())
+                    .background(
+                        PopoverChrome.card,
+                        in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                            .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
+                    )
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showsTaskPicker, arrowEdge: .bottom) {
+                    pomodoroTaskPicker
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(
+            PopoverChrome.surfaceAlt.opacity(0.82),
+            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous)
+        )
+    }
+
+    private var pomodoroTaskPicker: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("할 일 선택")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                    Spacer()
+                    Text("\(taskCandidates.count)개")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+
+                Text("오늘 시작하거나 목표에 연결한 미완료 할 일이에요.")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            if taskCandidates.count >= 6 {
+                TextField("할 일 검색", text: $taskSearchText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .rounded))
+            }
+
+            Button {
+                selectTask(nil)
+                showsTaskPicker = false
+            } label: {
+                taskPickerRowLabel(
+                    title: "연결하지 않고 시작",
+                    systemImage: "minus.circle",
+                    isSelected: selectedTaskID == nil,
+                    isHovered: false
+                )
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+                .overlay(PopoverChrome.divider)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    taskPickerSection(
+                        title: "오늘 시작할 일",
+                        systemImage: "calendar",
+                        candidates: visibleTodayTaskCandidates
+                    )
+                    taskPickerSection(
+                        title: "목표에 연결된 할 일",
+                        systemImage: "target",
+                        candidates: visibleGoalTaskCandidates
+                    )
+
+                    if visibleTaskCandidates.isEmpty {
+                        VStack(spacing: 7) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .medium))
+                            Text("검색 결과가 없어요")
+                                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                        }
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .frame(maxWidth: .infinity, minHeight: 72)
+                    }
+                }
+                .padding(.trailing, 3)
+            }
+            .frame(height: taskPickerListHeight)
+        }
+        .padding(16)
+        .frame(width: 360)
+        .background(PopoverChrome.surface)
+    }
+
+    @ViewBuilder
+    private func taskPickerSection(
+        title: String,
+        systemImage: String,
+        candidates: [PomodoroTaskCandidate]
+    ) -> some View {
+        if !candidates.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 5) {
+                    Image(systemName: systemImage)
+                    Text(title)
+                    Text("\(candidates.count)")
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .padding(.horizontal, 7)
+
+                ForEach(candidates) { task in
+                    Button {
+                        selectTask(task.id)
+                        showsTaskPicker = false
+                    } label: {
+                        taskPickerRowLabel(
+                            title: task.title,
+                            systemImage: "circle",
+                            isSelected: selectedTaskID == task.id,
+                            isHovered: hoveredTaskID == task.id
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHovering in
+                        hoveredTaskID = isHovering ? task.id : nil
+                    }
+                }
+            }
+        }
+    }
+
+    private func taskPickerRowLabel(
+        title: String,
+        systemImage: String,
+        isSelected: Bool,
+        isHovered: Bool
+    ) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                .frame(width: 17)
+
+            Text(title)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 8)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isSelected
+                ? PopoverChrome.accentSoft.opacity(0.72)
+                : (isHovered ? PopoverChrome.card.opacity(0.78) : .clear),
+            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+                .stroke(
+                    isSelected
+                        ? PopoverChrome.accent.opacity(0.28)
+                        : (isHovered ? PopoverChrome.divider : .clear),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private var taskCandidates: [PomodoroTaskCandidate] {
+        PomodoroTaskCandidateBuilder.candidates(
+            memos: memos,
+            goalRecords: goalRecords,
+            now: taskReferenceDate
+        )
+    }
+
+    private var visibleTaskCandidates: [PomodoroTaskCandidate] {
+        let query = taskSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return taskCandidates }
+        return taskCandidates.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var visibleTodayTaskCandidates: [PomodoroTaskCandidate] {
+        visibleTaskCandidates.filter(\.isToday)
+    }
+
+    private var visibleGoalTaskCandidates: [PomodoroTaskCandidate] {
+        visibleTaskCandidates.filter { $0.isGoalLinked && !$0.isToday }
+    }
+
+    private var taskPickerListHeight: CGFloat {
+        let sectionCount = [visibleTodayTaskCandidates, visibleGoalTaskCandidates]
+            .filter { !$0.isEmpty }
+            .count
+        let contentHeight = CGFloat(visibleTaskCandidates.count * 43 + sectionCount * 27)
+        return min(286, max(76, contentHeight))
+    }
+
+    private var selectedTask: PomodoroTaskCandidate? {
+        guard let selectedTaskID else { return nil }
+        return taskCandidates.first { $0.id == selectedTaskID }
+    }
+
+    private func selectTask(_ taskID: UUID?) {
+        guard selectedTaskID != taskID else { return }
+        selectedTaskID = taskID
+    }
+
+    private func startFocus() {
+        let task = selectedTask
+        timerManager.startFocus(
+            category: selectedFocusCategory,
+            linkedMemoID: task?.id,
+            taskTitleSnapshot: task?.title
+        )
+        selectedTaskID = nil
     }
 
     private var productiveTransitionCategories: [String] {
