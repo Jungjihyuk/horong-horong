@@ -476,6 +476,225 @@ struct PomodoroReflectionOptionCount: Identifiable, Equatable {
     let count: Int
 }
 
+struct PomodoroPatternMetrics: Equatable {
+    let sessionCount: Int
+    let linkedSessionCount: Int
+    let durationSeconds: Int
+    let sessionsWithAppRecords: Int
+    let recordedSeconds: Int
+    let unrecordedSeconds: Int
+    let ambiguousOverlapSeconds: Int
+    let userModifiedRecordedSeconds: Int
+    let appSwitchCount: Int
+    let categorySwitchCount: Int
+    let longestContinuousAppUsage: PomodoroContinuousAppUsage?
+    let reflectionCount: Int
+    let focusExperienceCounts: [PomodoroReflectionOptionCount]
+    let progressResultCounts: [PomodoroReflectionOptionCount]
+    let incompleteReasonCounts: [PomodoroReflectionOptionCount]
+
+    var unlinkedSessionCount: Int {
+        max(0, sessionCount - linkedSessionCount)
+    }
+}
+
+struct PomodoroPatternGroup: Identifiable, Equatable {
+    let id: String
+    let linkedMemoID: UUID?
+    let title: String
+    let firstStartedAt: Date
+    let metrics: PomodoroPatternMetrics
+}
+
+struct PomodoroPatternReadModel: Equatable {
+    let general: PomodoroPatternMetrics
+    let categoryGroups: [PomodoroPatternGroup]
+    let taskGroups: [PomodoroPatternGroup]
+}
+
+enum PomodoroPatternReadModelBuilder {
+    static func build(
+        sessions: [PomodoroSessionBreakdown],
+        reflections: [PomodoroReflection],
+        completions: [PomodoroTaskCompletion] = []
+    ) -> PomodoroPatternReadModel {
+        let reflectionBySessionID = reflections.reduce(into: [UUID: PomodoroReflection]()) {
+            $0[$1.focusSessionID] = $1
+        }
+        let completionSessionIDs = Set(completions.map(\.focusSessionID))
+
+        let categoryGroups = Dictionary(grouping: sessions, by: \.category)
+            .map { category, groupedSessions in
+                PomodoroPatternGroup(
+                    id: "category:\(category)",
+                    linkedMemoID: nil,
+                    title: category,
+                    firstStartedAt: groupedSessions.map(\.startedAt).min() ?? .distantPast,
+                    metrics: metrics(
+                        for: groupedSessions,
+                        reflectionBySessionID: reflectionBySessionID,
+                        completionSessionIDs: completionSessionIDs
+                    )
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.metrics.durationSeconds != rhs.metrics.durationSeconds {
+                    return lhs.metrics.durationSeconds > rhs.metrics.durationSeconds
+                }
+                return lhs.title < rhs.title
+            }
+
+        let linkedSessions = sessions.filter { $0.linkedMemoID != nil }
+        let taskGroups = Dictionary(grouping: linkedSessions, by: { $0.linkedMemoID! })
+            .map { memoID, groupedSessions in
+                let orderedSessions = groupedSessions.sorted { $0.startedAt < $1.startedAt }
+                let latestTitle = orderedSessions.reversed().compactMap {
+                    normalizedText($0.taskTitle)
+                }.first
+                return PomodoroPatternGroup(
+                    id: "memo:\(memoID.uuidString)",
+                    linkedMemoID: memoID,
+                    title: latestTitle ?? "이름을 확인할 수 없는 할 일",
+                    firstStartedAt: orderedSessions.first?.startedAt ?? .distantPast,
+                    metrics: metrics(
+                        for: groupedSessions,
+                        reflectionBySessionID: reflectionBySessionID,
+                        completionSessionIDs: completionSessionIDs
+                    )
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.firstStartedAt != rhs.firstStartedAt {
+                    return lhs.firstStartedAt < rhs.firstStartedAt
+                }
+                return lhs.title < rhs.title
+            }
+
+        return PomodoroPatternReadModel(
+            general: metrics(
+                for: sessions,
+                reflectionBySessionID: reflectionBySessionID,
+                completionSessionIDs: completionSessionIDs
+            ),
+            categoryGroups: categoryGroups,
+            taskGroups: taskGroups
+        )
+    }
+
+    private static func metrics(
+        for sessions: [PomodoroSessionBreakdown],
+        reflectionBySessionID: [UUID: PomodoroReflection],
+        completionSessionIDs: Set<UUID>
+    ) -> PomodoroPatternMetrics {
+        var longestContinuousAppUsage: PomodoroContinuousAppUsage?
+        for usage in sessions.compactMap(\.observation.longestContinuousAppUsage) {
+            if usage.durationSeconds > (longestContinuousAppUsage?.durationSeconds ?? -1) {
+                longestContinuousAppUsage = usage
+            }
+        }
+
+        let matchedReflections = sessions.compactMap { session -> (UUID, PomodoroReflection)? in
+            reflectionBySessionID[session.id].map { (session.id, $0) }
+        }
+        let focusRawValues = matchedReflections.map { $0.1.focusExperienceRawValue }
+        let progressRawValues = matchedReflections.map { sessionID, reflection in
+            if reflection.progressResultRawValue == PomodoroProgressResult.completedAsPlanned.rawValue,
+               completionSessionIDs.contains(sessionID) {
+                return "linked_task_completed"
+            }
+            return reflection.progressResultRawValue
+        }
+        let incompleteRawValues = matchedReflections.compactMap {
+            $0.1.incompleteReasonRawValue
+        }
+
+        let focusOptions = PomodoroFocusExperience.allCases.map {
+            (id: $0.rawValue, label: $0.label)
+        }
+        let progressOptions = [
+            (
+                id: "linked_task_completed",
+                label: PomodoroProgressResult.completedAsPlanned.label(
+                    recordsLinkedTaskCompletion: true
+                )
+            )
+        ] + PomodoroProgressResult.allCases.map {
+            (id: $0.rawValue, label: $0.label)
+        }
+        let incompleteOptions = PomodoroIncompleteReason.allCases.map {
+            (id: $0.rawValue, label: $0.label)
+        }
+
+        return PomodoroPatternMetrics(
+            sessionCount: sessions.count,
+            linkedSessionCount: sessions.filter { $0.linkedMemoID != nil }.count,
+            durationSeconds: sessions.reduce(0) { $0 + $1.durationSeconds },
+            sessionsWithAppRecords: sessions.filter(\.observation.hasRecords).count,
+            recordedSeconds: sessions.reduce(0) { $0 + $1.observation.recordedSeconds },
+            unrecordedSeconds: sessions.reduce(0) { $0 + $1.observation.unrecordedSeconds },
+            ambiguousOverlapSeconds: sessions.reduce(0) {
+                $0 + $1.observation.ambiguousOverlapSeconds
+            },
+            userModifiedRecordedSeconds: sessions.reduce(0) {
+                $0 + $1.observation.userModifiedRecordedSeconds
+            },
+            appSwitchCount: sessions.reduce(0) { $0 + $1.observation.appSwitchCount },
+            categorySwitchCount: sessions.reduce(0) {
+                $0 + $1.observation.categorySwitchCount
+            },
+            longestContinuousAppUsage: longestContinuousAppUsage,
+            reflectionCount: matchedReflections.count,
+            focusExperienceCounts: optionCounts(
+                rawValues: focusRawValues,
+                options: focusOptions,
+                unknownID: "unknown_focus_experience"
+            ),
+            progressResultCounts: optionCounts(
+                rawValues: progressRawValues,
+                options: progressOptions,
+                unknownID: "unknown_progress_result"
+            ),
+            incompleteReasonCounts: optionCounts(
+                rawValues: incompleteRawValues,
+                options: incompleteOptions,
+                unknownID: "unknown_incomplete_reason"
+            )
+        )
+    }
+
+    private static func optionCounts(
+        rawValues: [String],
+        options: [(id: String, label: String)],
+        unknownID: String
+    ) -> [PomodoroReflectionOptionCount] {
+        let counts = Dictionary(grouping: rawValues, by: { $0 }).mapValues(\.count)
+        var result = options.compactMap { option -> PomodoroReflectionOptionCount? in
+            guard let count = counts[option.id] else { return nil }
+            return PomodoroReflectionOptionCount(
+                id: option.id,
+                label: option.label,
+                count: count
+            )
+        }
+        let knownCount = result.reduce(0) { $0 + $1.count }
+        if rawValues.count > knownCount {
+            result.append(
+                PomodoroReflectionOptionCount(
+                    id: unknownID,
+                    label: "확인할 수 없는 응답",
+                    count: rawValues.count - knownCount
+                )
+            )
+        }
+        return result
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 struct PomodoroTaskSummary: Identifiable {
     var id: String {
         linkedMemoID.map { "memo:\($0.uuidString)" } ?? "unlinked"
@@ -1724,6 +1943,17 @@ struct StatsChartView: View {
     private var pomodoroDetailSection: some View {
         let sessions = pomodoroSessions
         let totalSeconds = sessions.reduce(0) { $0 + $1.durationSeconds }
+        let pattern = PomodoroPatternReadModelBuilder.build(
+            sessions: sessions,
+            reflections: pomodoroReflections,
+            completions: pomodoroTaskCompletions
+        )
+        let linkedTaskSummaries = pomodoroTaskSummaries.filter { $0.linkedMemoID != nil }
+        let taskMetricsByMemoID = Dictionary(
+            uniqueKeysWithValues: pattern.taskGroups.compactMap { group in
+                group.linkedMemoID.map { ($0, group.metrics) }
+            }
+        )
 
         return Group {
             if !sessions.isEmpty {
@@ -1738,16 +1968,33 @@ struct StatsChartView: View {
                             .foregroundStyle(PopoverChrome.inkSecondary)
                     }
 
+                    pomodoroPatternOverview(pattern.general)
+
+                    Divider()
+                        .overlay(PopoverChrome.divider)
+
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("할 일별 요약")
+                        Text("연결한 할 일별 기록")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(PopoverChrome.inkSecondary)
-                        Text("같은 할 일에 사용한 시간과 회고를 묶었어요")
+                        Text("할 일이 연결되지 않은 세션은 전체·세션별 기록에 포함하고, 할 일별 기록에서만 제외했어요")
                             .font(.caption)
                             .foregroundStyle(PopoverChrome.inkTertiary)
 
-                        ForEach(pomodoroTaskSummaries) { summary in
-                            pomodoroTaskSummaryRow(summary)
+                        if linkedTaskSummaries.isEmpty {
+                            Text("할 일에 연결된 포모도로 세션이 없어요")
+                                .font(.caption)
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                                .padding(.vertical, 6)
+                        } else {
+                            ForEach(linkedTaskSummaries) { summary in
+                                pomodoroTaskSummaryRow(
+                                    summary,
+                                    patternMetrics: summary.linkedMemoID.flatMap {
+                                        taskMetricsByMemoID[$0]
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1767,14 +2014,100 @@ struct StatsChartView: View {
         }
     }
 
-    private func pomodoroTaskSummaryRow(_ summary: PomodoroTaskSummary) -> some View {
+    private func pomodoroPatternOverview(_ metrics: PomodoroPatternMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("전체 포모도로 기록")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+
+            Text(
+                "할 일에 연결된 세션 \(metrics.linkedSessionCount)회 · "
+                    + "연결되지 않은 세션 \(metrics.unlinkedSessionCount)회"
+            )
+            .font(.caption)
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .monospacedDigit()
+
+            Text("회고를 작성한 세션 \(metrics.reflectionCount)/\(metrics.sessionCount)회")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+
+            if metrics.sessionsWithAppRecords == 0 {
+                Text("앱 사용 기록이 있는 세션이 없어 전환 횟수를 계산할 수 없어요")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            } else {
+                Text(
+                    "앱 사용이 기록된 세션 \(metrics.sessionsWithAppRecords)/\(metrics.sessionCount)회 · "
+                        + "기록에서 확인된 앱 전환 \(metrics.appSwitchCount)회 · "
+                        + "카테고리 전환 \(metrics.categorySwitchCount)회"
+                )
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+
+                if let longest = metrics.longestContinuousAppUsage {
+                    Text(
+                        "가장 오래 이어진 앱 구간 · \(longest.appName) · "
+                            + "\(longest.category) · \(formatDuration(longest.durationSeconds))"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                }
+            }
+
+            if metrics.sessionsWithAppRecords > 0,
+               metrics.sessionsWithAppRecords < metrics.sessionCount {
+                Text(
+                    "앱 사용 기록이 없는 세션 "
+                        + "\(metrics.sessionCount - metrics.sessionsWithAppRecords)회는 "
+                        + "앱·카테고리 전환 횟수를 계산할 수 없어요"
+                )
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            if metrics.reflectionCount > 0 {
+                Text("회고에서 선택한 응답")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                pomodoroReflectionCountsRow(
+                    title: "몰입 경험",
+                    counts: metrics.focusExperienceCounts,
+                    leadingPadding: 0
+                )
+                pomodoroReflectionCountsRow(
+                    title: "진행 결과",
+                    counts: metrics.progressResultCounts,
+                    leadingPadding: 0
+                )
+                if !metrics.incompleteReasonCounts.isEmpty {
+                    pomodoroReflectionCountsRow(
+                        title: "남은 이유",
+                        counts: metrics.incompleteReasonCounts,
+                        leadingPadding: 0
+                    )
+                }
+            }
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            PopoverChrome.surfaceAlt.opacity(0.58),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+    }
+
+    private func pomodoroTaskSummaryRow(
+        _ summary: PomodoroTaskSummary,
+        patternMetrics: PomodoroPatternMetrics?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: summary.linkedMemoID == nil ? "link.slash" : "checklist")
+                Image(systemName: "checklist")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(
-                        summary.linkedMemoID == nil ? PopoverChrome.inkTertiary : PopoverChrome.accent
-                    )
+                    .foregroundStyle(PopoverChrome.accent)
                 Text(summary.displayTitle)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(PopoverChrome.ink)
@@ -1794,25 +2127,51 @@ struct StatsChartView: View {
                     .padding(.leading, 20)
             }
 
+            if let patternMetrics {
+                if patternMetrics.sessionsWithAppRecords == 0 {
+                    Text("앱 사용 기록이 있는 세션이 없어 전환 횟수를 계산할 수 없어요")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.leading, 20)
+                } else {
+                    Text(
+                        "앱 사용이 기록된 세션 "
+                            + "\(patternMetrics.sessionsWithAppRecords)/\(patternMetrics.sessionCount)회 · "
+                            + "기록에서 확인된 앱 전환 \(patternMetrics.appSwitchCount)회 · "
+                            + "카테고리 전환 \(patternMetrics.categorySwitchCount)회"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .monospacedDigit()
+                    .padding(.leading, 20)
+                }
+            }
+
             if summary.reflectionCount == 0 {
                 Text("작성된 회고 없음")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .padding(.leading, 20)
             } else {
-                Text("회고 \(summary.reflectionCount)/\(summary.sessionCount)")
+                Text("회고에서 선택한 응답 \(summary.reflectionCount)/\(summary.sessionCount)회")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .padding(.leading, 20)
 
-                pomodoroTaskReflectionCountsRow(
+                pomodoroReflectionCountsRow(
                     title: "몰입 경험",
                     counts: summary.focusExperienceCounts
                 )
-                pomodoroTaskReflectionCountsRow(
+                pomodoroReflectionCountsRow(
                     title: "진행 결과",
                     counts: summary.progressResultCounts
                 )
+                if let patternMetrics, !patternMetrics.incompleteReasonCounts.isEmpty {
+                    pomodoroReflectionCountsRow(
+                        title: "남은 이유",
+                        counts: patternMetrics.incompleteReasonCounts
+                    )
+                }
             }
         }
         .padding(11)
@@ -1823,9 +2182,10 @@ struct StatsChartView: View {
         )
     }
 
-    private func pomodoroTaskReflectionCountsRow(
+    private func pomodoroReflectionCountsRow(
         title: String,
-        counts: [PomodoroReflectionOptionCount]
+        counts: [PomodoroReflectionOptionCount],
+        leadingPadding: CGFloat = 20
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(title)
@@ -1838,7 +2198,7 @@ struct StatsChartView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.leading, 20)
+        .padding(.leading, leadingPadding)
     }
 
     private var weeklyPomodoroSection: some View {
