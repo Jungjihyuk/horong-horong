@@ -1965,6 +1965,211 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(observation.userModifiedRecordedSeconds, 3)
     }
 
+    func testPomodoroPatternReadModelKeepsUnlinkedSessionsInGeneralOnly() throws {
+        let memoID = UUID()
+        let start = Date(timeIntervalSince1970: 1_801_000_000)
+        let linkedSession = PomodoroSessionBreakdown(
+            id: UUID(),
+            startedAt: start,
+            endedAt: start.addingTimeInterval(1_500),
+            category: "개발",
+            linkedMemoID: memoID,
+            taskTitle: "개인 패턴 집계",
+            durationSeconds: 1_500,
+            observation: PomodoroSessionObservation(
+                sessionSeconds: 1_500,
+                recordedSeconds: 1_200,
+                unrecordedSeconds: 300,
+                ambiguousOverlapSeconds: 0,
+                userModifiedRecordedSeconds: 0,
+                appSwitchCount: 3,
+                categorySwitchCount: 1,
+                categoryTransitions: [],
+                longestContinuousAppUsage: PomodoroContinuousAppUsage(
+                    appName: "Xcode",
+                    category: "개발",
+                    durationSeconds: 720
+                ),
+                apps: [],
+                categories: []
+            )
+        )
+        let unlinkedSession = PomodoroSessionBreakdown(
+            id: UUID(),
+            startedAt: start.addingTimeInterval(1_800),
+            endedAt: start.addingTimeInterval(2_700),
+            category: "개발",
+            linkedMemoID: nil,
+            taskTitle: nil,
+            durationSeconds: 900,
+            observation: PomodoroSessionObservation(
+                sessionSeconds: 900,
+                recordedSeconds: 600,
+                unrecordedSeconds: 300,
+                ambiguousOverlapSeconds: 0,
+                userModifiedRecordedSeconds: 0,
+                appSwitchCount: 2,
+                categorySwitchCount: 0,
+                categoryTransitions: [],
+                longestContinuousAppUsage: PomodoroContinuousAppUsage(
+                    appName: "Safari",
+                    category: "개발",
+                    durationSeconds: 300
+                ),
+                apps: [],
+                categories: []
+            )
+        )
+
+        let model = PomodoroPatternReadModelBuilder.build(
+            sessions: [linkedSession, unlinkedSession],
+            reflections: [
+                PomodoroReflection(
+                    focusSessionID: linkedSession.id,
+                    focusExperience: .deeplyFocused,
+                    progressResult: .meaningfulProgress,
+                    incompleteReason: .underestimatedScope
+                ),
+                PomodoroReflection(
+                    focusSessionID: unlinkedSession.id,
+                    focusExperience: .mostlyFocused,
+                    progressResult: .completedAsPlanned
+                ),
+            ]
+        )
+
+        XCTAssertEqual(model.general.sessionCount, 2)
+        XCTAssertEqual(model.general.linkedSessionCount, 1)
+        XCTAssertEqual(model.general.unlinkedSessionCount, 1)
+        XCTAssertEqual(model.general.durationSeconds, 2_400)
+        XCTAssertEqual(model.general.appSwitchCount, 5)
+        XCTAssertEqual(model.general.categorySwitchCount, 1)
+        XCTAssertEqual(model.general.reflectionCount, 2)
+
+        let category = try XCTUnwrap(model.categoryGroups.first)
+        XCTAssertEqual(category.title, "개발")
+        XCTAssertEqual(category.metrics.sessionCount, 2)
+        XCTAssertEqual(category.metrics.reflectionCount, 2)
+
+        XCTAssertEqual(model.taskGroups.count, 1)
+        let task = try XCTUnwrap(model.taskGroups.first)
+        XCTAssertEqual(task.linkedMemoID, memoID)
+        XCTAssertEqual(task.title, "개인 패턴 집계")
+        XCTAssertEqual(task.metrics.sessionCount, 1)
+        XCTAssertEqual(task.metrics.appSwitchCount, 3)
+        XCTAssertEqual(task.metrics.reflectionCount, 1)
+        XCTAssertEqual(
+            task.metrics.incompleteReasonCounts,
+            [
+                PomodoroReflectionOptionCount(
+                    id: PomodoroIncompleteReason.underestimatedScope.rawValue,
+                    label: PomodoroIncompleteReason.underestimatedScope.label,
+                    count: 1
+                )
+            ]
+        )
+    }
+
+    func testPomodoroPatternReadModelSeparatesMissingRecordsAndOrphanReflections() throws {
+        let memoID = UUID()
+        let start = Date(timeIntervalSince1970: 1_801_100_000)
+        let recordedSession = PomodoroSessionBreakdown(
+            id: UUID(),
+            startedAt: start,
+            endedAt: start.addingTimeInterval(1_500),
+            category: "조사",
+            linkedMemoID: memoID,
+            taskTitle: "자료 조사",
+            durationSeconds: 1_500,
+            observation: PomodoroSessionObservation(
+                sessionSeconds: 1_500,
+                recordedSeconds: 1_500,
+                unrecordedSeconds: 0,
+                ambiguousOverlapSeconds: 0,
+                userModifiedRecordedSeconds: 0,
+                appSwitchCount: 0,
+                categorySwitchCount: 0,
+                categoryTransitions: [],
+                longestContinuousAppUsage: PomodoroContinuousAppUsage(
+                    appName: "Safari",
+                    category: "조사",
+                    durationSeconds: 1_500
+                ),
+                apps: [],
+                categories: []
+            )
+        )
+        let missingRecordSession = PomodoroSessionBreakdown(
+            id: UUID(),
+            startedAt: start.addingTimeInterval(1_800),
+            endedAt: start.addingTimeInterval(3_300),
+            category: "조사",
+            linkedMemoID: memoID,
+            taskTitle: "자료 조사 완료",
+            durationSeconds: 1_500,
+            observation: PomodoroSessionObservation(
+                sessionSeconds: 1_500,
+                recordedSeconds: 0,
+                unrecordedSeconds: 1_500,
+                ambiguousOverlapSeconds: 0,
+                userModifiedRecordedSeconds: 0,
+                appSwitchCount: 0,
+                categorySwitchCount: 0,
+                categoryTransitions: [],
+                longestContinuousAppUsage: nil,
+                apps: [],
+                categories: []
+            )
+        )
+        let matchingReflection = PomodoroReflection(
+            focusSessionID: recordedSession.id,
+            focusExperience: .deeplyFocused,
+            progressResult: .completedAsPlanned
+        )
+        let orphanReflection = PomodoroReflection(
+            focusSessionID: UUID(),
+            focusExperience: .difficultToFocus,
+            progressResult: .littleProgress,
+            incompleteReason: .distracted
+        )
+        let completion = PomodoroTaskCompletion(
+            focusSessionID: recordedSession.id,
+            linkedMemoID: memoID,
+            taskTitleSnapshot: "자료 조사",
+            completedAt: start.addingTimeInterval(1_500),
+            didMarkMemoCompleted: true,
+            memoWasPinnedBeforeCompletion: false
+        )
+
+        let model = PomodoroPatternReadModelBuilder.build(
+            sessions: [recordedSession, missingRecordSession],
+            reflections: [matchingReflection, orphanReflection],
+            completions: [completion]
+        )
+
+        XCTAssertEqual(model.general.sessionCount, 2)
+        XCTAssertEqual(model.general.sessionsWithAppRecords, 1)
+        XCTAssertEqual(model.general.recordedSeconds, 1_500)
+        XCTAssertEqual(model.general.unrecordedSeconds, 1_500)
+        XCTAssertEqual(model.general.reflectionCount, 1)
+        XCTAssertEqual(model.general.longestContinuousAppUsage?.durationSeconds, 1_500)
+        XCTAssertEqual(
+            model.general.progressResultCounts,
+            [
+                PomodoroReflectionOptionCount(
+                    id: "linked_task_completed",
+                    label: "이 할 일을 모두 끝냈어요",
+                    count: 1
+                )
+            ]
+        )
+
+        let task = try XCTUnwrap(model.taskGroups.first)
+        XCTAssertEqual(task.title, "자료 조사 완료")
+        XCTAssertEqual(task.metrics.sessionsWithAppRecords, 1)
+        XCTAssertEqual(task.metrics.reflectionCount, 1)
+    }
+
     @MainActor
     func testAppUsageSegmentTracksUserModifiedProvenance() {
         let start = Date(timeIntervalSince1970: 1_800_900_000)
