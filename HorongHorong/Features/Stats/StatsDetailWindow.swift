@@ -13,6 +13,7 @@ private struct StatsLoadedData {
     let dailySegments: [AppUsageSegment]
     let weekSegments: [AppUsageSegment]
     let periodSegments: [AppUsageSegment]
+    let pomodoroComparisonSessions: [PomodoroSessionBreakdown]
     let timerSessions: [FocusSession]
     let pomodoroReflections: [PomodoroReflection]
     let pomodoroTaskCompletions: [PomodoroTaskCompletion]
@@ -31,6 +32,7 @@ struct StatsDetailWindow: View {
     @State private var dailySegments: [AppUsageSegment] = []
     @State private var weekSegments: [AppUsageSegment] = []
     @State private var periodSegments: [AppUsageSegment] = []
+    @State private var pomodoroComparisonSessions: [PomodoroSessionBreakdown] = []
     @State private var timerSessions: [FocusSession] = []
     @State private var pomodoroReflections: [PomodoroReflection] = []
     @State private var pomodoroTaskCompletions: [PomodoroTaskCompletion] = []
@@ -41,11 +43,13 @@ struct StatsDetailWindow: View {
     @State private var hoveredViewMode: StatsViewMode?
     @State private var trackerStore = TrackerStateStore.shared
     @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
+    @State private var loadCacheOrder: [StatsLoadCacheKey] = []
 
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "app.horonghorong",
         category: "StatsDetail"
     )
+    private static let loadCacheLimit = 6
 
     init(initialViewMode: StatsViewMode = .daily) {
         _viewMode = State(initialValue: initialViewMode)
@@ -67,6 +71,7 @@ struct StatsDetailWindow: View {
                         dailySegments: dailySegments,
                         weekSegments: weekSegments,
                         periodSegments: periodSegments,
+                        pomodoroComparisonSessions: pomodoroComparisonSessions,
                         timerSessions: timerSessions,
                         pomodoroReflections: pomodoroReflections,
                         pomodoroTaskCompletions: pomodoroTaskCompletions,
@@ -381,6 +386,8 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail load start mode=\(viewMode.rawValue, privacy: .public) start=\(Int(startDate.timeIntervalSince1970)) end=\(Int(endDate.timeIntervalSince1970))")
 
         if let cached = loadCache[key] {
+            loadCacheOrder.removeAll { $0 == key }
+            loadCacheOrder.append(key)
             let applyStartedAt = Date()
             applyLoadedData(cached)
             let applyElapsedMs = elapsedMs(since: applyStartedAt)
@@ -399,10 +406,7 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail records fetch mode=\(viewMode.rawValue, privacy: .public) count=\(fetchedRecords.count) elapsed=\(recordsElapsedMs)ms")
 
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
-        let fetchedPomodoroReflections = loadPomodoroReflections(
-            for: fetchedSessions,
-            mode: viewMode
-        )
+        let fetchedPomodoroReflections = loadPomodoroReflections(for: fetchedSessions)
         let fetchedPomodoroTaskCompletions = loadPomodoroTaskCompletions(
             for: fetchedSessions,
             mode: viewMode
@@ -429,12 +433,31 @@ struct StatsDetailWindow: View {
             timerSessions: fetchedSessions,
             aggregateSnapshot: aggregate
         )
+        let loadedPomodoroSegments = loadPomodoroSegments(
+            for: fetchedSessions,
+            reflectedSessionIDs: Set(fetchedPomodoroReflections.map(\.focusSessionID)),
+            availablePeriodSegments: loadedSegments.period,
+            periodSegmentsCoverFullRange: periodSegmentsCoverFullRange(
+                mode: viewMode,
+                records: fetchedRecords,
+                aggregateSnapshot: aggregate
+            ),
+            periodStart: startDate,
+            periodEnd: endDate
+        )
+        let loadedPomodoroComparisonSessions = PomodoroComparisonPeriodBuilder.build(
+            sessions: fetchedSessions,
+            segments: loadedPomodoroSegments,
+            periodStart: startDate,
+            periodEnd: endDate
+        )
 
         let loadedData = StatsLoadedData(
             records: fetchedRecords,
             dailySegments: loadedSegments.daily,
             weekSegments: loadedSegments.week,
             periodSegments: loadedSegments.period,
+            pomodoroComparisonSessions: loadedPomodoroComparisonSessions,
             timerSessions: fetchedSessions,
             pomodoroReflections: fetchedPomodoroReflections,
             pomodoroTaskCompletions: fetchedPomodoroTaskCompletions,
@@ -443,6 +466,12 @@ struct StatsDetailWindow: View {
             attentionDaySummaries: finalizedAttentionDays
         )
         loadCache[key] = loadedData
+        loadCacheOrder.removeAll { $0 == key }
+        loadCacheOrder.append(key)
+        while loadCacheOrder.count > Self.loadCacheLimit {
+            let evictedKey = loadCacheOrder.removeFirst()
+            loadCache.removeValue(forKey: evictedKey)
+        }
         let applyStartedAt = Date()
         applyLoadedData(loadedData)
         let applyElapsedMs = elapsedMs(since: applyStartedAt)
@@ -456,6 +485,7 @@ struct StatsDetailWindow: View {
         dailySegments = data.dailySegments
         weekSegments = data.weekSegments
         periodSegments = data.periodSegments
+        pomodoroComparisonSessions = data.pomodoroComparisonSessions
         timerSessions = data.timerSessions
         pomodoroReflections = data.pomodoroReflections
         pomodoroTaskCompletions = data.pomodoroTaskCompletions
@@ -479,6 +509,7 @@ struct StatsDetailWindow: View {
 
     private func invalidateLoadCache() {
         loadCache.removeAll()
+        loadCacheOrder.removeAll()
         Self.logger.notice("StatsDetail load cache invalidated")
     }
 
@@ -527,20 +558,91 @@ struct StatsDetailWindow: View {
     }
 
     private func loadPomodoroReflections(
-        for sessions: [FocusSession],
-        mode: StatsViewMode
+        for sessions: [FocusSession]
     ) -> [PomodoroReflection] {
-        guard mode == .daily, !sessions.isEmpty else { return [] }
+        guard !sessions.isEmpty else { return [] }
+        let sessionIDs = sessions.map(\.id)
+        let descriptor = FetchDescriptor<PomodoroReflection>(
+            predicate: #Predicate { sessionIDs.contains($0.focusSessionID) },
+            sortBy: [SortDescriptor(\.answeredAt)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
 
-        return sessions.compactMap { session in
-            let sessionID = session.id
-            var descriptor = FetchDescriptor<PomodoroReflection>(
-                predicate: #Predicate { $0.focusSessionID == sessionID }
-            )
-            descriptor.fetchLimit = 1
-            return try? modelContext.fetch(descriptor).first
+    private func loadPomodoroSegments(
+        for sessions: [FocusSession],
+        reflectedSessionIDs: Set<UUID>,
+        availablePeriodSegments: [AppUsageSegment],
+        periodSegmentsCoverFullRange: Bool,
+        periodStart: Date,
+        periodEnd: Date
+    ) -> [AppUsageSegment] {
+        let completedRanges = sessions.compactMap { session -> (Date, Date)? in
+            guard reflectedSessionIDs.contains(session.id),
+                  session.startedAt >= periodStart,
+                  session.startedAt < periodEnd,
+                  isCompletedPomodoro(session),
+                  let end = focusEnd(for: session) else {
+                return nil
+            }
+            guard end > session.startedAt else { return nil }
+            return (session.startedAt, end)
         }
-        .sorted { $0.answeredAt < $1.answeredAt }
+        var segmentsByID = Dictionary(
+            uniqueKeysWithValues: availablePeriodSegments.map { ($0.id, $0) }
+        )
+        let missingRanges = completedRanges.compactMap { rangeStart, rangeEnd in
+            guard periodSegmentsCoverFullRange else { return (rangeStart, rangeEnd) }
+            guard rangeEnd > periodEnd else { return nil }
+            return (max(rangeStart, periodEnd), rangeEnd)
+        }
+        for (rangeStart, rangeEnd) in mergedPomodoroSegmentRanges(missingRanges) {
+            let descriptor = FetchDescriptor<AppUsageSegment>(
+                predicate: #Predicate {
+                    $0.startTime < rangeEnd && $0.endTime > rangeStart
+                },
+                sortBy: [SortDescriptor(\.startTime)]
+            )
+            for segment in (try? modelContext.fetch(descriptor)) ?? [] {
+                segmentsByID[segment.id] = segment
+            }
+        }
+        return segmentsByID.values.sorted { $0.startTime < $1.startTime }
+    }
+
+    private func mergedPomodoroSegmentRanges(
+        _ ranges: [(start: Date, end: Date)]
+    ) -> [(start: Date, end: Date)] {
+        let maximumGap: TimeInterval = 10 * 60
+        let sorted = ranges.sorted { $0.start < $1.start }
+        guard var current = sorted.first else { return [] }
+        var result: [(start: Date, end: Date)] = []
+
+        for range in sorted.dropFirst() {
+            if range.start.timeIntervalSince(current.end) <= maximumGap {
+                current.end = max(current.end, range.end)
+            } else {
+                result.append(current)
+                current = range
+            }
+        }
+        result.append(current)
+        return result
+    }
+
+    private func periodSegmentsCoverFullRange(
+        mode: StatsViewMode,
+        records: [AppUsageRecord],
+        aggregateSnapshot: StatsAggregateSnapshot?
+    ) -> Bool {
+        switch mode {
+        case .daily:
+            return true
+        case .weekly:
+            return aggregateSnapshot == nil
+        case .monthly:
+            return aggregateSnapshot == nil && records.isEmpty
+        }
     }
 
     private func loadPomodoroTaskCompletions(
@@ -569,9 +671,11 @@ struct StatsDetailWindow: View {
     }
 
     private func focusEnd(for session: FocusSession) -> Date? {
-        guard let endedAt = session.endedAt else { return nil }
-        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
-        return min(endedAt, expectedEnd)
+        PomodoroComparisonPeriodBuilder.focusEnd(for: session)
+    }
+
+    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
+        PomodoroComparisonPeriodBuilder.isCompleted(session)
     }
 
     /// 일간 뷰에서는 선택한 하루의 세그먼트, 주간 뷰에서는 해당 주 7일 세그먼트를 읽는다.
