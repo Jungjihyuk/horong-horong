@@ -730,9 +730,7 @@ enum PomodoroFocusComparisonGroup: String, CaseIterable, Identifiable {
     }
 }
 
-struct PomodoroFocusComparisonMetrics: Equatable {
-    let group: PomodoroFocusComparisonGroup
-    let reflectionSessionCount: Int
+struct PomodoroBehaviorDistribution: Equatable {
     let missingBehaviorRecordSessionCount: Int
     let qualityExcludedSessionCount: Int
     let sessionsWithAmbiguousRecords: Int
@@ -767,6 +765,52 @@ struct PomodoroFocusComparisonMetrics: Equatable {
     }
 }
 
+struct PomodoroFocusComparisonMetrics: Equatable {
+    let group: PomodoroFocusComparisonGroup
+    let reflectionSessionCount: Int
+    let behavior: PomodoroBehaviorDistribution
+
+    var missingBehaviorRecordSessionCount: Int {
+        behavior.missingBehaviorRecordSessionCount
+    }
+
+    var qualityExcludedSessionCount: Int {
+        behavior.qualityExcludedSessionCount
+    }
+
+    var sessionsWithAmbiguousRecords: Int {
+        behavior.sessionsWithAmbiguousRecords
+    }
+
+    var appSwitchesPerAttributedTenMinutes: [Double] {
+        behavior.appSwitchesPerAttributedTenMinutes
+    }
+
+    var categorySwitchesPerAttributedTenMinutes: [Double] {
+        behavior.categorySwitchesPerAttributedTenMinutes
+    }
+
+    var longestContinuousAppCategoryRatios: [Double] {
+        behavior.longestContinuousAppCategoryRatios
+    }
+
+    var comparableSessionCount: Int {
+        behavior.comparableSessionCount
+    }
+
+    var medianAppSwitchesPerAttributedTenMinutes: Double? {
+        behavior.medianAppSwitchesPerAttributedTenMinutes
+    }
+
+    var medianCategorySwitchesPerAttributedTenMinutes: Double? {
+        behavior.medianCategorySwitchesPerAttributedTenMinutes
+    }
+
+    var medianLongestContinuousAppCategoryRatio: Double? {
+        behavior.medianLongestContinuousAppCategoryRatio
+    }
+}
+
 enum PomodoroFocusComparisonQualityPolicy {
     static let minimumRecordedCoverage = 0.8
     static let maximumAmbiguousOverlapRatio = 0.1
@@ -778,6 +822,59 @@ enum PomodoroFocusComparisonQualityPolicy {
         let ambiguousRatio = Double(observation.ambiguousOverlapSeconds) / sessionSeconds
         return recordedCoverage >= minimumRecordedCoverage
             && ambiguousRatio <= maximumAmbiguousOverlapRatio
+    }
+}
+
+enum PomodoroBehaviorDistributionBuilder {
+    static func build(
+        sessions: [PomodoroSessionBreakdown]
+    ) -> PomodoroBehaviorDistribution {
+        var appSwitchRates: [Double] = []
+        var categorySwitchRates: [Double] = []
+        var longestRatios: [Double] = []
+        var missingBehaviorRecordSessionCount = 0
+        var qualityExcludedSessionCount = 0
+        var sessionsWithAmbiguousRecords = 0
+
+        for session in sessions {
+            let observation = session.observation
+            let attributedSeconds = observation.attributedSeconds
+            guard observation.sessionSeconds > 0,
+                  observation.recordedSeconds > 0 else {
+                missingBehaviorRecordSessionCount += 1
+                continue
+            }
+            guard PomodoroFocusComparisonQualityPolicy.includes(observation) else {
+                qualityExcludedSessionCount += 1
+                continue
+            }
+            guard attributedSeconds > 0,
+                  let longest = observation.longestContinuousAppUsage else {
+                missingBehaviorRecordSessionCount += 1
+                continue
+            }
+            if observation.ambiguousOverlapSeconds > 0 {
+                sessionsWithAmbiguousRecords += 1
+            }
+
+            let denominator = Double(attributedSeconds)
+            appSwitchRates.append(Double(observation.appSwitchCount) / denominator * 600)
+            categorySwitchRates.append(
+                Double(observation.categorySwitchCount) / denominator * 600
+            )
+            longestRatios.append(
+                min(1, max(0, Double(longest.durationSeconds) / denominator))
+            )
+        }
+
+        return PomodoroBehaviorDistribution(
+            missingBehaviorRecordSessionCount: missingBehaviorRecordSessionCount,
+            qualityExcludedSessionCount: qualityExcludedSessionCount,
+            sessionsWithAmbiguousRecords: sessionsWithAmbiguousRecords,
+            appSwitchesPerAttributedTenMinutes: appSwitchRates,
+            categorySwitchesPerAttributedTenMinutes: categorySwitchRates,
+            longestContinuousAppCategoryRatios: longestRatios
+        )
     }
 }
 
@@ -891,49 +988,136 @@ enum PomodoroFocusComparisonBuilder {
         for group: PomodoroFocusComparisonGroup,
         sessions: [PomodoroSessionBreakdown]
     ) -> PomodoroFocusComparisonMetrics {
-        var appSwitchRates: [Double] = []
-        var categorySwitchRates: [Double] = []
-        var longestRatios: [Double] = []
-        var missingBehaviorRecordSessionCount = 0
-        var qualityExcludedSessionCount = 0
-        var sessionsWithAmbiguousRecords = 0
-
-        for session in sessions {
-            let observation = session.observation
-            let attributedSeconds = observation.attributedSeconds
-            guard observation.sessionSeconds > 0,
-                  attributedSeconds > 0,
-                  let longest = observation.longestContinuousAppUsage else {
-                missingBehaviorRecordSessionCount += 1
-                continue
-            }
-            guard PomodoroFocusComparisonQualityPolicy.includes(observation) else {
-                qualityExcludedSessionCount += 1
-                continue
-            }
-            if observation.ambiguousOverlapSeconds > 0 {
-                sessionsWithAmbiguousRecords += 1
-            }
-
-            let denominator = Double(attributedSeconds)
-            appSwitchRates.append(Double(observation.appSwitchCount) / denominator * 600)
-            categorySwitchRates.append(
-                Double(observation.categorySwitchCount) / denominator * 600
-            )
-            longestRatios.append(
-                min(1, max(0, Double(longest.durationSeconds) / denominator))
-            )
-        }
-
         return PomodoroFocusComparisonMetrics(
             group: group,
             reflectionSessionCount: sessions.count,
-            missingBehaviorRecordSessionCount: missingBehaviorRecordSessionCount,
-            qualityExcludedSessionCount: qualityExcludedSessionCount,
-            sessionsWithAmbiguousRecords: sessionsWithAmbiguousRecords,
-            appSwitchesPerAttributedTenMinutes: appSwitchRates,
-            categorySwitchesPerAttributedTenMinutes: categorySwitchRates,
-            longestContinuousAppCategoryRatios: longestRatios
+            behavior: PomodoroBehaviorDistributionBuilder.build(sessions: sessions)
+        )
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+struct PomodoroLinkedTaskReflectionCounts: Equatable {
+    let answeredCount: Int
+    let unansweredCount: Int
+    let focusedCount: Int
+    let difficultCount: Int
+    let unsureCount: Int
+    let unknownCount: Int
+}
+
+struct PomodoroLinkedTaskComparisonItem: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let firstStartedAt: Date
+    let totalSessionCount: Int
+    let totalDurationSeconds: Int
+    let behavior: PomodoroBehaviorDistribution
+    let reflections: PomodoroLinkedTaskReflectionCounts
+}
+
+struct PomodoroLinkedTaskComparisonReadModel: Equatable {
+    let category: String
+    let items: [PomodoroLinkedTaskComparisonItem]
+
+    var appSwitchDomainMaximum: Double {
+        max(
+            1,
+            items
+                .flatMap(\.behavior.appSwitchesPerAttributedTenMinutes)
+                .max() ?? 0
+        )
+    }
+
+    var categorySwitchDomainMaximum: Double {
+        max(
+            1,
+            items
+                .flatMap(\.behavior.categorySwitchesPerAttributedTenMinutes)
+                .max() ?? 0
+        )
+    }
+}
+
+enum PomodoroLinkedTaskComparisonBuilder {
+    static func build(
+        sessions: [PomodoroSessionBreakdown],
+        reflections: [PomodoroReflection],
+        category: String
+    ) -> PomodoroLinkedTaskComparisonReadModel {
+        guard !category.isEmpty else {
+            return PomodoroLinkedTaskComparisonReadModel(category: category, items: [])
+        }
+        let reflectionBySessionID = reflections.reduce(into: [UUID: PomodoroReflection]()) {
+            $0[$1.focusSessionID] = $1
+        }
+        let scopedSessions = sessions.filter {
+            $0.category == category && $0.linkedMemoID != nil
+        }
+        let items = Dictionary(grouping: scopedSessions, by: { $0.linkedMemoID! })
+            .map { memoID, groupedSessions in
+                let ordered = groupedSessions.sorted { $0.startedAt < $1.startedAt }
+                let title = ordered.reversed().compactMap {
+                    normalizedText($0.taskTitle)
+                }.first ?? "이름을 확인할 수 없는 할 일"
+                var answeredCount = 0
+                var focusedCount = 0
+                var difficultCount = 0
+                var unsureCount = 0
+                var unknownCount = 0
+
+                for session in ordered {
+                    guard let reflection = reflectionBySessionID[session.id] else { continue }
+                    answeredCount += 1
+                    switch PomodoroFocusComparisonGroup.group(
+                        for: reflection.focusExperienceRawValue
+                    ) {
+                    case .focused:
+                        focusedCount += 1
+                    case .difficult:
+                        difficultCount += 1
+                    case .unsure:
+                        unsureCount += 1
+                    case nil:
+                        unknownCount += 1
+                    }
+                }
+
+                return PomodoroLinkedTaskComparisonItem(
+                    id: memoID,
+                    title: title,
+                    firstStartedAt: ordered.first?.startedAt ?? .distantPast,
+                    totalSessionCount: ordered.count,
+                    totalDurationSeconds: ordered.reduce(0) {
+                        $0 + $1.durationSeconds
+                    },
+                    behavior: PomodoroBehaviorDistributionBuilder.build(
+                        sessions: ordered
+                    ),
+                    reflections: PomodoroLinkedTaskReflectionCounts(
+                        answeredCount: answeredCount,
+                        unansweredCount: max(0, ordered.count - answeredCount),
+                        focusedCount: focusedCount,
+                        difficultCount: difficultCount,
+                        unsureCount: unsureCount,
+                        unknownCount: unknownCount
+                    )
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.firstStartedAt != rhs.firstStartedAt {
+                    return lhs.firstStartedAt < rhs.firstStartedAt
+                }
+                return lhs.title < rhs.title
+            }
+
+        return PomodoroLinkedTaskComparisonReadModel(
+            category: category,
+            items: items
         )
     }
 
@@ -1219,6 +1403,7 @@ enum StatsViewMode: String, CaseIterable, Identifiable {
 
 struct StatsChartView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let records: [AppUsageRecord]
     let viewMode: StatsViewMode
@@ -2537,6 +2722,13 @@ struct StatsChartView: View {
                 category: $0
             )
         } ?? []
+        let taskComparisonModel = selectedCategory.map {
+            PomodoroLinkedTaskComparisonBuilder.build(
+                sessions: sessions,
+                reflections: pomodoroReflections,
+                category: $0
+            )
+        }
         let effectiveTaskID = selectedPomodoroComparisonTaskID.flatMap { selectedID in
             taskOptions.contains { $0.id == selectedID } ? selectedID : nil
         }
@@ -2597,11 +2789,11 @@ struct StatsChartView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("연결한 할 일")
+                    Text("회고 자세히 보기")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(PopoverChrome.inkTertiary)
-                    Picker("연결한 할 일", selection: $selectedPomodoroComparisonTaskID) {
-                        Text(selectedCategory == nil ? "카테고리를 먼저 선택" : "전체 포모도로")
+                    Picker("회고 자세히 보기", selection: $selectedPomodoroComparisonTaskID) {
+                        Text(selectedCategory == nil ? "카테고리를 먼저 선택" : "카테고리 전체")
                             .tag(nil as UUID?)
                         ForEach(taskOptions) { option in
                             Text(option.title).tag(Optional(option.id))
@@ -2623,14 +2815,22 @@ struct StatsChartView: View {
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .center)
             } else if model.matchedReflectionCount == 0 {
-                Text("포모도로는 있지만 작성된 종료 회고가 없어요.")
+                Text(
+                    effectiveTaskID == nil
+                        ? "포모도로는 있지만 작성된 종료 회고가 없어요."
+                        : "이 할 일에는 작성된 종료 회고가 없어 회고별 차이를 비교할 수 없어요. 전체 행동 값은 아래 선택 카드에 그대로 표시해요."
+                )
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 if comparedReflectionCount == 0 {
-                    Text("이 범위의 회고는 잘 모르겠음 또는 확인할 수 없는 응답만 있어 두 그룹을 비교하지 않았어요.")
+                    Text(
+                        effectiveTaskID == nil
+                            ? "이 범위의 회고는 잘 모르겠음 또는 확인할 수 없는 응답만 있어 두 그룹을 비교하지 않았어요."
+                            : "이 할 일의 회고는 잘 모르겠음 또는 확인할 수 없는 응답만 있어 회고별 차이를 비교하지 않았어요. 전체 행동 값은 아래 선택 카드에 그대로 표시해요."
+                    )
                         .font(.caption)
                         .foregroundStyle(PopoverChrome.inkTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2695,6 +2895,11 @@ struct StatsChartView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            Divider()
+                .overlay(PopoverChrome.divider)
+
+            pomodoroLinkedTaskComparisonSection(taskComparisonModel)
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2717,6 +2922,251 @@ struct StatsChartView: View {
             }
             self.selectedPomodoroComparisonTaskID = nil
         }
+    }
+
+    @ViewBuilder
+    private func pomodoroLinkedTaskComparisonSection(
+        _ model: PomodoroLinkedTaskComparisonReadModel?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("할 일별 행동 기록 비교")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                Spacer(minLength: 8)
+                if let model {
+                    Text("\(model.items.count)개")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .monospacedDigit()
+                }
+            }
+
+            if let model {
+                Text("\(Constants.categoryEmoji(for: model.category)) \(model.category)에서 연결한 할 일을 같은 눈금으로 보여드려요. 카드 순서는 값의 높고 낮음과 관계없어요.")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !model.items.isEmpty {
+                    Text("회/10분은 비거나 겹친 시간을 뺀, 앱·카테고리가 명확한 기록 10분당 전환 횟수예요.")
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                switch model.items.count {
+                case 0:
+                    Text("선택한 기간의 이 카테고리에는 할 일이 연결된 포모도로가 없어요.")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                case 1:
+                    Text("선택한 기간에는 연결된 할 일이 1개예요. 다른 할 일에 포모도로를 연결하면 나란히 비교할 수 있어요.")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let item = model.items.first {
+                        pomodoroLinkedTaskComparisonCard(item, model: model)
+                    }
+                default:
+                    let comparableTaskCount = model.items.filter {
+                        $0.behavior.comparableSessionCount > 0
+                    }.count
+                    let columns = dynamicTypeSize.isAccessibilitySize
+                        ? [GridItem(.flexible(), spacing: 10)]
+                        : [GridItem(.adaptive(minimum: 300), spacing: 10)]
+
+                    if comparableTaskCount < 2 {
+                        Text("행동 값을 계산할 수 있는 할 일이 \(comparableTaskCount)개라 아직 행동 차이를 나란히 비교하기 어려워요.")
+                            .font(.caption)
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                        ForEach(model.items) { item in
+                            pomodoroLinkedTaskComparisonCard(item, model: model)
+                        }
+                    }
+
+                }
+
+                if !model.items.isEmpty {
+                    Text("행동 값은 연결한 모든 포모도로 중 기록 기준을 충족한 세션으로 계산하고, 회고 수는 따로 보여드려요. 점 하나는 한 세션의 값이며 반복된 경향은 아니에요. 여러 세션이면 큰 점은 가운데값, 선 양 끝은 최솟값과 최댓값이에요.")
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("카드의 ‘자세히’를 누르면 위 영역에서 회고별 행동 차이를 봐요. 회고 여부와 무관한 전체 행동 값은 카드에 그대로 남아요.")
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("먼저 카테고리를 선택해 주세요. 선택한 기간·카테고리 안에서 연결한 할 일을 비교해요.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
+    private func pomodoroLinkedTaskComparisonCard(
+        _ item: PomodoroLinkedTaskComparisonItem,
+        model: PomodoroLinkedTaskComparisonReadModel
+    ) -> some View {
+        let reflection = item.reflections
+        let behavior = item.behavior
+        let isSelected = selectedPomodoroComparisonTaskID == item.id
+        let titleLineLimit: Int? = dynamicTypeSize.isAccessibilitySize ? nil : 2
+        var reflectionParts = [
+            "몰입한 편 \(reflection.focusedCount)회",
+            "집중하기 어려웠던 때 \(reflection.difficultCount)회",
+            "잘 모르겠음 \(reflection.unsureCount)회",
+        ]
+        if reflection.unknownCount > 0 {
+            reflectionParts.append("확인 불가 \(reflection.unknownCount)회")
+        }
+        var recordParts: [String] = []
+        if behavior.missingBehaviorRecordSessionCount > 0 {
+            recordParts.append("앱 기록 없음 \(behavior.missingBehaviorRecordSessionCount)회")
+        }
+        if behavior.qualityExcludedSessionCount > 0 {
+            recordParts.append(
+                "기록 범위·겹침 기준 밖 \(behavior.qualityExcludedSessionCount)회"
+            )
+        }
+        if behavior.sessionsWithAmbiguousRecords > 0 {
+            recordParts.append(
+                "겹친 시간을 빼고 계산한 세션 \(behavior.sessionsWithAmbiguousRecords)회"
+            )
+        }
+
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 6) {
+                Text(item.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .lineLimit(titleLineLimit)
+                    .help(item.title)
+                Spacer(minLength: 4)
+                Button {
+                    selectedPomodoroComparisonTaskID = item.id
+                } label: {
+                    Label(
+                        isSelected ? "보는 중" : "자세히",
+                        systemImage: isSelected ? "checkmark.circle.fill" : "chevron.up"
+                    )
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(
+                        isSelected ? PopoverChrome.accent : PopoverChrome.inkTertiary
+                    )
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+                .help("\(item.title) 회고별 행동 차이 자세히 보기")
+                .accessibilityHint("위 비교 영역에서 이 할 일의 회고별 행동 차이를 봅니다")
+                .accessibilityValue(isSelected ? "자세히 보는 중" : "선택하지 않음")
+            }
+
+            if isSelected {
+                Text("위 회고별 비교에서 자세히 보는 중")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.accent)
+            }
+
+            Text("포모도로 \(item.totalSessionCount)회 · \(formatDuration(item.totalDurationSeconds))")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+
+            Text("회고 작성 \(reflection.answeredCount)/\(item.totalSessionCount)회 · 행동 값을 계산한 세션 \(behavior.comparableSessionCount)/\(item.totalSessionCount)회")
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(reflectionParts.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !recordParts.isEmpty {
+                Text(recordParts.joined(separator: " · "))
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if behavior.comparableSessionCount == 0 {
+                Text("현재 기준으로 계산할 행동 기록이 없어요.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .padding(.vertical, 6)
+            } else {
+                pomodoroFocusComparisonMetric(
+                    title: "확인된 앱 전환",
+                    medianValue: behavior.medianAppSwitchesPerAttributedTenMinutes ?? 0,
+                    medianText: comparisonRateText(
+                        behavior.medianAppSwitchesPerAttributedTenMinutes
+                    ),
+                    values: behavior.appSwitchesPerAttributedTenMinutes,
+                    upperBound: model.appSwitchDomainMaximum,
+                    upperBoundText: comparisonRateAxisText(model.appSwitchDomainMaximum),
+                    color: PopoverChrome.accent,
+                    groupLabel: "\(item.title) 할 일",
+                    formatsAsRatio: false
+                )
+                pomodoroFocusComparisonMetric(
+                    title: "확인된 카테고리 전환",
+                    medianValue: behavior.medianCategorySwitchesPerAttributedTenMinutes ?? 0,
+                    medianText: comparisonRateText(
+                        behavior.medianCategorySwitchesPerAttributedTenMinutes
+                    ),
+                    values: behavior.categorySwitchesPerAttributedTenMinutes,
+                    upperBound: model.categorySwitchDomainMaximum,
+                    upperBoundText: comparisonRateAxisText(
+                        model.categorySwitchDomainMaximum
+                    ),
+                    color: PopoverChrome.accent,
+                    groupLabel: "\(item.title) 할 일",
+                    formatsAsRatio: false
+                )
+                pomodoroFocusComparisonMetric(
+                    title: "한 앱·카테고리로 가장 길게 이어진 비율",
+                    medianValue: behavior.medianLongestContinuousAppCategoryRatio ?? 0,
+                    medianText: comparisonRatioText(
+                        behavior.medianLongestContinuousAppCategoryRatio
+                    ),
+                    values: behavior.longestContinuousAppCategoryRatios,
+                    upperBound: 1,
+                    upperBoundText: "100%",
+                    color: PopoverChrome.accent,
+                    groupLabel: "\(item.title) 할 일",
+                    formatsAsRatio: true
+                )
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            PopoverChrome.card.opacity(0.72),
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(
+                    isSelected ? PopoverChrome.accent.opacity(0.72) : PopoverChrome.divider,
+                    lineWidth: isSelected ? 1.5 : 1
+                )
+        )
+        .accessibilityElement(children: .contain)
     }
 
     private func pomodoroFocusComparisonGroupCard(

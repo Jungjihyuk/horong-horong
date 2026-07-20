@@ -2377,8 +2377,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(model.matchedReflectionCount, 8)
         XCTAssertEqual(model.focused.reflectionSessionCount, 5)
         XCTAssertEqual(model.focused.comparableSessionCount, 2)
-        XCTAssertEqual(model.focused.missingBehaviorRecordSessionCount, 1)
-        XCTAssertEqual(model.focused.qualityExcludedSessionCount, 2)
+        XCTAssertEqual(model.focused.missingBehaviorRecordSessionCount, 0)
+        XCTAssertEqual(model.focused.qualityExcludedSessionCount, 3)
         XCTAssertEqual(model.focused.sessionsWithAmbiguousRecords, 1)
         XCTAssertEqual(
             try XCTUnwrap(model.focused.medianAppSwitchesPerAttributedTenMinutes),
@@ -2534,6 +2534,244 @@ final class ConstantsDefaultsTests: XCTestCase {
                     firstStartedAt: developmentMemoB.startedAt
                 ),
             ]
+        )
+    }
+
+    func testLinkedTaskComparisonSeparatesReflectionsFromAllBehaviorSessions() throws {
+        let memoA = UUID()
+        let memoB = UUID()
+        let memoC = UUID()
+        let start = Date(timeIntervalSince1970: 1_801_350_000)
+
+        func session(
+            offset: TimeInterval,
+            category: String = "개발",
+            memoID: UUID?,
+            title: String?,
+            recordedSeconds: Int,
+            ambiguousSeconds: Int = 0,
+            appSwitchCount: Int = 0,
+            categorySwitchCount: Int = 0,
+            longestSeconds: Int? = nil
+        ) -> PomodoroSessionBreakdown {
+            let startedAt = start.addingTimeInterval(offset)
+            return PomodoroSessionBreakdown(
+                id: UUID(),
+                startedAt: startedAt,
+                endedAt: startedAt.addingTimeInterval(600),
+                category: category,
+                linkedMemoID: memoID,
+                taskTitle: title,
+                durationSeconds: 600,
+                observation: PomodoroSessionObservation(
+                    sessionSeconds: 600,
+                    recordedSeconds: recordedSeconds,
+                    unrecordedSeconds: max(0, 600 - recordedSeconds),
+                    ambiguousOverlapSeconds: ambiguousSeconds,
+                    userModifiedRecordedSeconds: 0,
+                    appSwitchCount: appSwitchCount,
+                    categorySwitchCount: categorySwitchCount,
+                    categoryTransitions: [],
+                    longestContinuousAppUsage: longestSeconds.map {
+                        PomodoroContinuousAppUsage(
+                            appName: "Xcode",
+                            category: category,
+                            durationSeconds: $0
+                        )
+                    },
+                    apps: [],
+                    categories: []
+                )
+            )
+        }
+
+        let aFocused = session(
+            offset: 0,
+            memoID: memoA,
+            title: "이전 제목",
+            recordedSeconds: 600,
+            appSwitchCount: 1,
+            longestSeconds: 400
+        )
+        let aUnanswered = session(
+            offset: 900,
+            memoID: memoA,
+            title: nil,
+            recordedSeconds: 600,
+            appSwitchCount: 3,
+            categorySwitchCount: 1,
+            longestSeconds: 300
+        )
+        let aMissing = session(
+            offset: 1_800,
+            memoID: memoA,
+            title: "  ",
+            recordedSeconds: 0
+        )
+        let aLowQuality = session(
+            offset: 2_700,
+            memoID: memoA,
+            title: "새 제목",
+            recordedSeconds: 120,
+            longestSeconds: 120
+        )
+        let bUnsure = session(
+            offset: 3_600,
+            memoID: memoB,
+            title: "문서 정리",
+            recordedSeconds: 0
+        )
+        let bUnknown = session(
+            offset: 4_500,
+            memoID: memoB,
+            title: nil,
+            recordedSeconds: 0
+        )
+        let cUnanswered = session(
+            offset: 5_100,
+            memoID: memoC,
+            title: "테스트 보강",
+            recordedSeconds: 600,
+            appSwitchCount: 5,
+            categorySwitchCount: 2,
+            longestSeconds: 240
+        )
+        let sameMemoOtherCategory = session(
+            offset: 5_400,
+            category: "글쓰기",
+            memoID: memoA,
+            title: "다른 카테고리",
+            recordedSeconds: 600,
+            appSwitchCount: 9,
+            longestSeconds: 100
+        )
+        let unlinked = session(
+            offset: 6_300,
+            memoID: nil,
+            title: nil,
+            recordedSeconds: 600,
+            longestSeconds: 600
+        )
+        let unknownReflection = PomodoroReflection(
+            focusSessionID: bUnknown.id,
+            focusExperience: .unsure,
+            progressResult: .meaningfulProgress
+        )
+        unknownReflection.focusExperienceRawValue = "legacy_unknown"
+        let reflections = [
+            PomodoroReflection(
+                focusSessionID: aFocused.id,
+                focusExperience: .deeplyFocused,
+                progressResult: .meaningfulProgress
+            ),
+            PomodoroReflection(
+                focusSessionID: aMissing.id,
+                focusExperience: .difficultToFocus,
+                progressResult: .littleProgress,
+                incompleteReason: .blocked
+            ),
+            PomodoroReflection(
+                focusSessionID: bUnsure.id,
+                focusExperience: .unsure,
+                progressResult: .goalChanged,
+                incompleteReason: .switchedTask
+            ),
+            unknownReflection,
+            PomodoroReflection(
+                focusSessionID: sameMemoOtherCategory.id,
+                focusExperience: .deeplyFocused,
+                progressResult: .completedAsPlanned
+            ),
+        ]
+
+        let model = PomodoroLinkedTaskComparisonBuilder.build(
+            sessions: [
+                aFocused,
+                aUnanswered,
+                aMissing,
+                aLowQuality,
+                bUnsure,
+                bUnknown,
+                cUnanswered,
+                sameMemoOtherCategory,
+                unlinked,
+            ],
+            reflections: reflections,
+            category: "개발"
+        )
+
+        XCTAssertEqual(model.category, "개발")
+        XCTAssertEqual(model.items.map(\.id), [memoA, memoB, memoC])
+        let taskA = try XCTUnwrap(model.items.first)
+        XCTAssertEqual(taskA.title, "새 제목")
+        XCTAssertEqual(taskA.totalSessionCount, 4)
+        XCTAssertEqual(taskA.totalDurationSeconds, 2_400)
+        XCTAssertEqual(taskA.behavior.comparableSessionCount, 2)
+        XCTAssertEqual(taskA.behavior.missingBehaviorRecordSessionCount, 1)
+        XCTAssertEqual(taskA.behavior.qualityExcludedSessionCount, 1)
+        XCTAssertEqual(
+            taskA.totalSessionCount,
+            taskA.behavior.comparableSessionCount
+                + taskA.behavior.missingBehaviorRecordSessionCount
+                + taskA.behavior.qualityExcludedSessionCount
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(taskA.behavior.medianAppSwitchesPerAttributedTenMinutes),
+            2,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(taskA.reflections.answeredCount, 2)
+        XCTAssertEqual(taskA.reflections.unansweredCount, 2)
+        XCTAssertEqual(taskA.reflections.focusedCount, 1)
+        XCTAssertEqual(taskA.reflections.difficultCount, 1)
+
+        let taskB = try XCTUnwrap(model.items.first { $0.id == memoB })
+        XCTAssertEqual(taskB.totalSessionCount, 2)
+        XCTAssertEqual(taskB.behavior.comparableSessionCount, 0)
+        XCTAssertEqual(taskB.behavior.missingBehaviorRecordSessionCount, 2)
+        XCTAssertNil(taskB.behavior.medianAppSwitchesPerAttributedTenMinutes)
+        XCTAssertEqual(taskB.reflections.answeredCount, 2)
+        XCTAssertEqual(taskB.reflections.unsureCount, 1)
+        XCTAssertEqual(taskB.reflections.unknownCount, 1)
+
+        let taskC = try XCTUnwrap(model.items.first { $0.id == memoC })
+        XCTAssertEqual(taskC.behavior.comparableSessionCount, 1)
+        XCTAssertEqual(taskC.reflections.answeredCount, 0)
+        XCTAssertEqual(taskC.reflections.unansweredCount, 1)
+        XCTAssertEqual(model.appSwitchDomainMaximum, 5, accuracy: 0.0001)
+        XCTAssertEqual(model.categorySwitchDomainMaximum, 2, accuracy: 0.0001)
+    }
+
+    func testPomodoroComparisonSegmentScopeIncludesReflectedAndLinkedSessions() {
+        let linked = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "개발",
+            linkedMemoID: UUID(),
+            taskTitleSnapshot: "비교 화면"
+        )
+        let reflectedUnlinked = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        let unrelated = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        let reflection = PomodoroReflection(
+            focusSessionID: reflectedUnlinked.id,
+            focusExperience: .mostlyFocused,
+            progressResult: .meaningfulProgress
+        )
+
+        XCTAssertEqual(
+            PomodoroComparisonSegmentScope.includedSessionIDs(
+                sessions: [linked, reflectedUnlinked, unrelated],
+                reflections: [reflection]
+            ),
+            Set([linked.id, reflectedUnlinked.id])
         )
     }
 

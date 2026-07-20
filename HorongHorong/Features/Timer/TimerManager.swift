@@ -177,6 +177,10 @@ final class TimerManager: @unchecked Sendable {
                 try? modelContext?.save()
                 // 완료된 집중 세션을 통계(AppUsageRecord)에 반영한다.
                 recordCompletedFocus(session: session)
+                NotificationCenter.default.post(
+                    name: .pomodoroSessionDidChange,
+                    object: session.id
+                )
             } else {
                 canContinueLastTask = true
             }
