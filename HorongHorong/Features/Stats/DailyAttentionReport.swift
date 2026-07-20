@@ -14,7 +14,6 @@ struct DailyAttentionWindow: Identifiable, Equatable {
     let score: Double
     let durationSeconds: Int
     let switches: Int
-    let reason: String
 }
 
 struct DailyRecoveryMoment: Identifiable, Equatable {
@@ -44,6 +43,70 @@ struct DailyAttentionReport {
 
     var hasReviewSignals: Bool {
         bestWindow != nil || worstWindow != nil || quickRecovery != nil || difficultRecovery != nil
+    }
+}
+
+enum DailyAttentionObservationPresentation {
+    static let learningStatus = "패턴을 알아가는 중"
+    static let learningMessage = "지금은 기록된 활동을 사실대로 보여드려요. 이 기록만으로 몰입 여부를 판단하지 않아요."
+
+    static func title(isFinalized: Bool) -> String {
+        isFinalized ? "하루 기록" : "오늘 기록 중"
+    }
+
+    static func introduction(isFinalized: Bool) -> String {
+        isFinalized
+            ? "이날의 앱과 카테고리 기록을 시간대별로 정리했어요."
+            : "오늘 지금까지의 앱과 카테고리 기록을 시간대별로 정리했어요."
+    }
+
+    static func longestWindowTitle(isFinalized: Bool) -> String {
+        isFinalized ? "기록 시간이 가장 길었던 구간" : "지금까지 기록 시간이 가장 길었던 구간"
+    }
+
+    static func mostSwitchedWindowTitle(isFinalized: Bool) -> String {
+        isFinalized ? "전환이 가장 많았던 구간" : "지금까지 전환이 가장 많았던 구간"
+    }
+
+    static func insufficientDataMessage(isFinalized: Bool) -> String {
+        isFinalized
+            ? "이날은 시간대별로 비교할 만큼의 기록이 없어요."
+            : "오늘은 아직 시간대별로 비교할 만큼의 기록이 없어요."
+    }
+
+    static func weeklySummary(currentDayCount: Int, previousDayCount: Int) -> String {
+        "이번 주 \(currentDayCount)일과 지난 주 \(previousDayCount)일의 기록을 모았어요."
+    }
+
+    static func monthlySummary(currentDayCount: Int, previousDayCount: Int) -> String {
+        "이번 달 \(currentDayCount)일과 지난 달 \(previousDayCount)일의 기록을 모았어요."
+    }
+
+    static func windowDescription(
+        primaryCategory: String?,
+        durationText: String,
+        switches: Int
+    ) -> String {
+        let category = primaryCategory ?? "카테고리 미지정"
+        if switches == 0 {
+            return "\(category) 중심의 기록 구간은 \(durationText)이고, 카테고리 전환은 없었어요."
+        }
+        return "\(category) 중심의 기록 구간은 \(durationText)이고, 카테고리 전환은 \(switches)회예요."
+    }
+
+    static func recoveryDescription(
+        kind: DailyRecoveryMoment.Kind,
+        category: String?,
+        durationText: String
+    ) -> String {
+        switch kind {
+        case .quickReturn:
+            let subject = category.map { "\($0) 카테고리가" } ?? "다음 작업이"
+            return "예정된 휴식 종료 후 \(subject) \(durationText) 뒤 기록됐어요."
+        case .delayedReturn:
+            let target = category.map { "\($0) 카테고리" } ?? "다음 작업"
+            return "예정된 휴식 종료 후 \(durationText) 동안 \(target) 기록이 없었어요."
+        }
     }
 }
 
@@ -333,15 +396,6 @@ enum WeeklyAttentionTrendReportBuilder {
         }
 
         let metrics = [
-            higherIsBetterMetric(
-                title: "평균 흐름 점수",
-                current: averageScore(current),
-                previous: averageScore(previous),
-                unit: "점",
-                improvedMessage: "지난 주보다 흐름 유지가 좋아졌어요.",
-                declinedMessage: "지난 주보다 흐름 점수가 낮아졌어요.",
-                steadyMessage: "지난 주와 비슷한 흐름을 유지했어요."
-            ),
             lowerIsBetterMetric(
                 title: "방해 앱 체류",
                 current: average(\.selectiveEventCount, in: current),
@@ -387,28 +441,6 @@ enum WeeklyAttentionTrendReportBuilder {
             metrics: [],
             summaryMessage: "비교할 수 있는 주간 기록이 아직 없어요.",
             guidanceMessage: "며칠 더 기록이 쌓이면 전보다 나아진 점과 흔들린 점을 비교해볼 수 있어요."
-        )
-    }
-
-    private static func higherIsBetterMetric(
-        title: String,
-        current: Double,
-        previous: Double,
-        unit: String,
-        improvedMessage: String,
-        declinedMessage: String,
-        steadyMessage: String
-    ) -> AttentionTrendMetric {
-        makeMetric(
-            title: title,
-            current: current,
-            previous: previous,
-            unit: unit,
-            isImproved: current > previous,
-            changeMagnitude: abs(current - previous),
-            improvedMessage: improvedMessage,
-            declinedMessage: declinedMessage,
-            steadyMessage: steadyMessage
         )
     }
 
@@ -466,12 +498,6 @@ enum WeeklyAttentionTrendReportBuilder {
             direction: direction,
             message: message
         )
-    }
-
-    private static func averageScore(_ summaries: [AttentionDaySummary]) -> Double {
-        guard !summaries.isEmpty else { return 0 }
-        let total = summaries.reduce(0.0) { $0 + $1.overallScore }
-        return total / Double(summaries.count) * 100
     }
 
     private static func average(
@@ -533,7 +559,7 @@ enum DailyAttentionReportBuilder {
         let switches: Int
 
         var durationSeconds: Int {
-            max(0, Int(end.timeIntervalSince(start)))
+            categoryDurations.values.reduce(0, +)
         }
 
         var primaryCategory: String? {
@@ -554,6 +580,23 @@ enum DailyAttentionReportBuilder {
         let scoredBuckets = visibleBuckets.map { bucket in
             (bucket, score(bucket, attentionEvents: attentionSummary.events))
         }
+        let hasVisibleSegments = segments.contains {
+            !Constants.hiddenLegacyCategories.contains($0.category) && $0.endTime > $0.startTime
+        }
+        let observationBuckets = visibleBuckets.map { bucket in
+            TimelineBucket(
+                startTime: bucket.startTime,
+                endTime: bucket.endTime,
+                categoryDurations: bucket.categoryDurations,
+                switches: hasVisibleSegments
+                    ? observedSwitchCount(
+                        segments: segments,
+                        from: bucket.startTime,
+                        to: bucket.endTime
+                    )
+                    : bucket.switches
+            )
+        }
 
         let bucketBest = scoredBuckets
             .max { lhs, rhs in
@@ -562,26 +605,39 @@ enum DailyAttentionReportBuilder {
             }
             .map { makeWindow(kind: .best, bucket: $0.0, score: $0.1) }
 
-        let bucketWorst = scoredBuckets
-            .min { lhs, rhs in
-                if lhs.1 != rhs.1 { return lhs.1 < rhs.1 }
-                return lhs.0.switches > rhs.0.switches
+        let longestBucket = observationBuckets
+            .max { lhs, rhs in
+                if lhs.totalSeconds != rhs.totalSeconds {
+                    return lhs.totalSeconds < rhs.totalSeconds
+                }
+                return lhs.switches > rhs.switches
             }
-            .map { makeWindow(kind: .worst, bucket: $0.0, score: $0.1) }
+            .map { bucket in
+                makeWindow(
+                    kind: .best,
+                    bucket: bucket,
+                    score: score(bucket, attentionEvents: attentionSummary.events)
+                )
+            }
 
-        let best = isFinalized
-            ? (longestFullDayWindow(day: day, segments: segments, timerSessions: timerSessions) ?? bucketBest)
-            : bucketBest
+        let mostSwitched = observationBuckets
+            .filter { $0.switches > 0 }
+            .max { lhs, rhs in
+                if lhs.switches != rhs.switches {
+                    return lhs.switches < rhs.switches
+                }
+                return lhs.totalSeconds < rhs.totalSeconds
+            }
+            .map { bucket in
+                makeWindow(
+                    kind: .worst,
+                    bucket: bucket,
+                    score: score(bucket, attentionEvents: attentionSummary.events)
+                )
+            }
 
-        let worst = isFinalized
-            ? fullDayWorstWindow(
-                day: day,
-                segments: segments,
-                buckets: buckets,
-                attentionEvents: attentionSummary.events,
-                fallback: bucketWorst
-            )
-            : bucketWorst
+        let best = longestFullDayWindow(day: day, segments: segments, timerSessions: timerSessions) ?? longestBucket
+        let worst = mostSwitched
 
         let quickRecovery = quickRecoveryMoment(
             segments: segments,
@@ -589,7 +645,7 @@ enum DailyAttentionReportBuilder {
             thresholds: thresholds
         )
         let difficultRecovery = difficultRecoveryMoment(from: attentionSummary)
-        let flowState = attentionSummary.hasSignals ? attentionSummary.flowState : inferredFlowState(from: best)
+        let flowState = attentionSummary.hasSignals ? attentionSummary.flowState : inferredFlowState(from: bucketBest)
 
         return DailyAttentionReport(
             day: day,
@@ -632,13 +688,7 @@ enum DailyAttentionReportBuilder {
             return nil
         }
 
-        let category = run.primaryCategory ?? "한 작업"
-        let reason: String
-        if run.switches == 0 {
-            reason = "\(category) 흐름이 전환 없이 \(durationText(run.durationSeconds)) 이어졌어요."
-        } else {
-            reason = "\(category) 중심 흐름이 \(durationText(run.durationSeconds)) 이어졌고, 전환 \(run.switches)회가 섞였어요."
-        }
+        let switches = observedSwitchCount(segments: segments, from: run.start, to: run.end)
 
         return DailyAttentionWindow(
             kind: .best,
@@ -647,9 +697,34 @@ enum DailyAttentionReportBuilder {
             primaryCategory: run.primaryCategory,
             score: 1,
             durationSeconds: run.durationSeconds,
-            switches: run.switches,
-            reason: reason
+            switches: switches
         )
+    }
+
+    private static func observedSwitchCount(
+        segments: [AppUsageSegment],
+        from start: Date,
+        to end: Date
+    ) -> Int {
+        let visible = segments.compactMap { segment -> SegmentSlice? in
+            guard !Constants.hiddenLegacyCategories.contains(segment.category) else { return nil }
+            let clippedStart = max(segment.startTime, start)
+            let clippedEnd = min(segment.endTime, end)
+            guard clippedEnd > clippedStart else { return nil }
+            return SegmentSlice(start: clippedStart, end: clippedEnd, category: segment.category)
+        }.sorted { $0.start < $1.start }
+        guard visible.count > 1 else { return 0 }
+
+        return zip(visible, visible.dropFirst()).reduce(0) { count, pair in
+            let (previous, current) = pair
+            let gap = current.start.timeIntervalSince(previous.end)
+            guard gap >= 0,
+                  gap <= 120,
+                  previous.category != current.category else {
+                return count
+            }
+            return count + 1
+        }
     }
 
     private static func focusRuns(
@@ -674,7 +749,7 @@ enum DailyAttentionReportBuilder {
             let gap = slice.start.timeIntervalSince(previous.end)
             let continues = gap <= maxGap && isSameFocusFlow(previous, slice, timerSessions: timerSessions)
             if continues {
-                if previous.category != slice.category && !isExemptSwitch(previous, slice, timerSessions: timerSessions) {
+                if previous.category != slice.category {
                     switches += 1
                 }
                 runEnd = max(runEnd, slice.end)
@@ -728,95 +803,6 @@ enum DailyAttentionReportBuilder {
         .sorted { $0.start < $1.start }
     }
 
-    private static func fullDayWorstWindow(
-        day: Date,
-        segments: [AppUsageSegment],
-        buckets: [TimelineBucket],
-        attentionEvents: [AttentionEventCandidate],
-        fallback: DailyAttentionWindow?
-    ) -> DailyAttentionWindow? {
-        let problemEvents = attentionEvents.filter { $0.type != .allowedSwitch }
-        guard !problemEvents.isEmpty else {
-            return fallback
-        }
-
-        let windowSeconds: TimeInterval = 30 * 60
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: day)
-        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(24 * 60 * 60)
-        let candidates = problemEvents.map { event -> (start: Date, end: Date, events: [AttentionEventCandidate]) in
-            let start = max(dayStart, event.occurredAt)
-            let end = min(dayEnd, start.addingTimeInterval(windowSeconds))
-            let events = problemEvents.filter { $0.occurredAt >= start && $0.occurredAt < end }
-            return (start, end, events)
-        }
-
-        guard let selected = candidates.max(by: { lhs, rhs in
-            let lhsDuration = lhs.events.reduce(0) { $0 + $1.durationSeconds }
-            let rhsDuration = rhs.events.reduce(0) { $0 + $1.durationSeconds }
-            if lhs.events.count != rhs.events.count {
-                return lhs.events.count < rhs.events.count
-            }
-            return lhsDuration < rhsDuration
-        }) else {
-            return fallback
-        }
-
-        let overlapped = clippedSegments(day: day, segments: segments).filter {
-            $0.end > selected.start && $0.start < selected.end
-        }
-        let categoryDurations = overlapped.reduce(into: [String: Int]()) { result, slice in
-            let start = max(slice.start, selected.start)
-            let end = min(slice.end, selected.end)
-            result[slice.category, default: 0] += max(0, Int(end.timeIntervalSince(start)))
-        }
-        let primary = categoryDurations.max { $0.value < $1.value }?.key
-        let eventSummary = eventReason(selected.events, primaryCategory: primary)
-        let switchCount = buckets
-            .filter { $0.endTime > selected.start && $0.startTime < selected.end }
-            .reduce(0) { $0 + $1.switches }
-
-        return DailyAttentionWindow(
-            kind: .worst,
-            start: selected.start,
-            end: selected.end,
-            primaryCategory: primary,
-            score: 0,
-            durationSeconds: Int(selected.end.timeIntervalSince(selected.start)),
-            switches: switchCount,
-            reason: eventSummary
-        )
-    }
-
-    private static func eventReason(_ events: [AttentionEventCandidate], primaryCategory: String?) -> String {
-        let selective = events.filter { $0.type == .selectiveDistraction }.count
-        let sustained = events.filter { $0.type == .sustainedDrop }.count
-        let delayed = events.filter { $0.type == .delayedReturn }.count
-        let context = primaryCategory.map { "\($0) 흐름에서 " } ?? ""
-        let activeTypes = [selective, sustained, delayed].filter { $0 > 0 }.count
-
-        if activeTypes == 1 {
-            if selective > 0 {
-                return "\(context)방해 가능 앱에 머문 신호가 보였어요."
-            }
-            if sustained > 0 {
-                return "\(context)집중 타이머가 목표보다 일찍 끝났어요."
-            }
-            if delayed > 0 {
-                return "\(context)휴식 뒤 원래 흐름으로 돌아오는 데 시간이 걸렸어요."
-            }
-        }
-
-        var parts: [String] = []
-        if selective > 0 { parts.append("방해 앱 체류 \(selective)회") }
-        if sustained > 0 { parts.append("조기 중단 \(sustained)회") }
-        if delayed > 0 { parts.append("복귀 지연 \(delayed)회") }
-        guard !parts.isEmpty else {
-            return "\(context)주의 흐름이 가장 많이 흔들렸어요."
-        }
-        return "\(context)\(parts.joined(separator: ", ")) 신호가 함께 보였어요."
-    }
-
     private static func score(
         _ bucket: TimelineBucket,
         attentionEvents: [AttentionEventCandidate]
@@ -845,21 +831,6 @@ enum DailyAttentionReportBuilder {
         score: Double
     ) -> DailyAttentionWindow {
         let primary = bucket.sortedCategories.first
-        let reason: String
-        switch kind {
-        case .best:
-            if bucket.switches == 0 {
-                reason = "전환 없이 \(durationText(bucket.totalSeconds)) 이어졌어요."
-            } else {
-                reason = "전환 \(bucket.switches)회 안에서 \(primary?.category ?? "한 작업") 흐름이 가장 오래 유지됐어요."
-            }
-        case .worst:
-            if bucket.switches >= 3 {
-                reason = "이 구간에서 작업 전환이 \(bucket.switches)회 발생해 흐름이 가장 자주 끊겼어요."
-            } else {
-                reason = "\(primary?.category ?? "여러 작업")에 머문 시간이 짧게 끊겼어요."
-            }
-        }
 
         return DailyAttentionWindow(
             kind: kind,
@@ -868,8 +839,7 @@ enum DailyAttentionReportBuilder {
             primaryCategory: primary?.category,
             score: score,
             durationSeconds: bucket.totalSeconds,
-            switches: bucket.switches,
-            reason: reason
+            switches: bucket.switches
         )
     }
 
@@ -897,8 +867,8 @@ enum DailyAttentionReportBuilder {
                 kind: .quickReturn,
                 occurredAt: expectedReturnAt,
                 durationSeconds: delay,
-                category: targetCategory,
-                message: "휴식 후 \(durationText(delay)) 만에 \(targetCategory) 흐름으로 돌아왔어요."
+                category: returnSegment.category,
+                message: "예정된 휴식 종료 후 \(durationText(delay)) 뒤 \(returnSegment.category) 카테고리가 기록됐어요."
             ))
         }
 

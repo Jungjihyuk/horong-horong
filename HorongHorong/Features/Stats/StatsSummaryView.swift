@@ -45,7 +45,7 @@ struct StatsSummaryView: View {
         topCategory: nil,
         overallScore: 0
     )
-    @State private var todayAttentionSummary = AttentionSummary.empty
+    @State private var hasTodaySegmentDetails = false
     @State private var weekLongestSessionSeconds: Int = 0
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
@@ -136,7 +136,7 @@ struct StatsSummaryView: View {
 
     private var todaySummary: some View {
         VStack(spacing: 10) {
-            summaryHeader(title: "오늘 집중", total: "총 \(shortDuration(totalUsageSeconds))", showsTop3: true)
+            summaryHeader(title: "오늘 기록", total: "총 \(shortDuration(totalUsageSeconds))", showsTop3: true)
 
             if !categoryUsages.isEmpty {
                 HStack(alignment: .center, spacing: 14) {
@@ -151,7 +151,9 @@ struct StatsSummaryView: View {
                 .popoverCard()
             }
 
-            metricCards
+            if hasTodaySegmentDetails {
+                metricCards
+            }
             horongStatusCard
         }
     }
@@ -240,8 +242,8 @@ struct StatsSummaryView: View {
 
     private var metricCards: some View {
         HStack(spacing: 8) {
-            summaryMetricCard(label: "최장 세션", value: shortDuration(todayFocusSummary.longestFocusSeconds))
-            summaryMetricCard(label: "작업 전환", value: "\(todayFocusSummary.switches)회")
+            summaryMetricCard(label: "같은 카테고리 최장", value: shortDuration(todayFocusSummary.longestFocusSeconds))
+            summaryMetricCard(label: "카테고리 전환", value: "\(todayFocusSummary.switches)회")
         }
     }
 
@@ -271,10 +273,10 @@ struct StatsSummaryView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text("오늘 호롱이 상태")
+                    Text("오늘의 관찰")
                         .font(.system(size: 12.5, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.accent)
-                    Text("— \(horongStatusLabel) \(horongStatusEmoji)")
+                    Text("— 패턴을 알아가는 중")
                         .font(.system(size: 12.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
@@ -282,14 +284,6 @@ struct StatsSummaryView: View {
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
 
-                if todayAttentionSummary.hasSignals {
-                    VStack(spacing: 5) {
-                        ForEach(attentionEvidenceEvents) { event in
-                            attentionEvidenceRow(event)
-                        }
-                    }
-                    .padding(.top, 4)
-                }
             }
             Spacer(minLength: 0)
         }
@@ -328,7 +322,7 @@ struct StatsSummaryView: View {
 
     private var weekSummary: some View {
         VStack(spacing: 10) {
-            summaryHeader(title: "이번 주 집중", total: "총 \(weekTotalFormatted)", showsTop3: false)
+            summaryHeader(title: "이번 주 기록", total: "총 \(weekTotalFormatted)", showsTop3: false)
 
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 8) {
@@ -350,56 +344,6 @@ struct StatsSummaryView: View {
 
             weekMetricCards
             weekStatusCard
-        }
-    }
-
-    private var attentionEvidenceEvents: [AttentionEventCandidate] {
-        Array(todayAttentionSummary.events.filter { $0.type != .allowedSwitch }.prefix(3))
-    }
-
-    private func attentionEvidenceRow(_ event: AttentionEventCandidate) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: attentionIcon(for: event.type))
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(PopoverChrome.accent)
-                .frame(width: 14)
-            Text(event.reason)
-                .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkSecondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Menu {
-                Button {
-                    saveAttentionCorrection(for: event, verdict: .distraction)
-                } label: {
-                    Label("신호 맞음", systemImage: "checkmark.seal")
-                }
-                Button {
-                    saveAttentionCorrection(for: event, verdict: .notDistraction)
-                } label: {
-                    Label("방해 아님", systemImage: "checkmark.circle")
-                }
-                Button {
-                    saveAttentionCorrection(for: event, verdict: .misclassified)
-                } label: {
-                    Label("분류 오류", systemImage: "xmark.circle")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("이 근거 보정")
-        }
-    }
-
-    private func attentionIcon(for type: AttentionEventType) -> String {
-        switch type {
-        case .selectiveDistraction: return "bell.badge"
-        case .sustainedDrop: return "timer"
-        case .delayedReturn: return "arrow.uturn.backward.circle"
-        case .allowedSwitch: return "checkmark.circle"
         }
     }
 
@@ -541,102 +485,15 @@ struct StatsSummaryView: View {
     }
 
     private var horongStatusMessage: String {
-        if todayAttentionSummary.hasSignals {
-            return attentionStatusExplanation
+        guard todayFocusSummary.totalSeconds > 0 else {
+            return "아직 기록이 없어요. 첫 기록을 시작해보세요."
         }
 
-        switch todayFocusSummary.level {
-        case .focused:
-            return "큰 흔들림 없이 한 가지 흐름에 오래 머문 기록이에요."
-        case .moderate:
-            return "흐름은 이어졌지만 중간 전환이 조금 있었어요."
-        case .scattered:
-            return "전환이 여러 번 겹쳐 원래 흐름으로 돌아볼 신호가 있어요."
-        case .empty:
-            return "아직 기록이 없어요. 첫 집중을 시작해보세요."
-        }
-    }
-
-    private var attentionStatusExplanation: String {
-        let signalEvents = todayAttentionSummary.events.filter { $0.type != .allowedSwitch }
-        let selectiveCount = signalEvents.filter { $0.type == .selectiveDistraction }.count
-        let sustainedCount = signalEvents.filter { $0.type == .sustainedDrop }.count
-        let returnCount = signalEvents.filter { $0.type == .delayedReturn }.count
-        var parts: [String] = []
-
-        if selectiveCount > 0 {
-            parts.append("방해 앱 체류 \(selectiveCount)회")
-        }
-        if sustainedCount > 0 {
-            parts.append("조기 중단 \(sustainedCount)회")
-        }
-        if returnCount > 0 {
-            parts.append("복귀 지연 \(returnCount)회")
+        guard hasTodaySegmentDetails else {
+            return "\(formatMetricDuration(todayFocusSummary.totalSeconds)) 기록 · 카테고리별 집계만 있어 전환과 연속 시간은 알 수 없어요."
         }
 
-        let summary = parts.isEmpty ? todayAttentionSummary.primaryMessage : "\(parts.joined(separator: ", "))가 보여요."
-        guard let event = todayAttentionSummary.primaryEvent else {
-            return summary
-        }
-        return "\(summary) 주요 근거: \(event.reason)."
-    }
-
-    private var horongStatusLabel: String {
-        todayAttentionSummary.hasSignals ? todayAttentionSummary.levelLabel : todayFocusSummary.levelLabel
-    }
-
-    private var horongStatusEmoji: String {
-        todayAttentionSummary.hasSignals ? todayAttentionSummary.levelEmoji : todayFocusSummary.levelEmoji
-    }
-
-    private func loadAttentionCorrections(from start: Date, to end: Date) -> [AttentionEventCorrection] {
-        let descriptor = FetchDescriptor<AttentionEvent>(
-            predicate: #Predicate { $0.occurredAt >= start && $0.occurredAt < end }
-        )
-        let events = (try? modelContext.fetch(descriptor)) ?? []
-        return events.map {
-            AttentionEventCorrection(fingerprint: $0.fingerprint, verdict: $0.verdict)
-        }
-    }
-
-    private func loadBreakTransitionIntents(from start: Date, to end: Date) -> [BreakTransitionIntent] {
-        let descriptor = FetchDescriptor<BreakTransitionIntent>(
-            predicate: #Predicate { $0.breakEndedAt >= start && $0.breakEndedAt < end },
-            sortBy: [SortDescriptor(\.breakEndedAt)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
-
-    private func saveAttentionCorrection(for event: AttentionEventCandidate, verdict: AttentionEventVerdict) {
-        let fingerprint = event.fingerprint
-        let descriptor = FetchDescriptor<AttentionEvent>(
-            predicate: #Predicate { $0.fingerprint == fingerprint }
-        )
-
-        if let existing = try? modelContext.fetch(descriptor).first {
-            existing.eventType = event.type.rawValue
-            existing.occurredAt = event.occurredAt
-            existing.sourceApp = event.sourceApp
-            existing.sourceCategory = event.sourceCategory
-            existing.targetCategory = event.targetCategory
-            existing.durationSeconds = event.durationSeconds
-            existing.verdict = verdict
-        } else {
-            let correction = AttentionEvent(
-                fingerprint: event.fingerprint,
-                eventType: event.type.rawValue,
-                occurredAt: event.occurredAt,
-                sourceApp: event.sourceApp,
-                sourceCategory: event.sourceCategory,
-                targetCategory: event.targetCategory,
-                durationSeconds: event.durationSeconds,
-                verdict: verdict
-            )
-            modelContext.insert(correction)
-        }
-
-        try? modelContext.save()
-        loadData()
+        return "\(formatMetricDuration(todayFocusSummary.totalSeconds)) 기록 · 카테고리 전환 \(todayFocusSummary.switches)회 · 같은 카테고리 최장 \(formatMetricDuration(todayFocusSummary.longestFocusSeconds))"
     }
 
     private var totalFormatted: String {
@@ -686,9 +543,8 @@ struct StatsSummaryView: View {
         let visibleSegments = segments.filter {
             !Constants.hiddenLegacyCategories.contains($0.category)
         }
+        hasTodaySegmentDetails = !visibleSegments.isEmpty
         let timerSessions = loadTimerSessions(from: today, to: tomorrow)
-        let attentionCorrections = loadAttentionCorrections(from: today, to: tomorrow)
-        let breakTransitionIntents = loadBreakTransitionIntents(from: today, to: tomorrow)
         let buckets = TimelineAnalytics.buckets(
             for: today,
             segments: visibleSegments,
@@ -700,15 +556,6 @@ struct StatsSummaryView: View {
             buckets: buckets,
             timerSessions: timerSessions
         )
-        todayAttentionSummary = AttentionAnalytics.summary(
-            for: today,
-            segments: visibleSegments,
-            timerSessions: timerSessions,
-            thresholds: AttentionThresholdStore.shared.thresholds,
-            breakTransitions: breakTransitionIntents,
-            corrections: attentionCorrections
-        )
-
         if !visibleSegments.isEmpty {
             let focusWindows = loadFocusWindows(from: today, to: tomorrow)
             var categoryDurations: [String: Int] = [:]
@@ -735,7 +582,6 @@ struct StatsSummaryView: View {
         }
 
         categoryUsages = makeCategoryUsages(from: categoryDurations)
-        todayAttentionSummary = .empty
         if todayFocusSummary.totalSeconds == 0 {
             todayFocusSummary = DailyFocusSummary(
                 totalSeconds: categoryDurations.values.reduce(0, +),
@@ -976,6 +822,9 @@ struct StatsSummaryView: View {
     }
 
     private func formatMetricDuration(_ seconds: Int) -> String {
+        if seconds < 60 {
+            return "\(max(0, seconds))초"
+        }
         let h = seconds / 3600
         let m = (seconds % 3600) / 60
         if h > 0 {
