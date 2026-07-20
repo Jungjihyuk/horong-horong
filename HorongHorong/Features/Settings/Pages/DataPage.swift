@@ -55,7 +55,7 @@ struct DataPage: View {
                 SettingsRow(
                     "익명 개선 데이터 보내기",
                     subtitle: telemetryConfigured
-                    ? "익명 설치 ID, 앱/OS 버전, 피드백 위치, 선택한 답변, 판단 신호와 점수 구간만 전송합니다. 앱 이름, 번들 ID, 세부 타임라인, 리포트 원문은 보내지 않습니다."
+                    ? "현재 익명 설치 ID, 앱/OS 버전, 동의 상태만 전송합니다. 앱 이름, 번들 ID, 작업 기록, 포모도로 회고 내용은 보내지 않습니다."
                     : "Supabase 연결값이 없어 전송할 수 없습니다."
                 ) {
                     Toggle("", isOn: $telemetryEnabled)

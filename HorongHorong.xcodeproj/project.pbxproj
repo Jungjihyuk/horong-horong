@@ -1041,7 +1041,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/호롱호롱";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/HorongHorong";
 			};
 			name = Debug;
 		};
@@ -1172,7 +1172,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/호롱호롱";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/HorongHorong";
 			};
 			name = Release;
 		};

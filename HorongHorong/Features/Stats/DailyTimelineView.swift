@@ -64,23 +64,6 @@ struct DailyFocusSummary {
         return .scattered
     }
 
-    var levelLabel: String {
-        flowState.label
-    }
-
-    var levelColor: Color {
-        switch level {
-        case .focused: return .green
-        case .moderate: return .yellow
-        case .scattered: return .red
-        case .empty: return .gray
-        }
-    }
-
-    var levelEmoji: String {
-        flowState.emoji
-    }
-
     var flowState: AttentionFlowState {
         switch level {
         case .focused: return .steady
@@ -175,9 +158,10 @@ enum TimelineAnalytics {
         }
     }
 
-    /// 하루 전체 요약. 최장 집중 구간은 "같은 카테고리 + 2분 이하 간극"은 이어진 것으로 본다.
+    /// 하루 전체 요약. 같은 카테고리의 기록 사이 2분 이하 간극은 같은 구간으로 묶되,
+    /// 최장 기록 시간에는 실제로 기록된 시간만 더한다.
     /// buckets 가 이미 짝 카테고리/타이머 세션 예외를 반영하기 때문에 overallScore 는 그 보정을 자동으로 상속한다.
-    /// 요약의 전환 횟수 필드도 동일 예외를 적용한다.
+    /// 사용자에게 보여주는 전환 횟수는 예외 규칙을 적용하지 않은 실제 카테고리 변경 횟수다.
     static func summary(
         for day: Date,
         segments: [AppUsageSegment],
@@ -197,38 +181,38 @@ enum TimelineAnalytics {
             return (s, e, seg.category)
         }.sorted { $0.start < $1.start }
 
-        let pairs = CategoryPairStore.shared
+        let maxSwitchGap: TimeInterval = 120
         var switches = 0
-        var lastCategory: String? = nil
+        var previous: (start: Date, end: Date, category: String)?
         for seg in clipped {
-            if let last = lastCategory, last != seg.category {
-                let exempt = pairs.contains(last, seg.category)
-                    || isInTimerSession(seg.start, sessions: timerSessions)
-                if !exempt { switches += 1 }
+            if let previous {
+                let gap = seg.start.timeIntervalSince(previous.end)
+                if gap >= 0,
+                   gap <= maxSwitchGap,
+                   previous.category != seg.category {
+                    switches += 1
+                }
             }
-            lastCategory = seg.category
+            previous = seg
         }
 
         let maxGap: TimeInterval = 120
         var longest: TimeInterval = 0
-        var runStart: Date? = nil
+        var runDuration: TimeInterval = 0
         var runEnd: Date? = nil
         var runCat: String? = nil
         for seg in clipped {
             if let rc = runCat, rc == seg.category, let re = runEnd, seg.start.timeIntervalSince(re) <= maxGap {
+                runDuration += seg.end.timeIntervalSince(seg.start)
                 runEnd = seg.end
             } else {
-                if let rs = runStart, let re = runEnd {
-                    longest = max(longest, re.timeIntervalSince(rs))
-                }
-                runStart = seg.start
+                longest = max(longest, runDuration)
+                runDuration = seg.end.timeIntervalSince(seg.start)
                 runEnd = seg.end
                 runCat = seg.category
             }
         }
-        if let rs = runStart, let re = runEnd {
-            longest = max(longest, re.timeIntervalSince(rs))
-        }
+        longest = max(longest, runDuration)
 
         var totals: [String: Int] = [:]
         for seg in clipped {
@@ -255,31 +239,32 @@ enum TimelineAnalytics {
 
 struct DailyFocusSummaryCard: View {
     let summary: DailyFocusSummary
+    let showsDetailedMetrics: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            HStack(spacing: 6) {
-                Text(summary.levelEmoji).font(.title3)
-                Text(summary.levelLabel).font(.callout.bold())
-                    .foregroundStyle(PopoverChrome.ink)
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(summary.levelColor.opacity(0.15), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(summary.levelColor.opacity(0.35), lineWidth: 1)
-            )
+            Label("관찰 기록", systemImage: "chart.xyaxis.line")
+                .font(.callout.bold())
+                .foregroundStyle(PopoverChrome.ink)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(PopoverChrome.accentSoft.opacity(0.3), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(PopoverChrome.accent.opacity(0.25), lineWidth: 1)
+                )
 
             Rectangle()
                 .fill(PopoverChrome.divider)
                 .frame(width: 1, height: 28)
 
-            metric(label: "최장 집중", value: formatDuration(summary.longestFocusSeconds))
-            metric(label: "작업 전환", value: "\(summary.switches)회")
+            if showsDetailedMetrics {
+                metric(label: "같은 카테고리 최장 기록", value: formatDuration(summary.longestFocusSeconds))
+                metric(label: "카테고리 전환", value: "\(summary.switches)회")
+            }
             if let top = summary.topCategory {
                 metric(
-                    label: "주 작업",
+                    label: "가장 오래 기록된 카테고리",
                     value: "\(Constants.categoryEmoji(for: top)) \(top)"
                 )
             }
@@ -330,7 +315,6 @@ struct DailyTimelineBucketsView: View {
                 noDataView
             } else {
                 verticalTimeline
-                legendHint
             }
         }
     }
@@ -347,7 +331,7 @@ struct DailyTimelineBucketsView: View {
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .monospacedDigit()
             } else {
-                Text("막대가 길수록 오래 머문 시간대, 흐릿할수록 전환이 많았던 시간대에요")
+                Text("막대 길이는 기록 시간, 색상은 카테고리를 보여줘요")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkTertiary)
             }
@@ -407,7 +391,6 @@ struct DailyTimelineBucketsView: View {
                         }
                         Spacer(minLength: 0)
                     }
-                    .saturation(0.15 + 0.85 * bucket.focusScore)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                 }
                 .overlay(
@@ -417,17 +400,6 @@ struct DailyTimelineBucketsView: View {
             }
             .frame(height: 14)
 
-            // 전환 4회 이상 경고 점
-            Group {
-                if bucket.switches >= 4 {
-                    Circle()
-                        .fill(Color.red.opacity(0.8))
-                        .frame(width: 5, height: 5)
-                } else {
-                    Color.clear.frame(width: 5, height: 5)
-                }
-            }
-            .frame(width: 10)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 1)
@@ -439,25 +411,6 @@ struct DailyTimelineBucketsView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "HH:mm"
         return fmt.string(from: date)
-    }
-
-    private var legendHint: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 4) {
-                Rectangle().fill(Color.blue).frame(width: 10, height: 10).cornerRadius(2)
-                Text("흐름 유지").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
-            }
-            HStack(spacing: 4) {
-                Rectangle().fill(Color.blue).saturation(0.15).frame(width: 10, height: 10).cornerRadius(2)
-                Text("전환 많음").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
-            }
-            HStack(spacing: 4) {
-                Circle().fill(Color.red.opacity(0.8)).frame(width: 4, height: 4)
-                Text("전환 4회 이상").font(.caption2).foregroundStyle(PopoverChrome.inkSecondary)
-            }
-            Spacer()
-        }
-        .padding(.top, 2)
     }
 
     private var noDataView: some View {
@@ -483,6 +436,6 @@ struct DailyTimelineBucketsView: View {
         let e = fmt.string(from: bucket.endTime)
         let top = bucket.sortedCategories.first.map { "\(Constants.categoryEmoji(for: $0.category)) \($0.category)" } ?? "-"
         let mins = bucket.totalSeconds / 60
-        return "\(s)–\(e) · \(top) · 활동 \(mins)분 · 전환 \(bucket.switches)회"
+        return "\(s)–\(e) · \(top) · 기록 \(mins)분"
     }
 }

@@ -118,7 +118,7 @@ struct MenuBarPopover: View {
                         .foregroundStyle(PopoverChrome.ink)
                 }
 
-                Text("보내는 내용은 익명 설치 ID, 앱/OS 버전, 피드백 위치, 선택한 답변, 판단 신호와 점수 구간입니다. 앱 이름, 번들 ID, 세부 타임라인, 리포트 원문은 보내지 않습니다. 언제든 설정 > 데이터에서 바꿀 수 있어요.")
+                Text("현재 보내는 내용은 익명 설치 ID, 앱/OS 버전, 이 설정의 동의 상태입니다. 앱 이름, 번들 ID, 작업 기록, 포모도로 회고 내용은 보내지 않습니다. 언제든 설정 > 데이터에서 바꿀 수 있어요.")
                     .font(.system(size: 12.5, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
