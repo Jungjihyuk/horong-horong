@@ -488,6 +488,39 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(saved.schemaVersion, 1)
     }
 
+    @MainActor
+    func testPomodoroReflectionBatchFetchesOnlyRequestedSessions() throws {
+        let schema = Schema([
+            FocusSession.self,
+            PomodoroReflection.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let requestedSessionIDs = [UUID(), UUID()]
+        let unrelatedSessionID = UUID()
+
+        for sessionID in requestedSessionIDs + [unrelatedSessionID] {
+            context.insert(
+                PomodoroReflection(
+                    focusSessionID: sessionID,
+                    focusExperience: .mostlyFocused,
+                    progressResult: .meaningfulProgress
+                )
+            )
+        }
+        try context.save()
+
+        let descriptor = FetchDescriptor<PomodoroReflection>(
+            predicate: #Predicate {
+                requestedSessionIDs.contains($0.focusSessionID)
+            }
+        )
+        let fetched = try context.fetch(descriptor)
+
+        XCTAssertEqual(Set(fetched.map(\.focusSessionID)), Set(requestedSessionIDs))
+    }
+
     func testUpdatingPomodoroReflectionClearsReasonWhenWorkIsCompleted() {
         let reflection = PomodoroReflection(
             focusSessionID: UUID(),
@@ -2168,6 +2201,405 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(task.title, "자료 조사 완료")
         XCTAssertEqual(task.metrics.sessionsWithAppRecords, 1)
         XCTAssertEqual(task.metrics.reflectionCount, 1)
+    }
+
+    func testPomodoroFocusComparisonUsesAttributedTimeAndGroupMedians() throws {
+        let start = Date(timeIntervalSince1970: 1_801_200_000)
+
+        func session(
+            offset: TimeInterval,
+            recordedSeconds: Int,
+            ambiguousSeconds: Int,
+            appSwitchCount: Int,
+            categorySwitchCount: Int,
+            longestSeconds: Int?
+        ) -> PomodoroSessionBreakdown {
+            let id = UUID()
+            let startedAt = start.addingTimeInterval(offset)
+            return PomodoroSessionBreakdown(
+                id: id,
+                startedAt: startedAt,
+                endedAt: startedAt.addingTimeInterval(1_200),
+                category: "개발",
+                linkedMemoID: nil,
+                taskTitle: nil,
+                durationSeconds: 1_200,
+                observation: PomodoroSessionObservation(
+                    sessionSeconds: 1_200,
+                    recordedSeconds: recordedSeconds,
+                    unrecordedSeconds: max(0, 1_200 - recordedSeconds),
+                    ambiguousOverlapSeconds: ambiguousSeconds,
+                    userModifiedRecordedSeconds: 0,
+                    appSwitchCount: appSwitchCount,
+                    categorySwitchCount: categorySwitchCount,
+                    categoryTransitions: [],
+                    longestContinuousAppUsage: longestSeconds.map {
+                        PomodoroContinuousAppUsage(
+                            appName: "Xcode",
+                            category: "개발",
+                            durationSeconds: $0
+                        )
+                    },
+                    apps: [],
+                    categories: []
+                )
+            )
+        }
+
+        let deeplyFocused = session(
+            offset: 0,
+            recordedSeconds: 1_200,
+            ambiguousSeconds: 60,
+            appSwitchCount: 2,
+            categorySwitchCount: 1,
+            longestSeconds: 570
+        )
+        let mostlyFocused = session(
+            offset: 1_500,
+            recordedSeconds: 960,
+            ambiguousSeconds: 0,
+            appSwitchCount: 0,
+            categorySwitchCount: 0,
+            longestSeconds: 960
+        )
+        let unavailableFocused = session(
+            offset: 3_000,
+            recordedSeconds: 600,
+            ambiguousSeconds: 600,
+            appSwitchCount: 0,
+            categorySwitchCount: 0,
+            longestSeconds: nil
+        )
+        let lowCoverageFocused = session(
+            offset: 3_600,
+            recordedSeconds: 120,
+            ambiguousSeconds: 0,
+            appSwitchCount: 0,
+            categorySwitchCount: 0,
+            longestSeconds: 120
+        )
+        let highAmbiguityFocused = session(
+            offset: 4_050,
+            recordedSeconds: 1_200,
+            ambiguousSeconds: 180,
+            appSwitchCount: 1,
+            categorySwitchCount: 1,
+            longestSeconds: 500
+        )
+        let frequentlyDistracted = session(
+            offset: 4_500,
+            recordedSeconds: 960,
+            ambiguousSeconds: 0,
+            appSwitchCount: 6,
+            categorySwitchCount: 2,
+            longestSeconds: 192
+        )
+        let difficultToFocus = session(
+            offset: 6_000,
+            recordedSeconds: 1_200,
+            ambiguousSeconds: 0,
+            appSwitchCount: 8,
+            categorySwitchCount: 4,
+            longestSeconds: 240
+        )
+        let unsure = session(
+            offset: 7_500,
+            recordedSeconds: 960,
+            ambiguousSeconds: 0,
+            appSwitchCount: 3,
+            categorySwitchCount: 1,
+            longestSeconds: 480
+        )
+        let sessions = [
+            deeplyFocused,
+            mostlyFocused,
+            unavailableFocused,
+            lowCoverageFocused,
+            highAmbiguityFocused,
+            frequentlyDistracted,
+            difficultToFocus,
+            unsure,
+        ]
+        let reflections = [
+            PomodoroReflection(
+                focusSessionID: deeplyFocused.id,
+                focusExperience: .deeplyFocused,
+                progressResult: .meaningfulProgress
+            ),
+            PomodoroReflection(
+                focusSessionID: mostlyFocused.id,
+                focusExperience: .mostlyFocused,
+                progressResult: .completedAsPlanned
+            ),
+            PomodoroReflection(
+                focusSessionID: unavailableFocused.id,
+                focusExperience: .deeplyFocused,
+                progressResult: .littleProgress,
+                incompleteReason: .distracted
+            ),
+            PomodoroReflection(
+                focusSessionID: lowCoverageFocused.id,
+                focusExperience: .mostlyFocused,
+                progressResult: .littleProgress,
+                incompleteReason: .distracted
+            ),
+            PomodoroReflection(
+                focusSessionID: highAmbiguityFocused.id,
+                focusExperience: .deeplyFocused,
+                progressResult: .meaningfulProgress
+            ),
+            PomodoroReflection(
+                focusSessionID: frequentlyDistracted.id,
+                focusExperience: .frequentlyDistracted,
+                progressResult: .littleProgress,
+                incompleteReason: .distracted
+            ),
+            PomodoroReflection(
+                focusSessionID: difficultToFocus.id,
+                focusExperience: .difficultToFocus,
+                progressResult: .meaningfulProgress,
+                incompleteReason: .blocked
+            ),
+            PomodoroReflection(
+                focusSessionID: unsure.id,
+                focusExperience: .unsure,
+                progressResult: .goalChanged,
+                incompleteReason: .switchedTask
+            ),
+        ]
+
+        let model = PomodoroFocusComparisonBuilder.build(
+            sessions: sessions,
+            reflections: reflections
+        )
+
+        XCTAssertEqual(model.scopedSessionCount, 8)
+        XCTAssertEqual(model.matchedReflectionCount, 8)
+        XCTAssertEqual(model.focused.reflectionSessionCount, 5)
+        XCTAssertEqual(model.focused.comparableSessionCount, 2)
+        XCTAssertEqual(model.focused.missingBehaviorRecordSessionCount, 1)
+        XCTAssertEqual(model.focused.qualityExcludedSessionCount, 2)
+        XCTAssertEqual(model.focused.sessionsWithAmbiguousRecords, 1)
+        XCTAssertEqual(
+            try XCTUnwrap(model.focused.medianAppSwitchesPerAttributedTenMinutes),
+            0.5263157895,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(model.focused.medianCategorySwitchesPerAttributedTenMinutes),
+            0.2631578947,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(model.focused.medianLongestContinuousAppCategoryRatio),
+            0.75,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(model.difficult.reflectionSessionCount, 2)
+        XCTAssertEqual(
+            try XCTUnwrap(model.difficult.medianAppSwitchesPerAttributedTenMinutes),
+            3.875,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(model.unsure.reflectionSessionCount, 1)
+        XCTAssertEqual(model.unknownReflectionCount, 0)
+    }
+
+    func testPomodoroFocusComparisonScopesCategoryAndLinkedTaskIndependently() throws {
+        let memoA = UUID()
+        let memoB = UUID()
+        let start = Date(timeIntervalSince1970: 1_801_300_000)
+
+        func session(
+            offset: TimeInterval,
+            category: String,
+            memoID: UUID?,
+            title: String?
+        ) -> PomodoroSessionBreakdown {
+            let id = UUID()
+            let startedAt = start.addingTimeInterval(offset)
+            return PomodoroSessionBreakdown(
+                id: id,
+                startedAt: startedAt,
+                endedAt: startedAt.addingTimeInterval(600),
+                category: category,
+                linkedMemoID: memoID,
+                taskTitle: title,
+                durationSeconds: 600,
+                observation: PomodoroSessionObservation(
+                    sessionSeconds: 600,
+                    recordedSeconds: 600,
+                    unrecordedSeconds: 0,
+                    ambiguousOverlapSeconds: 0,
+                    userModifiedRecordedSeconds: 0,
+                    appSwitchCount: 1,
+                    categorySwitchCount: 0,
+                    categoryTransitions: [],
+                    longestContinuousAppUsage: PomodoroContinuousAppUsage(
+                        appName: "Xcode",
+                        category: category,
+                        durationSeconds: 500
+                    ),
+                    apps: [],
+                    categories: []
+                )
+            )
+        }
+
+        let developmentMemoA = session(
+            offset: 0,
+            category: "개발",
+            memoID: memoA,
+            title: "비교 화면"
+        )
+        let unlinkedDevelopment = session(
+            offset: 900,
+            category: "개발",
+            memoID: nil,
+            title: nil
+        )
+        let writingMemoA = session(
+            offset: 1_800,
+            category: "글쓰기",
+            memoID: memoA,
+            title: "비교 화면 문서"
+        )
+        let developmentMemoB = session(
+            offset: 2_700,
+            category: "개발",
+            memoID: memoB,
+            title: "필터 테스트"
+        )
+        let unknownResponse = session(
+            offset: 3_600,
+            category: "개발",
+            memoID: nil,
+            title: nil
+        )
+        let sessions = [
+            developmentMemoA,
+            unlinkedDevelopment,
+            writingMemoA,
+            developmentMemoB,
+            unknownResponse,
+        ]
+        let reflections = sessions.map {
+            PomodoroReflection(
+                focusSessionID: $0.id,
+                focusExperience: .mostlyFocused,
+                progressResult: .meaningfulProgress
+            )
+        }
+        reflections.last?.focusExperienceRawValue = "legacy_unknown"
+        let orphan = PomodoroReflection(
+            focusSessionID: UUID(),
+            focusExperience: .difficultToFocus,
+            progressResult: .littleProgress,
+            incompleteReason: .distracted
+        )
+
+        let categoryModel = PomodoroFocusComparisonBuilder.build(
+            sessions: sessions,
+            reflections: reflections + [orphan],
+            category: "개발"
+        )
+        XCTAssertEqual(categoryModel.scopedSessionCount, 4)
+        XCTAssertEqual(categoryModel.matchedReflectionCount, 4)
+        XCTAssertEqual(categoryModel.focused.reflectionSessionCount, 3)
+        XCTAssertEqual(categoryModel.unknownReflectionCount, 1)
+
+        let taskModel = PomodoroFocusComparisonBuilder.build(
+            sessions: sessions,
+            reflections: reflections,
+            category: "개발",
+            linkedMemoID: memoA
+        )
+        XCTAssertEqual(taskModel.scopedSessionCount, 1)
+        XCTAssertEqual(taskModel.focused.reflectionSessionCount, 1)
+
+        XCTAssertEqual(
+            PomodoroFocusComparisonBuilder.taskOptions(
+                sessions: sessions,
+                category: "개발"
+            ),
+            [
+                PomodoroFocusComparisonTaskOption(
+                    id: memoA,
+                    title: "비교 화면",
+                    firstStartedAt: developmentMemoA.startedAt
+                ),
+                PomodoroFocusComparisonTaskOption(
+                    id: memoB,
+                    title: "필터 테스트",
+                    firstStartedAt: developmentMemoB.startedAt
+                ),
+            ]
+        )
+    }
+
+    @MainActor
+    func testPomodoroComparisonPeriodUsesStartMembershipAndFullSessionInterval() throws {
+        let periodStart = Date(timeIntervalSince1970: 1_801_400_000)
+        let periodEnd = periodStart.addingTimeInterval(3_600)
+
+        func completedSession(startedAt: Date, focusMinutes: Int = 10) -> FocusSession {
+            let session = FocusSession(
+                focusMinutes: focusMinutes,
+                breakMinutes: 5,
+                category: "개발"
+            )
+            session.startedAt = startedAt
+            session.endedAt = startedAt.addingTimeInterval(TimeInterval(focusMinutes * 60))
+            session.completed = true
+            return session
+        }
+
+        let overlappingFromPreviousPeriod = completedSession(
+            startedAt: periodStart.addingTimeInterval(-300)
+        )
+        let startsAtPeriodBoundary = completedSession(startedAt: periodStart)
+        let crossesPeriodEnd = completedSession(
+            startedAt: periodEnd.addingTimeInterval(-300)
+        )
+        let startsAtNextPeriod = completedSession(startedAt: periodEnd)
+
+        let segments = [
+            AppUsageSegment(
+                appName: "Xcode",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                category: "개발",
+                startTime: periodStart,
+                endTime: periodStart.addingTimeInterval(600)
+            ),
+            AppUsageSegment(
+                appName: "Terminal",
+                bundleIdentifier: "com.apple.Terminal",
+                category: "개발",
+                startTime: periodEnd.addingTimeInterval(-300),
+                endTime: periodEnd.addingTimeInterval(300)
+            ),
+        ]
+
+        let result = PomodoroComparisonPeriodBuilder.build(
+            sessions: [
+                overlappingFromPreviousPeriod,
+                startsAtPeriodBoundary,
+                crossesPeriodEnd,
+                startsAtNextPeriod,
+            ],
+            segments: segments,
+            periodStart: periodStart,
+            periodEnd: periodEnd
+        )
+
+        XCTAssertEqual(result.map(\.id), [startsAtPeriodBoundary.id, crossesPeriodEnd.id])
+        let first = try XCTUnwrap(result.first)
+        let last = try XCTUnwrap(result.last)
+        XCTAssertEqual(first.observation.sessionSeconds, 600)
+        XCTAssertEqual(first.observation.recordedSeconds, 600)
+        XCTAssertEqual(last.endedAt, periodEnd.addingTimeInterval(300))
+        XCTAssertEqual(last.observation.sessionSeconds, 600)
+        XCTAssertEqual(last.observation.recordedSeconds, 600)
     }
 
     @MainActor
