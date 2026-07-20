@@ -5,6 +5,9 @@ extension Notification.Name {
     static let pomodoroReflectionDidChange = Notification.Name(
         "app.horonghorong.pomodoroReflectionDidChange"
     )
+    static let pomodoroSessionDidChange = Notification.Name(
+        "app.horonghorong.pomodoroSessionDidChange"
+    )
     static let pomodoroLinkedTaskDidComplete = Notification.Name(
         "app.horonghorong.pomodoroLinkedTaskDidComplete"
     )

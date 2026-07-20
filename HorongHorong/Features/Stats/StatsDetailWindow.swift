@@ -22,6 +22,19 @@ private struct StatsLoadedData {
     let attentionDaySummaries: [AttentionDaySummary]
 }
 
+enum PomodoroComparisonSegmentScope {
+    static func includedSessionIDs(
+        sessions: [FocusSession],
+        reflections: [PomodoroReflection]
+    ) -> Set<UUID> {
+        let reflectedSessionIDs = Set(reflections.map(\.focusSessionID))
+        let linkedSessionIDs = Set(sessions.compactMap { session in
+            session.linkedMemoID == nil ? nil : session.id
+        })
+        return reflectedSessionIDs.union(linkedSessionIDs)
+    }
+}
+
 struct StatsDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Constants.AppStorageKey.popoverTheme)
@@ -92,6 +105,10 @@ struct StatsDetailWindow: View {
             loadRecords()
         }
         .onReceive(NotificationCenter.default.publisher(for: .pomodoroReflectionDidChange)) { _ in
+            invalidateLoadCache()
+            loadRecords()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pomodoroSessionDidChange)) { _ in
             invalidateLoadCache()
             loadRecords()
         }
@@ -433,9 +450,13 @@ struct StatsDetailWindow: View {
             timerSessions: fetchedSessions,
             aggregateSnapshot: aggregate
         )
+        let includedPomodoroSessionIDs = PomodoroComparisonSegmentScope.includedSessionIDs(
+            sessions: fetchedSessions,
+            reflections: fetchedPomodoroReflections
+        )
         let loadedPomodoroSegments = loadPomodoroSegments(
             for: fetchedSessions,
-            reflectedSessionIDs: Set(fetchedPomodoroReflections.map(\.focusSessionID)),
+            includedSessionIDs: includedPomodoroSessionIDs,
             availablePeriodSegments: loadedSegments.period,
             periodSegmentsCoverFullRange: periodSegmentsCoverFullRange(
                 mode: viewMode,
@@ -571,14 +592,14 @@ struct StatsDetailWindow: View {
 
     private func loadPomodoroSegments(
         for sessions: [FocusSession],
-        reflectedSessionIDs: Set<UUID>,
+        includedSessionIDs: Set<UUID>,
         availablePeriodSegments: [AppUsageSegment],
         periodSegmentsCoverFullRange: Bool,
         periodStart: Date,
         periodEnd: Date
     ) -> [AppUsageSegment] {
         let completedRanges = sessions.compactMap { session -> (Date, Date)? in
-            guard reflectedSessionIDs.contains(session.id),
+            guard includedSessionIDs.contains(session.id),
                   session.startedAt >= periodStart,
                   session.startedAt < periodEnd,
                   isCompletedPomodoro(session),
