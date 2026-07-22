@@ -2742,7 +2742,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(model.categorySwitchDomainMaximum, 2, accuracy: 0.0001)
     }
 
-    func testPomodoroComparisonSegmentScopeIncludesReflectedAndLinkedSessions() {
+    func testPomodoroComparisonSegmentScopeIncludesEverySession() {
         let linked = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -2760,19 +2760,334 @@ final class ConstantsDefaultsTests: XCTestCase {
             breakMinutes: 5,
             category: "개발"
         )
-        let reflection = PomodoroReflection(
-            focusSessionID: reflectedUnlinked.id,
-            focusExperience: .mostlyFocused,
-            progressResult: .meaningfulProgress
+        XCTAssertEqual(
+            PomodoroComparisonSegmentScope.includedSessionIDs(
+                sessions: [linked, reflectedUnlinked, unrelated]
+            ),
+            Set([linked.id, reflectedUnlinked.id, unrelated.id])
+        )
+    }
+
+    func testBehaviorConditionEvaluatorUsesVisibleValuesAndInclusiveThresholds() {
+        let observation = PomodoroSessionObservation(
+            sessionSeconds: 600,
+            recordedSeconds: 576,
+            unrecordedSeconds: 24,
+            ambiguousOverlapSeconds: 0,
+            userModifiedRecordedSeconds: 0,
+            appSwitchCount: 1,
+            categorySwitchCount: 1,
+            categoryTransitions: [],
+            longestContinuousAppUsage: PomodoroContinuousAppUsage(
+                appName: "Xcode",
+                category: "개발",
+                durationSeconds: 484
+            ),
+            apps: [],
+            categories: []
+        )
+        let allConditions = PomodoroBehaviorConditions(
+            maximumAppSwitchesPerAttributedTenMinutes: 1,
+            maximumCategorySwitchesPerAttributedTenMinutes: 1,
+            minimumLongestContinuousAppCategoryRatio: 0.84
         )
 
         XCTAssertEqual(
-            PomodoroComparisonSegmentScope.includedSessionIDs(
-                sessions: [linked, reflectedUnlinked, unrelated],
-                reflections: [reflection]
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation,
+                conditions: allConditions
             ),
-            Set([linked.id, reflectedUnlinked.id])
+            .evaluated(matchedConditionCount: 3, totalConditionCount: 3)
         )
+
+        let twoConditions = PomodoroBehaviorConditions(
+            maximumAppSwitchesPerAttributedTenMinutes: 0.9,
+            minimumLongestContinuousAppCategoryRatio: 0.85
+        )
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation,
+                conditions: twoConditions
+            ),
+            .evaluated(matchedConditionCount: 0, totalConditionCount: 2)
+        )
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation,
+                conditions: PomodoroBehaviorConditions()
+            ),
+            .noConditions
+        )
+    }
+
+    func testBehaviorConditionDraftRequiresExplicitValidValues() throws {
+        var draft = PomodoroBehaviorConditionDraft()
+        XCTAssertNil(draft.conditions)
+
+        draft.usesMaximumAppSwitches = true
+        XCTAssertNil(draft.conditions)
+        draft.maximumAppSwitchesText = "1,5"
+        draft.usesMinimumLongestContinuousRatio = true
+        draft.minimumLongestContinuousPercentText = "60"
+
+        let conditions = try XCTUnwrap(draft.conditions)
+        XCTAssertEqual(conditions.maximumAppSwitchesPerAttributedTenMinutes, 1.5)
+        XCTAssertNil(conditions.maximumCategorySwitchesPerAttributedTenMinutes)
+        XCTAssertEqual(conditions.minimumLongestContinuousAppCategoryRatio, 0.6)
+
+        draft.minimumLongestContinuousPercentText = "101"
+        XCTAssertNil(draft.conditions)
+    }
+
+    func testBehaviorConditionDraftNormalizesToDisplayedPrecision() throws {
+        var draft = PomodoroBehaviorConditionDraft()
+        draft.usesMaximumAppSwitches = true
+        draft.maximumAppSwitchesText = "1.06"
+        draft.usesMaximumCategorySwitches = true
+        draft.maximumCategorySwitchesText = "2.04"
+        draft.usesMinimumLongestContinuousRatio = true
+        draft.minimumLongestContinuousPercentText = "55.5"
+
+        let conditions = try XCTUnwrap(draft.conditions)
+        XCTAssertEqual(
+            try XCTUnwrap(conditions.maximumAppSwitchesPerAttributedTenMinutes),
+            1.1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(conditions.maximumCategorySwitchesPerAttributedTenMinutes),
+            2.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(conditions.minimumLongestContinuousAppCategoryRatio),
+            0.56,
+            accuracy: 0.0001
+        )
+    }
+
+    func testBehaviorConditionEvaluatorUsesInclusiveQualityBoundaries() {
+        func observation(recordedSeconds: Int, ambiguousSeconds: Int) -> PomodoroSessionObservation {
+            let attributedSeconds = max(0, recordedSeconds - ambiguousSeconds)
+            return PomodoroSessionObservation(
+                sessionSeconds: 600,
+                recordedSeconds: recordedSeconds,
+                unrecordedSeconds: max(0, 600 - recordedSeconds),
+                ambiguousOverlapSeconds: ambiguousSeconds,
+                userModifiedRecordedSeconds: 0,
+                appSwitchCount: 1,
+                categorySwitchCount: 0,
+                categoryTransitions: [],
+                longestContinuousAppUsage: attributedSeconds > 0
+                    ? PomodoroContinuousAppUsage(
+                        appName: "Xcode",
+                        category: "개발",
+                        durationSeconds: attributedSeconds
+                    )
+                    : nil,
+                apps: [],
+                categories: []
+            )
+        }
+        let conditions = PomodoroBehaviorConditions(
+            maximumAppSwitchesPerAttributedTenMinutes: 10
+        )
+
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation(recordedSeconds: 480, ambiguousSeconds: 60),
+                conditions: conditions
+            ),
+            .evaluated(matchedConditionCount: 1, totalConditionCount: 1)
+        )
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation(recordedSeconds: 479, ambiguousSeconds: 0),
+                conditions: conditions
+            ),
+            .calculationHeld(.qualityExcluded)
+        )
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation(recordedSeconds: 600, ambiguousSeconds: 61),
+                conditions: conditions
+            ),
+            .calculationHeld(.qualityExcluded)
+        )
+        XCTAssertEqual(
+            PomodoroBehaviorConditionEvaluator.evaluate(
+                observation: observation(recordedSeconds: 0, ambiguousSeconds: 0),
+                conditions: conditions
+            ),
+            .calculationHeld(.missingBehaviorRecord)
+        )
+    }
+
+    func testBehaviorConditionPreviewScopesCategoryAndIncludesUnreflectedSessions() {
+        let start = Date(timeIntervalSince1970: 1_801_375_000)
+        func session(
+            id: UUID = UUID(),
+            category: String,
+            appSwitchCount: Int,
+            recordedSeconds: Int = 600
+        ) -> PomodoroSessionBreakdown {
+            PomodoroSessionBreakdown(
+                id: id,
+                startedAt: start,
+                endedAt: start.addingTimeInterval(600),
+                category: category,
+                linkedMemoID: nil,
+                taskTitle: nil,
+                durationSeconds: 600,
+                observation: PomodoroSessionObservation(
+                    sessionSeconds: 600,
+                    recordedSeconds: recordedSeconds,
+                    unrecordedSeconds: max(0, 600 - recordedSeconds),
+                    ambiguousOverlapSeconds: 0,
+                    userModifiedRecordedSeconds: 0,
+                    appSwitchCount: appSwitchCount,
+                    categorySwitchCount: 0,
+                    categoryTransitions: [],
+                    longestContinuousAppUsage: recordedSeconds > 0
+                        ? PomodoroContinuousAppUsage(
+                            appName: "Xcode",
+                            category: category,
+                            durationSeconds: recordedSeconds
+                        )
+                        : nil,
+                    apps: [],
+                    categories: []
+                )
+            )
+        }
+        let conditions = PomodoroBehaviorConditions(
+            maximumAppSwitchesPerAttributedTenMinutes: 1
+        )
+        let preview = PomodoroBehaviorConditionEvaluator.preview(
+            sessions: [
+                session(category: "개발", appSwitchCount: 0),
+                session(category: "개발", appSwitchCount: 2),
+                session(category: "개발", appSwitchCount: 0, recordedSeconds: 0),
+                session(category: "글쓰기", appSwitchCount: 0),
+            ],
+            category: "개발",
+            conditions: conditions
+        )
+
+        XCTAssertEqual(preview.totalSessionCount, 3)
+        XCTAssertEqual(preview.evaluatedSessionCount, 2)
+        XCTAssertEqual(preview.missingBehaviorRecordSessionCount, 1)
+        XCTAssertEqual(preview.qualityExcludedSessionCount, 0)
+        XCTAssertEqual(preview.matchCounts, [0: 1, 1: 1])
+    }
+
+    @MainActor
+    func testCategoryBehaviorConditionSetPersistsUpdatesAndDeletes() throws {
+        let schema = Schema([CategoryBehaviorConditionSet.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        try CategoryBehaviorConditionSetStore.upsert(
+            category: " 개발 ",
+            maximumAppSwitchesPerAttributedTenMinutes: 2,
+            maximumCategorySwitchesPerAttributedTenMinutes: nil,
+            minimumLongestContinuousAppCategoryRatio: 0.6,
+            modelContext: context
+        )
+        var saved = try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>())
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved.first?.category, "개발")
+        XCTAssertEqual(saved.first?.conditionCount, 2)
+
+        try CategoryBehaviorConditionSetStore.upsert(
+            category: "개발",
+            maximumAppSwitchesPerAttributedTenMinutes: 1.56,
+            maximumCategorySwitchesPerAttributedTenMinutes: 0.54,
+            minimumLongestContinuousAppCategoryRatio: nil,
+            modelContext: context
+        )
+        saved = try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>())
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved.first?.maximumAppSwitchesPerAttributedTenMinutes, 1.6)
+        XCTAssertEqual(saved.first?.maximumCategorySwitchesPerAttributedTenMinutes, 0.5)
+        XCTAssertNil(saved.first?.minimumLongestContinuousAppCategoryRatio)
+
+        try CategoryBehaviorConditionSetStore.upsert(
+            category: "개발",
+            maximumAppSwitchesPerAttributedTenMinutes: nil,
+            maximumCategorySwitchesPerAttributedTenMinutes: nil,
+            minimumLongestContinuousAppCategoryRatio: nil,
+            modelContext: context
+        )
+        XCTAssertTrue(
+            try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>()).isEmpty
+        )
+    }
+
+    @MainActor
+    func testCategoryBehaviorConditionSetMovesOnRenameAndDeletesWithoutReplacingFallback() throws {
+        let schema = Schema([CategoryBehaviorConditionSet.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        context.insert(CategoryBehaviorConditionSet(
+            category: "개발",
+            maximumAppSwitchesPerAttributedTenMinutes: 2
+        ))
+        context.insert(CategoryBehaviorConditionSet(
+            category: "기타",
+            minimumLongestContinuousAppCategoryRatio: 0.5
+        ))
+        try context.save()
+
+        try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+            from: "개발",
+            to: "프로그래밍",
+            modelContext: context
+        )
+        try context.save()
+        var saved = try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>())
+        XCTAssertEqual(Set(saved.map(\.category)), Set(["프로그래밍", "기타"]))
+
+        try CategoryBehaviorConditionSetStore.prepareCategoryDeletion(
+            category: "프로그래밍",
+            modelContext: context
+        )
+        try context.save()
+        saved = try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>())
+        XCTAssertEqual(saved.map(\.category), ["기타"])
+        XCTAssertEqual(saved.first?.minimumLongestContinuousAppCategoryRatio, 0.5)
+    }
+
+    @MainActor
+    func testCategoryBehaviorConditionSetRenameReplacesOrphanedTargetWithSource() throws {
+        let schema = Schema([CategoryBehaviorConditionSet.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        context.insert(CategoryBehaviorConditionSet(
+            category: "개발",
+            maximumAppSwitchesPerAttributedTenMinutes: 2
+        ))
+        context.insert(CategoryBehaviorConditionSet(
+            category: "프로그래밍",
+            minimumLongestContinuousAppCategoryRatio: 0.5
+        ))
+        try context.save()
+
+        try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+            from: "개발",
+            to: "프로그래밍",
+            modelContext: context
+        )
+        try context.save()
+
+        let saved = try context.fetch(FetchDescriptor<CategoryBehaviorConditionSet>())
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved.first?.category, "프로그래밍")
+        XCTAssertEqual(saved.first?.maximumAppSwitchesPerAttributedTenMinutes, 2)
+        XCTAssertNil(saved.first?.minimumLongestContinuousAppCategoryRatio)
     }
 
     @MainActor
@@ -2902,6 +3217,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let updatedSchema = Schema([
             FocusSession.self,
             PomodoroReflection.self,
+            CategoryBehaviorConditionSet.self,
             PomodoroTaskCompletion.self,
         ])
         let updatedConfiguration = ModelConfiguration(schema: updatedSchema, url: storeURL)
@@ -2917,6 +3233,11 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertTrue(
             try updatedContainer.mainContext.fetch(
                 FetchDescriptor<PomodoroTaskCompletion>()
+            ).isEmpty
+        )
+        XCTAssertTrue(
+            try updatedContainer.mainContext.fetch(
+                FetchDescriptor<CategoryBehaviorConditionSet>()
             ).isEmpty
         )
     }

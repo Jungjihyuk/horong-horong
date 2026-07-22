@@ -24,14 +24,9 @@ private struct StatsLoadedData {
 
 enum PomodoroComparisonSegmentScope {
     static func includedSessionIDs(
-        sessions: [FocusSession],
-        reflections: [PomodoroReflection]
+        sessions: [FocusSession]
     ) -> Set<UUID> {
-        let reflectedSessionIDs = Set(reflections.map(\.focusSessionID))
-        let linkedSessionIDs = Set(sessions.compactMap { session in
-            session.linkedMemoID == nil ? nil : session.id
-        })
-        return reflectedSessionIDs.union(linkedSessionIDs)
+        Set(sessions.map(\.id))
     }
 }
 
@@ -71,11 +66,10 @@ struct StatsDetailWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if shouldShowVacationIllustration {
-                // 일러스트 자체가 휴가 컨텍스트를 충분히 전달하므로 상단 배너는 생략.
-                vacationIllustration
-            } else {
+            if !shouldShowVacationIllustration {
                 vacationBanner
+            }
+            ZStack {
                 ScrollView {
                     StatsChartView(
                         records: records,
@@ -94,6 +88,14 @@ struct StatsDetailWindow: View {
                         vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
                     )
                     .padding(20)
+                }
+                .opacity(shouldShowVacationIllustration ? 0 : 1)
+                .allowsHitTesting(!shouldShowVacationIllustration)
+                .accessibilityHidden(shouldShowVacationIllustration)
+
+                if shouldShowVacationIllustration {
+                    // 일러스트 자체가 휴가 컨텍스트를 충분히 전달하므로 상단 배너는 생략.
+                    vacationIllustration
                 }
             }
         }
@@ -451,8 +453,7 @@ struct StatsDetailWindow: View {
             aggregateSnapshot: aggregate
         )
         let includedPomodoroSessionIDs = PomodoroComparisonSegmentScope.includedSessionIDs(
-            sessions: fetchedSessions,
-            reflections: fetchedPomodoroReflections
+            sessions: fetchedSessions
         )
         let loadedPomodoroSegments = loadPomodoroSegments(
             for: fetchedSessions,

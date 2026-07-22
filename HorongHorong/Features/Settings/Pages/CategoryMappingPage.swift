@@ -23,6 +23,7 @@ struct CategoryMappingPage: View {
     @State private var newPairB: String = Constants.allCategories.dropFirst().first
         ?? Constants.allCategories.first
         ?? Constants.categoryName("기타")
+    @State private var categoryMutationError: String?
 
     var body: some View {
         SettingsPageScroll {
@@ -34,6 +35,19 @@ struct CategoryMappingPage: View {
             pairCard
         }
         .onAppear { loadRules() }
+        .alert(
+            "카테고리를 변경하지 못했어요",
+            isPresented: Binding(
+                get: { categoryMutationError != nil },
+                set: { if !$0 { categoryMutationError = nil } }
+            )
+        ) {
+            Button("확인", role: .cancel) {
+                categoryMutationError = nil
+            }
+        } message: {
+            Text(categoryMutationError ?? "잠시 후 다시 시도해 주세요.")
+        }
     }
 
     // MARK: - 카테고리 정의
@@ -482,9 +496,17 @@ struct CategoryMappingPage: View {
             return
         }
 
+        if trimmedName != oldName {
+            do {
+                try migrateCategory(from: oldName, to: trimmedName)
+            } catch {
+                categoryMutationError = error.localizedDescription
+                return
+            }
+        }
         guard categoryStore.update(oldName: oldName, newName: trimmedName, emoji: emoji) else { return }
         if trimmedName != oldName {
-            migrateCategory(from: oldName, to: trimmedName)
+            applyCategoryMigrationSideEffects(from: oldName, to: trimmedName)
         }
         resetCategorySelections()
         loadRules()
@@ -493,15 +515,32 @@ struct CategoryMappingPage: View {
     private func deleteCategory(_ category: String) {
         guard categoryStore.canDelete(category) else { return }
         let fallback = Constants.categoryName("기타")
-        migrateCategory(from: category, to: fallback)
+        do {
+            try migrateCategory(
+                from: category,
+                to: fallback,
+                movesBehaviorConditions: false
+            )
+        } catch {
+            categoryMutationError = error.localizedDescription
+            return
+        }
         categoryStore.delete(name: category)
+        applyCategoryMigrationSideEffects(from: category, to: fallback)
         pairStore.removeCategory(category)
         resetCategorySelections()
         loadRules()
     }
 
-    private func migrateCategory(from oldName: String, to newName: String) {
+    private func migrateCategory(
+        from oldName: String,
+        to newName: String,
+        movesBehaviorConditions: Bool = true
+    ) throws {
         guard oldName != newName else { return }
+        guard !modelContext.hasChanges else {
+            throw CategoryBehaviorConditionSetValidationError.pendingChanges
+        }
 
         let oldCategory = oldName
         let newCategory = newName
@@ -509,37 +548,61 @@ struct CategoryMappingPage: View {
         let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate { $0.category == oldCategory }
         )
-        for segment in (try? modelContext.fetch(segmentDescriptor)) ?? [] {
-            segment.category = newCategory
-        }
-
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for record in (try? modelContext.fetch(recordDescriptor)) ?? [] {
-            record.category = newCategory
-        }
-
-        let focusDescriptor = FetchDescriptor<FocusSession>()
-        for session in (try? modelContext.fetch(focusDescriptor)) ?? [] where session.category == oldCategory {
-            session.category = newCategory
-        }
-
-        let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for rule in (try? modelContext.fetch(ruleDescriptor)) ?? [] {
-            rule.category = newCategory
-            if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
-               defaultRule.category == newCategory {
-                rule.isUserDefined = false
-                CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
-            } else {
-                rule.isUserDefined = true
-                CategoryManager.shared.setUserRule(bundleIdentifier: rule.bundleIdentifier, category: newCategory)
+        do {
+            for segment in try modelContext.fetch(segmentDescriptor) {
+                segment.category = newCategory
             }
-        }
 
+            let recordDescriptor = FetchDescriptor<AppUsageRecord>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for record in try modelContext.fetch(recordDescriptor) {
+                record.category = newCategory
+            }
+
+            let focusDescriptor = FetchDescriptor<FocusSession>()
+            for session in try modelContext.fetch(focusDescriptor)
+                where session.category == oldCategory {
+                session.category = newCategory
+            }
+
+            let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for rule in try modelContext.fetch(ruleDescriptor) {
+                rule.category = newCategory
+                if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
+                   defaultRule.category == newCategory {
+                    rule.isUserDefined = false
+                } else {
+                    rule.isUserDefined = true
+                }
+            }
+
+            if movesBehaviorConditions {
+                try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+                    from: oldCategory,
+                    to: newCategory,
+                    modelContext: modelContext
+                )
+            } else {
+                try CategoryBehaviorConditionSetStore.prepareCategoryDeletion(
+                    category: oldCategory,
+                    modelContext: modelContext
+                )
+            }
+
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    private func applyCategoryMigrationSideEffects(
+        from oldCategory: String,
+        to newCategory: String
+    ) {
         if UserDefaults.standard.string(forKey: Constants.AppStorageKey.selectedFocusCategory) == oldCategory {
             UserDefaults.standard.set(newCategory, forKey: Constants.AppStorageKey.selectedFocusCategory)
         }
@@ -553,7 +616,6 @@ struct CategoryMappingPage: View {
         }
 
         pairStore.renameCategory(from: oldCategory, to: newCategory)
-        try? modelContext.save()
         CategoryManager.shared.loadUserRules(from: modelContext)
     }
 
