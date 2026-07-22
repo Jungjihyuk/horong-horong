@@ -272,6 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AchievementGoalRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
+            CategoryBehaviorConditionSet.self,
             PomodoroTaskCompletion.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
@@ -506,47 +507,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let oldCategory = Constants.categoryName("문서")
         let newCategory = Constants.categoryName("기록")
-        if oldCategory != newCategory {
-            migrateCategory(from: oldCategory, to: newCategory, in: context)
-            CategoryStore.shared.delete(name: oldCategory)
+        do {
+            if oldCategory != newCategory {
+                try migrateCategory(from: oldCategory, to: newCategory, in: context)
+                CategoryStore.shared.delete(name: oldCategory)
+            }
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
         }
-
-        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
-    private func migrateCategory(from oldCategory: String, to newCategory: String, in context: ModelContext) {
+    private func migrateCategory(
+        from oldCategory: String,
+        to newCategory: String,
+        in context: ModelContext
+    ) throws {
+        guard !context.hasChanges else {
+            throw CategoryBehaviorConditionSetValidationError.pendingChanges
+        }
         let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate { $0.category == oldCategory }
         )
-        for segment in (try? context.fetch(segmentDescriptor)) ?? [] {
-            segment.category = newCategory
-        }
-
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for record in (try? context.fetch(recordDescriptor)) ?? [] {
-            record.category = newCategory
-        }
-
-        let focusDescriptor = FetchDescriptor<FocusSession>()
-        for session in (try? context.fetch(focusDescriptor)) ?? [] where session.category == oldCategory {
-            session.category = newCategory
-        }
-
-        let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for rule in (try? context.fetch(ruleDescriptor)) ?? [] {
-            rule.category = newCategory
-            if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
-               defaultRule.category == newCategory {
-                rule.isUserDefined = false
-                CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
-            } else {
-                rule.isUserDefined = true
-                CategoryManager.shared.setUserRule(bundleIdentifier: rule.bundleIdentifier, category: newCategory)
+        do {
+            for segment in try context.fetch(segmentDescriptor) {
+                segment.category = newCategory
             }
+
+            let recordDescriptor = FetchDescriptor<AppUsageRecord>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for record in try context.fetch(recordDescriptor) {
+                record.category = newCategory
+            }
+
+            let focusDescriptor = FetchDescriptor<FocusSession>()
+            for session in try context.fetch(focusDescriptor)
+                where session.category == oldCategory {
+                session.category = newCategory
+            }
+
+            let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for rule in try context.fetch(ruleDescriptor) {
+                rule.category = newCategory
+                if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
+                   defaultRule.category == newCategory {
+                    rule.isUserDefined = false
+                } else {
+                    rule.isUserDefined = true
+                }
+            }
+
+            try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+                from: oldCategory,
+                to: newCategory,
+                modelContext: context
+            )
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
         }
 
         if UserDefaults.standard.string(forKey: Constants.AppStorageKey.selectedFocusCategory) == oldCategory {
@@ -562,7 +584,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
-        try? context.save()
         CategoryManager.shared.loadUserRules(from: context)
     }
 }
