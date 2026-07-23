@@ -57,6 +57,36 @@ final class FocusSession {
     }
 }
 
+extension FocusSession {
+    @MainActor
+    @discardableResult
+    static func resetMarkerColors(
+        for category: String,
+        in modelContext: ModelContext
+    ) throws -> Int {
+        guard !modelContext.hasChanges else {
+            throw CategoryBehaviorConditionSetValidationError.pendingChanges
+        }
+
+        do {
+            let sessions = try modelContext.fetch(FetchDescriptor<FocusSession>())
+            let customizedSessions = sessions.filter {
+                $0.category == category && $0.markerColorKey != nil
+            }
+            for session in customizedSessions {
+                session.markerColorKey = nil
+            }
+            if !customizedSessions.isEmpty {
+                try modelContext.save()
+            }
+            return customizedSessions.count
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+}
+
 enum PomodoroFocusExperience: String, CaseIterable, Identifiable {
     case deeplyFocused = "deeply_focused"
     case mostlyFocused = "mostly_focused"

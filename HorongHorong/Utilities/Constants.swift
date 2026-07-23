@@ -1,6 +1,27 @@
 import SwiftUI
 
 enum Constants {
+    /// 앱의 사용 구간은 기록했지만 사용자가 아직 카테고리를 확정하지 않은 상태.
+    /// 실제 사용자 카테고리 목록에는 포함하지 않는다.
+    static let unclassifiedAppCategory = "미분류"
+    /// 타이머·할 일 확인처럼 작업 흐름을 관리하기 위해 잠깐 사용하는 앱의 특수 분류.
+    static let productivityManagementAppCategory = "생산성 관리"
+    static let productivityManagementAppEmoji = "⏰"
+    static let legacySupportAppCategory = "세션 보조"
+    static let horongHorongBundleIdentifier = "com.horonghorong.app"
+    static let productivityManagementShortInteractionSeconds: TimeInterval = 10
+    static let productivityManagementReflectionThresholdSeconds = 60
+    static let reservedCategoryNames: Set<String> = [
+        unclassifiedAppCategory,
+        productivityManagementAppCategory,
+        legacySupportAppCategory,
+    ]
+
+    static func isProductivityManagementCategory(_ category: String) -> Bool {
+        category == productivityManagementAppCategory
+            || category == legacySupportAppCategory
+    }
+
     static func mondayWeekStart(for date: Date, calendar baseCalendar: Calendar = .current) -> Date {
         var calendar = baseCalendar
         calendar.firstWeekday = 2
@@ -101,17 +122,34 @@ enum Constants {
     }
 
     static func categoryEmoji(for category: String) -> String {
-        CategoryStore.shared.emoji(for: category)
+        if isProductivityManagementCategory(category) {
+            return productivityManagementAppEmoji
+        }
+        return CategoryStore.shared.emoji(for: category)
     }
 
     static func categoryColor(for category: String) -> Color {
-        CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
+        if isProductivityManagementCategory(category) {
+            return CategoryColorPalette.color(for: "gray")
+        }
+        return CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
     }
 
     // MARK: - 브라우저 bundle identifier (URL 기반 분류용)
     static let browserBundleIds: Set<String> = [
         "com.google.Chrome",
+        "com.google.Chrome.canary",
         "com.apple.Safari",
+        "com.apple.SafariTechnologyPreview",
+        "com.brave.Browser",
+        "com.microsoft.edgemac",
+        "company.thebrowser.Browser",
+        "org.chromium.Chromium",
+        "org.mozilla.firefox",
+        "org.mozilla.firefoxdeveloperedition",
+        "com.vivaldi.Vivaldi",
+        "com.operasoftware.Opera",
+        "com.kagi.kagimacOS",
     ]
 
     // MARK: - 엔터 카테고리로 분류할 도메인 키워드 (브라우저 URL 내 포함 여부 검사)
@@ -144,6 +182,10 @@ enum Constants {
 
     // MARK: - 기본 앱→카테고리 매핑 (업무/공부는 자동 매핑 없음)
     static var defaultCategoryRules: [(bundleId: String, appName: String, category: String)] { [
+        // ⏰ 생산성 관리
+        (horongHorongBundleIdentifier, "호롱호롱", productivityManagementAppCategory),
+        ("com.apple.reminders", "미리알림", productivityManagementAppCategory),
+
         // 💻 개발
         ("com.microsoft.VSCode", "Visual Studio Code", categoryName("개발")),
         ("com.google.antigravity", "Antigravity", categoryName("개발")),
@@ -157,12 +199,32 @@ enum Constants {
         ("md.obsidian", "Obsidian", categoryName("기록")),
         ("notion.id", "Notion", categoryName("기록")),
         ("com.apple.Notes", "메모", categoryName("기록")),
-        ("com.apple.reminders", "미리알림", categoryName("기록")),
 
         // 💬 소통
         ("com.kakao.KakaoTalkMac", "카카오톡", categoryName("소통")),
         ("com.hnc.Discord", "Discord", categoryName("소통")),
     ] }
+
+    // MARK: - 기본 웹사이트→카테고리 매핑
+    static var defaultWebsiteCategoryRules: [(domain: String, category: String)] { [
+        ("chatgpt.com", categoryName("개발")),
+        ("claude.ai", categoryName("개발")),
+        ("gemini.google.com", categoryName("개발")),
+        ("youtube.com", categoryName("엔터")),
+        ("netflix.com", categoryName("엔터")),
+    ] }
+
+    static var allDefaultCategoryRules: [
+        (bundleId: String, appName: String, category: String)
+    ] {
+        defaultCategoryRules + defaultWebsiteCategoryRules.map { rule in
+            (
+                bundleId: WebsiteCategoryRule.bundleIdentifier(for: rule.domain),
+                appName: rule.domain,
+                category: rule.category
+            )
+        }
+    }
 
     // MARK: - 모든 카테고리 목록
     static var allCategories: [String] { CategoryStore.shared.categoryNames }
@@ -172,7 +234,7 @@ enum Constants {
         includingHidden: Bool = false
     ) -> (bundleId: String, appName: String, category: String)? {
         guard includingHidden || !isDefaultCategoryRuleHidden(bundleIdentifier) else { return nil }
-        return defaultCategoryRules.first { $0.bundleId == bundleIdentifier }
+        return allDefaultCategoryRules.first { $0.bundleId == bundleIdentifier }
     }
 
     static func isDefaultCategoryRuleHidden(_ bundleIdentifier: String) -> Bool {

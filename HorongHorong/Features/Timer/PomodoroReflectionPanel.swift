@@ -26,6 +26,35 @@ final class PomodoroReflectionPanel {
         let canRecordLinkedTaskCompletion = session?.linkedMemoID.map {
             PomodoroTaskCompletionRecorder.hasLinkedMemo(id: $0, modelContext: modelContext)
         } ?? false
+        let suggestedAppCategory = session?.category ?? Constants.defaultFocusCategory
+        let focusRange: (start: Date, end: Date)?
+        if let session,
+           let endedAt = session.endedAt {
+            let expectedEnd = session.startedAt.addingTimeInterval(
+                TimeInterval(max(0, session.focusMinutes) * 60)
+            )
+            focusRange = (session.startedAt, min(endedAt, expectedEnd))
+        } else {
+            focusRange = nil
+        }
+        let unclassifiedApps: [UnclassifiedAppUsage]
+        let productivityManagementAppUsages: [ProductivityManagementAppUsage]
+        if let focusRange {
+            unclassifiedApps = AppClassificationService.unclassifiedApps(
+                from: focusRange.start,
+                to: focusRange.end,
+                modelContext: modelContext
+            )
+            productivityManagementAppUsages =
+                AppClassificationService.productivityManagementAppUsages(
+                    from: focusRange.start,
+                    to: focusRange.end,
+                    modelContext: modelContext
+                )
+        } else {
+            unclassifiedApps = []
+            productivityManagementAppUsages = []
+        }
 
         close(animated: false)
 
@@ -60,7 +89,15 @@ final class PomodoroReflectionPanel {
             taskTitle: session?.taskTitleSnapshot,
             isLinkedTask: session?.linkedMemoID != nil,
             canRecordLinkedTaskCompletion: canRecordLinkedTaskCompletion,
-            onSave: { [weak self] focusExperience, progressResult, incompleteReason in
+            suggestedAppCategory: suggestedAppCategory,
+            unclassifiedApps: unclassifiedApps,
+            productivityManagementAppUsages: productivityManagementAppUsages,
+            onSave: {
+                [weak self] focusExperience,
+                progressResult,
+                incompleteReason,
+                appChoices,
+                productivityManagementAppCategories in
                 guard !progressResult.requiresReason || incompleteReason != nil else {
                     throw PomodoroReflectionSaveError.missingIncompleteReason
                 }
@@ -75,6 +112,23 @@ final class PomodoroReflectionPanel {
                 )
                 modelContext.insert(reflection)
                 do {
+                    try AppClassificationService.apply(
+                        choices: appChoices,
+                        apps: unclassifiedApps,
+                        modelContext: modelContext
+                    )
+                    if let focusRange {
+                        for (bundleIdentifier, category) in productivityManagementAppCategories {
+                            try AppClassificationService
+                                .prepareProductivityManagementAppSessionClassification(
+                                    bundleIdentifier: bundleIdentifier,
+                                    from: focusRange.start,
+                                    to: focusRange.end,
+                                    category: category,
+                                    modelContext: modelContext
+                                )
+                        }
+                    }
                     let recordsLinkedTaskCompletion = progressResult == .completedAsPlanned
                         && session?.linkedMemoID.map {
                             PomodoroTaskCompletionRecorder.hasLinkedMemo(
@@ -93,7 +147,9 @@ final class PomodoroReflectionPanel {
                         affectedMemo = nil
                     }
                     try modelContext.save()
+                    CategoryManager.shared.loadUserRules(from: modelContext)
                     NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
+                    NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
                     if recordsLinkedTaskCompletion,
                        let linkedMemoID = session?.linkedMemoID {
                         NotificationCenter.default.post(
@@ -167,15 +223,32 @@ private struct PomodoroReflectionView: View {
         case focusExperience
         case progressResult
         case incompleteReason
+        case appClassification
+    }
+
+    private enum AppSelection: Hashable {
+        case later
+        case category(String)
+        case excluded
+    }
+
+    private enum ProductivityManagementAppSelection: Hashable {
+        case management
+        case category(String)
     }
 
     let taskTitle: String?
     let isLinkedTask: Bool
     let canRecordLinkedTaskCompletion: Bool
+    let suggestedAppCategory: String
+    let unclassifiedApps: [UnclassifiedAppUsage]
+    let productivityManagementAppUsages: [ProductivityManagementAppUsage]
     let onSave: (
         PomodoroFocusExperience,
         PomodoroProgressResult,
-        PomodoroIncompleteReason?
+        PomodoroIncompleteReason?,
+        [String: UnclassifiedAppChoice],
+        [String: String]
     ) throws -> Void
     let onCancel: () -> Void
 
@@ -183,8 +256,15 @@ private struct PomodoroReflectionView: View {
     @State private var focusExperience: PomodoroFocusExperience?
     @State private var progressResult: PomodoroProgressResult?
     @State private var incompleteReason: PomodoroIncompleteReason?
+    @State private var appSelections: [String: AppSelection] = [:]
+    @State private var productivityManagementAppSelections:
+        [String: ProductivityManagementAppSelection] = [:]
     @State private var saveErrorMessage: String?
     @State private var isSaving = false
+
+    private var needsAppClassification: Bool {
+        !unclassifiedApps.isEmpty || !productivityManagementAppUsages.isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -206,6 +286,11 @@ private struct PomodoroReflectionView: View {
                     .foregroundStyle(PopoverChrome.ink)
                 if step == .incompleteReason {
                     Text("가장 큰 이유 하나를 골라주세요.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                } else if step == .appClassification,
+                          !productivityManagementAppUsages.isEmpty {
+                    Text("생산성 관리 앱 사용이 작업의 일부였다면 이 세션에만 반영해요.")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                 }
@@ -334,7 +419,137 @@ private struct PomodoroReflectionView: View {
                     saveErrorMessage = nil
                 }
             }
+        case .appClassification:
+            ForEach(productivityManagementAppUsages) { usage in
+                productivityManagementAppClassificationRow(usage)
+            }
+            ForEach(unclassifiedApps) { app in
+                appClassificationRow(app)
+            }
         }
+    }
+
+    private func productivityManagementAppClassificationRow(
+        _ usage: ProductivityManagementAppUsage
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "timer")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(PopoverChrome.accent)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(usage.appName)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("\(formattedDuration(usage.durationSeconds)) 사용")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Picker(
+                "",
+                selection: Binding(
+                    get: {
+                        productivityManagementAppSelections[usage.bundleIdentifier]
+                            ?? .management
+                    },
+                    set: {
+                        productivityManagementAppSelections[usage.bundleIdentifier] = $0
+                        saveErrorMessage = nil
+                    }
+                )
+            ) {
+                Text("생산성 관리")
+                    .tag(ProductivityManagementAppSelection.management)
+                Text("작업의 일부 · \(suggestedAppCategory)")
+                    .tag(ProductivityManagementAppSelection.category(suggestedAppCategory))
+                ForEach(
+                    Constants.allCategories.filter { $0 != suggestedAppCategory },
+                    id: \.self
+                ) { category in
+                    Text("\(Constants.categoryEmoji(for: category)) \(category)")
+                        .tag(ProductivityManagementAppSelection.category(category))
+                }
+            }
+            .labelsHidden()
+            .frame(width: 190)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+        .background(
+            PopoverChrome.surfaceAlt,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
+    }
+
+    private func appClassificationRow(_ app: UnclassifiedAppUsage) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "app.dashed")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(PopoverChrome.accent)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(app.appName)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("\(formattedDuration(app.durationSeconds)) · \(app.bundleIdentifier)")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Picker(
+                "",
+                selection: Binding(
+                    get: { appSelections[app.bundleIdentifier] ?? .later },
+                    set: {
+                        appSelections[app.bundleIdentifier] = $0
+                        saveErrorMessage = nil
+                    }
+                )
+            ) {
+                Text("나중에 분류").tag(AppSelection.later)
+                Text("추천 · \(suggestedAppCategory)")
+                    .tag(AppSelection.category(suggestedAppCategory))
+                ForEach(
+                    Constants.allCategories.filter { $0 != suggestedAppCategory },
+                    id: \.self
+                ) { category in
+                    Text("\(Constants.categoryEmoji(for: category)) \(category)")
+                        .tag(AppSelection.category(category))
+                }
+                Divider()
+                Text("앞으로 기록 안 함").tag(AppSelection.excluded)
+            }
+            .labelsHidden()
+            .frame(width: 170)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+        .background(
+            PopoverChrome.surfaceAlt,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: 1)
+        )
+    }
+
+    private func formattedDuration(_ seconds: Int) -> String {
+        let minutes = max(0, seconds) / 60
+        if minutes > 0 { return "\(minutes)분" }
+        return "\(max(0, seconds))초"
     }
 
     private func optionButton(
@@ -397,6 +612,7 @@ private struct PomodoroReflectionView: View {
         case .focusExperience: return "질문 1 · 몰입 경험"
         case .progressResult: return "질문 2 · 작업 진행 결과"
         case .incompleteReason: return "추가 질문 · 가장 큰 이유"
+        case .appClassification: return "마지막 · 앱 사용 분류"
         }
     }
 
@@ -408,6 +624,7 @@ private struct PomodoroReflectionView: View {
                 ? "이 할 일을 얼마나 진행했나요?"
                 : "계획한 만큼 진행했나요?"
         case .incompleteReason: return "작업이 남은 가장 큰 이유는 무엇인가요?"
+        case .appClassification: return "이번 세션의 앱 사용을 어떻게 분류할까요?"
         }
     }
 
@@ -416,8 +633,12 @@ private struct PomodoroReflectionView: View {
         case .focusExperience:
             return "다음"
         case .progressResult:
-            return progressResult?.requiresReason == true ? "다음" : "저장"
+            return progressResult?.requiresReason == true || needsAppClassification
+                ? "다음"
+                : "저장"
         case .incompleteReason:
+            return needsAppClassification ? "다음" : "저장"
+        case .appClassification:
             return "저장"
         }
     }
@@ -427,6 +648,7 @@ private struct PomodoroReflectionView: View {
         case .focusExperience: return focusExperience == nil
         case .progressResult: return progressResult == nil
         case .incompleteReason: return incompleteReason == nil
+        case .appClassification: return false
         }
     }
 
@@ -439,6 +661,8 @@ private struct PomodoroReflectionView: View {
             step = .focusExperience
         case .incompleteReason:
             step = .progressResult
+        case .appClassification:
+            step = progressResult?.requiresReason == true ? .incompleteReason : .progressResult
         }
     }
 
@@ -452,11 +676,19 @@ private struct PomodoroReflectionView: View {
             guard let progressResult else { return }
             if progressResult.requiresReason {
                 step = .incompleteReason
+            } else if needsAppClassification {
+                step = .appClassification
             } else {
                 save()
             }
         case .incompleteReason:
             guard incompleteReason != nil else { return }
+            if needsAppClassification {
+                step = .appClassification
+            } else {
+                save()
+            }
+        case .appClassification:
             save()
         }
     }
@@ -464,8 +696,32 @@ private struct PomodoroReflectionView: View {
     private func save() {
         guard !isSaving, let focusExperience, let progressResult else { return }
         isSaving = true
+        let appChoices = appSelections.reduce(into: [String: UnclassifiedAppChoice]()) {
+            result, entry in
+            switch entry.value {
+            case .later:
+                break
+            case let .category(category):
+                result[entry.key] = .category(category)
+            case .excluded:
+                result[entry.key] = .excluded
+            }
+        }
+        let productivityManagementAppCategories =
+            productivityManagementAppSelections.reduce(into: [String: String]()) {
+                result, entry in
+                if case let .category(category) = entry.value {
+                    result[entry.key] = category
+                }
+            }
         do {
-            try onSave(focusExperience, progressResult, incompleteReason)
+            try onSave(
+                focusExperience,
+                progressResult,
+                incompleteReason,
+                appChoices,
+                productivityManagementAppCategories
+            )
         } catch {
             isSaving = false
             saveErrorMessage = "저장하지 못했어요. 잠시 후 다시 시도해 주세요."
@@ -478,7 +734,27 @@ private struct PomodoroReflectionView: View {
         taskTitle: "통계 회고 결과 화면 구현",
         isLinkedTask: true,
         canRecordLinkedTaskCompletion: true,
-        onSave: { _, _, _ in },
+        suggestedAppCategory: "개발",
+        unclassifiedApps: [
+            UnclassifiedAppUsage(
+                bundleIdentifier: "com.example.orca",
+                appName: "Orca",
+                durationSeconds: 18 * 60
+            )
+        ],
+        productivityManagementAppUsages: [
+            ProductivityManagementAppUsage(
+                bundleIdentifier: Constants.horongHorongBundleIdentifier,
+                appName: "호롱호롱",
+                durationSeconds: 3 * 60
+            ),
+            ProductivityManagementAppUsage(
+                bundleIdentifier: "com.apple.reminders",
+                appName: "미리알림",
+                durationSeconds: 2 * 60
+            ),
+        ],
+        onSave: { _, _, _, _, _ in },
         onCancel: {}
     )
 }

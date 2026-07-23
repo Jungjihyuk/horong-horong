@@ -65,6 +65,7 @@ struct PomodoroSessionObservation: Equatable {
     let ambiguousOverlapSeconds: Int
     let userModifiedRecordedSeconds: Int
     let appSwitchCount: Int
+    let appUsageRunCount: Int
     let categorySwitchCount: Int
     let categoryTransitions: [PomodoroCategoryTransition]
     let longestContinuousAppUsage: PomodoroContinuousAppUsage?
@@ -77,6 +78,11 @@ struct PomodoroSessionObservation: Equatable {
 
     var attributedSeconds: Int {
         max(0, recordedSeconds - ambiguousOverlapSeconds)
+    }
+
+    var averageAppUsageRunSeconds: Double? {
+        guard appUsageRunCount > 0 else { return nil }
+        return Double(attributedSeconds) / Double(appUsageRunCount)
     }
 }
 
@@ -120,6 +126,13 @@ enum PomodoroSessionObservationBuilder {
         let state: AttributedState
         var end: Date
         var duration: TimeInterval
+    }
+
+    private struct AppBehaviorVisit {
+        let appIdentity: String
+        var category: String
+        var duration: TimeInterval
+        var isProductivityManagementApp: Bool
     }
 
     private struct TransitionKey: Hashable {
@@ -176,10 +189,12 @@ enum PomodoroSessionObservationBuilder {
                 )
             }
 
+        let behaviorVisits = appBehaviorVisits(from: timeline)
         var appDurations: [StateKey: (appName: String, duration: TimeInterval)] = [:]
         var ambiguousOverlapDuration: TimeInterval = 0
         var userModifiedRecordedDuration: TimeInterval = 0
-        var appSwitchCount = 0
+        let appUsageRunCount = behaviorVisits.count
+        let appSwitchCount = max(0, appUsageRunCount - 1)
         var categorySwitchCount = 0
         var transitionCounts: [TransitionKey: Int] = [:]
         var previousAttributed: (state: AttributedState, end: Date)?
@@ -188,6 +203,9 @@ enum PomodoroSessionObservationBuilder {
 
         func finishCurrentRun() {
             guard let currentRun else { return }
+            guard !Constants.isProductivityManagementCategory(
+                currentRun.state.key.category
+            ) else { return }
             let durationSeconds = max(0, Int(currentRun.duration))
             guard durationSeconds > (longestUsage?.durationSeconds ?? -1) else { return }
             longestUsage = PomodoroContinuousAppUsage(
@@ -221,15 +239,18 @@ enum PomodoroSessionObservationBuilder {
                     isDirectlyAfter($0.end, nextStart: interval.start)
                 } ?? false
                 if let previous = previousAttributed, isDirectlyAfterPrevious {
-                    if previous.state.key.appIdentity != state.key.appIdentity {
-                        appSwitchCount += 1
-                    }
-                    if previous.state.key.category != state.key.category {
+                    let previousCategory = previous.state.key.category
+                    let currentCategory = state.key.category
+                    if previousCategory != Constants.unclassifiedAppCategory,
+                       currentCategory != Constants.unclassifiedAppCategory,
+                       !Constants.isProductivityManagementCategory(previousCategory),
+                       !Constants.isProductivityManagementCategory(currentCategory),
+                       previousCategory != currentCategory {
                         categorySwitchCount += 1
                         transitionCounts[
                             TransitionKey(
-                                source: previous.state.key.category,
-                                target: state.key.category
+                                source: previousCategory,
+                                target: currentCategory
                             ),
                             default: 0
                         ] += 1
@@ -328,6 +349,7 @@ enum PomodoroSessionObservationBuilder {
                 max(0, Int(userModifiedRecordedDuration))
             ),
             appSwitchCount: appSwitchCount,
+            appUsageRunCount: appUsageRunCount,
             categorySwitchCount: categorySwitchCount,
             categoryTransitions: transitionCounts
                 .map {
@@ -346,6 +368,53 @@ enum PomodoroSessionObservationBuilder {
             apps: apps,
             categories: categories
         )
+    }
+
+    private static func appBehaviorVisits(
+        from timeline: [TimelineInterval]
+    ) -> [AppBehaviorVisit] {
+        var observedVisits: [AppBehaviorVisit] = []
+
+        for interval in timeline {
+            guard case let .attributed(state) = interval.state else { continue }
+            let isProductivityManagementApp = Constants.isProductivityManagementCategory(
+                state.key.category
+            )
+            if let lastIndex = observedVisits.indices.last,
+               observedVisits[lastIndex].appIdentity == state.key.appIdentity {
+                observedVisits[lastIndex].duration += interval.duration
+                if observedVisits[lastIndex].isProductivityManagementApp
+                    && !isProductivityManagementApp {
+                    observedVisits[lastIndex].isProductivityManagementApp = false
+                    observedVisits[lastIndex].category = state.key.category
+                }
+            } else {
+                observedVisits.append(AppBehaviorVisit(
+                    appIdentity: state.key.appIdentity,
+                    category: state.key.category,
+                    duration: interval.duration,
+                    isProductivityManagementApp: isProductivityManagementApp
+                ))
+            }
+        }
+
+        let significantVisits = observedVisits.filter {
+            !$0.isProductivityManagementApp
+                || $0.duration >= Constants.productivityManagementShortInteractionSeconds
+        }
+        var collapsedVisits: [AppBehaviorVisit] = []
+        for visit in significantVisits {
+            if let lastIndex = collapsedVisits.indices.last,
+               collapsedVisits[lastIndex].appIdentity == visit.appIdentity {
+                collapsedVisits[lastIndex].duration += visit.duration
+                collapsedVisits[lastIndex].isProductivityManagementApp =
+                    collapsedVisits[lastIndex].isProductivityManagementApp
+                        && visit.isProductivityManagementApp
+            } else {
+                collapsedVisits.append(visit)
+            }
+        }
+        return collapsedVisits
     }
 
     private static func normalizedApp(
@@ -444,6 +513,7 @@ enum PomodoroSessionObservationBuilder {
             ambiguousOverlapSeconds: 0,
             userModifiedRecordedSeconds: 0,
             appSwitchCount: 0,
+            appUsageRunCount: 0,
             categorySwitchCount: 0,
             categoryTransitions: [],
             longestContinuousAppUsage: nil,
