@@ -1226,6 +1226,28 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(saved.taskTitleSnapshot, "데이터 계약 확정")
     }
 
+    @MainActor
+    func testFocusSessionImmersionMetadataPersistsInSwiftData() throws {
+        let schema = Schema([FocusSession.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let session = FocusSession(
+            focusMinutes: 50,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        session.inputActiveSeconds = 2_100
+        session.markerColorKey = "purple"
+
+        context.insert(session)
+        try context.save()
+
+        let saved = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
+        XCTAssertEqual(saved.inputActiveSeconds, 2_100)
+        XCTAssertEqual(saved.markerColorKey, "purple")
+    }
+
     func testPomodoroTaskCandidatesIncludeGoalLinkedAndTodayTasksOnce() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -3111,6 +3133,8 @@ final class ConstantsDefaultsTests: XCTestCase {
             startedAt: periodStart.addingTimeInterval(-300)
         )
         let startsAtPeriodBoundary = completedSession(startedAt: periodStart)
+        startsAtPeriodBoundary.inputActiveSeconds = 300
+        startsAtPeriodBoundary.markerColorKey = "purple"
         let crossesPeriodEnd = completedSession(
             startedAt: periodEnd.addingTimeInterval(-300)
         )
@@ -3150,6 +3174,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         let last = try XCTUnwrap(result.last)
         XCTAssertEqual(first.observation.sessionSeconds, 600)
         XCTAssertEqual(first.observation.recordedSeconds, 600)
+        XCTAssertEqual(first.inputActivityRatio, 0.5)
+        XCTAssertEqual(first.markerColorKey, "purple")
         XCTAssertEqual(last.endedAt, periodEnd.addingTimeInterval(300))
         XCTAssertEqual(last.observation.sessionSeconds, 600)
         XCTAssertEqual(last.observation.recordedSeconds, 600)
@@ -3251,6 +3277,94 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertTrue(defaultNames.contains("기타"))
     }
 
+    func testDefaultCategoryColorsAreOneToOne() {
+        let colorKeys = Constants.defaultCategoryDefinitions.compactMap(\.colorKey)
+
+        XCTAssertEqual(colorKeys.count, Constants.defaultCategoryDefinitions.count)
+        XCTAssertEqual(Set(colorKeys).count, colorKeys.count)
+        XCTAssertEqual(
+            Dictionary(
+                uniqueKeysWithValues: Constants.defaultCategoryDefinitions.map {
+                    ($0.defaultName, $0.colorKey)
+                }
+            ),
+            Constants.defaultCategoryColorKeys.mapValues(Optional.some)
+        )
+    }
+
+    func testNewCategoriesReceiveUniqueColorsAfterPaletteIsExhausted() throws {
+        let (userDefaults, suiteName) = try makeIsolatedUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = CategoryStore(userDefaults: userDefaults)
+        let newCategoryCount = CategoryColorPalette.options.count + 5
+
+        for index in 0..<newCategoryCount {
+            XCTAssertTrue(store.add(name: "사용자 \(index)", emoji: "🧩"))
+        }
+
+        let colorKeys = store.categories.compactMap(\.colorKey)
+        XCTAssertEqual(colorKeys.count, store.categories.count)
+        XCTAssertEqual(Set(colorKeys).count, colorKeys.count)
+        XCTAssertNotEqual(store.colorKey(for: "사용자 0"), CategoryColorPalette.fallbackKey)
+        XCTAssertTrue(colorKeys.contains(where: CategoryColorPalette.isGenerated))
+    }
+
+    func testCategoryColorSurvivesRenameAndSwapsWithoutDuplicates() throws {
+        let (userDefaults, suiteName) = try makeIsolatedUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = CategoryStore(userDefaults: userDefaults)
+        XCTAssertTrue(store.add(name: "기획", emoji: "🗺️"))
+        XCTAssertTrue(store.add(name: "리뷰", emoji: "🧪"))
+        let planningColor = store.colorKey(for: "기획")
+        let reviewColor = store.colorKey(for: "리뷰")
+
+        XCTAssertTrue(store.setColorKey(reviewColor, for: "기획"))
+        XCTAssertEqual(store.colorKey(for: "기획"), reviewColor)
+        XCTAssertEqual(store.colorKey(for: "리뷰"), planningColor)
+        XCTAssertTrue(store.update(oldName: "기획", newName: "설계", emoji: "🗺️"))
+        XCTAssertEqual(store.colorKey(for: "설계"), reviewColor)
+
+        let reloaded = CategoryStore(userDefaults: userDefaults)
+        let reloadedColorKeys = reloaded.categories.compactMap(\.colorKey)
+        XCTAssertEqual(reloaded.colorKey(for: "설계"), reviewColor)
+        XCTAssertEqual(reloaded.colorKey(for: "리뷰"), planningColor)
+        XCTAssertEqual(Set(reloadedColorKeys).count, reloadedColorKeys.count)
+    }
+
+    func testLegacyCategoriesWithoutColorsAreAssignedUniquePersistentColors() throws {
+        let (userDefaults, suiteName) = try makeIsolatedUserDefaults()
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        var legacyCategories = Constants.defaultCategoryDefinitions
+        for index in legacyCategories.indices {
+            legacyCategories[index].colorKey = nil
+        }
+        legacyCategories.append(
+            CategoryDefinition(
+                defaultName: "사용자",
+                name: "사용자",
+                emoji: "🧩",
+                colorKey: nil
+            )
+        )
+        userDefaults.set(
+            try JSONEncoder().encode(legacyCategories),
+            forKey: "categories.v1"
+        )
+
+        let migrated = CategoryStore(userDefaults: userDefaults)
+        let migratedColorKeys = migrated.categories.compactMap(\.colorKey)
+        XCTAssertEqual(migratedColorKeys.count, migrated.categories.count)
+        XCTAssertEqual(Set(migratedColorKeys).count, migratedColorKeys.count)
+        XCTAssertEqual(migrated.colorKey(for: "업무"), "brown")
+        XCTAssertNotEqual(migrated.colorKey(for: "사용자"), CategoryColorPalette.fallbackKey)
+
+        let reloaded = CategoryStore(userDefaults: userDefaults)
+        XCTAssertEqual(
+            reloaded.categories.map(\.colorKey),
+            migrated.categories.map(\.colorKey)
+        )
+    }
+
     func testAgentDerivedDirectoriesUseSingleRoot() {
         let root = "/tmp/HorongHorongTests/experiments"
 
@@ -3295,6 +3409,13 @@ final class ConstantsDefaultsTests: XCTestCase {
         legacyContainer.mainContext.insert(session)
         try legacyContainer.mainContext.save()
         return session.id
+    }
+
+    private func makeIsolatedUserDefaults() throws -> (UserDefaults, String) {
+        let suiteName = "HorongHorongTests.CategoryStore.\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        userDefaults.removePersistentDomain(forName: suiteName)
+        return (userDefaults, suiteName)
     }
 
     @MainActor

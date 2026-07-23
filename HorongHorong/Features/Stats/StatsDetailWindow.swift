@@ -939,7 +939,7 @@ struct StatsDetailWindow: View {
 
 // MARK: - 몰입 상세 (몰입 지도 + 세션별 지표)
 
-/// 몰입 지도 가로축 후보. `입력 활동`은 아직 수집하지 않아 비활성(준비 중).
+/// 몰입 지도 가로축 후보. `입력 활동`은 해당 데이터가 있는 세션만 표시한다.
 enum FocusSessionMetric: String, CaseIterable, Identifiable {
     case continuousFocus
     case appSwitches
@@ -1287,7 +1287,7 @@ struct FocusDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!metric.isAvailable)
-        .help(metric.isAvailable ? "가로축을 이 지표로 바꿉니다" : "입력 활동은 아직 수집하지 않아요 (준비 중)")
+        .help(metric.isAvailable ? "가로축을 이 지표로 바꿉니다" : "아직 사용할 수 없는 지표입니다")
     }
 
     private var focusChart: some View {

@@ -466,6 +466,30 @@ struct PomodoroSessionBreakdown: Identifiable {
     let inputActivityRatio: Double?
     /// 사용자가 지정한 몰입 지도 점 색 키. nil = 카테고리 기본색.
     let markerColorKey: String?
+
+    init(
+        id: UUID,
+        startedAt: Date,
+        endedAt: Date,
+        category: String,
+        linkedMemoID: UUID?,
+        taskTitle: String?,
+        durationSeconds: Int,
+        observation: PomodoroSessionObservation,
+        inputActivityRatio: Double? = nil,
+        markerColorKey: String? = nil
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.category = category
+        self.linkedMemoID = linkedMemoID
+        self.taskTitle = taskTitle
+        self.durationSeconds = durationSeconds
+        self.observation = observation
+        self.inputActivityRatio = inputActivityRatio
+        self.markerColorKey = markerColorKey
+    }
 }
 
 struct PomodoroTimeSummary: Identifiable {

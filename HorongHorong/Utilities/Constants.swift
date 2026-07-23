@@ -58,15 +58,15 @@ enum Constants {
     }
 
     // MARK: - 카테고리 색상
-    static let categoryColors: [String: Color] = [
-        "업무": .brown,
-        "개발": .blue,
-        "공부": Color(red: 0.65, green: 0.87, blue: 0.35),   // 연두
-        "조사": .teal,
-        "소통": .orange,
-        "엔터": .red,
-        "기록": Color(red: 0.53, green: 0.81, blue: 0.92),   // 하늘
-        "기타": .gray,
+    static let defaultCategoryColorKeys: [String: String] = [
+        "업무": "brown",
+        "개발": "blue",
+        "공부": "lime",
+        "조사": "teal",
+        "소통": "orange",
+        "엔터": "red",
+        "기록": "sky",
+        "기타": "gray",
     ]
 
     // MARK: - 카테고리 이모지
@@ -82,14 +82,14 @@ enum Constants {
     ]
 
     static let defaultCategoryDefinitions: [CategoryDefinition] = [
-        CategoryDefinition(defaultName: "업무", name: "업무", emoji: "💼"),
-        CategoryDefinition(defaultName: "개발", name: "개발", emoji: "💻"),
-        CategoryDefinition(defaultName: "공부", name: "공부", emoji: "📚"),
-        CategoryDefinition(defaultName: "조사", name: "조사", emoji: "🔎"),
-        CategoryDefinition(defaultName: "기록", name: "기록", emoji: "📓"),
-        CategoryDefinition(defaultName: "소통", name: "소통", emoji: "💬"),
-        CategoryDefinition(defaultName: "엔터", name: "엔터", emoji: "🎬"),
-        CategoryDefinition(defaultName: "기타", name: "기타", emoji: "📦"),
+        CategoryDefinition(defaultName: "업무", name: "업무", emoji: "💼", colorKey: "brown"),
+        CategoryDefinition(defaultName: "개발", name: "개발", emoji: "💻", colorKey: "blue"),
+        CategoryDefinition(defaultName: "공부", name: "공부", emoji: "📚", colorKey: "lime"),
+        CategoryDefinition(defaultName: "조사", name: "조사", emoji: "🔎", colorKey: "teal"),
+        CategoryDefinition(defaultName: "기록", name: "기록", emoji: "📓", colorKey: "sky"),
+        CategoryDefinition(defaultName: "소통", name: "소통", emoji: "💬", colorKey: "orange"),
+        CategoryDefinition(defaultName: "엔터", name: "엔터", emoji: "🎬", colorKey: "red"),
+        CategoryDefinition(defaultName: "기타", name: "기타", emoji: "📦", colorKey: "gray"),
     ]
 
     static func categoryName(_ defaultName: String) -> String {
@@ -105,8 +105,7 @@ enum Constants {
     }
 
     static func categoryColor(for category: String) -> Color {
-        let defaultName = defaultName(forCategory: category)
-        return categoryColors[defaultName] ?? categoryColors[category] ?? .gray
+        CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
     }
 
     // MARK: - 브라우저 bundle identifier (URL 기반 분류용)
@@ -872,20 +871,122 @@ struct CategoryDefinition: Codable, Identifiable, Hashable {
     var defaultName: String
     var name: String
     var emoji: String
+    var colorKey: String?
+}
+
+struct CategoryColorOption: Identifiable {
+    let key: String
+    let name: String
+    let color: Color
+    var id: String { key }
+}
+
+/// 카테고리마다 하나의 고유 색상 키를 유지한다.
+/// 준비된 팔레트를 먼저 쓰고, 모두 사용하면 안정적인 자동 색상 키를 순서대로 생성한다.
+enum CategoryColorPalette {
+    static let fallbackKey = "gray"
+    static let options: [CategoryColorOption] = [
+        CategoryColorOption(key: "brown", name: "갈색", color: .brown),
+        CategoryColorOption(key: "blue", name: "파랑", color: .blue),
+        CategoryColorOption(
+            key: "lime",
+            name: "연두",
+            color: Color(red: 0.65, green: 0.87, blue: 0.35)
+        ),
+        CategoryColorOption(key: "teal", name: "청록", color: .teal),
+        CategoryColorOption(key: "orange", name: "주황", color: .orange),
+        CategoryColorOption(key: "red", name: "빨강", color: .red),
+        CategoryColorOption(
+            key: "sky",
+            name: "하늘",
+            color: Color(red: 0.53, green: 0.81, blue: 0.92)
+        ),
+        CategoryColorOption(key: "gray", name: "회색", color: .gray),
+        CategoryColorOption(key: "indigo", name: "남색", color: .indigo),
+        CategoryColorOption(key: "mint", name: "민트", color: .mint),
+        CategoryColorOption(key: "cyan", name: "시안", color: .cyan),
+        CategoryColorOption(key: "green", name: "초록", color: .green),
+        CategoryColorOption(key: "yellow", name: "노랑", color: .yellow),
+        CategoryColorOption(key: "pink", name: "분홍", color: .pink),
+        CategoryColorOption(key: "purple", name: "보라", color: .purple),
+    ]
+
+    static func color(for key: String?) -> Color {
+        if let option = options.first(where: { $0.key == key }) {
+            return option.color
+        }
+        guard let index = generatedIndex(for: key) else {
+            return options.first(where: { $0.key == fallbackKey })?.color ?? .gray
+        }
+        let hue = (Double(index) * 0.618_033_988_749_895).truncatingRemainder(dividingBy: 1)
+        let saturation = 0.58 + (Double(index % 3) * 0.08)
+        let brightness = 0.72 + (Double(index % 2) * 0.12)
+        return Color(hue: hue, saturation: saturation, brightness: brightness)
+    }
+
+    static func option(for key: String) -> CategoryColorOption? {
+        if let option = options.first(where: { $0.key == key }) {
+            return option
+        }
+        guard let index = generatedIndex(for: key) else { return nil }
+        return CategoryColorOption(
+            key: key,
+            name: "자동 색상 \(index + 1)",
+            color: color(for: key)
+        )
+    }
+
+    static func isSupported(_ key: String) -> Bool {
+        options.contains { $0.key == key } || generatedIndex(for: key) != nil
+    }
+
+    static func nextAvailableKey(usedKeys: Set<String>) -> String {
+        if let option = options.first(where: { !usedKeys.contains($0.key) }) {
+            return option.key
+        }
+        var index = 0
+        while usedKeys.contains(generatedKey(index: index)) {
+            index += 1
+        }
+        return generatedKey(index: index)
+    }
+
+    static func isGenerated(_ key: String) -> Bool {
+        generatedIndex(for: key) != nil
+    }
+
+    private static func generatedKey(index: Int) -> String {
+        "generated-\(index)"
+    }
+
+    private static func generatedIndex(for key: String?) -> Int? {
+        guard let key, key.hasPrefix("generated-"),
+              let index = Int(key.dropFirst("generated-".count)),
+              index >= 0 else {
+            return nil
+        }
+        return index
+    }
 }
 
 @Observable
 final class CategoryStore: @unchecked Sendable {
     static let shared = CategoryStore()
 
-    private let storageKey = "categories.v1"
+    private let storageKey: String
+    private let userDefaults: UserDefaults
     private(set) var categories: [CategoryDefinition] = []
 
     var categoryNames: [String] {
         categories.map(\.name)
     }
 
-    private init() {
+    init(
+        userDefaults: UserDefaults = .standard,
+        storageKey: String = "categories.v1"
+    ) {
+        self.userDefaults = userDefaults
+        self.storageKey = storageKey
         load()
     }
 
@@ -903,6 +1004,12 @@ final class CategoryStore: @unchecked Sendable {
         categories.first { $0.name == displayName }?.defaultName ?? displayName
     }
 
+    func colorKey(for category: String) -> String {
+        categories.first { $0.name == category }?.colorKey
+            ?? Constants.defaultCategoryColorKeys[defaultName(forDisplayName: category)]
+            ?? CategoryColorPalette.fallbackKey
+    }
+
     func canDelete(_ category: String) -> Bool {
         defaultName(forDisplayName: category) != "기타"
     }
@@ -910,7 +1017,17 @@ final class CategoryStore: @unchecked Sendable {
     func add(name: String, emoji: String) -> Bool {
         let trimmed = normalizedName(name)
         guard !trimmed.isEmpty, !categoryNames.contains(trimmed) else { return false }
-        categories.append(CategoryDefinition(defaultName: trimmed, name: trimmed, emoji: normalizedEmoji(emoji)))
+        let colorKey = CategoryColorPalette.nextAvailableKey(
+            usedKeys: Set(categories.compactMap(\.colorKey))
+        )
+        categories.append(
+            CategoryDefinition(
+                defaultName: trimmed,
+                name: trimmed,
+                emoji: normalizedEmoji(emoji),
+                colorKey: colorKey
+            )
+        )
         save()
         return true
     }
@@ -926,6 +1043,24 @@ final class CategoryStore: @unchecked Sendable {
         return true
     }
 
+    /// 이미 사용 중인 색을 선택하면 두 카테고리의 색을 교환해 1:1 매핑을 유지한다.
+    func setColorKey(_ colorKey: String, for category: String) -> Bool {
+        guard CategoryColorPalette.isSupported(colorKey),
+              let targetIndex = categories.firstIndex(where: { $0.name == category }) else {
+            return false
+        }
+        let previousColorKey = categories[targetIndex].colorKey
+        guard previousColorKey != colorKey else { return true }
+
+        if let ownerIndex = categories.firstIndex(where: { $0.colorKey == colorKey }),
+           ownerIndex != targetIndex {
+            categories[ownerIndex].colorKey = previousColorKey
+        }
+        categories[targetIndex].colorKey = colorKey
+        save()
+        return true
+    }
+
     func delete(name: String) {
         guard canDelete(name) else { return }
         categories.removeAll { $0.name == name }
@@ -933,13 +1068,14 @@ final class CategoryStore: @unchecked Sendable {
     }
 
     private func load() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
+        if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([CategoryDefinition].self, from: data),
            !decoded.isEmpty {
             categories = mergedWithNewDefaults(decoded)
         } else {
             categories = Constants.defaultCategoryDefinitions
         }
+        categories = assigningUniqueColors(to: categories)
         save()
     }
 
@@ -952,9 +1088,32 @@ final class CategoryStore: @unchecked Sendable {
         return result
     }
 
+    private func assigningUniqueColors(
+        to definitions: [CategoryDefinition]
+    ) -> [CategoryDefinition] {
+        var result = definitions
+        var usedKeys: Set<String> = []
+
+        for index in result.indices {
+            let preferredKey = result[index].colorKey
+                ?? Constants.defaultCategoryColorKeys[result[index].defaultName]
+            if let preferredKey,
+               CategoryColorPalette.isSupported(preferredKey),
+               !usedKeys.contains(preferredKey) {
+                result[index].colorKey = preferredKey
+                usedKeys.insert(preferredKey)
+            } else {
+                let colorKey = CategoryColorPalette.nextAvailableKey(usedKeys: usedKeys)
+                result[index].colorKey = colorKey
+                usedKeys.insert(colorKey)
+            }
+        }
+        return result
+    }
+
     private func save() {
         if let data = try? JSONEncoder().encode(categories) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+            userDefaults.set(data, forKey: storageKey)
         }
     }
 
