@@ -26,6 +26,11 @@ final class FocusSession {
     // 성취 목표에 연결된 할 일. 관계 대신 UUID와 제목 스냅샷을 저장해 삭제된 Memo도 설명할 수 있게 한다.
     var linkedMemoID: UUID?
     var taskTitleSnapshot: String?
+    /// 집중(focusing) 동안 키보드·마우스 입력이 있었던 초. 유휴(입력 없음) 시간은 빼고 센다.
+    /// nil = 이 기능 도입 이전에 만들어진 기록(입력 데이터 없음).
+    var inputActiveSeconds: Int?
+    /// 몰입 지도에서 이 세션 점에 쓸 사용자 지정 색 키. nil = 카테고리 기본색.
+    var markerColorKey: String?
 
     init(
         focusMinutes: Int,
@@ -42,6 +47,8 @@ final class FocusSession {
         self.category = category
         self.linkedMemoID = linkedMemoID
         self.taskTitleSnapshot = linkedMemoID == nil ? nil : Self.normalizedText(taskTitleSnapshot)
+        self.inputActiveSeconds = nil
+        self.markerColorKey = nil
     }
 
     private static func normalizedText(_ value: String?) -> String? {

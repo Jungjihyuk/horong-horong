@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import CoreGraphics
 
 private struct PomodoroTaskContext {
     let linkedMemoID: UUID
@@ -62,6 +63,7 @@ final class TimerManager: @unchecked Sendable {
             taskTitleSnapshot: taskTitleSnapshot
         )
         currentSession = session
+        focusInputActiveSeconds = 0
         modelContext?.insert(session)
         try? modelContext?.save()
 
@@ -149,6 +151,11 @@ final class TimerManager: @unchecked Sendable {
     }
 
     private func tick() {
+        // 집중 중인 1초마다 시스템 유휴 시간을 확인해, 최근에 입력이 있었으면 "입력 중"으로 센다.
+        if appState.timerState == .focusing, appState.remainingSeconds > 0,
+           currentIdleSeconds() < Self.inputActiveThresholdSeconds {
+            focusInputActiveSeconds += 1
+        }
         if appState.remainingSeconds > 0 {
             appState.remainingSeconds -= 1
         } else {
@@ -156,6 +163,18 @@ final class TimerManager: @unchecked Sendable {
             timer = nil
             handleTimerComplete()
         }
+    }
+
+    /// 집중 동안 키보드·마우스 입력이 있었던 초의 누적값. 세션 완료 시 FocusSession 에 저장한다.
+    private var focusInputActiveSeconds = 0
+
+    /// 마지막 입력 후 이 시간(초) 이내면 "입력 중"으로 본다. 틱 간격(1초)보다 살짝 크게 둔다.
+    private static let inputActiveThresholdSeconds: TimeInterval = 2
+
+    /// 마지막 입력(키보드/마우스) 후 경과 초. 권한이 필요 없는 시스템 유휴 타이머를 읽는다.
+    private func currentIdleSeconds() -> TimeInterval {
+        guard let anyType = CGEventType(rawValue: ~0) else { return 0 }
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyType)
     }
 
     private func handleTimerComplete() {
@@ -174,6 +193,7 @@ final class TimerManager: @unchecked Sendable {
                 } else {
                     lastCompletedTaskContext = nil
                 }
+                session.inputActiveSeconds = focusInputActiveSeconds
                 try? modelContext?.save()
                 // 완료된 집중 세션을 통계(AppUsageRecord)에 반영한다.
                 recordCompletedFocus(session: session)

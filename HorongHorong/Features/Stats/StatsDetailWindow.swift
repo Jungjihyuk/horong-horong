@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import OSLog
+import Charts
 
 private struct StatsLoadCacheKey: Hashable {
     let mode: StatsViewMode
@@ -30,6 +31,11 @@ enum PomodoroComparisonSegmentScope {
     }
 }
 
+enum StatsContentMode {
+    case period
+    case focus
+}
+
 struct StatsDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(Constants.AppStorageKey.popoverTheme)
@@ -48,6 +54,7 @@ struct StatsDetailWindow: View {
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var attentionDaySummaries: [AttentionDaySummary] = []
     @State private var showEditor: Bool = false
+    @State private var contentMode: StatsContentMode = .period
     @State private var hoveredViewMode: StatsViewMode?
     @State private var trackerStore = TrackerStateStore.shared
     @State private var loadCache: [StatsLoadCacheKey: StatsLoadedData] = [:]
@@ -63,37 +70,52 @@ struct StatsDetailWindow: View {
         _viewMode = State(initialValue: initialViewMode)
     }
 
+    private var showsVacationIllustration: Bool {
+        shouldShowVacationIllustration && contentMode == .period
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if !shouldShowVacationIllustration {
+            if contentMode == .period, !shouldShowVacationIllustration {
                 vacationBanner
             }
             ZStack {
                 ScrollView {
-                    StatsChartView(
-                        records: records,
-                        viewMode: viewMode,
-                        referenceDate: selectedDate,
-                        dailySegments: dailySegments,
-                        weekSegments: weekSegments,
-                        periodSegments: periodSegments,
-                        pomodoroComparisonSessions: pomodoroComparisonSessions,
-                        timerSessions: timerSessions,
-                        pomodoroReflections: pomodoroReflections,
-                        pomodoroTaskCompletions: pomodoroTaskCompletions,
-                        breakTransitionIntents: breakTransitionIntents,
-                        aggregateSnapshot: aggregateSnapshot,
-                        attentionDaySummaries: attentionDaySummaries,
-                        vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
-                    )
+                    Group {
+                        if contentMode == .focus {
+                            FocusDetailView(
+                                sessions: pomodoroComparisonSessions,
+                                reflections: pomodoroReflections,
+                                viewMode: viewMode,
+                                referenceDate: selectedDate
+                            )
+                        } else {
+                            StatsChartView(
+                                records: records,
+                                viewMode: viewMode,
+                                referenceDate: selectedDate,
+                                dailySegments: dailySegments,
+                                weekSegments: weekSegments,
+                                periodSegments: periodSegments,
+                                pomodoroComparisonSessions: pomodoroComparisonSessions,
+                                timerSessions: timerSessions,
+                                pomodoroReflections: pomodoroReflections,
+                                pomodoroTaskCompletions: pomodoroTaskCompletions,
+                                breakTransitionIntents: breakTransitionIntents,
+                                aggregateSnapshot: aggregateSnapshot,
+                                attentionDaySummaries: attentionDaySummaries,
+                                vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
+                            )
+                        }
+                    }
                     .padding(20)
                 }
-                .opacity(shouldShowVacationIllustration ? 0 : 1)
-                .allowsHitTesting(!shouldShowVacationIllustration)
-                .accessibilityHidden(shouldShowVacationIllustration)
+                .opacity(showsVacationIllustration ? 0 : 1)
+                .allowsHitTesting(!showsVacationIllustration)
+                .accessibilityHidden(showsVacationIllustration)
 
-                if shouldShowVacationIllustration {
+                if showsVacationIllustration {
                     // 일러스트 자체가 휴가 컨텍스트를 충분히 전달하므로 상단 배너는 생략.
                     vacationIllustration
                 }
@@ -267,6 +289,21 @@ struct StatsDetailWindow: View {
             dateNavigator
 
             Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    contentMode = contentMode == .focus ? .period : .focus
+                }
+            } label: {
+                Label(
+                    contentMode == .focus ? "통계로" : "몰입",
+                    systemImage: contentMode == .focus ? "chevron.left" : "scope"
+                )
+            }
+            .buttonStyle(LanternSecondaryButtonStyle())
+            .controlSize(.small)
+            .fixedSize()
+            .help(contentMode == .focus ? "기간 통계로 돌아갑니다" : "이 기간의 몰입 세션을 자세히 봅니다")
+
+            Button {
                 showEditor = true
             } label: {
                 Label("편집", systemImage: "pencil")
@@ -355,6 +392,7 @@ struct StatsDetailWindow: View {
             }
             .buttonStyle(LanternSecondaryButtonStyle())
             .controlSize(.small)
+            .fixedSize()
         }
     }
 
@@ -895,6 +933,644 @@ struct StatsDetailWindow: View {
                 return nil
             }
             return (start, end)
+        }
+    }
+}
+
+// MARK: - 몰입 상세 (몰입 지도 + 세션별 지표)
+
+/// 몰입 지도 가로축 후보. `입력 활동`은 아직 수집하지 않아 비활성(준비 중).
+enum FocusSessionMetric: String, CaseIterable, Identifiable {
+    case continuousFocus
+    case appSwitches
+    case inputActivity
+    case appCount
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .continuousFocus: return "연속 몰입"
+        case .appSwitches: return "앱 전환"
+        case .inputActivity: return "입력 활동"
+        case .appCount: return "사용 앱 수"
+        }
+    }
+
+    var axisLabel: String {
+        switch self {
+        case .continuousFocus: return "연속 몰입 (분) →"
+        case .appSwitches: return "앱 전환 (회) →"
+        case .inputActivity: return "입력 활동 (%) →"
+        case .appCount: return "사용 앱 수 (개) →"
+        }
+    }
+
+    var isAvailable: Bool { true }
+
+    func value(_ row: FocusSessionRow) -> Double {
+        switch self {
+        case .continuousFocus: return row.continuousFocusMinutes
+        case .appSwitches: return Double(row.observation.appSwitchCount)
+        case .inputActivity: return (row.inputActivityRatio ?? 0) * 100
+        case .appCount: return Double(row.observation.apps.count)
+        }
+    }
+
+    /// 이 지표를 지도에 그릴 값이 있는지. 입력 활동은 수집된 세션만 그린다.
+    func hasValue(_ row: FocusSessionRow) -> Bool {
+        switch self {
+        case .inputActivity: return row.inputActivityRatio != nil
+        default: return true
+        }
+    }
+}
+
+/// 몰입 지도·세션 리스트가 쓰는 한 세션의 파생 지표. 모두 observation 에서 계산.
+/// 몰입 지도 점에 쓸 수 있는 사용자 지정 색 팔레트. 저장은 key 문자열로 한다.
+struct FocusMarkerColor: Identifiable {
+    let key: String
+    let name: String
+    let color: Color
+    var id: String { key }
+}
+
+enum FocusMarkerPalette {
+    static let colors: [FocusMarkerColor] = [
+        .init(key: "blue", name: "파랑", color: .blue),
+        .init(key: "teal", name: "청록", color: .teal),
+        .init(key: "green", name: "초록", color: .green),
+        .init(key: "yellow", name: "노랑", color: .yellow),
+        .init(key: "orange", name: "주황", color: .orange),
+        .init(key: "red", name: "빨강", color: .red),
+        .init(key: "pink", name: "분홍", color: .pink),
+        .init(key: "purple", name: "보라", color: .purple),
+        .init(key: "gray", name: "회색", color: .gray),
+    ]
+
+    static func color(forKey key: String?) -> Color? {
+        guard let key else { return nil }
+        return colors.first { $0.key == key }?.color
+    }
+}
+
+struct FocusSessionRow: Identifiable {
+    let id: UUID
+    let title: String
+    let category: String
+    let startedAt: Date
+    let durationSeconds: Int
+    let rating: Int?
+    let observation: PomodoroSessionObservation
+    let inputActivityRatio: Double?
+    let markerColorKey: String?
+
+    var inputActivityPercent: Int? {
+        inputActivityRatio.map { Int(($0 * 100).rounded()) }
+    }
+
+    var continuousFocusMinutes: Double {
+        Double(observation.longestContinuousAppUsage?.durationSeconds ?? 0) / 60
+    }
+    var activeRatio: Double {
+        observation.sessionSeconds > 0
+            ? Double(observation.recordedSeconds) / Double(observation.sessionSeconds)
+            : 0
+    }
+    var minutesPerSwitch: Double? {
+        guard observation.appSwitchCount > 0 else { return nil }
+        return Double(observation.attributedSeconds) / Double(observation.appSwitchCount) / 60
+    }
+    var appCount: Int { observation.apps.count }
+    var hasComparableRecord: Bool { observation.recordedSeconds > 0 }
+    var color: Color {
+        FocusMarkerPalette.color(forKey: markerColorKey) ?? Constants.categoryColor(for: category)
+    }
+    var emoji: String { Constants.categoryEmoji(for: category) }
+}
+
+/// 회고(`focusExperience`)를 1–5 몰입 점수로. `unsure`/미작성은 값 없음(지도 제외).
+private func focusRating(_ experience: PomodoroFocusExperience?) -> Int? {
+    switch experience {
+    case .deeplyFocused: return 4
+    case .mostlyFocused: return 3
+    case .frequentlyDistracted: return 2
+    case .difficultToFocus: return 1
+    case .unsure, .none: return nil
+    }
+}
+
+private let focusTimeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
+
+/// 세로축(몰입 점수)에 마우스를 올리면 보여줄 설명. 점수는 종료 회고와 1:1로 대응한다.
+private let focusScoreLegend = """
+몰입 점수 = 포모도로가 끝난 뒤 고른 집중 경험
+4 · 깊게 몰입했어요
+3 · 대체로 집중했어요
+2 · 자주 흐트러졌어요
+1 · 집중하기 어려웠어요
+‘잘 모르겠어요’는 지도에서 빼요
+"""
+
+struct FocusDetailView: View {
+    let sessions: [PomodoroSessionBreakdown]
+    let reflections: [PomodoroReflection]
+    let viewMode: StatsViewMode
+    let referenceDate: Date
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var xMetric: FocusSessionMetric = .continuousFocus
+    @State private var selectedSessionID: UUID?
+    @State private var showsScoreInfo = false
+    @State private var colorPickerSessionID: UUID?
+
+    private var rows: [FocusSessionRow] {
+        let reflectionByID = Dictionary(
+            reflections.map { ($0.focusSessionID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return sessions.compactMap { session -> FocusSessionRow? in
+            guard let reflection = reflectionByID[session.id] else { return nil }
+            return FocusSessionRow(
+                id: session.id,
+                title: session.taskTitle ?? "\(session.category) 세션",
+                category: session.category,
+                startedAt: session.startedAt,
+                durationSeconds: session.durationSeconds,
+                rating: focusRating(reflection.focusExperience),
+                observation: session.observation,
+                inputActivityRatio: session.inputActivityRatio,
+                markerColorKey: session.markerColorKey
+            )
+        }
+        .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    private var mapRows: [FocusSessionRow] {
+        rows.filter { $0.rating != nil && $0.hasComparableRecord }
+    }
+
+    /// 선택한 가로축 지표로 실제 그릴 수 있는 세션(예: 입력 활동은 수집된 세션만).
+    private var plottedRows: [FocusSessionRow] {
+        mapRows.filter { xMetric.hasValue($0) }
+    }
+
+    private var selectedRow: FocusSessionRow? {
+        selectedSessionID.flatMap { id in rows.first { $0.id == id } }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if rows.isEmpty {
+                emptyState
+            } else {
+                focusMapCard
+                sessionListSection
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "scope")
+                .font(.largeTitle)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            Text("이 기간에 회고를 남긴 포모도로가 없어요.")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+            Text("포모도로가 끝난 뒤 집중 경험을 선택하면 몰입 지도에서 볼 수 있어요.")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+    }
+
+    // MARK: 몰입 지도
+
+    private var focusMapCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("몰입 지도")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                scoreInfoButton
+                Spacer()
+                Text("↑ 위로 갈수록 내가 느낀 몰입이 높아요 · 원이 클수록 오래 집중")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            HStack(spacing: 8) {
+                Text("가로 기준")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                ForEach(FocusSessionMetric.allCases) { metric in
+                    metricChip(metric)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if mapRows.isEmpty {
+                Text("아직 몰입 점수를 매긴 세션이 없어요. (‘잘 모르겠음’ 회고만 있거나 앱 기록이 부족해요)")
+                    .font(.callout)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 30)
+            } else if plottedRows.isEmpty {
+                Text("이 기간에는 ‘입력 활동’을 기록한 세션이 아직 없어요.")
+                    .font(.callout)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 30)
+            } else {
+                focusChart
+            }
+
+            if let selected = selectedRow {
+                selectedDetailLine(selected)
+            } else {
+                Text("점을 누르면 그 세션의 상세가 보여요. 원이 클수록 전환 없이 오래 집중한 세션이에요.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .popoverCard(padding: 16)
+    }
+
+    /// 세로축(몰입 점수)이 무슨 뜻인지 알려주는 ⓘ. 마우스를 올리면 툴팁, 누르면 팝오버.
+    private var scoreInfoButton: some View {
+        Button {
+            showsScoreInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+        }
+        .buttonStyle(.plain)
+        .help(focusScoreLegend)
+        .popover(isPresented: $showsScoreInfo) {
+            scoreLegendPopover
+        }
+        .accessibilityLabel("몰입 점수 설명")
+    }
+
+    private var scoreLegendPopover: some View {
+        let scores = [4, 3, 2, 1]
+        let labels = ["깊게 몰입했어요", "대체로 집중했어요", "자주 흐트러졌어요", "집중하기 어려웠어요"]
+        return VStack(alignment: .leading, spacing: 7) {
+            Text("몰입 점수 = 세로축")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+            Text("포모도로가 끝난 뒤 고른 집중 경험이에요.")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(scores.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    Text("\(scores[index])")
+                        .font(.callout.weight(.bold))
+                        .monospacedDigit()
+                        .frame(width: 14, alignment: .trailing)
+                        .foregroundStyle(PopoverChrome.accent)
+                    Text(labels[index])
+                        .font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
+                }
+            }
+            Text("‘잘 모르겠어요’는 몰입 점수가 없어 지도에서 빼요.")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(width: 250)
+    }
+
+    private func metricChip(_ metric: FocusSessionMetric) -> some View {
+        let selected = xMetric == metric
+        return Button {
+            if metric.isAvailable { xMetric = metric }
+        } label: {
+            HStack(spacing: 4) {
+                Text(metric.title)
+                if !metric.isAvailable {
+                    Text("준비 중")
+                        .font(.caption2)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(PopoverChrome.divider, in: Capsule())
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .foregroundStyle(
+                !metric.isAvailable
+                    ? PopoverChrome.inkTertiary
+                    : (selected ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
+            )
+            .background(
+                selected ? PopoverChrome.selectionFill : PopoverChrome.surface,
+                in: Capsule()
+            )
+            .overlay(Capsule().stroke(PopoverChrome.divider, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(!metric.isAvailable)
+        .help(metric.isAvailable ? "가로축을 이 지표로 바꿉니다" : "입력 활동은 아직 수집하지 않아요 (준비 중)")
+    }
+
+    private var focusChart: some View {
+        let xMax = max(1, plottedRows.map { xMetric.value($0) }.max() ?? 1)
+        let maxMinutes = max(1, plottedRows.map(\.continuousFocusMinutes).max() ?? 1)
+        return Chart(plottedRows) { row in
+            PointMark(
+                x: .value(xMetric.title, xMetric.value(row)),
+                y: .value("몰입", Double(row.rating ?? 0))
+            )
+            .symbolSize(60 + (row.continuousFocusMinutes / maxMinutes) * 340)
+            .foregroundStyle(row.color)
+            .opacity(selectedSessionID == nil || selectedSessionID == row.id ? 0.9 : 0.28)
+        }
+        .chartXScale(domain: -(xMax * 0.08)...(xMax * 1.1))
+        .chartYScale(domain: 0.5...4.5)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [1, 2, 3, 4]) {
+                AxisGridLine()
+                AxisValueLabel()
+            }
+        }
+        .chartXAxisLabel(xMetric.axisLabel, alignment: .trailing)
+        .frame(height: 300)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        SpatialTapGesture().onEnded { event in
+                            selectNearest(to: event.location, proxy: proxy, geo: geo)
+                        }
+                    )
+            }
+        }
+    }
+
+    private func selectNearest(to location: CGPoint, proxy: ChartProxy, geo: GeometryProxy) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let origin = geo[plotFrame].origin
+        let point = CGPoint(x: location.x - origin.x, y: location.y - origin.y)
+        var best: (id: UUID, distance: CGFloat)?
+        for row in plottedRows {
+            guard let px = proxy.position(forX: xMetric.value(row)),
+                  let py = proxy.position(forY: Double(row.rating ?? 0)) else { continue }
+            let distance = hypot(px - point.x, py - point.y)
+            if best == nil || distance < best!.distance {
+                best = (row.id, distance)
+            }
+        }
+        if let best, best.distance < 44 {
+            selectedSessionID = (selectedSessionID == best.id) ? nil : best.id
+        } else {
+            selectedSessionID = nil
+        }
+    }
+
+    private func selectedDetailLine(_ row: FocusSessionRow) -> some View {
+        var parts: [String] = [focusTimeFormatter.string(from: row.startedAt)]
+        if let rating = row.rating { parts.append("자기평가 \(rating)/4") }
+        parts.append("연속 \(Int(row.continuousFocusMinutes))분")
+        if let mps = row.minutesPerSwitch {
+            parts.append("전환당 \(String(format: "%.1f", mps))분")
+        }
+        parts.append("활성 \(Int((row.activeRatio * 100).rounded()))%")
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(row.emoji) \(row.title)")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+            Text("· " + parts.joined(separator: " · "))
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+    }
+
+    // MARK: 세션별 지표
+
+    private var sessionListSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("세션별 지표")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("내 평가 + 측정값 그대로")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+            ForEach(rows) { row in
+                sessionCard(row)
+            }
+        }
+    }
+
+    /// 세션 카드의 색 스와치. 누르면 팔레트 팝오버로 이 세션의 지도 점 색을 바꾼다.
+    private func colorSwatchButton(for row: FocusSessionRow) -> some View {
+        Button {
+            colorPickerSessionID = row.id
+        } label: {
+            Circle()
+                .fill(row.color)
+                .frame(width: 11, height: 11)
+                .overlay(Circle().stroke(PopoverChrome.divider, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help("이 세션의 몰입 지도 점 색을 바꿉니다")
+        .popover(isPresented: Binding(
+            get: { colorPickerSessionID == row.id },
+            set: { if !$0 { colorPickerSessionID = nil } }
+        )) {
+            colorSwatchPicker(for: row)
+        }
+    }
+
+    private func colorSwatchPicker(for row: FocusSessionRow) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("점 색상")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(26), spacing: 8), count: 5),
+                spacing: 8
+            ) {
+                swatch(
+                    color: Constants.categoryColor(for: row.category),
+                    selected: row.markerColorKey == nil,
+                    isDefault: true
+                ) { setMarkerColor(nil, for: row) }
+                ForEach(FocusMarkerPalette.colors) { item in
+                    swatch(
+                        color: item.color,
+                        selected: row.markerColorKey == item.key,
+                        isDefault: false
+                    ) { setMarkerColor(item.key, for: row) }
+                }
+            }
+            Text("점선 = 카테고리 기본색")
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+        }
+        .padding(14)
+        .frame(width: 208)
+    }
+
+    private func swatch(
+        color: Color,
+        selected: Bool,
+        isDefault: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Circle().strokeBorder(
+                        PopoverChrome.inkSecondary,
+                        style: StrokeStyle(lineWidth: 1.5, dash: isDefault ? [3, 2] : [])
+                    )
+                    .opacity(isDefault ? 1 : 0.15)
+                )
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .opacity(selected ? 1 : 0)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(isDefault ? "카테고리 기본색" : "")
+    }
+
+    private func setMarkerColor(_ key: String?, for row: FocusSessionRow) {
+        colorPickerSessionID = nil
+        let id = row.id
+        var descriptor = FetchDescriptor<FocusSession>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let session = try? modelContext.fetch(descriptor).first else { return }
+        session.markerColorKey = key
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
+    }
+
+    private func sessionCard(_ row: FocusSessionRow) -> some View {
+        let isSelected = selectedSessionID == row.id
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                colorSwatchButton(for: row)
+                Text("\(row.emoji) \(row.title)")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                ratingDots(row.rating)
+                Text("\(focusTimeFormatter.string(from: row.startedAt)) · \(row.durationSeconds / 60)분")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .monospacedDigit()
+            }
+
+            ViewThatFits(in: .horizontal) {
+                sessionMetricRow(row)
+                sessionMetricRow(row, wrap: true)
+            }
+        }
+        .padding(12)
+        .background(
+            isSelected ? PopoverChrome.selectionFill.opacity(0.25) : PopoverChrome.card,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    isSelected ? PopoverChrome.accent : PopoverChrome.divider,
+                    lineWidth: isSelected ? 1.5 : 1
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedSessionID = isSelected ? nil : row.id
+        }
+    }
+
+    @ViewBuilder
+    private func sessionMetricRow(_ row: FocusSessionRow, wrap: Bool = false) -> some View {
+        let items: [(String, Bool)] = {
+            var result: [(String, Bool)] = [
+                ("연속 \(Int(row.continuousFocusMinutes))분", false),
+                ("전환 \(row.observation.appSwitchCount)회", false),
+                ("앱 \(row.appCount)개", false),
+                ("활성 \(Int((row.activeRatio * 100).rounded()))%", false),
+            ]
+            if let mps = row.minutesPerSwitch {
+                result.append(("전환당 \(String(format: "%.1f", mps))분", false))
+            }
+            if let pct = row.inputActivityPercent {
+                result.append(("입력 \(pct)%", false))
+            } else {
+                result.append(("입력 —", true))
+            }
+            result.append(("휴식 준비 중", true))
+            return result
+        }()
+
+        if wrap {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    metricLabel(item.0, pending: item.1)
+                }
+            }
+        } else {
+            HStack(spacing: 10) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    metricLabel(item.0, pending: item.1)
+                }
+            }
+        }
+    }
+
+    private func metricLabel(_ text: String, pending: Bool) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(pending ? PopoverChrome.inkTertiary : PopoverChrome.inkSecondary)
+            .monospacedDigit()
+    }
+
+    private func ratingDots(_ rating: Int?) -> some View {
+        HStack(spacing: 3) {
+            if let rating {
+                ForEach(1...4, id: \.self) { index in
+                    Circle()
+                        .fill(index <= rating ? PopoverChrome.accent : PopoverChrome.divider)
+                        .frame(width: 7, height: 7)
+                }
+            } else {
+                Text("—")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
         }
     }
 }
