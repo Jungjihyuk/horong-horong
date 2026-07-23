@@ -100,6 +100,29 @@ struct CategoryMappingPage: View {
             .frame(width: 100)
             .disabled(category.defaultName == "기타")
 
+            Menu {
+                ForEach(selectableColorOptions) { option in
+                    Button {
+                        _ = categoryStore.setColorKey(option.key, for: category.name)
+                    } label: {
+                        Label(
+                            option.name,
+                            systemImage: category.colorKey == option.key
+                                ? "checkmark.circle.fill"
+                                : "circle.fill"
+                        )
+                    }
+                }
+            } label: {
+                Circle()
+                    .fill(CategoryColorPalette.color(for: category.colorKey))
+                    .frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 1))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("카테고리 색상 변경")
+
             if category.defaultName != category.name
                 || category.emoji != (Constants.categoryEmoji[category.defaultName] ?? category.emoji) {
                 Button {
@@ -452,6 +475,16 @@ struct CategoryMappingPage: View {
     }
 
     // MARK: - Derived
+
+    private var selectableColorOptions: [CategoryColorOption] {
+        let generatedKeys = Set(
+            categoryStore.categories
+                .compactMap(\.colorKey)
+                .filter(CategoryColorPalette.isGenerated)
+        )
+        return CategoryColorPalette.options
+            + generatedKeys.sorted().compactMap(CategoryColorPalette.option)
+    }
 
     private var groupedCategoryRules: [(category: String, rules: [AppCategoryRule])] {
         let grouped = Dictionary(grouping: categoryRules) { $0.category }
