@@ -1248,6 +1248,47 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(saved.markerColorKey, "purple")
     }
 
+    @MainActor
+    func testResetMarkerColorsOnlyAffectsSelectedCategory() throws {
+        let schema = Schema([FocusSession.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+
+        let customizedDevelopment = FocusSession(
+            focusMinutes: 50,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        customizedDevelopment.markerColorKey = "purple"
+        let defaultDevelopment = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        let customizedStudy = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "공부"
+        )
+        customizedStudy.markerColorKey = "pink"
+
+        context.insert(customizedDevelopment)
+        context.insert(defaultDevelopment)
+        context.insert(customizedStudy)
+        try context.save()
+
+        let resetCount = try FocusSession.resetMarkerColors(
+            for: "개발",
+            in: context
+        )
+
+        XCTAssertEqual(resetCount, 1)
+        XCTAssertNil(customizedDevelopment.markerColorKey)
+        XCTAssertNil(defaultDevelopment.markerColorKey)
+        XCTAssertEqual(customizedStudy.markerColorKey, "pink")
+    }
+
     func testPomodoroTaskCandidatesIncludeGoalLinkedAndTodayTasksOnce() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -1639,6 +1680,12 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(observation.ambiguousOverlapSeconds, 0)
         XCTAssertEqual(observation.userModifiedRecordedSeconds, 0)
         XCTAssertEqual(observation.appSwitchCount, 2)
+        XCTAssertEqual(observation.appUsageRunCount, 3)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            8 * 60,
+            accuracy: 0.001
+        )
         XCTAssertEqual(observation.categorySwitchCount, 2)
         XCTAssertEqual(
             observation.categoryTransitions,
@@ -1705,6 +1752,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(observation.ambiguousOverlapSeconds, 0)
         XCTAssertEqual(observation.userModifiedRecordedSeconds, 0)
         XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appUsageRunCount, 0)
+        XCTAssertNil(observation.averageAppUsageRunSeconds)
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(observation.categoryTransitions, [])
         XCTAssertNil(observation.longestContinuousAppUsage)
@@ -1744,7 +1793,13 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(observation.unrecordedSeconds, 10 * 60)
         XCTAssertEqual(observation.ambiguousOverlapSeconds, 5 * 60)
         XCTAssertEqual(observation.userModifiedRecordedSeconds, 10 * 60)
-        XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appSwitchCount, 1)
+        XCTAssertEqual(observation.appUsageRunCount, 2)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            5 * 60,
+            accuracy: 0.001
+        )
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(observation.categoryTransitions, [])
         XCTAssertEqual(observation.apps.reduce(0) { $0 + $1.durationSeconds }, 10 * 60)
@@ -1760,7 +1815,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
-    func testPomodoroSessionObservationDoesNotInventSwitchAcrossGap() {
+    func testPomodoroSessionObservationCountsObservedAppChangeAcrossGap() {
         let start = Date(timeIntervalSince1970: 1_800_400_000)
         let end = start.addingTimeInterval(25 * 60)
         let segments = [
@@ -1793,7 +1848,13 @@ final class ConstantsDefaultsTests: XCTestCase {
             segments: segments
         )
 
-        XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appSwitchCount, 1)
+        XCTAssertEqual(observation.appUsageRunCount, 2)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            7 * 60,
+            accuracy: 0.001
+        )
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(observation.categoryTransitions, [])
         XCTAssertEqual(
@@ -1886,7 +1947,197 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
-    func testPomodoroSessionObservationDoesNotBridgeMinimumSegmentGap() {
+    func testPomodoroSessionObservationCountsUnclassifiedAppsWithoutInventingCategoryTransitions() {
+        let start = Date(timeIntervalSince1970: 1_800_625_000)
+        let end = start.addingTimeInterval(15 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Xcode",
+                bundleIdentifier: "com.apple.dt.Xcode",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: Constants.unclassifiedAppCategory,
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: start.addingTimeInterval(10 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Slack",
+                bundleIdentifier: "com.tinyspeck.slackmacgap",
+                category: "업무",
+                startTime: start.addingTimeInterval(10 * 60),
+                endTime: end
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.recordedSeconds, 15 * 60)
+        XCTAssertEqual(observation.appSwitchCount, 2)
+        XCTAssertEqual(observation.appUsageRunCount, 3)
+        XCTAssertEqual(observation.categorySwitchCount, 0)
+        XCTAssertEqual(observation.categoryTransitions, [])
+        XCTAssertEqual(observation.apps.count, 3)
+        XCTAssertEqual(
+            observation.apps.first { $0.appName == "Orca" }?.durationSeconds,
+            5 * 60
+        )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationCollapsesSameAppAcrossRecordingGaps() {
+        let start = Date(timeIntervalSince1970: 1_800_640_000)
+        let end = start.addingTimeInterval(20 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: start.addingTimeInterval(7 * 60),
+                endTime: start.addingTimeInterval(11 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: start.addingTimeInterval(15 * 60),
+                endTime: start.addingTimeInterval(18 * 60)
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.recordedSeconds, 12 * 60)
+        XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appUsageRunCount, 1)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            12 * 60,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            observation.longestContinuousAppUsage?.durationSeconds,
+            5 * 60
+        )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationBridgesShortProductivityManagementInteraction() {
+        let start = Date(timeIntervalSince1970: 1_800_645_000)
+        let managementSeconds = Constants.productivityManagementShortInteractionSeconds - 1
+        let secondAppStart = start.addingTimeInterval(5 * 60 + managementSeconds)
+        let end = secondAppStart.addingTimeInterval(5 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "미리알림",
+                bundleIdentifier: "com.apple.reminders",
+                category: Constants.productivityManagementAppCategory,
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: secondAppStart
+            ),
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: secondAppStart,
+                endTime: end
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appUsageRunCount, 1)
+        XCTAssertEqual(observation.categorySwitchCount, 0)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            10 * 60 + managementSeconds,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            observation.apps.first { $0.appName == "미리알림" }?.durationSeconds,
+            Int(managementSeconds)
+        )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationCountsLongProductivityManagementInteraction() {
+        let start = Date(timeIntervalSince1970: 1_800_647_000)
+        let managementSeconds = Constants.productivityManagementShortInteractionSeconds
+        let secondAppStart = start.addingTimeInterval(5 * 60 + managementSeconds)
+        let end = secondAppStart.addingTimeInterval(5 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "미리알림",
+                bundleIdentifier: "com.apple.reminders",
+                category: Constants.productivityManagementAppCategory,
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: secondAppStart
+            ),
+            AppUsageSegment(
+                appName: "Orca",
+                bundleIdentifier: "com.stablyai.orca",
+                category: "개발",
+                startTime: secondAppStart,
+                endTime: end
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.appSwitchCount, 2)
+        XCTAssertEqual(observation.appUsageRunCount, 3)
+        XCTAssertEqual(observation.categorySwitchCount, 0)
+        XCTAssertEqual(
+            observation.averageAppUsageRunSeconds ?? -1,
+            (10 * 60 + managementSeconds) / 3,
+            accuracy: 0.001
+        )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationCountsAppChangeAcrossMinimumSegmentGap() {
         let start = Date(timeIntervalSince1970: 1_800_650_000)
         let end = start.addingTimeInterval(25 * 60)
         let segments = [
@@ -1917,7 +2168,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
 
         XCTAssertEqual(AppTracker.minimumSegmentSeconds, 3)
-        XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appSwitchCount, 1)
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(observation.categoryTransitions, [])
     }
@@ -1943,6 +2194,344 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
         XCTAssertFalse(
             AppTracker.shouldPersistSegment(elapsed: -1, hasPreviousSegment: true)
+        )
+    }
+
+    func testHorongHorongIsRegisteredAsDefaultProductivityManagementApp() {
+        let rule = Constants.defaultCategoryRule(
+            for: Constants.horongHorongBundleIdentifier,
+            includingHidden: true
+        )
+
+        XCTAssertEqual(rule?.appName, "호롱호롱")
+        XCTAssertEqual(rule?.category, Constants.productivityManagementAppCategory)
+        XCTAssertEqual(
+            Constants.categoryEmoji(for: Constants.productivityManagementAppCategory),
+            "⏰"
+        )
+        XCTAssertTrue(
+            Constants.reservedCategoryNames.contains(
+                Constants.productivityManagementAppCategory
+            )
+        )
+    }
+
+    func testRemindersIsRegisteredAsDefaultProductivityManagementApp() {
+        let rule = Constants.defaultCategoryRule(
+            for: "com.apple.reminders",
+            includingHidden: true
+        )
+
+        XCTAssertEqual(rule?.appName, "미리알림")
+        XCTAssertEqual(rule?.category, Constants.productivityManagementAppCategory)
+    }
+
+    func testContextDependentAppsAreNotDefaultCategoryRules() {
+        let bundleIdentifiers = [
+            "com.apple.Preview",
+            "com.apple.iBooksX",
+            "com.google.Chrome",
+            "org.mozilla.firefox",
+            "com.apple.Safari",
+        ]
+
+        for bundleIdentifier in bundleIdentifiers {
+            XCTAssertNil(
+                Constants.defaultCategoryRule(
+                    for: bundleIdentifier,
+                    includingHidden: true
+                )
+            )
+        }
+    }
+
+    @MainActor
+    func testDefaultRuleReconciliationRemovesOnlyRetiredDefaults() throws {
+        let schema = Schema([AppCategoryRule.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let retiredDefault = AppCategoryRule(
+            bundleIdentifier: "com.apple.Safari",
+            appName: "Safari",
+            category: "공부"
+        )
+        let userRule = AppCategoryRule(
+            bundleIdentifier: "com.apple.iBooksX",
+            appName: "Books",
+            category: "공부",
+            isUserDefined: true
+        )
+        context.insert(retiredDefault)
+        context.insert(userRule)
+
+        try DefaultAppCategoryRuleStore.reconcile(in: context)
+
+        let rules = try context.fetch(FetchDescriptor<AppCategoryRule>())
+        XCTAssertFalse(
+            rules.contains {
+                $0.bundleIdentifier == retiredDefault.bundleIdentifier
+                    && !$0.isUserDefined
+            }
+        )
+        XCTAssertTrue(
+            rules.contains {
+                $0.bundleIdentifier == userRule.bundleIdentifier
+                    && $0.isUserDefined
+                    && $0.category == "공부"
+            }
+        )
+    }
+
+    @MainActor
+    func testLegacySupportCategoryMigratesToProductivityManagement() throws {
+        let schema = Schema([
+            AppCategoryRule.self,
+            AppUsageSegment.self,
+            AppUsageRecord.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let start = Date(timeIntervalSince1970: 1_800_665_000)
+        let rule = AppCategoryRule(
+            bundleIdentifier: Constants.horongHorongBundleIdentifier,
+            appName: "호롱호롱",
+            category: Constants.legacySupportAppCategory
+        )
+        let segment = AppUsageSegment(
+            appName: "호롱호롱",
+            bundleIdentifier: Constants.horongHorongBundleIdentifier,
+            category: Constants.legacySupportAppCategory,
+            startTime: start,
+            endTime: start.addingTimeInterval(30)
+        )
+        let record = AppUsageRecord(
+            appName: "호롱호롱",
+            bundleIdentifier: Constants.horongHorongBundleIdentifier,
+            category: Constants.legacySupportAppCategory,
+            date: start
+        )
+        context.insert(rule)
+        context.insert(segment)
+        context.insert(record)
+        try context.save()
+
+        CategoryManager.shared.loadUserRules(from: context)
+
+        XCTAssertEqual(rule.category, Constants.productivityManagementAppCategory)
+        XCTAssertEqual(segment.category, Constants.productivityManagementAppCategory)
+        XCTAssertEqual(record.category, Constants.productivityManagementAppCategory)
+    }
+
+    @MainActor
+    func testProductivityManagementAppSessionClassificationOnlyChangesOverlappingRange() throws {
+        let schema = Schema([AppUsageSegment.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let sessionStart = Date(timeIntervalSince1970: 1_800_670_000)
+        let sessionEnd = sessionStart.addingTimeInterval(10 * 60)
+        context.insert(AppUsageSegment(
+            appName: "미리알림",
+            bundleIdentifier: "com.apple.reminders",
+            category: Constants.productivityManagementAppCategory,
+            startTime: sessionStart.addingTimeInterval(-2 * 60),
+            endTime: sessionEnd.addingTimeInterval(2 * 60)
+        ))
+        try context.save()
+
+        XCTAssertEqual(
+            AppClassificationService.productivityManagementAppUsages(
+                from: sessionStart,
+                to: sessionEnd,
+                modelContext: context
+            ).first?.durationSeconds,
+            10 * 60
+        )
+
+        try AppClassificationService.prepareProductivityManagementAppSessionClassification(
+            bundleIdentifier: "com.apple.reminders",
+            from: sessionStart,
+            to: sessionEnd,
+            category: "개발",
+            modelContext: context
+        )
+        try context.save()
+
+        let segments = try context.fetch(
+            FetchDescriptor<AppUsageSegment>(
+                sortBy: [SortDescriptor(\.startTime)]
+            )
+        )
+        XCTAssertEqual(segments.count, 3)
+        XCTAssertEqual(segments.map(\.category), [
+            Constants.productivityManagementAppCategory,
+            "개발",
+            Constants.productivityManagementAppCategory,
+        ])
+        XCTAssertEqual(segments[0].startTime, sessionStart.addingTimeInterval(-2 * 60))
+        XCTAssertEqual(segments[0].endTime, sessionStart)
+        XCTAssertEqual(segments[1].startTime, sessionStart)
+        XCTAssertEqual(segments[1].endTime, sessionEnd)
+        XCTAssertTrue(segments[1].isUserModified)
+        XCTAssertEqual(segments[2].startTime, sessionEnd)
+        XCTAssertEqual(segments[2].endTime, sessionEnd.addingTimeInterval(2 * 60))
+    }
+
+    @MainActor
+    func testProductivityManagementUsageGroupsMultipleAppsForReflection() throws {
+        let schema = Schema([AppUsageSegment.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let sessionStart = Date(timeIntervalSince1970: 1_800_672_000)
+        let sessionEnd = sessionStart.addingTimeInterval(10 * 60)
+        context.insert(AppUsageSegment(
+            appName: "호롱호롱",
+            bundleIdentifier: Constants.horongHorongBundleIdentifier,
+            category: Constants.productivityManagementAppCategory,
+            startTime: sessionStart,
+            endTime: sessionStart.addingTimeInterval(70)
+        ))
+        context.insert(AppUsageSegment(
+            appName: "미리알림",
+            bundleIdentifier: "com.apple.reminders",
+            category: Constants.productivityManagementAppCategory,
+            startTime: sessionStart.addingTimeInterval(2 * 60),
+            endTime: sessionStart.addingTimeInterval(4 * 60)
+        ))
+        context.insert(AppUsageSegment(
+            appName: "짧은 확인",
+            bundleIdentifier: "com.example.short-check",
+            category: Constants.productivityManagementAppCategory,
+            startTime: sessionStart.addingTimeInterval(5 * 60),
+            endTime: sessionStart.addingTimeInterval(5 * 60 + 59)
+        ))
+        try context.save()
+
+        let usages = AppClassificationService.productivityManagementAppUsages(
+            from: sessionStart,
+            to: sessionEnd,
+            modelContext: context
+        )
+
+        XCTAssertEqual(usages.map(\.appName), ["미리알림", "호롱호롱"])
+        XCTAssertEqual(usages.map(\.durationSeconds), [120, 70])
+    }
+
+    @MainActor
+    func testClassifyingDiscoveredAppUpdatesRuleAndPastUnclassifiedUsage() throws {
+        let schema = Schema([
+            AppCategoryRule.self,
+            AppUsageSegment.self,
+            AppUsageRecord.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let bundleIdentifier = "test.unclassified.classify"
+        let start = Date(timeIntervalSince1970: 1_800_675_000)
+        let segment = AppUsageSegment(
+            appName: "새 IDE",
+            bundleIdentifier: bundleIdentifier,
+            category: Constants.unclassifiedAppCategory,
+            startTime: start,
+            endTime: start.addingTimeInterval(20 * 60)
+        )
+        let record = AppUsageRecord(
+            appName: "새 IDE",
+            bundleIdentifier: bundleIdentifier,
+            category: Constants.unclassifiedAppCategory,
+            date: start
+        )
+        record.durationSeconds = 20 * 60
+        context.insert(segment)
+        context.insert(record)
+        try context.save()
+
+        XCTAssertEqual(
+            AppClassificationService.unclassifiedApps(
+                from: start,
+                to: start.addingTimeInterval(20 * 60),
+                modelContext: context
+            ),
+            [
+                UnclassifiedAppUsage(
+                    bundleIdentifier: bundleIdentifier,
+                    appName: "새 IDE",
+                    durationSeconds: 20 * 60
+                )
+            ]
+        )
+
+        try AppClassificationService.classify(
+            bundleIdentifier: bundleIdentifier,
+            appName: "새 IDE",
+            category: "개발",
+            modelContext: context
+        )
+
+        let rules = try context.fetch(FetchDescriptor<AppCategoryRule>())
+        XCTAssertEqual(rules.count, 1)
+        XCTAssertEqual(rules.first?.bundleIdentifier, bundleIdentifier)
+        XCTAssertEqual(rules.first?.category, "개발")
+        XCTAssertEqual(rules.first?.isExcluded, false)
+        XCTAssertEqual(segment.category, "개발")
+        XCTAssertEqual(record.category, "개발")
+        XCTAssertEqual(
+            CategoryManager.shared.trackingClassification(for: bundleIdentifier),
+            .category("개발")
+        )
+    }
+
+    @MainActor
+    func testExcludingDiscoveredAppKeepsHistoryAndPersistsFutureExclusion() throws {
+        let schema = Schema([
+            AppCategoryRule.self,
+            AppUsageSegment.self,
+            AppUsageRecord.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let bundleIdentifier = "test.unclassified.exclude"
+        let start = Date(timeIntervalSince1970: 1_800_680_000)
+        context.insert(AppUsageSegment(
+            appName: "민감 앱",
+            bundleIdentifier: bundleIdentifier,
+            category: Constants.unclassifiedAppCategory,
+            startTime: start,
+            endTime: start.addingTimeInterval(5 * 60)
+        ))
+        let record = AppUsageRecord(
+            appName: "민감 앱",
+            bundleIdentifier: bundleIdentifier,
+            category: Constants.unclassifiedAppCategory,
+            date: start
+        )
+        record.durationSeconds = 5 * 60
+        context.insert(record)
+        try context.save()
+
+        try AppClassificationService.exclude(
+            bundleIdentifier: bundleIdentifier,
+            appName: "민감 앱",
+            modelContext: context
+        )
+
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<AppUsageSegment>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<AppUsageRecord>()), 1)
+        XCTAssertTrue(
+            AppClassificationService.allUnclassifiedApps(modelContext: context).isEmpty
+        )
+        let rule = try XCTUnwrap(
+            context.fetch(FetchDescriptor<AppCategoryRule>()).first
+        )
+        XCTAssertTrue(rule.isExcluded)
+        XCTAssertEqual(
+            CategoryManager.shared.trackingClassification(for: bundleIdentifier),
+            .excluded
         )
     }
 
@@ -1974,6 +2563,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
 
         XCTAssertEqual(observation.appSwitchCount, 0)
+        XCTAssertEqual(observation.appUsageRunCount, 1)
         XCTAssertEqual(observation.categorySwitchCount, 1)
         XCTAssertEqual(
             observation.apps,
@@ -2038,6 +2628,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                 ambiguousOverlapSeconds: 0,
                 userModifiedRecordedSeconds: 0,
                 appSwitchCount: 3,
+                appUsageRunCount: 4,
                 categorySwitchCount: 1,
                 categoryTransitions: [],
                 longestContinuousAppUsage: PomodoroContinuousAppUsage(
@@ -2064,6 +2655,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                 ambiguousOverlapSeconds: 0,
                 userModifiedRecordedSeconds: 0,
                 appSwitchCount: 2,
+                appUsageRunCount: 3,
                 categorySwitchCount: 0,
                 categoryTransitions: [],
                 longestContinuousAppUsage: PomodoroContinuousAppUsage(
@@ -2143,6 +2735,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                 ambiguousOverlapSeconds: 0,
                 userModifiedRecordedSeconds: 0,
                 appSwitchCount: 0,
+                appUsageRunCount: 1,
                 categorySwitchCount: 0,
                 categoryTransitions: [],
                 longestContinuousAppUsage: PomodoroContinuousAppUsage(
@@ -2169,6 +2762,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                 ambiguousOverlapSeconds: 0,
                 userModifiedRecordedSeconds: 0,
                 appSwitchCount: 0,
+                appUsageRunCount: 0,
                 categorySwitchCount: 0,
                 categoryTransitions: [],
                 longestContinuousAppUsage: nil,
@@ -2253,6 +2847,9 @@ final class ConstantsDefaultsTests: XCTestCase {
                     ambiguousOverlapSeconds: ambiguousSeconds,
                     userModifiedRecordedSeconds: 0,
                     appSwitchCount: appSwitchCount,
+                    appUsageRunCount: recordedSeconds > ambiguousSeconds
+                        ? appSwitchCount + 1
+                        : 0,
                     categorySwitchCount: categorySwitchCount,
                     categoryTransitions: [],
                     longestContinuousAppUsage: longestSeconds.map {
@@ -2455,6 +3052,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                     ambiguousOverlapSeconds: 0,
                     userModifiedRecordedSeconds: 0,
                     appSwitchCount: 1,
+                    appUsageRunCount: 2,
                     categorySwitchCount: 0,
                     categoryTransitions: [],
                     longestContinuousAppUsage: PomodoroContinuousAppUsage(
@@ -2592,6 +3190,9 @@ final class ConstantsDefaultsTests: XCTestCase {
                     ambiguousOverlapSeconds: ambiguousSeconds,
                     userModifiedRecordedSeconds: 0,
                     appSwitchCount: appSwitchCount,
+                    appUsageRunCount: recordedSeconds > ambiguousSeconds
+                        ? appSwitchCount + 1
+                        : 0,
                     categorySwitchCount: categorySwitchCount,
                     categoryTransitions: [],
                     longestContinuousAppUsage: longestSeconds.map {
@@ -2798,6 +3399,7 @@ final class ConstantsDefaultsTests: XCTestCase {
             ambiguousOverlapSeconds: 0,
             userModifiedRecordedSeconds: 0,
             appSwitchCount: 1,
+            appUsageRunCount: 2,
             categorySwitchCount: 1,
             categoryTransitions: [],
             longestContinuousAppUsage: PomodoroContinuousAppUsage(
@@ -2898,6 +3500,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                 ambiguousOverlapSeconds: ambiguousSeconds,
                 userModifiedRecordedSeconds: 0,
                 appSwitchCount: 1,
+                appUsageRunCount: attributedSeconds > 0 ? 2 : 0,
                 categorySwitchCount: 0,
                 categoryTransitions: [],
                 longestContinuousAppUsage: attributedSeconds > 0
@@ -2968,6 +3571,7 @@ final class ConstantsDefaultsTests: XCTestCase {
                     ambiguousOverlapSeconds: 0,
                     userModifiedRecordedSeconds: 0,
                     appSwitchCount: appSwitchCount,
+                    appUsageRunCount: recordedSeconds > 0 ? appSwitchCount + 1 : 0,
                     categorySwitchCount: 0,
                     categoryTransitions: [],
                     longestContinuousAppUsage: recordedSeconds > 0

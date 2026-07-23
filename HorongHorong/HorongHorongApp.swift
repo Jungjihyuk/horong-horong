@@ -467,21 +467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func seedDefaultCategoryRules(in context: ModelContext) {
-        let descriptor = FetchDescriptor<AppCategoryRule>()
-        let existingRules = (try? context.fetch(descriptor)) ?? []
-        let existingBundleIds = Set(existingRules.map(\.bundleIdentifier))
-
-        for rule in Constants.defaultCategoryRules where !Constants.isDefaultCategoryRuleHidden(rule.bundleId) {
-            guard !existingBundleIds.contains(rule.bundleId) else { continue }
-            let categoryRule = AppCategoryRule(
-                bundleIdentifier: rule.bundleId,
-                appName: rule.appName,
-                category: rule.category,
-                isUserDefined: false
-            )
-            context.insert(categoryRule)
-        }
-        try? context.save()
+        try? DefaultAppCategoryRuleStore.reconcile(in: context)
     }
 
     private func repairOrphanedPomodoroRecords(in context: ModelContext) {

@@ -939,7 +939,7 @@ struct StatsDetailWindow: View {
 
 // MARK: - 몰입 상세 (몰입 지도 + 세션별 지표)
 
-/// 몰입 지도 가로축 후보. `입력 활동`은 해당 데이터가 있는 세션만 표시한다.
+/// 몰입 지도 가로축 후보. `키보드·마우스 사용률`은 해당 데이터가 있는 세션만 표시한다.
 enum FocusSessionMetric: String, CaseIterable, Identifiable {
     case continuousFocus
     case appSwitches
@@ -952,7 +952,7 @@ enum FocusSessionMetric: String, CaseIterable, Identifiable {
         switch self {
         case .continuousFocus: return "연속 몰입"
         case .appSwitches: return "앱 전환"
-        case .inputActivity: return "입력 활동"
+        case .inputActivity: return "키보드·마우스 사용률"
         case .appCount: return "사용 앱 수"
         }
     }
@@ -961,7 +961,7 @@ enum FocusSessionMetric: String, CaseIterable, Identifiable {
         switch self {
         case .continuousFocus: return "연속 몰입 (분) →"
         case .appSwitches: return "앱 전환 (회) →"
-        case .inputActivity: return "입력 활동 (%) →"
+        case .inputActivity: return "키보드·마우스 사용률 (%) →"
         case .appCount: return "사용 앱 수 (개) →"
         }
     }
@@ -977,7 +977,7 @@ enum FocusSessionMetric: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 이 지표를 지도에 그릴 값이 있는지. 입력 활동은 수집된 세션만 그린다.
+    /// 이 지표를 지도에 그릴 값이 있는지. 키보드·마우스 사용률은 수집된 세션만 그린다.
     func hasValue(_ row: FocusSessionRow) -> Bool {
         switch self {
         case .inputActivity: return row.inputActivityRatio != nil
@@ -1021,6 +1021,7 @@ struct FocusSessionRow: Identifiable {
     let startedAt: Date
     let durationSeconds: Int
     let rating: Int?
+    let selfAssessmentLabel: String?
     let observation: PomodoroSessionObservation
     let inputActivityRatio: Double?
     let markerColorKey: String?
@@ -1032,16 +1033,18 @@ struct FocusSessionRow: Identifiable {
     var continuousFocusMinutes: Double {
         Double(observation.longestContinuousAppUsage?.durationSeconds ?? 0) / 60
     }
-    var activeRatio: Double {
+    var appUsageRatio: Double {
         observation.sessionSeconds > 0
             ? Double(observation.recordedSeconds) / Double(observation.sessionSeconds)
             : 0
     }
-    var minutesPerSwitch: Double? {
-        guard observation.appSwitchCount > 0 else { return nil }
-        return Double(observation.attributedSeconds) / Double(observation.appSwitchCount) / 60
+    var averageAppSwitchIntervalSeconds: Double? {
+        observation.averageAppUsageRunSeconds
     }
     var appCount: Int { observation.apps.count }
+    var unclassifiedAppCount: Int {
+        observation.apps.filter { $0.category == Constants.unclassifiedAppCategory }.count
+    }
     var hasComparableRecord: Bool { observation.recordedSeconds > 0 }
     var color: Color {
         FocusMarkerPalette.color(forKey: markerColorKey) ?? Constants.categoryColor(for: category)
@@ -1073,7 +1076,7 @@ private let focusScoreLegend = """
 3 · 대체로 집중했어요
 2 · 자주 흐트러졌어요
 1 · 집중하기 어려웠어요
-‘잘 모르겠어요’는 지도에서 빼요
+‘잘 모르겠어요’는 차트에서 빼요
 """
 
 struct FocusDetailView: View {
@@ -1086,6 +1089,7 @@ struct FocusDetailView: View {
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
     @State private var showsScoreInfo = false
+    @State private var showsSessionMetricInfo = false
     @State private var colorPickerSessionID: UUID?
 
     private var rows: [FocusSessionRow] {
@@ -1102,6 +1106,7 @@ struct FocusDetailView: View {
                 startedAt: session.startedAt,
                 durationSeconds: session.durationSeconds,
                 rating: focusRating(reflection.focusExperience),
+                selfAssessmentLabel: reflection.focusExperience?.label,
                 observation: session.observation,
                 inputActivityRatio: session.inputActivityRatio,
                 markerColorKey: session.markerColorKey
@@ -1114,7 +1119,7 @@ struct FocusDetailView: View {
         rows.filter { $0.rating != nil && $0.hasComparableRecord }
     }
 
-    /// 선택한 가로축 지표로 실제 그릴 수 있는 세션(예: 입력 활동은 수집된 세션만).
+    /// 선택한 가로축 지표로 실제 그릴 수 있는 세션(예: 키보드·마우스 사용률은 수집된 세션만).
     private var plottedRows: [FocusSessionRow] {
         mapRows.filter { xMetric.hasValue($0) }
     }
@@ -1143,7 +1148,7 @@ struct FocusDetailView: View {
             Text("이 기간에 회고를 남긴 포모도로가 없어요.")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
-            Text("포모도로가 끝난 뒤 집중 경험을 선택하면 몰입 지도에서 볼 수 있어요.")
+            Text("포모도로가 끝난 뒤 집중 경험을 선택하면 몰입 패턴 차트에서 볼 수 있어요.")
                 .font(.caption)
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -1157,7 +1162,7 @@ struct FocusDetailView: View {
     private var focusMapCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("몰입 지도")
+                Text("몰입 패턴 차트")
                     .font(.headline)
                     .foregroundStyle(PopoverChrome.ink)
                 scoreInfoButton
@@ -1185,7 +1190,7 @@ struct FocusDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 30)
             } else if plottedRows.isEmpty {
-                Text("이 기간에는 ‘입력 활동’을 기록한 세션이 아직 없어요.")
+                Text("이 기간에는 ‘키보드·마우스 사용률’을 기록한 세션이 아직 없어요.")
                     .font(.callout)
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1247,7 +1252,7 @@ struct FocusDetailView: View {
                         .foregroundStyle(PopoverChrome.ink)
                 }
             }
-            Text("‘잘 모르겠어요’는 몰입 점수가 없어 지도에서 빼요.")
+            Text("‘잘 모르겠어요’는 몰입 점수가 없어 차트에서 빼요.")
                 .font(.caption)
                 .foregroundStyle(PopoverChrome.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1348,12 +1353,14 @@ struct FocusDetailView: View {
 
     private func selectedDetailLine(_ row: FocusSessionRow) -> some View {
         var parts: [String] = [focusTimeFormatter.string(from: row.startedAt)]
-        if let rating = row.rating { parts.append("자기평가 \(rating)/4") }
-        parts.append("연속 \(Int(row.continuousFocusMinutes))분")
-        if let mps = row.minutesPerSwitch {
-            parts.append("전환당 \(String(format: "%.1f", mps))분")
+        if let label = row.selfAssessmentLabel {
+            parts.append("자기평가: \(label)")
         }
-        parts.append("활성 \(Int((row.activeRatio * 100).rounded()))%")
+        parts.append("연속 몰입 \(Int(row.continuousFocusMinutes))분")
+        if let interval = row.averageAppSwitchIntervalSeconds {
+            parts.append("앱 전환 간격 \(formattedMetricDuration(interval))")
+        }
+        parts.append("앱 사용 비중 \(Int((row.appUsageRatio * 100).rounded()))%")
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("\(row.emoji) \(row.title)")
                 .font(.callout.weight(.semibold))
@@ -1371,10 +1378,11 @@ struct FocusDetailView: View {
 
     private var sessionListSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("세션별 지표")
                     .font(.headline)
                     .foregroundStyle(PopoverChrome.ink)
+                sessionMetricInfoButton
                 Spacer()
                 Text("내 평가 + 측정값 그대로")
                     .font(.caption)
@@ -1383,6 +1391,97 @@ struct FocusDetailView: View {
             ForEach(rows) { row in
                 sessionCard(row)
             }
+        }
+    }
+
+    private var sessionMetricInfoButton: some View {
+        Button {
+            showsSessionMetricInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+        }
+        .buttonStyle(.plain)
+        .help("세션별 지표의 의미와 계산 방법")
+        .popover(isPresented: $showsSessionMetricInfo) {
+            sessionMetricInfoPopover
+        }
+        .accessibilityLabel("세션별 지표 설명")
+    }
+
+    private var sessionMetricInfoPopover: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("세션별 지표 안내")
+                        .font(.headline)
+                        .foregroundStyle(PopoverChrome.ink)
+                    Text("각 수치가 무엇을 보여 주고 어떻게 계산되는지 설명합니다.")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                }
+
+                metricExplanation(
+                    title: "연속 몰입",
+                    meaning: "한 앱을 끊김 없이 사용한 구간 중 가장 긴 시간입니다. 높을수록 한 앱에 오래 머문 세션이에요.",
+                    formula: "가장 긴 연속 앱 사용 구간"
+                )
+                metricExplanation(
+                    title: "앱 전환",
+                    meaning: "기록 순서에서 사용 앱이 달라진 횟수입니다. A → B → A라면 2회로 셉니다. 기록 공백이 있으면 확인 가능한 최소 전환만 반영해요.",
+                    formula: "앱 사용 순서에서 앞뒤 앱이 달라진 횟수"
+                )
+                metricExplanation(
+                    title: "사용 앱 수",
+                    meaning: "세션 중 기록된 서로 다른 앱의 수입니다. 브라우저는 사이트에 따라 별도 앱처럼 구분될 수 있어요.",
+                    formula: "중복을 제외한 기록 앱 수"
+                )
+                metricExplanation(
+                    title: "앱 사용 비중",
+                    meaning: "세션 동안 앱 사용 기록이 얼마나 이어졌는지 보여 줍니다. 값이 낮으면 자리 비움뿐 아니라 추적이 중단되거나 기록이 누락된 경우도 확인해야 해요.",
+                    formula: "앱 사용 기록 시간 ÷ 세션 시간 × 100"
+                )
+                metricExplanation(
+                    title: "앱 전환 간격",
+                    meaning: "한 앱에 평균적으로 얼마나 오래 머물렀는지 보여 줍니다. 같은 앱의 기록 공백은 합치고, 10초 미만의 생산성 관리 앱 사용은 작업 흐름을 잇는 짧은 확인으로 봐요.",
+                    formula: "명확히 기록된 앱 사용 시간 ÷ (앱 전환 횟수 + 1)"
+                )
+                metricExplanation(
+                    title: "키보드·마우스 사용률",
+                    meaning: "집중 시간 중 키보드나 마우스 입력이 이어진 비율입니다. 생각하거나 읽는 시간이 많은 작업은 집중했어도 낮게 나올 수 있어요.",
+                    formula: "최근 2초 안에 입력이 있었던 초 ÷ 설정한 집중 시간 × 100"
+                )
+
+                Divider()
+
+                Text("‘앱 기록 없음’은 해당 세션에 앱 기록이 없다는 뜻이고, ‘—’는 이 지표를 수집하기 전에 생성된 세션이라는 뜻입니다. 미분류 앱도 앱 관련 지표에는 포함됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+        }
+        .frame(width: 420, height: 520)
+    }
+
+    private func metricExplanation(
+        title: String,
+        meaning: String,
+        formula: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PopoverChrome.ink)
+            Text(meaning)
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("계산 · \(formula)")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(PopoverChrome.accent)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -1397,7 +1496,7 @@ struct FocusDetailView: View {
                 .overlay(Circle().stroke(PopoverChrome.divider, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .help("이 세션의 몰입 지도 점 색을 바꿉니다")
+        .help("이 세션의 몰입 패턴 차트 점 색을 바꿉니다")
         .popover(isPresented: Binding(
             get: { colorPickerSessionID == row.id },
             set: { if !$0 { colorPickerSessionID = nil } }
@@ -1411,24 +1510,51 @@ struct FocusDetailView: View {
             Text("점 색상")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
+            Button {
+                setMarkerColor(nil, for: row)
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Constants.categoryColor(for: row.category))
+                        .frame(width: 14, height: 14)
+                        .overlay(Circle().stroke(PopoverChrome.divider, lineWidth: 1))
+                    Text("\(row.category) 기본색 사용")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(PopoverChrome.ink)
+                        .opacity(row.markerColorKey == nil ? 1 : 0)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .background(
+                    row.markerColorKey == nil ? PopoverChrome.selectionFill : PopoverChrome.card,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(PopoverChrome.divider, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("이 세션의 개별 색상을 지우고 카테고리 기본색을 사용합니다")
             LazyVGrid(
                 columns: Array(repeating: GridItem(.fixed(26), spacing: 8), count: 5),
                 spacing: 8
             ) {
-                swatch(
-                    color: Constants.categoryColor(for: row.category),
-                    selected: row.markerColorKey == nil,
-                    isDefault: true
-                ) { setMarkerColor(nil, for: row) }
                 ForEach(FocusMarkerPalette.colors) { item in
                     swatch(
                         color: item.color,
                         selected: row.markerColorKey == item.key,
-                        isDefault: false
+                        name: item.name
                     ) { setMarkerColor(item.key, for: row) }
                 }
             }
-            Text("점선 = 카테고리 기본색")
+            Text("아래 색상은 이 세션에만 적용됩니다.")
                 .font(.caption2)
                 .foregroundStyle(PopoverChrome.inkTertiary)
         }
@@ -1439,7 +1565,7 @@ struct FocusDetailView: View {
     private func swatch(
         color: Color,
         selected: Bool,
-        isDefault: Bool,
+        name: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -1449,9 +1575,9 @@ struct FocusDetailView: View {
                 .overlay(
                     Circle().strokeBorder(
                         PopoverChrome.inkSecondary,
-                        style: StrokeStyle(lineWidth: 1.5, dash: isDefault ? [3, 2] : [])
+                        lineWidth: 1.5
                     )
-                    .opacity(isDefault ? 1 : 0.15)
+                    .opacity(0.15)
                 )
                 .overlay(
                     Image(systemName: "checkmark")
@@ -1461,7 +1587,7 @@ struct FocusDetailView: View {
                 )
         }
         .buttonStyle(.plain)
-        .help(isDefault ? "카테고리 기본색" : "")
+        .help(name)
     }
 
     private func setMarkerColor(_ key: String?, for row: FocusSessionRow) {
@@ -1518,19 +1644,27 @@ struct FocusDetailView: View {
     @ViewBuilder
     private func sessionMetricRow(_ row: FocusSessionRow, wrap: Bool = false) -> some View {
         let items: [(String, Bool)] = {
-            var result: [(String, Bool)] = [
-                ("연속 \(Int(row.continuousFocusMinutes))분", false),
-                ("전환 \(row.observation.appSwitchCount)회", false),
-                ("앱 \(row.appCount)개", false),
-                ("활성 \(Int((row.activeRatio * 100).rounded()))%", false),
-            ]
-            if let mps = row.minutesPerSwitch {
-                result.append(("전환당 \(String(format: "%.1f", mps))분", false))
+            var result: [(String, Bool)] = []
+            if row.observation.hasRecords {
+                result = [
+                    ("연속 몰입 \(Int(row.continuousFocusMinutes))분", false),
+                    ("앱 전환 \(row.observation.appSwitchCount)회", false),
+                    ("사용 앱 수 \(row.appCount)개", false),
+                    ("앱 사용 비중 \(Int((row.appUsageRatio * 100).rounded()))%", false),
+                ]
+                if let interval = row.averageAppSwitchIntervalSeconds {
+                    result.append(("앱 전환 간격 \(formattedMetricDuration(interval))", false))
+                }
+                if row.unclassifiedAppCount > 0 {
+                    result.append(("미분류 앱 \(row.unclassifiedAppCount)개", true))
+                }
+            } else {
+                result.append(("앱 기록 없음", true))
             }
             if let pct = row.inputActivityPercent {
-                result.append(("입력 \(pct)%", false))
+                result.append(("키보드·마우스 사용률 \(pct)%", false))
             } else {
-                result.append(("입력 —", true))
+                result.append(("키보드·마우스 사용률 —", true))
             }
             result.append(("휴식 준비 중", true))
             return result
@@ -1556,6 +1690,15 @@ struct FocusDetailView: View {
             .font(.caption)
             .foregroundStyle(pending ? PopoverChrome.inkTertiary : PopoverChrome.inkSecondary)
             .monospacedDigit()
+    }
+
+    private func formattedMetricDuration(_ seconds: Double) -> String {
+        let totalSeconds = max(0, Int(seconds.rounded()))
+        guard totalSeconds >= 60 else { return "\(totalSeconds)초" }
+        let minutes = totalSeconds / 60
+        let remainingSeconds = totalSeconds % 60
+        guard remainingSeconds > 0 else { return "\(minutes)분" }
+        return "\(minutes)분 \(remainingSeconds)초"
     }
 
     private func ratingDots(_ rating: Int?) -> some View {

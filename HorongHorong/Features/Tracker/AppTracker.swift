@@ -230,7 +230,9 @@ final class AppTracker: @unchecked Sendable {
         )
 
         let previous = try? trackingContext.fetch(descriptor).first
-        guard Self.shouldPersistSegment(
+        let isProductivityManagementApp =
+            Constants.isProductivityManagementCategory(targetCategory)
+        guard (isProductivityManagementApp && elapsed > 0) || Self.shouldPersistSegment(
             elapsed: elapsed,
             hasPreviousSegment: previous != nil
         ) else {
@@ -258,22 +260,11 @@ final class AppTracker: @unchecked Sendable {
     // MARK: - 브라우저 URL 조회 (AppleScript)
 
     private func currentBrowserURL(for bundleId: String) -> String? {
-        let source: String
+        let source: String?
         switch bundleId {
-        case "com.google.Chrome":
+        case "com.apple.Safari", "com.apple.SafariTechnologyPreview":
             source = """
-            tell application "Google Chrome"
-                if (count of windows) is 0 then return ""
-                try
-                    return URL of active tab of front window
-                on error
-                    return ""
-                end try
-            end tell
-            """
-        case "com.apple.Safari":
-            source = """
-            tell application "Safari"
+            tell application id "\(bundleId)"
                 if (count of windows) is 0 then return ""
                 try
                     return URL of current tab of front window
@@ -282,14 +273,78 @@ final class AppTracker: @unchecked Sendable {
                 end try
             end tell
             """
+        case let identifier where Constants.browserBundleIds.contains(identifier)
+            && identifier != "org.mozilla.firefox"
+            && identifier != "org.mozilla.firefoxdeveloperedition":
+            source = """
+            tell application id "\(identifier)"
+                if (count of windows) is 0 then return ""
+                try
+                    return URL of active tab of front window
+                on error
+                    return ""
+                end try
+            end tell
+            """
         default:
+            source = nil
+        }
+
+        if let source,
+           let script = NSAppleScript(source: source) {
+            var errorDict: NSDictionary?
+            let descriptor = script.executeAndReturnError(&errorDict)
+            if errorDict == nil,
+               let url = validWebURL(descriptor.stringValue) {
+                return url
+            }
+        }
+
+        guard let app = currentApp,
+              app.bundleIdentifier == bundleId else {
             return nil
         }
-        guard let script = NSAppleScript(source: source) else { return nil }
-        var errorDict: NSDictionary?
-        let descriptor = script.executeAndReturnError(&errorDict)
-        if errorDict != nil { return nil }
-        return descriptor.stringValue
+        return accessibilityDocumentURL(for: app)
+    }
+
+    private func accessibilityDocumentURL(for app: NSRunningApplication) -> String? {
+        let applicationElement = AXUIElementCreateApplication(app.processIdentifier)
+        var focusedWindowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            applicationElement,
+            kAXFocusedWindowAttribute as CFString,
+            &focusedWindowValue
+        ) == .success,
+              let focusedWindowValue else {
+            return nil
+        }
+
+        let focusedWindow = focusedWindowValue as! AXUIElement
+        var documentValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            focusedWindow,
+            kAXDocumentAttribute as CFString,
+            &documentValue
+        ) == .success,
+              let documentValue else {
+            return nil
+        }
+
+        if let url = documentValue as? URL {
+            return validWebURL(url.absoluteString)
+        }
+        return validWebURL(documentValue as? String)
+    }
+
+    private func validWebURL(_ value: String?) -> String? {
+        guard let value,
+              let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host != nil else {
+            return nil
+        }
+        return value
     }
 
     static func entertainmentLabel(for url: String) -> String? {
@@ -320,8 +375,24 @@ final class AppTracker: @unchecked Sendable {
     }
 
     private func resolveTarget(bundleId: String, appName: String) -> ResolvedTarget? {
-        if Constants.browserBundleIds.contains(bundleId) {
-            let url = currentBrowserURL(for: bundleId) ?? ""
+        if CategoryManager.shared.trackingClassification(for: bundleId) == .excluded {
+            return nil
+        }
+
+        let isKnownBrowser = Constants.browserBundleIds.contains(bundleId)
+        let url = isKnownBrowser || CategoryManager.shared.hasWebsiteRules
+            ? currentBrowserURL(for: bundleId) ?? ""
+            : ""
+
+        if let match = CategoryManager.shared.websiteMatch(for: url) {
+            return ResolvedTarget(
+                category: match.category,
+                bundleId: "\(bundleId).website.\(match.domain)",
+                appName: "\(appName) (\(match.domain))"
+            )
+        }
+
+        if isKnownBrowser {
             if let label = Self.entertainmentLabel(for: url) {
                 return ResolvedTarget(
                     category: Constants.categoryName("엔터"),
@@ -338,7 +409,15 @@ final class AppTracker: @unchecked Sendable {
                 return ResolvedTarget(category: Constants.categoryName("기타"), bundleId: bundleId, appName: appName)
             }
         } else {
-            guard let category = CategoryManager.shared.matchedCategory(for: bundleId) else { return nil }
+            let category: String
+            switch CategoryManager.shared.trackingClassification(for: bundleId) {
+            case let .category(mappedCategory):
+                category = mappedCategory
+            case .unclassified:
+                category = Constants.unclassifiedAppCategory
+            case .excluded:
+                return nil
+            }
             return ResolvedTarget(category: category, bundleId: bundleId, appName: appName)
         }
     }
