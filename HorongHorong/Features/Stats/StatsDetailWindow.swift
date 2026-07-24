@@ -1046,6 +1046,8 @@ struct FocusSessionRow: Identifiable {
     let endKind: FocusSessionEndKind?
     let rating: Int?
     let selfAssessmentLabel: String?
+    let progressResult: PomodoroProgressResult?
+    let incompleteReason: PomodoroIncompleteReason?
     let observation: PomodoroSessionObservation
     let inputActivityRatio: Double?
     let markerColorKey: String?
@@ -1182,6 +1184,201 @@ enum FocusTaskSessionGroupBuilder {
     }
 }
 
+struct FocusTaskSessionTrendPoint: Identifiable, Equatable {
+    let id: UUID
+    let iteration: Int
+    let startedAt: Date
+    let endedAt: Date
+    let completionStatus: FocusSessionCompletionStatus
+    let selfAssessmentLabel: String?
+    let selfAssessmentRating: Int?
+    let progressResult: PomodoroProgressResult?
+    let incompleteReason: PomodoroIncompleteReason?
+    let taskCompleted: Bool
+
+    var progressScore: Double? {
+        switch progressResult {
+        case .littleProgress: return 1
+        case .meaningfulProgress: return 2
+        case .completedAsPlanned: return 3
+        case .goalChanged, .none: return nil
+        }
+    }
+
+    var focusScore: Double? {
+        selfAssessmentRating.map(Double.init)
+    }
+
+    var canPlotOnCauseMap: Bool {
+        focusScore != nil && progressScore != nil
+    }
+}
+
+enum FocusTaskSessionTrendBuilder {
+    static func points(
+        rows: [FocusSessionRow],
+        completedSessionIDs: Set<UUID> = []
+    ) -> [FocusTaskSessionTrendPoint] {
+        rows
+            .sorted { $0.startedAt < $1.startedAt }
+            .enumerated()
+            .map { offset, row in
+                FocusTaskSessionTrendPoint(
+                    id: row.id,
+                    iteration: offset + 1,
+                    startedAt: row.startedAt,
+                    endedAt: row.endedAt,
+                    completionStatus: row.completionStatus,
+                    selfAssessmentLabel: row.selfAssessmentLabel,
+                    selfAssessmentRating: row.rating,
+                    progressResult: row.progressResult,
+                    incompleteReason: row.incompleteReason,
+                    taskCompleted: completedSessionIDs.contains(row.id)
+                )
+            }
+    }
+}
+
+enum FocusTaskContinuationCause: String, CaseIterable, Identifiable {
+    case scopeOrQuality
+    case difficultyOrBlocked
+    case focusDisruption
+    case contextChange
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .scopeOrQuality: return "작업 범위·완성도"
+        case .difficultyOrBlocked: return "막힘·난이도"
+        case .focusDisruption: return "집중 방해"
+        case .contextChange: return "외부·방향 변경"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .scopeOrQuality: return "분량·범위 단서"
+        case .difficultyOrBlocked: return "막힘·난이도 단서"
+        case .focusDisruption: return "집중 어려움 단서"
+        case .contextChange: return "외부·방향 변경"
+        }
+    }
+}
+
+struct FocusTaskContinuationCauseEvidence: Identifiable, Equatable {
+    var id: FocusTaskContinuationCause { cause }
+    let cause: FocusTaskContinuationCause
+    let directSessionCount: Int
+    let supportingSessionCount: Int
+}
+
+struct FocusTaskContinuationCauseSummary: Equatable {
+    let evidence: [FocusTaskContinuationCauseEvidence]
+    let dominantCause: FocusTaskContinuationCause?
+    let headline: String
+}
+
+enum FocusTaskContinuationCauseBuilder {
+    static func summary(
+        points: [FocusTaskSessionTrendPoint]
+    ) -> FocusTaskContinuationCauseSummary {
+        var directSessionIDs = Dictionary(
+            uniqueKeysWithValues: FocusTaskContinuationCause.allCases.map {
+                ($0, Set<UUID>())
+            }
+        )
+        var supportingSessionIDs = directSessionIDs
+
+        for point in points {
+            let directCause = directCause(for: point)
+            if let directCause {
+                directSessionIDs[directCause, default: []].insert(point.id)
+            }
+            for cause in supportingCauses(for: point) where cause != directCause {
+                supportingSessionIDs[cause, default: []].insert(point.id)
+            }
+        }
+
+        let evidence = FocusTaskContinuationCause.allCases.map { cause in
+            FocusTaskContinuationCauseEvidence(
+                cause: cause,
+                directSessionCount: directSessionIDs[cause]?.count ?? 0,
+                supportingSessionCount: supportingSessionIDs[cause]?.count ?? 0
+            )
+        }
+        let highestDirectCount = evidence.map(\.directSessionCount).max() ?? 0
+        let strongestDirectCauses = evidence.filter {
+            highestDirectCount > 0 && $0.directSessionCount == highestDirectCount
+        }
+        let dominantCause = strongestDirectCauses.count == 1
+            ? strongestDirectCauses[0].cause
+            : nil
+        let totalSupportingCount = evidence.reduce(0) {
+            $0 + $1.supportingSessionCount
+        }
+
+        let headline: String
+        if let dominantCause {
+            headline = "가장 강한 단서: \(dominantCause.title)"
+        } else if strongestDirectCauses.count > 1 {
+            headline = "여러 이유가 함께 기록됐어요"
+        } else if totalSupportingCount > 0 {
+            headline = "직접 선택한 이유가 없어 응답 조합만 보여드려요"
+        } else {
+            headline = "이유를 판단할 회고가 부족해요"
+        }
+
+        return FocusTaskContinuationCauseSummary(
+            evidence: evidence,
+            dominantCause: dominantCause,
+            headline: headline
+        )
+    }
+
+    static func directCause(
+        for point: FocusTaskSessionTrendPoint
+    ) -> FocusTaskContinuationCause? {
+        if let reason = point.incompleteReason {
+            switch reason {
+            case .insufficientTime, .underestimatedScope, .continuedForQuality:
+                return .scopeOrQuality
+            case .blocked:
+                return .difficultyOrBlocked
+            case .distracted:
+                return .focusDisruption
+            case .switchedTask, .externalInterruption:
+                return .contextChange
+            }
+        }
+        if point.progressResult == .goalChanged {
+            return .contextChange
+        }
+        return nil
+    }
+
+    static func supportingCauses(
+        for point: FocusTaskSessionTrendPoint
+    ) -> Set<FocusTaskContinuationCause> {
+        guard point.progressResult != .completedAsPlanned,
+              point.progressResult != .goalChanged else {
+            return []
+        }
+
+        var causes: Set<FocusTaskContinuationCause> = []
+        if let rating = point.selfAssessmentRating {
+            if rating <= 2 {
+                causes.insert(.focusDisruption)
+            } else if point.progressResult == .littleProgress {
+                causes.insert(.difficultyOrBlocked)
+            } else if point.progressResult == .meaningfulProgress {
+                causes.insert(.scopeOrQuality)
+            }
+        }
+        return causes
+    }
+}
+
 /// 회고(`focusExperience`)를 1–5 몰입 점수로. `unsure`/미작성은 값 없음(지도 제외).
 private func focusRating(_ experience: PomodoroFocusExperience?) -> Int? {
     switch experience {
@@ -1209,6 +1406,686 @@ private let focusScoreLegend = """
 ‘잘 모르겠어요’는 차트에서 빼요
 """
 
+private struct FocusCauseMapRouteNode: Identifiable {
+    var id: UUID { point.id }
+    let point: FocusTaskSessionTrendPoint
+    let x: Double
+    let y: Double
+    let usesDetourLane: Bool
+}
+
+private struct FocusCauseMapRouteSegment: Identifiable {
+    var id: String {
+        "\(start.id.uuidString)-\(end.id.uuidString)"
+    }
+    let start: FocusCauseMapRouteNode
+    let end: FocusCauseMapRouteNode
+
+    var usesDetourLane: Bool {
+        start.usesDetourLane || end.usesDetourLane
+    }
+}
+
+private struct FocusTaskSessionTrendView: View {
+    let points: [FocusTaskSessionTrendPoint]
+    @Binding var selectedSessionID: UUID?
+    @Binding var hoveredSessionID: UUID?
+
+    private var activePoint: FocusTaskSessionTrendPoint? {
+        let activeID = hoveredSessionID ?? selectedSessionID
+        return activeID.flatMap { id in points.first { $0.id == id } }
+    }
+
+    private var causeSummary: FocusTaskContinuationCauseSummary {
+        FocusTaskContinuationCauseBuilder.summary(points: points)
+    }
+
+    private var mappablePoints: [FocusTaskSessionTrendPoint] {
+        points.filter(\.canPlotOnCauseMap)
+    }
+
+    private var causeMapRouteNodes: [FocusCauseMapRouteNode] {
+        let lastIndex = max(1, points.count - 1)
+        return points.enumerated().map { index, point in
+            if let position = causeMapPosition(for: point) {
+                return FocusCauseMapRouteNode(
+                    point: point,
+                    x: position.x,
+                    y: position.y,
+                    usesDetourLane: false
+                )
+            }
+            let timelineX = points.count == 1
+                ? 2.5
+                : 0.75 + Double(index) / Double(lastIndex) * 3.5
+            return FocusCauseMapRouteNode(
+                point: point,
+                x: timelineX,
+                y: 0,
+                usesDetourLane: true
+            )
+        }
+    }
+
+    private var causeMapRouteSegments: [FocusCauseMapRouteSegment] {
+        zip(causeMapRouteNodes, causeMapRouteNodes.dropFirst()).map {
+            FocusCauseMapRouteSegment(start: $0.0, end: $0.1)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("왜 여러 회차가 필요했을까요?")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("회고 응답을 먼저 보고, 패턴 추정은 보조로만 사용해요")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                Spacer()
+                Text("\(points.count)회차")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .monospacedDigit()
+            }
+
+            causeOverview
+            causeMapPanel
+
+            Text("회차별 기록")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            sessionContextStrip
+        }
+        .padding(12)
+        .background(
+            PopoverChrome.card.opacity(0.7),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(PopoverChrome.divider, lineWidth: 1)
+        )
+        .onDisappear {
+            if let hoveredSessionID,
+               points.contains(where: { $0.id == hoveredSessionID }) {
+                self.hoveredSessionID = nil
+            }
+        }
+    }
+
+    private var causeOverview: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(causeSummary.headline)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("● 회고 응답  ○ 패턴 추정")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 155), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(causeSummary.evidence) { evidence in
+                    causeEvidenceCard(evidence)
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            PopoverChrome.surface,
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+    }
+
+    private func causeEvidenceCard(
+        _ evidence: FocusTaskContinuationCauseEvidence
+    ) -> some View {
+        let highlighted = causeSummary.dominantCause == evidence.cause
+        let hasEvidence = evidence.directSessionCount > 0
+            || evidence.supportingSessionCount > 0
+        let tint = causeTint(evidence.cause)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: causeIcon(evidence.cause))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(hasEvidence ? tint : PopoverChrome.inkTertiary)
+                Text(evidence.cause.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(
+                        hasEvidence ? PopoverChrome.ink : PopoverChrome.inkTertiary
+                    )
+                    .lineLimit(1)
+            }
+            HStack(spacing: 8) {
+                Text("● 응답 \(evidence.directSessionCount)회")
+                Text("○ 추정 \(evidence.supportingSessionCount)회")
+            }
+            .font(.caption2)
+            .foregroundStyle(
+                hasEvidence ? PopoverChrome.inkSecondary : PopoverChrome.inkTertiary
+            )
+            .monospacedDigit()
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            highlighted ? tint.opacity(0.12) : PopoverChrome.card,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    highlighted ? tint : PopoverChrome.divider,
+                    lineWidth: highlighted ? 1.5 : 1
+                )
+        )
+        .help(
+            "● 응답은 회고에서 고른 이유이고, ○ 추정은 집중 체감과 진척 결과의 조합에서 보이는 패턴입니다."
+        )
+    }
+
+    private var causeMapPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("집중 체감 × 작업 진척")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("아래로 우회하는 선은 위치를 알 수 없는 회차예요")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                Spacer()
+            }
+
+            causeMapChart
+
+            let excluded = points.filter { !$0.canPlotOnCauseMap }
+            if !excluded.isEmpty {
+                Text(
+                    "알 수 없음: "
+                    + excluded.map(mapExclusionText).joined(separator: " · ")
+                )
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(
+            PopoverChrome.surface,
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+    }
+
+    private var causeMapChart: some View {
+        Chart {
+            RectangleMark(
+                xStart: .value("집중 시작", 0.5),
+                xEnd: .value("집중 끝", 2.5),
+                yStart: .value("진척 시작", 0.5),
+                yEnd: .value("진척 끝", 2.5)
+            )
+            .foregroundStyle(causeTint(.focusDisruption).opacity(0.08))
+            .annotation(position: .overlay) {
+                causeZoneLabel(.focusDisruption)
+            }
+
+            RectangleMark(
+                xStart: .value("난이도 시작", 2.5),
+                xEnd: .value("난이도 끝", 4.5),
+                yStart: .value("진척 시작", 0.5),
+                yEnd: .value("진척 끝", 1.5)
+            )
+            .foregroundStyle(causeTint(.difficultyOrBlocked).opacity(0.08))
+            .annotation(position: .overlay) {
+                causeZoneLabel(.difficultyOrBlocked)
+            }
+
+            RectangleMark(
+                xStart: .value("범위 시작", 2.5),
+                xEnd: .value("범위 끝", 4.5),
+                yStart: .value("진척 시작", 1.5),
+                yEnd: .value("진척 끝", 2.5)
+            )
+            .foregroundStyle(causeTint(.scopeOrQuality).opacity(0.08))
+            .annotation(position: .overlay) {
+                causeZoneLabel(.scopeOrQuality)
+            }
+
+            RectangleMark(
+                xStart: .value("완료 시작", 0.5),
+                xEnd: .value("완료 끝", 4.5),
+                yStart: .value("진척 시작", 2.5),
+                yEnd: .value("진척 끝", 3.5)
+            )
+            .foregroundStyle(Color.green.opacity(0.08))
+            .annotation(position: .overlay) {
+                Text("계획한 만큼 완료")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.green.opacity(0.75))
+            }
+
+            RectangleMark(
+                xStart: .value("우회 시작", 0.5),
+                xEnd: .value("우회 끝", 4.5),
+                yStart: .value("우회 아래", -0.4),
+                yEnd: .value("우회 위", 0.4)
+            )
+            .foregroundStyle(PopoverChrome.inkTertiary.opacity(0.07))
+
+            RuleMark(y: .value("알 수 없음 구분", 0.4))
+                .foregroundStyle(PopoverChrome.divider)
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+
+            ForEach(causeMapRouteSegments) { segment in
+                LineMark(
+                    x: .value("경로 시작 X", segment.start.x),
+                    y: .value("경로 시작 Y", segment.start.y),
+                    series: .value("경로 구간", segment.id)
+                )
+                .foregroundStyle(PopoverChrome.inkTertiary.opacity(0.58))
+                .lineStyle(
+                    StrokeStyle(
+                        lineWidth: 1.5,
+                        dash: segment.usesDetourLane ? [4, 3] : []
+                    )
+                )
+                LineMark(
+                    x: .value("경로 끝 X", segment.end.x),
+                    y: .value("경로 끝 Y", segment.end.y),
+                    series: .value("경로 구간", segment.id)
+                )
+                .foregroundStyle(PopoverChrome.inkTertiary.opacity(0.58))
+                .lineStyle(
+                    StrokeStyle(
+                        lineWidth: 1.5,
+                        dash: segment.usesDetourLane ? [4, 3] : []
+                    )
+                )
+            }
+
+            ForEach(causeMapRouteNodes) { node in
+                PointMark(
+                    x: .value("집중 체감", node.x),
+                    y: .value("작업 진척", node.y)
+                )
+                .symbolSize(activePoint?.id == node.id ? 190 : 145)
+                .foregroundStyle(
+                    node.usesDetourLane
+                        ? PopoverChrome.inkTertiary
+                        : pointTint(node.point)
+                )
+                .opacity(activePoint == nil || activePoint?.id == node.id ? 1 : 0.38)
+                .annotation(position: .overlay) {
+                    Text("\(node.point.iteration)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .chartXScale(domain: 0.5...4.5)
+        .chartYScale(domain: -0.4...3.5)
+        .chartXAxis {
+            AxisMarks(values: [1.0, 2.0, 3.0, 4.0]) { value in
+                AxisGridLine()
+                    .foregroundStyle(PopoverChrome.divider.opacity(0.55))
+                AxisValueLabel {
+                    if let score = value.as(Double.self) {
+                        Text(focusAxisLabel(Int(score.rounded())))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: [0.0, 1.0, 2.0, 3.0]) { value in
+                AxisGridLine()
+                    .foregroundStyle(PopoverChrome.divider.opacity(0.55))
+                AxisValueLabel {
+                    if let score = value.as(Double.self) {
+                        Text(progressAxisLabel(Int(score.rounded())))
+                    }
+                }
+            }
+        }
+        .chartXAxisLabel("내가 느낀 집중 →", alignment: .trailing)
+        .frame(height: 285)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                causeMapInteractionLayer(proxy: proxy, geometry: geometry)
+            }
+        }
+    }
+
+    private func causeZoneLabel(
+        _ cause: FocusTaskContinuationCause
+    ) -> some View {
+        Text(cause.shortTitle)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(causeTint(cause).opacity(0.7))
+    }
+
+    private func causeMapInteractionLayer(
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) -> some View {
+        Rectangle()
+            .fill(.clear)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    hoveredSessionID = nearestCauseMapPoint(
+                        to: location,
+                        proxy: proxy,
+                        geometry: geometry
+                    )?.id
+                case .ended:
+                    hoveredSessionID = nil
+                }
+            }
+            .gesture(
+                SpatialTapGesture().onEnded { event in
+                    guard let point = nearestCauseMapPoint(
+                        to: event.location,
+                        proxy: proxy,
+                        geometry: geometry
+                    ) else { return }
+                    selectedSessionID = selectedSessionID == point.id ? nil : point.id
+                }
+            )
+    }
+
+    private func nearestCauseMapPoint(
+        to location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) -> FocusTaskSessionTrendPoint? {
+        guard let plotFrame = proxy.plotFrame else { return nil }
+        let frame = geometry[plotFrame]
+        let relativePoint = CGPoint(
+            x: location.x - frame.minX,
+            y: location.y - frame.minY
+        )
+        var nearest: (point: FocusTaskSessionTrendPoint, distance: CGFloat)?
+        for node in causeMapRouteNodes {
+            guard let x = proxy.position(forX: node.x),
+                  let y = proxy.position(forY: node.y) else {
+                continue
+            }
+            let distance = hypot(x - relativePoint.x, y - relativePoint.y)
+            if nearest == nil || distance < nearest!.distance {
+                nearest = (node.point, distance)
+            }
+        }
+        guard let nearest, nearest.distance < 42 else { return nil }
+        return nearest.point
+    }
+
+    private var sessionContextStrip: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
+                    sessionContextButton(point)
+                    if index < points.count - 1 {
+                        Image(systemName: "arrow.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private func sessionContextButton(
+        _ point: FocusTaskSessionTrendPoint
+    ) -> some View {
+        let active = activePoint?.id == point.id
+        let tint = completionTint(point.completionStatus)
+        let supportingCause = FocusTaskContinuationCauseBuilder
+            .supportingCauses(for: point)
+            .first
+        return Button {
+            selectedSessionID = selectedSessionID == point.id ? nil : point.id
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 5) {
+                    Text("\(point.iteration)회차")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.ink)
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 6, height: 6)
+                    Text(point.completionStatus.label)
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    Spacer(minLength: 4)
+                    if point.taskCompleted {
+                        Text("할 일 완료")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(PopoverChrome.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                PopoverChrome.accent.opacity(0.1),
+                                in: Capsule()
+                            )
+                    }
+                }
+                HStack(spacing: 5) {
+                    Image(systemName: point.selfAssessmentRating == nil ? "circle.dashed" : "circle.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(assessmentTint(point.selfAssessmentRating))
+                    Text(point.selfAssessmentLabel ?? "자기평가 없음")
+                        .font(.caption2)
+                        .foregroundStyle(
+                            point.selfAssessmentLabel == nil
+                                ? PopoverChrome.inkTertiary
+                                : PopoverChrome.inkSecondary
+                        )
+                        .lineLimit(1)
+                }
+                Divider()
+                Text(
+                    point.progressResult?.label(
+                        recordsLinkedTaskCompletion: point.taskCompleted
+                    ) ?? "작업 진척 회고 없음"
+                )
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(
+                    point.progressResult == nil
+                        ? PopoverChrome.inkTertiary
+                        : PopoverChrome.inkSecondary
+                )
+                .lineLimit(1)
+                if let reason = point.incompleteReason {
+                    Label {
+                        Text(reason.label)
+                            .lineLimit(2)
+                    } icon: {
+                        Text("●")
+                            .foregroundStyle(
+                                causeTint(
+                                    FocusTaskContinuationCauseBuilder.directCause(
+                                        for: point
+                                    ) ?? .contextChange
+                                )
+                            )
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                } else if let supportingCause {
+                    Text("○ \(supportingCause.shortTitle)")
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .frame(width: 220, alignment: .leading)
+            .frame(minHeight: 108, alignment: .topLeading)
+            .background(
+                active ? PopoverChrome.selectionFill : PopoverChrome.surface,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        active ? PopoverChrome.accent : PopoverChrome.divider,
+                        lineWidth: active ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering {
+                hoveredSessionID = point.id
+            } else if hoveredSessionID == point.id {
+                hoveredSessionID = nil
+            }
+        }
+        .help(sessionIdentityText(point))
+    }
+
+    private func sessionIdentityText(
+        _ point: FocusTaskSessionTrendPoint
+    ) -> String {
+        let timeRange = "\(focusTimeFormatter.string(from: point.startedAt))–\(focusTimeFormatter.string(from: point.endedAt))"
+        let assessment = point.selfAssessmentLabel ?? "자기평가 없음"
+        let progress = point.progressResult?.label(
+            recordsLinkedTaskCompletion: point.taskCompleted
+        ) ?? "작업 진척 회고 없음"
+        var parts = [
+            "\(point.iteration)회차",
+            timeRange,
+            point.completionStatus.label,
+            assessment,
+            progress,
+        ]
+        if let reason = point.incompleteReason {
+            parts.append(reason.label)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func assessmentTint(_ rating: Int?) -> Color {
+        switch rating {
+        case 4: return PopoverChrome.accent
+        case 3: return .green
+        case 2: return .orange
+        case 1: return .red
+        default: return PopoverChrome.inkTertiary
+        }
+    }
+
+    private func completionTint(
+        _ status: FocusSessionCompletionStatus
+    ) -> Color {
+        switch status {
+        case .completedAsPlanned: return PopoverChrome.accent
+        case .endedEarly: return .orange
+        case .unknown: return PopoverChrome.inkTertiary
+        }
+    }
+
+    private func causeTint(
+        _ cause: FocusTaskContinuationCause
+    ) -> Color {
+        switch cause {
+        case .scopeOrQuality: return .blue
+        case .difficultyOrBlocked: return .purple
+        case .focusDisruption: return .red
+        case .contextChange: return PopoverChrome.inkSecondary
+        }
+    }
+
+    private func causeIcon(
+        _ cause: FocusTaskContinuationCause
+    ) -> String {
+        switch cause {
+        case .scopeOrQuality: return "shippingbox"
+        case .difficultyOrBlocked: return "exclamationmark.triangle"
+        case .focusDisruption: return "scope"
+        case .contextChange: return "arrow.triangle.branch"
+        }
+    }
+
+    private func pointTint(
+        _ point: FocusTaskSessionTrendPoint
+    ) -> Color {
+        if point.progressResult == .completedAsPlanned {
+            return .green
+        }
+        if let cause = FocusTaskContinuationCauseBuilder.directCause(for: point) {
+            return causeTint(cause)
+        }
+        if let cause = FocusTaskContinuationCauseBuilder
+            .supportingCauses(for: point)
+            .first {
+            return causeTint(cause)
+        }
+        return PopoverChrome.accent
+    }
+
+    private func causeMapPosition(
+        for point: FocusTaskSessionTrendPoint
+    ) -> (x: Double, y: Double)? {
+        guard let focusScore = point.focusScore,
+              let progressScore = point.progressScore else {
+            return nil
+        }
+        let overlappingPoints = mappablePoints.filter {
+            $0.focusScore == focusScore && $0.progressScore == progressScore
+        }
+        guard overlappingPoints.count > 1,
+              let index = overlappingPoints.firstIndex(where: { $0.id == point.id }) else {
+            return (focusScore, progressScore)
+        }
+        let offset = Double(index) / Double(overlappingPoints.count - 1) * 0.44 - 0.22
+        return (focusScore + offset, progressScore)
+    }
+
+    private func focusAxisLabel(
+        _ score: Int
+    ) -> String {
+        switch score {
+        case 1: return "어려움"
+        case 2: return "흐트러짐"
+        case 3: return "대체로"
+        case 4: return "깊게"
+        default: return ""
+        }
+    }
+
+    private func progressAxisLabel(
+        _ score: Int
+    ) -> String {
+        switch score {
+        case 0: return "알 수 없음"
+        case 1: return "거의 못함"
+        case 2: return "의미 있게"
+        case 3: return "계획만큼"
+        default: return ""
+        }
+    }
+
+    private func mapExclusionText(
+        _ point: FocusTaskSessionTrendPoint
+    ) -> String {
+        let focus = point.selfAssessmentLabel ?? "집중 회고 없음"
+        let progress = point.progressResult?.label(
+            recordsLinkedTaskCompletion: point.taskCompleted
+        ) ?? "진척 회고 없음"
+        return "\(point.iteration)회차 · 집중 체감: \(focus) · 작업 진척: \(progress)"
+    }
+
+}
+
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
     let reflections: [PomodoroReflection]
@@ -1226,6 +2103,7 @@ struct FocusDetailView: View {
     @State private var showsCategoryFilter = false
     @State private var categorySearchText = ""
     @State private var expandedTaskGroupIDs: Set<String> = []
+    @State private var hoveredTaskSessionID: UUID?
 
     private var rows: [FocusSessionRow] {
         let reflectionByID = Dictionary(
@@ -1246,6 +2124,8 @@ struct FocusDetailView: View {
                 endKind: session.endKind,
                 rating: focusRating(reflection?.focusExperience),
                 selfAssessmentLabel: reflection?.focusExperience?.label,
+                progressResult: reflection?.progressResult,
+                incompleteReason: reflection?.incompleteReason,
                 observation: session.observation,
                 inputActivityRatio: session.inputActivityRatio,
                 markerColorKey: session.markerColorKey
@@ -1279,8 +2159,12 @@ struct FocusDetailView: View {
     private var taskGroups: [FocusTaskSessionGroup] {
         FocusTaskSessionGroupBuilder.groups(
             rows: filteredRows,
-            completedSessionIDs: Set(taskCompletions.map(\.focusSessionID))
+            completedSessionIDs: completedTaskSessionIDs
         )
+    }
+
+    private var completedTaskSessionIDs: Set<UUID> {
+        Set(taskCompletions.map(\.focusSessionID))
     }
 
     var body: some View {
@@ -1850,6 +2734,17 @@ struct FocusDetailView: View {
 
             if isExpanded {
                 Divider()
+                if group.rows.count > 1 {
+                    FocusTaskSessionTrendView(
+                        points: FocusTaskSessionTrendBuilder.points(
+                            rows: group.rows,
+                            completedSessionIDs: completedTaskSessionIDs
+                        ),
+                        selectedSessionID: $selectedSessionID,
+                        hoveredSessionID: $hoveredTaskSessionID
+                    )
+                    Divider()
+                }
                 ForEach(group.rows) { row in
                     sessionCard(row)
                 }
@@ -2164,7 +3059,8 @@ struct FocusDetailView: View {
     }
 
     private func sessionCard(_ row: FocusSessionRow) -> some View {
-        let isSelected = selectedSessionID == row.id
+        let isPersistentlySelected = selectedSessionID == row.id
+        let isSelected = isPersistentlySelected || hoveredTaskSessionID == row.id
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 colorSwatchButton(for: row)
@@ -2205,7 +3101,7 @@ struct FocusDetailView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            selectedSessionID = isSelected ? nil : row.id
+            selectedSessionID = isPersistentlySelected ? nil : row.id
         }
     }
 
