@@ -1517,6 +1517,79 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
     }
 
+    func testFocusPeriodCalendarBuildsMondayBasedWeek() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let referenceDate = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    year: 2026,
+                    month: 7,
+                    day: 22
+                )
+            )
+        )
+
+        let dates = FocusPeriodCalendarBuilder.weekDates(
+            containing: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            dates.map { calendar.component(.day, from: $0) },
+            [20, 21, 22, 23, 24, 25, 26]
+        )
+        XCTAssertEqual(
+            dates.map {
+                FocusPeriodCalendarBuilder.mondayIndex(
+                    for: $0,
+                    calendar: calendar
+                )
+            },
+            [0, 1, 2, 3, 4, 5, 6]
+        )
+    }
+
+    func testFocusPeriodCalendarPadsMonthIntoCompleteWeeks() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let referenceDate = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    year: 2026,
+                    month: 7,
+                    day: 15
+                )
+            )
+        )
+
+        let weeks = FocusPeriodCalendarBuilder.monthWeeks(
+            containing: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(weeks.count, 5)
+        XCTAssertTrue(weeks.allSatisfy { $0.count == 7 })
+        XCTAssertNil(weeks[0][0])
+        XCTAssertNil(weeks[0][1])
+        XCTAssertEqual(
+            calendar.component(
+                .day,
+                from: try XCTUnwrap(weeks[0][2])
+            ),
+            1
+        )
+        XCTAssertEqual(
+            calendar.component(
+                .day,
+                from: try XCTUnwrap(weeks[4][4])
+            ),
+            31
+        )
+        XCTAssertNil(weeks[4][5])
+        XCTAssertNil(weeks[4][6])
+    }
+
     func testFocusTaskSessionGroupsUseLinkedMemoIDAndKeepUnlinkedSessionsSeparate() throws {
         let memoID = UUID()
         let completedSessionID = UUID()
