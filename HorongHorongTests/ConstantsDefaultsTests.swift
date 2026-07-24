@@ -1590,6 +1590,180 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(Set(unlinkedGroups.map(\.id)).count, 2)
     }
 
+    func testFocusTaskSessionTrendPointsKeepChronologyAndMissingValues() throws {
+        let firstSessionID = UUID()
+        let secondSessionID = UUID()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let secondStart = start.addingTimeInterval(1_800)
+        let rows = [
+            makeFocusSessionRow(
+                id: secondSessionID,
+                category: "개발",
+                startedAt: secondStart,
+                durationSeconds: 1_200,
+                plannedDurationSeconds: 1_500,
+                endKind: .recordedEarly,
+                rating: 3,
+                selfAssessmentLabel: PomodoroFocusExperience.mostlyFocused.label,
+                progressResult: .meaningfulProgress,
+                incompleteReason: .underestimatedScope
+            ),
+            makeFocusSessionRow(
+                id: firstSessionID,
+                category: "개발",
+                startedAt: start,
+                durationSeconds: 1_500,
+                plannedDurationSeconds: 1_500,
+                endKind: .timerCompleted,
+                rating: 4,
+                selfAssessmentLabel: PomodoroFocusExperience.deeplyFocused.label,
+                progressResult: .completedAsPlanned
+            ),
+        ]
+
+        let points = FocusTaskSessionTrendBuilder.points(
+            rows: rows,
+            completedSessionIDs: [firstSessionID]
+        )
+
+        XCTAssertEqual(points.map(\.id), [firstSessionID, secondSessionID])
+        XCTAssertEqual(points.map(\.iteration), [1, 2])
+
+        let firstPoint = try XCTUnwrap(points.first)
+        XCTAssertEqual(firstPoint.selfAssessmentRating, 4)
+        XCTAssertEqual(firstPoint.progressResult, .completedAsPlanned)
+        XCTAssertEqual(firstPoint.progressScore, 3)
+        XCTAssertTrue(firstPoint.taskCompleted)
+
+        let secondPoint = try XCTUnwrap(points.last)
+        XCTAssertEqual(secondPoint.completionStatus, .endedEarly)
+        XCTAssertEqual(secondPoint.selfAssessmentRating, 3)
+        XCTAssertEqual(secondPoint.progressResult, .meaningfulProgress)
+        XCTAssertEqual(secondPoint.incompleteReason, .underestimatedScope)
+        XCTAssertEqual(secondPoint.progressScore, 2)
+        XCTAssertTrue(secondPoint.canPlotOnCauseMap)
+        XCTAssertFalse(secondPoint.taskCompleted)
+    }
+
+    func testFocusTaskContinuationCausesUseDirectReflectionReasons() throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let rows = [
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start,
+                durationSeconds: 1_500,
+                rating: 4,
+                progressResult: .meaningfulProgress,
+                incompleteReason: .underestimatedScope
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(1_800),
+                durationSeconds: 1_500,
+                rating: 4,
+                progressResult: .littleProgress,
+                incompleteReason: .blocked
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(3_600),
+                durationSeconds: 1_500,
+                rating: 1,
+                progressResult: .littleProgress,
+                incompleteReason: .distracted
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(5_400),
+                durationSeconds: 1_500,
+                rating: 3,
+                progressResult: .goalChanged,
+                incompleteReason: .switchedTask
+            ),
+        ]
+
+        let summary = FocusTaskContinuationCauseBuilder.summary(
+            points: FocusTaskSessionTrendBuilder.points(rows: rows)
+        )
+        let evidence = Dictionary(
+            uniqueKeysWithValues: summary.evidence.map { ($0.cause, $0) }
+        )
+
+        XCTAssertEqual(
+            FocusTaskContinuationCause.allCases.map {
+                evidence[$0]?.directSessionCount
+            },
+            [1, 1, 1, 1]
+        )
+        XCTAssertTrue(
+            FocusTaskContinuationCause.allCases.allSatisfy {
+                evidence[$0]?.supportingSessionCount == 0
+            }
+        )
+        XCTAssertNil(summary.dominantCause)
+        XCTAssertEqual(summary.headline, "여러 이유가 함께 기록됐어요")
+    }
+
+    func testFocusTaskContinuationCausesKeepInferredSignalsSeparate() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let completedSessionID = UUID()
+        let rows = [
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start,
+                durationSeconds: 1_500,
+                rating: 4,
+                progressResult: .meaningfulProgress
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(1_800),
+                durationSeconds: 1_500,
+                rating: 4,
+                progressResult: .littleProgress
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(3_600),
+                durationSeconds: 1_500,
+                rating: 1,
+                progressResult: .meaningfulProgress
+            ),
+            makeFocusSessionRow(
+                id: completedSessionID,
+                category: "개발",
+                startedAt: start.addingTimeInterval(5_400),
+                durationSeconds: 1_500,
+                rating: 4,
+                progressResult: .completedAsPlanned
+            ),
+        ]
+        let points = FocusTaskSessionTrendBuilder.points(
+            rows: rows,
+            completedSessionIDs: [completedSessionID]
+        )
+        let summary = FocusTaskContinuationCauseBuilder.summary(points: points)
+        let evidence = Dictionary(
+            uniqueKeysWithValues: summary.evidence.map { ($0.cause, $0) }
+        )
+
+        XCTAssertTrue(
+            FocusTaskContinuationCause.allCases.allSatisfy {
+                evidence[$0]?.directSessionCount == 0
+            }
+        )
+        XCTAssertEqual(evidence[.scopeOrQuality]?.supportingSessionCount, 1)
+        XCTAssertEqual(evidence[.difficultyOrBlocked]?.supportingSessionCount, 1)
+        XCTAssertEqual(evidence[.focusDisruption]?.supportingSessionCount, 1)
+        XCTAssertEqual(evidence[.contextChange]?.supportingSessionCount, 0)
+        XCTAssertEqual(
+            summary.headline,
+            "직접 선택한 이유가 없어 응답 조합만 보여드려요"
+        )
+        XCTAssertEqual(points.map(\.progressScore), [2, 1, 2, 3])
+        XCTAssertEqual(points.last?.taskCompleted, true)
+    }
+
     func testPomodoroTaskSummariesGroupByMemoIDAndKeepUnlinkedSessionsSeparate() throws {
         let firstMemoID = UUID()
         let secondMemoID = UUID()
@@ -4624,7 +4798,12 @@ final class ConstantsDefaultsTests: XCTestCase {
         durationSeconds: Int,
         plannedDurationSeconds: Int? = nil,
         endKind: FocusSessionEndKind? = nil,
-        selfAssessmentLabel: String? = nil
+        rating: Int? = nil,
+        selfAssessmentLabel: String? = nil,
+        progressResult: PomodoroProgressResult? = nil,
+        incompleteReason: PomodoroIncompleteReason? = nil,
+        segments: [AppUsageSegment] = [],
+        inputActivityRatio: Double? = nil
     ) -> FocusSessionRow {
         let endedAt = startedAt.addingTimeInterval(TimeInterval(durationSeconds))
         return FocusSessionRow(
@@ -4637,14 +4816,16 @@ final class ConstantsDefaultsTests: XCTestCase {
             durationSeconds: durationSeconds,
             plannedDurationSeconds: plannedDurationSeconds,
             endKind: endKind,
-            rating: nil,
+            rating: rating,
             selfAssessmentLabel: selfAssessmentLabel,
+            progressResult: progressResult,
+            incompleteReason: incompleteReason,
             observation: PomodoroSessionObservationBuilder.observation(
                 from: startedAt,
                 to: endedAt,
-                segments: []
+                segments: segments
             ),
-            inputActivityRatio: nil,
+            inputActivityRatio: inputActivityRatio,
             markerColorKey: nil
         )
     }
