@@ -290,7 +290,7 @@ private struct PomodoroReflectionView: View {
                         .foregroundStyle(PopoverChrome.inkTertiary)
                 } else if step == .appClassification,
                           !productivityManagementAppUsages.isEmpty {
-                    Text("생산성 관리 앱 사용이 작업의 일부였다면 이 세션에만 반영해요.")
+                    Text("생산성 관리로 분류된 앱 사용이 작업의 일부였다면 이 세션에만 반영해요.")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                 }

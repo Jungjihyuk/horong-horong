@@ -30,6 +30,7 @@ struct MenuBarPopover: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: PopoverTab
     @State private var showTelemetryConsentPrompt = false
+    @State private var showFocusEndPrompt = false
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     var timerManager: TimerManager
@@ -52,6 +53,9 @@ struct MenuBarPopover: View {
                 bottomBar
             }
 
+            if showFocusEndPrompt {
+                focusEndPrompt
+            }
             if showTelemetryConsentPrompt {
                 telemetryConsentPrompt
             }
@@ -88,6 +92,11 @@ struct MenuBarPopover: View {
         .onAppear {
             showTelemetryConsentPrompt = TelemetryConsentStore.shouldPromptForConsent
         }
+        .onChange(of: appState.timerState) { _, state in
+            if state != .focusing && state != .paused {
+                showFocusEndPrompt = false
+            }
+        }
     }
 
     private func configurePopoverHostWindow(_ window: NSWindow) {
@@ -101,6 +110,94 @@ struct MenuBarPopover: View {
             view.layer?.cornerCurve = .continuous
             view.layer?.masksToBounds = true
         }
+    }
+
+    private var focusEndPrompt: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(PopoverChrome.accent)
+                    Text("집중을 종료할까요?")
+                        .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                }
+
+                Text("\(formattedFocusElapsedTime) 동안의 집중 기록을 저장할 수 있어요.")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+
+                VStack(spacing: 8) {
+                    Button {
+                        showFocusEndPrompt = false
+                        timerManager.endFocusAndRecord()
+                    } label: {
+                        Text("기록 후 종료")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(LanternPrimaryButtonStyle())
+
+                    Button {
+                        showFocusEndPrompt = false
+                        timerManager.discardCurrentFocus()
+                    } label: {
+                        Text("기록하지 않고 종료")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.large)
+
+                    Button {
+                        showFocusEndPrompt = false
+                    } label: {
+                        Text("계속하기")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(LanternSecondaryButtonStyle())
+                }
+            }
+            .padding(16)
+            .frame(width: Constants.popoverWidth - 56)
+            .background(
+                PopoverChrome.card,
+                in: RoundedRectangle(
+                    cornerRadius: PopoverChrome.radius(16),
+                    style: .continuous
+                )
+            )
+            .overlay(
+                RoundedRectangle(
+                    cornerRadius: PopoverChrome.radius(16),
+                    style: .continuous
+                )
+                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+            )
+            .shadow(
+                color: PopoverChrome.isGamePixel ? .clear : .black.opacity(0.18),
+                radius: PopoverChrome.isGamePixel ? 0 : 20,
+                x: 0,
+                y: PopoverChrome.isGamePixel ? 0 : 12
+            )
+        }
+        .zIndex(10)
+    }
+
+    private var formattedFocusElapsedTime: String {
+        let seconds = timerManager.currentFocusElapsedSeconds
+        let minutes = seconds / 60
+        let remainder = seconds % 60
+        if minutes == 0 {
+            return "\(remainder)초"
+        }
+        if remainder == 0 {
+            return "\(minutes)분"
+        }
+        return "\(minutes)분 \(remainder)초"
     }
 
     private var telemetryConsentPrompt: some View {
@@ -208,7 +305,12 @@ struct MenuBarPopover: View {
     private var tabContent: some View {
         switch selectedTab {
         case .timer:
-            TimerView(timerManager: timerManager) {
+            TimerView(
+                timerManager: timerManager,
+                requestFocusEnd: {
+                    showFocusEndPrompt = true
+                }
+            ) {
                 dismiss()
             }
         case .memo:

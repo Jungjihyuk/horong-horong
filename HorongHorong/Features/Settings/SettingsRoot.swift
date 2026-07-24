@@ -183,6 +183,7 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
         case .category:
             defaults.removeObject(forKey: Constants.AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
+            defaults.removeObject(forKey: Constants.AppStorageKey.unmappedAppHandling)
             for category in Constants.allCategories {
                 IdleThresholdStore.shared.resetToDefault(category: category)
             }

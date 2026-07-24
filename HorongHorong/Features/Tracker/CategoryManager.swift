@@ -25,16 +25,17 @@ final class CategoryManager: @unchecked Sendable {
         for rule in Constants.defaultWebsiteCategoryRules {
             let bundleIdentifier = WebsiteCategoryRule.bundleIdentifier(for: rule.domain)
             guard !Constants.isDefaultCategoryRuleHidden(bundleIdentifier) else { continue }
-            websiteRules[rule.domain] = rule.category
+            setWebsiteCategory(rule.category, for: rule.domain)
         }
 
         let descriptor = FetchDescriptor<AppCategoryRule>(
             predicate: #Predicate { $0.isUserDefined == true }
         )
         if let rules = try? context.fetch(descriptor) {
+            var persistedWebsiteRules: [(domain: String, category: String)] = []
             for rule in rules {
                 if let domain = WebsiteCategoryRule.domain(from: rule.bundleIdentifier) {
-                    websiteRules[domain] = rule.category
+                    persistedWebsiteRules.append((domain, rule.category))
                     continue
                 }
                 if rule.isExcluded {
@@ -42,6 +43,15 @@ final class CategoryManager: @unchecked Sendable {
                 } else {
                     userRules[rule.bundleIdentifier] = rule.category
                 }
+            }
+
+            for rule in persistedWebsiteRules where
+                !Constants.websiteAliases(for: rule.domain).isEmpty {
+                setWebsiteCategory(rule.category, for: rule.domain)
+            }
+            for rule in persistedWebsiteRules where
+                Constants.websiteAliases(for: rule.domain).isEmpty {
+                websiteRules[rule.domain] = rule.category
             }
         }
     }
@@ -89,7 +99,7 @@ final class CategoryManager: @unchecked Sendable {
 
     func setUserRule(bundleIdentifier: String, category: String) {
         if let domain = WebsiteCategoryRule.domain(from: bundleIdentifier) {
-            websiteRules[domain] = category
+            setWebsiteCategory(category, for: domain)
             return
         }
         excludedBundleIdentifiers.remove(bundleIdentifier)
@@ -98,7 +108,9 @@ final class CategoryManager: @unchecked Sendable {
 
     func removeUserRule(bundleIdentifier: String) {
         if let domain = WebsiteCategoryRule.domain(from: bundleIdentifier) {
-            websiteRules.removeValue(forKey: domain)
+            for relatedDomain in Constants.websiteRuleDomains(for: domain) {
+                websiteRules.removeValue(forKey: relatedDomain)
+            }
             return
         }
         userRules.removeValue(forKey: bundleIdentifier)
@@ -112,6 +124,12 @@ final class CategoryManager: @unchecked Sendable {
 
     func colorForCategory(_ category: String) -> String {
         Constants.categoryEmoji(for: category)
+    }
+
+    private func setWebsiteCategory(_ category: String, for domain: String) {
+        for relatedDomain in Constants.websiteRuleDomains(for: domain) {
+            websiteRules[relatedDomain] = category
+        }
     }
 
     private func migrateLegacyProductivityManagementCategory(

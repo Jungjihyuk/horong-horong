@@ -269,7 +269,11 @@ enum AttentionAnalytics {
         isAllowedSwitch: ((String, String) -> Bool)?,
         breakTransitions: [BreakTransitionIntent]
     ) -> AttentionEventCandidate? {
-        guard session.completed, let endedAt = session.endedAt else { return nil }
+        guard session.completed,
+              session.endKind != .recordedEarly,
+              let endedAt = session.endedAt else {
+            return nil
+        }
         let expectedReturnAt = endedAt.addingTimeInterval(TimeInterval(max(0, session.breakMinutes * 60)))
         guard expectedReturnAt < dayEnd else { return nil }
         guard !hasResolvedBreakTransition(near: expectedReturnAt, in: breakTransitions) else { return nil }

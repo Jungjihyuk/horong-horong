@@ -135,6 +135,47 @@ enum Constants {
         return CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
     }
 
+    enum UnmappedAppHandling: String, CaseIterable, Identifiable {
+        case pendingClassification
+        case recordAsOther
+        case doNotRecord
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .pendingClassification: return "분류 대기"
+            case .recordAsOther: return "기타로 기록"
+            case .doNotRecord: return "기록 안 함"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .pendingClassification:
+                return "미분류 목록에 모아 나중에 분류합니다."
+            case .recordAsOther:
+                return "기타로 기록하며 미분류 목록에는 추가하지 않습니다."
+            case .doNotRecord:
+                return "등록하지 않은 앱의 사용 시간을 저장하지 않습니다."
+            }
+        }
+    }
+
+    static let defaultUnmappedAppHandling: UnmappedAppHandling = .pendingClassification
+
+    static func storedUnmappedAppHandling(
+        in defaults: UserDefaults = .standard
+    ) -> UnmappedAppHandling {
+        guard let rawValue = defaults.string(
+            forKey: AppStorageKey.unmappedAppHandling
+        ) else {
+            return defaultUnmappedAppHandling
+        }
+        return UnmappedAppHandling(rawValue: rawValue)
+            ?? defaultUnmappedAppHandling
+    }
+
     // MARK: - 브라우저 bundle identifier (URL 기반 분류용)
     static let browserBundleIds: Set<String> = [
         "com.google.Chrome",
@@ -150,14 +191,6 @@ enum Constants {
         "com.vivaldi.Vivaldi",
         "com.operasoftware.Opera",
         "com.kagi.kagimacOS",
-    ]
-
-    // MARK: - 엔터 카테고리로 분류할 도메인 키워드 (브라우저 URL 내 포함 여부 검사)
-    // label 은 AppUsageRecord 에서 "Google Chrome (YouTube)" 처럼 괄호 안에 표기되는 서비스명
-    static let entertainmentURLHosts: [(host: String, label: String)] = [
-        ("youtube.com", "YouTube"),
-        ("youtu.be", "YouTube"),
-        ("netflix.com", "Netflix"),
     ]
 
     // MARK: - 조사 카테고리로 분류할 URL 규칙
@@ -206,13 +239,49 @@ enum Constants {
     ] }
 
     // MARK: - 기본 웹사이트→카테고리 매핑
-    static var defaultWebsiteCategoryRules: [(domain: String, category: String)] { [
-        ("chatgpt.com", categoryName("개발")),
-        ("claude.ai", categoryName("개발")),
-        ("gemini.google.com", categoryName("개발")),
-        ("youtube.com", categoryName("엔터")),
-        ("netflix.com", categoryName("엔터")),
+    static var defaultWebsiteCategoryRules: [
+        (domain: String, aliases: [String], category: String)
+    ] { [
+        ("chatgpt.com", [], categoryName("개발")),
+        ("claude.ai", [], categoryName("개발")),
+        ("gemini.google.com", [], categoryName("개발")),
+        ("youtube.com", ["youtu.be"], categoryName("엔터")),
+        ("netflix.com", [], categoryName("엔터")),
     ] }
+
+    static func websiteAliases(for domain: String) -> [String] {
+        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
+            return []
+        }
+        return defaultWebsiteCategoryRules.first {
+            $0.domain == normalizedDomain
+        }?.aliases ?? []
+    }
+
+    static func canonicalWebsiteRuleDomain(for domain: String) -> String {
+        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
+            return domain
+        }
+        return defaultWebsiteCategoryRules.first {
+            $0.domain == normalizedDomain || $0.aliases.contains(normalizedDomain)
+        }?.domain ?? normalizedDomain
+    }
+
+    static func websiteRuleDomains(for domain: String) -> [String] {
+        let canonicalDomain = canonicalWebsiteRuleDomain(for: domain)
+        return [canonicalDomain] + websiteAliases(for: canonicalDomain)
+    }
+
+    static func legacyWebsiteTrackedBundleSuffixes(for domain: String) -> [String] {
+        switch canonicalWebsiteRuleDomain(for: domain) {
+        case "youtube.com":
+            return [".youtube"]
+        case "netflix.com":
+            return [".netflix"]
+        default:
+            return []
+        }
+    }
 
     static var allDefaultCategoryRules: [
         (bundleId: String, appName: String, category: String)
@@ -523,6 +592,7 @@ enum Constants {
         static let remindersImportEnabled = "memo.remindersImportEnabled"
         static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
         static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
+        static let unmappedAppHandling = "category.unmappedAppHandling"
     }
 
     // MARK: - 메뉴바 표시 형식

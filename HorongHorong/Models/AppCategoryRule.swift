@@ -66,6 +66,14 @@ enum WebsiteCategoryRule {
         return normalizedDomain(from: domain)
     }
 
+    static func matchesTrackedBundleIdentifier(
+        _ trackedBundleIdentifier: String,
+        domain: String
+    ) -> Bool {
+        guard let normalizedDomain = normalizedDomain(from: domain) else { return false }
+        return trackedBundleIdentifier.hasSuffix(".website.\(normalizedDomain)")
+    }
+
     static func bestMatch(
         for url: String,
         rules: [String: String]
@@ -148,6 +156,17 @@ enum DefaultAppCategoryRuleStore {
 
 @MainActor
 enum AppClassificationService {
+    private struct UsageDayKey: Hashable {
+        let bundleIdentifier: String
+        let date: Date
+    }
+
+    private struct DailyCategoryTotal {
+        var appName: String
+        var durationSeconds: Int
+        var latestEndTime: Date
+    }
+
     static func productivityManagementAppUsages(
         from start: Date,
         to end: Date,
@@ -396,6 +415,52 @@ enum AppClassificationService {
         postUsageChange()
     }
 
+    @discardableResult
+    static func reclassifyExistingUsage(
+        ruleBundleIdentifier: String,
+        category: String,
+        modelContext: ModelContext
+    ) throws -> Int {
+        let websiteDomain = WebsiteCategoryRule.domain(from: ruleBundleIdentifier)
+        let websiteDomains = websiteDomain.map(Constants.websiteRuleDomains(for:)) ?? []
+        let legacyBundleSuffixes = websiteDomain.map(
+            Constants.legacyWebsiteTrackedBundleSuffixes(for:)
+        ) ?? []
+        let segments = try modelContext.fetch(FetchDescriptor<AppUsageSegment>())
+        let matchingSegments = segments.filter { segment in
+            if websiteDomain != nil {
+                return websiteDomains.contains { domain in
+                    WebsiteCategoryRule.matchesTrackedBundleIdentifier(
+                        segment.bundleIdentifier,
+                        domain: domain
+                    )
+                } || legacyBundleSuffixes.contains {
+                    segment.bundleIdentifier.hasSuffix($0)
+                }
+            }
+            return segment.bundleIdentifier == ruleBundleIdentifier
+        }
+
+        var affectedDays: Set<UsageDayKey> = []
+        var changedCount = 0
+        for segment in matchingSegments
+            where !segment.isUserModified && segment.category != category {
+            affectedDays.formUnion(usageDayKeys(for: segment))
+            segment.category = category
+            changedCount += 1
+        }
+
+        for key in affectedDays {
+            try rebuildDailyRecords(for: key, modelContext: modelContext)
+        }
+
+        try modelContext.save()
+        if changedCount > 0 {
+            postUsageChange()
+        }
+        return changedCount
+    }
+
     static func exclude(
         bundleIdentifier: String,
         appName: String,
@@ -502,6 +567,89 @@ enum AppClassificationService {
         return Set(
             ((try? modelContext.fetch(descriptor)) ?? []).map(\.bundleIdentifier)
         )
+    }
+
+    private static func usageDayKeys(for segment: AppUsageSegment) -> Set<UsageDayKey> {
+        let calendar = Calendar.current
+        var day = calendar.startOfDay(for: segment.startTime)
+        var keys: Set<UsageDayKey> = []
+
+        while day < segment.endTime {
+            keys.insert(UsageDayKey(
+                bundleIdentifier: segment.bundleIdentifier,
+                date: day
+            ))
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else {
+                break
+            }
+            day = nextDay
+        }
+        return keys
+    }
+
+    private static func rebuildDailyRecords(
+        for key: UsageDayKey,
+        modelContext: ModelContext
+    ) throws {
+        let calendar = Calendar.current
+        let dayStart = key.date
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
+            return
+        }
+
+        let bundleIdentifier = key.bundleIdentifier
+        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
+            predicate: #Predicate {
+                $0.bundleIdentifier == bundleIdentifier && $0.date == dayStart
+            }
+        )
+        for record in try modelContext.fetch(recordDescriptor) {
+            modelContext.delete(record)
+        }
+
+        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
+            predicate: #Predicate {
+                $0.bundleIdentifier == bundleIdentifier
+                    && $0.startTime < dayEnd
+                    && $0.endTime > dayStart
+            }
+        )
+        var totals: [String: DailyCategoryTotal] = [:]
+        for segment in try modelContext.fetch(segmentDescriptor) {
+            let clippedStart = max(dayStart, segment.startTime)
+            let clippedEnd = min(dayEnd, segment.endTime)
+            let durationSeconds = max(
+                0,
+                Int(clippedEnd.timeIntervalSince(clippedStart))
+            )
+            guard durationSeconds > 0 else { continue }
+
+            if var existing = totals[segment.category] {
+                existing.durationSeconds += durationSeconds
+                if segment.endTime > existing.latestEndTime {
+                    existing.appName = segment.appName
+                    existing.latestEndTime = segment.endTime
+                }
+                totals[segment.category] = existing
+            } else {
+                totals[segment.category] = DailyCategoryTotal(
+                    appName: segment.appName,
+                    durationSeconds: durationSeconds,
+                    latestEndTime: segment.endTime
+                )
+            }
+        }
+
+        for (category, total) in totals {
+            let record = AppUsageRecord(
+                appName: total.appName,
+                bundleIdentifier: bundleIdentifier,
+                category: category,
+                date: dayStart
+            )
+            record.durationSeconds = total.durationSeconds
+            modelContext.insert(record)
+        }
     }
 
     private static func postUsageChange() {

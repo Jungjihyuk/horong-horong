@@ -88,7 +88,104 @@ final class TimerManager: @unchecked Sendable {
         startCountdown()
     }
 
+    var currentFocusElapsedSeconds: Int {
+        Self.elapsedFocusSeconds(
+            plannedSeconds: appState.focusMinutes * 60,
+            remainingSeconds: appState.remainingSeconds
+        )
+    }
+
+    static func elapsedFocusSeconds(
+        plannedSeconds: Int,
+        remainingSeconds: Int
+    ) -> Int {
+        let normalizedPlannedSeconds = max(0, plannedSeconds)
+        let normalizedRemainingSeconds = min(
+            normalizedPlannedSeconds,
+            max(0, remainingSeconds)
+        )
+        return normalizedPlannedSeconds - normalizedRemainingSeconds
+    }
+
+    @discardableResult
+    func endFocusAndRecord() -> FocusSession? {
+        guard appState.timerState == .focusing || appState.timerState == .paused,
+              let session = currentSession else {
+            return nil
+        }
+
+        timer?.invalidate()
+        timer = nil
+        cancelPostBreakPrompt()
+
+        let actualSeconds = currentFocusElapsedSeconds
+        guard actualSeconds > 0 else {
+            discardCurrentFocus()
+            return nil
+        }
+
+        session.endedAt = Date()
+        session.completed = true
+        session.actualFocusSeconds = actualSeconds
+        session.endKind = .recordedEarly
+        session.inputActiveSeconds = focusInputActiveSeconds
+        updateLastCompletedTaskContext(for: session)
+        try? modelContext?.save()
+        recordCompletedFocus(session: session)
+        NotificationCenter.default.post(
+            name: .pomodoroSessionDidChange,
+            object: session.id
+        )
+
+        let completedSessionID = session.id
+        currentSession = nil
+        focusInputActiveSeconds = 0
+        appState.timerState = .idle
+        appState.remainingSeconds = 0
+
+        if UserDefaults.standard.bool(
+            forKey: Constants.AppStorageKey.pomodoroReflectionEnabled
+        ) {
+            Task { @MainActor [weak self] in
+                self?.showReflection(focusSessionID: completedSessionID)
+            }
+        }
+        return session
+    }
+
+    func discardCurrentFocus() {
+        guard appState.timerState == .focusing || appState.timerState == .paused else {
+            return
+        }
+
+        timer?.invalidate()
+        timer = nil
+        cancelPostBreakPrompt()
+
+        let discardedSessionID = currentSession?.id
+        if let currentSession, let modelContext {
+            modelContext.delete(currentSession)
+            try? modelContext.save()
+        }
+        currentSession = nil
+        focusInputActiveSeconds = 0
+        appState.timerState = .idle
+        appState.remainingSeconds = 0
+
+        if let discardedSessionID {
+            NotificationCenter.default.post(
+                name: .pomodoroSessionDidChange,
+                object: discardedSessionID
+            )
+        }
+    }
+
     func reset() {
+        if appState.timerState == .focusing || appState.timerState == .paused {
+            discardCurrentFocus()
+            return
+        }
+
         timer?.invalidate()
         timer = nil
         cancelPostBreakPrompt()
@@ -184,15 +281,9 @@ final class TimerManager: @unchecked Sendable {
             if let session = currentSession {
                 session.endedAt = Date()
                 session.completed = true
-                canContinueLastTask = canContinueTask(linkedMemoID: session.linkedMemoID)
-                if let linkedMemoID = session.linkedMemoID, canContinueLastTask {
-                    lastCompletedTaskContext = PomodoroTaskContext(
-                        linkedMemoID: linkedMemoID,
-                        taskTitleSnapshot: session.taskTitleSnapshot
-                    )
-                } else {
-                    lastCompletedTaskContext = nil
-                }
+                session.actualFocusSeconds = max(0, session.focusMinutes * 60)
+                session.endKind = .timerCompleted
+                updateLastCompletedTaskContext(for: session)
                 session.inputActiveSeconds = focusInputActiveSeconds
                 try? modelContext?.save()
                 // 완료된 집중 세션을 통계(AppUsageRecord)에 반영한다.
@@ -379,6 +470,18 @@ final class TimerManager: @unchecked Sendable {
         return !memo.isCompletedValue && !memo.isArchivedValue
     }
 
+    private func updateLastCompletedTaskContext(for session: FocusSession) {
+        canContinueLastTask = canContinueTask(linkedMemoID: session.linkedMemoID)
+        if let linkedMemoID = session.linkedMemoID, canContinueLastTask {
+            lastCompletedTaskContext = PomodoroTaskContext(
+                linkedMemoID: linkedMemoID,
+                taskTitleSnapshot: session.taskTitleSnapshot
+            )
+        } else {
+            lastCompletedTaskContext = nil
+        }
+    }
+
     private func hasProductiveActivity(since date: Date) -> Bool {
         guard let context = modelContext else { return false }
         let descriptor = FetchDescriptor<AppUsageSegment>(
@@ -418,35 +521,19 @@ final class TimerManager: @unchecked Sendable {
     private func recordCompletedFocus(session: FocusSession) {
         guard let context = modelContext else { return }
         let category = session.category ?? Constants.defaultFocusCategory
-        let seconds = session.focusMinutes * 60
+        let seconds = session.recordedFocusSeconds
         guard seconds > 0 else { return }
 
-        let today = Calendar.current.startOfDay(for: Date())
+        let today = Calendar.current.startOfDay(for: session.endedAt ?? Date())
         let bundleId = Constants.focusSessionBundleId(for: category)
-        let targetBundleId = bundleId
-        let targetDate = today
-
-        let descriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate {
-                $0.bundleIdentifier == targetBundleId && $0.date == targetDate
-            }
+        try? AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleId,
+            appName: Constants.focusSessionAppName,
+            category: category,
+            date: today,
+            deltaSeconds: seconds,
+            modelContext: context
         )
-
-        if let existing = try? context.fetch(descriptor).first {
-            existing.durationSeconds += seconds
-            if existing.category != category {
-                existing.category = category
-            }
-        } else {
-            let record = AppUsageRecord(
-                appName: Constants.focusSessionAppName,
-                bundleIdentifier: bundleId,
-                category: category,
-                date: today
-            )
-            record.durationSeconds = seconds
-            context.insert(record)
-        }
         try? context.save()
     }
 }

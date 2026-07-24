@@ -26,6 +26,13 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertFalse(Constants.defaultPomodoroReflectionEnabled)
     }
 
+    func testUnmappedAppsDefaultToPendingClassification() {
+        XCTAssertEqual(
+            Constants.defaultUnmappedAppHandling,
+            .pendingClassification
+        )
+    }
+
     func testTimerCompletionNotificationDefaultsToSystemOnly() {
         XCTAssertEqual(Constants.defaultTimerCompletionNotificationStyle, .system)
         XCTAssertEqual(
@@ -1227,6 +1234,114 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
+    func testFocusSessionEarlyEndMetadataPersistsInSwiftData() throws {
+        let schema = Schema([FocusSession.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let session = FocusSession(
+            focusMinutes: 50,
+            breakMinutes: 5,
+            category: "개발"
+        )
+        session.completed = true
+        session.actualFocusSeconds = 18 * 60 + 42
+        session.endKind = .recordedEarly
+
+        context.insert(session)
+        try context.save()
+
+        let saved = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
+        XCTAssertEqual(saved.actualFocusSeconds, 18 * 60 + 42)
+        XCTAssertEqual(saved.recordedFocusSeconds, 18 * 60 + 42)
+        XCTAssertEqual(saved.endKind, .recordedEarly)
+    }
+
+    func testTimerManagerElapsedFocusTimeUsesCountdownProgress() {
+        XCTAssertEqual(
+            TimerManager.elapsedFocusSeconds(
+                plannedSeconds: 50 * 60,
+                remainingSeconds: 31 * 60 + 18
+            ),
+            18 * 60 + 42
+        )
+        XCTAssertEqual(
+            TimerManager.elapsedFocusSeconds(
+                plannedSeconds: 50 * 60,
+                remainingSeconds: 60 * 60
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TimerManager.elapsedFocusSeconds(
+                plannedSeconds: 50 * 60,
+                remainingSeconds: -1
+            ),
+            50 * 60
+        )
+    }
+
+    @MainActor
+    func testTimerManagerRecordsEarlyFocusUsingElapsedCountdown() throws {
+        let reflectionKey = Constants.AppStorageKey.pomodoroReflectionEnabled
+        let previousReflectionSetting = UserDefaults.standard.object(
+            forKey: reflectionKey
+        )
+        UserDefaults.standard.set(false, forKey: reflectionKey)
+        defer {
+            if let previousReflectionSetting {
+                UserDefaults.standard.set(
+                    previousReflectionSetting,
+                    forKey: reflectionKey
+                )
+            } else {
+                UserDefaults.standard.removeObject(forKey: reflectionKey)
+            }
+        }
+
+        let schema = Schema([FocusSession.self, AppUsageRecord.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let appState = AppState()
+        appState.focusMinutes = 50
+        appState.breakMinutes = 5
+        let manager = TimerManager(appState: appState)
+        manager.setModelContext(context)
+
+        manager.startFocus(category: "개발")
+        appState.remainingSeconds = 31 * 60 + 18
+        let session = try XCTUnwrap(manager.endFocusAndRecord())
+
+        XCTAssertEqual(appState.timerState, .idle)
+        XCTAssertEqual(session.actualFocusSeconds, 18 * 60 + 42)
+        XCTAssertEqual(session.recordedFocusSeconds, 18 * 60 + 42)
+        XCTAssertEqual(session.endKind, .recordedEarly)
+        XCTAssertTrue(session.completed)
+
+        let records = try context.fetch(FetchDescriptor<AppUsageRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.durationSeconds, 18 * 60 + 42)
+    }
+
+    @MainActor
+    func testTimerManagerDiscardsCurrentFocusWithoutPersistingSession() throws {
+        let schema = Schema([FocusSession.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let appState = AppState()
+        let manager = TimerManager(appState: appState)
+        manager.setModelContext(context)
+
+        manager.startFocus(category: "개발")
+        manager.discardCurrentFocus()
+
+        XCTAssertEqual(appState.timerState, .idle)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<FocusSession>()).isEmpty)
+    }
+
+    @MainActor
     func testFocusSessionImmersionMetadataPersistsInSwiftData() throws {
         let schema = Schema([FocusSession.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -1363,6 +1478,116 @@ final class ConstantsDefaultsTests: XCTestCase {
 
         XCTAssertEqual(candidate.title, fullTitle)
         XCTAssertFalse(candidate.title.hasSuffix("..."))
+    }
+
+    func testFocusCategorySummariesSortCurrentPeriodByTotalDuration() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let rows = [
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start,
+                durationSeconds: 600
+            ),
+            makeFocusSessionRow(
+                category: "공부",
+                startedAt: start.addingTimeInterval(900),
+                durationSeconds: 1_200
+            ),
+            makeFocusSessionRow(
+                category: "개발",
+                startedAt: start.addingTimeInterval(2_400),
+                durationSeconds: 300
+            ),
+        ]
+
+        XCTAssertEqual(
+            FocusCategorySummaryBuilder.summaries(rows: rows),
+            [
+                FocusCategorySummary(
+                    category: "공부",
+                    durationSeconds: 1_200,
+                    sessionCount: 1
+                ),
+                FocusCategorySummary(
+                    category: "개발",
+                    durationSeconds: 900,
+                    sessionCount: 2
+                ),
+            ]
+        )
+    }
+
+    func testFocusTaskSessionGroupsUseLinkedMemoIDAndKeepUnlinkedSessionsSeparate() throws {
+        let memoID = UUID()
+        let completedSessionID = UUID()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let rows = [
+            makeFocusSessionRow(
+                linkedMemoID: memoID,
+                title: "통계 화면 구현",
+                category: "개발",
+                startedAt: start,
+                durationSeconds: 1_500,
+                plannedDurationSeconds: 1_500,
+                endKind: .timerCompleted,
+                selfAssessmentLabel: PomodoroFocusExperience.deeplyFocused.label
+            ),
+            makeFocusSessionRow(
+                id: completedSessionID,
+                linkedMemoID: memoID,
+                title: "통계 화면 구현 완료",
+                category: "개발",
+                startedAt: start.addingTimeInterval(1_800),
+                durationSeconds: 900,
+                plannedDurationSeconds: 1_500,
+                endKind: .recordedEarly,
+                selfAssessmentLabel: PomodoroFocusExperience.mostlyFocused.label
+            ),
+            makeFocusSessionRow(
+                title: "연결하지 않고 진행",
+                category: "기타",
+                startedAt: start.addingTimeInterval(3_600),
+                durationSeconds: 600
+            ),
+            makeFocusSessionRow(
+                title: "연결하지 않고 진행",
+                category: "기타",
+                startedAt: start.addingTimeInterval(4_500),
+                durationSeconds: 600
+            ),
+        ]
+
+        let groups = FocusTaskSessionGroupBuilder.groups(
+            rows: rows,
+            completedSessionIDs: [completedSessionID]
+        )
+
+        XCTAssertEqual(groups.count, 3)
+
+        let linkedGroup = try XCTUnwrap(
+            groups.first { $0.linkedMemoID == memoID }
+        )
+        XCTAssertEqual(linkedGroup.title, "통계 화면 구현 완료")
+        XCTAssertEqual(linkedGroup.rows.map(\.startedAt), [
+            start,
+            start.addingTimeInterval(1_800),
+        ])
+        XCTAssertEqual(linkedGroup.totalDurationSeconds, 2_400)
+        XCTAssertEqual(linkedGroup.completedAsPlannedCount, 1)
+        XCTAssertEqual(linkedGroup.endedEarlyCount, 1)
+        XCTAssertEqual(linkedGroup.unknownEndCount, 0)
+        XCTAssertEqual(linkedGroup.categories, ["개발"])
+        XCTAssertEqual(linkedGroup.assessmentCounts.map(\.label), [
+            PomodoroFocusExperience.deeplyFocused.label,
+            PomodoroFocusExperience.mostlyFocused.label,
+        ])
+        XCTAssertEqual(linkedGroup.assessmentCounts.map(\.count), [1, 1])
+        XCTAssertTrue(linkedGroup.completedInPeriod)
+
+        let unlinkedGroups = groups.filter { $0.linkedMemoID == nil }
+        XCTAssertEqual(unlinkedGroups.count, 2)
+        XCTAssertTrue(unlinkedGroups.allSatisfy { $0.rows.count == 1 })
+        XCTAssertEqual(Set(unlinkedGroups.map(\.id)).count, 2)
     }
 
     func testPomodoroTaskSummariesGroupByMemoIDAndKeepUnlinkedSessionsSeparate() throws {
@@ -2078,6 +2303,8 @@ final class ConstantsDefaultsTests: XCTestCase {
 
         XCTAssertEqual(observation.appSwitchCount, 0)
         XCTAssertEqual(observation.appUsageRunCount, 1)
+        XCTAssertEqual(observation.distinctAppWebCount, 1)
+        XCTAssertEqual(observation.shortProductivityManagementVisitCount, 1)
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(
             observation.averageAppUsageRunSeconds ?? -1,
@@ -2128,6 +2355,8 @@ final class ConstantsDefaultsTests: XCTestCase {
 
         XCTAssertEqual(observation.appSwitchCount, 2)
         XCTAssertEqual(observation.appUsageRunCount, 3)
+        XCTAssertEqual(observation.distinctAppWebCount, 2)
+        XCTAssertEqual(observation.shortProductivityManagementVisitCount, 0)
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(
             observation.averageAppUsageRunSeconds ?? -1,
@@ -2167,7 +2396,7 @@ final class ConstantsDefaultsTests: XCTestCase {
             segments: segments
         )
 
-        XCTAssertEqual(AppTracker.minimumSegmentSeconds, 3)
+        XCTAssertEqual(AppTracker.minimumSegmentSeconds, 5)
         XCTAssertEqual(observation.appSwitchCount, 1)
         XCTAssertEqual(observation.categorySwitchCount, 0)
         XCTAssertEqual(observation.categoryTransitions, [])
@@ -2194,6 +2423,78 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
         XCTAssertFalse(
             AppTracker.shouldPersistSegment(elapsed: -1, hasPreviousSegment: true)
+        )
+    }
+
+    func testAppTrackerSplitsIdleDurationAcrossCalendarDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 9 * 60 * 60)!
+        let firstDay = calendar.date(
+            from: DateComponents(year: 2026, month: 7, day: 23)
+        )!
+        let start = calendar.date(
+            from: DateComponents(
+                year: 2026,
+                month: 7,
+                day: 23,
+                hour: 23,
+                minute: 55
+            )
+        )!
+        let end = calendar.date(
+            from: DateComponents(
+                year: 2026,
+                month: 7,
+                day: 24,
+                hour: 0,
+                minute: 10
+            )
+        )!
+
+        XCTAssertEqual(
+            AppTracker.dailyDurationSlices(
+                from: start,
+                to: end,
+                calendar: calendar
+            ),
+            [
+                AppTracker.DailyDurationSlice(
+                    date: firstDay,
+                    durationSeconds: 5 * 60
+                ),
+                AppTracker.DailyDurationSlice(
+                    date: calendar.date(byAdding: .day, value: 1, to: firstDay)!,
+                    durationSeconds: 10 * 60
+                ),
+            ]
+        )
+    }
+
+    func testAppTrackerKeepsSameDayIdleDurationInOneSlice() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 9 * 60 * 60)!
+        let start = calendar.date(
+            from: DateComponents(
+                year: 2026,
+                month: 7,
+                day: 23,
+                hour: 12
+            )
+        )!
+        let end = start.addingTimeInterval(15 * 60)
+
+        XCTAssertEqual(
+            AppTracker.dailyDurationSlices(
+                from: start,
+                to: end,
+                calendar: calendar
+            ),
+            [
+                AppTracker.DailyDurationSlice(
+                    date: calendar.startOfDay(for: start),
+                    durationSeconds: 15 * 60
+                ),
+            ]
         )
     }
 
@@ -2486,6 +2787,190 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
+    func testDailyUsageRecordsStaySeparatedByCategory() throws {
+        let schema = Schema([AppUsageRecord.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let date = Date(timeIntervalSince1970: 1_800_677_000)
+        let bundleIdentifier = "test.category-separated"
+
+        try AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleIdentifier,
+            appName: "분리 테스트",
+            category: "개발",
+            date: date,
+            deltaSeconds: 10 * 60,
+            modelContext: context
+        )
+        try AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleIdentifier,
+            appName: "분리 테스트",
+            category: "공부",
+            date: date,
+            deltaSeconds: 5 * 60,
+            modelContext: context
+        )
+        try AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleIdentifier,
+            appName: "분리 테스트",
+            category: "개발",
+            date: date,
+            deltaSeconds: 2 * 60,
+            modelContext: context
+        )
+        try context.save()
+
+        let records = try context.fetch(FetchDescriptor<AppUsageRecord>())
+        let durations = Dictionary(
+            uniqueKeysWithValues: records.map { ($0.category, $0.durationSeconds) }
+        )
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(durations["개발"], 12 * 60)
+        XCTAssertEqual(durations["공부"], 5 * 60)
+    }
+
+    @MainActor
+    func testReclassifyingExistingUsageProtectsUserModifiedSegmentsAndRebuildsDailyRecords() throws {
+        let schema = Schema([AppUsageSegment.self, AppUsageRecord.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let day = Calendar.current.startOfDay(
+            for: Date(timeIntervalSince1970: 1_800_678_000)
+        )
+        let start = day.addingTimeInterval(9 * 60 * 60)
+        let bundleIdentifier = "test.history-reclassification"
+        let automatic = AppUsageSegment(
+            appName: "기록 테스트",
+            bundleIdentifier: bundleIdentifier,
+            category: "개발",
+            startTime: start,
+            endTime: start.addingTimeInterval(10 * 60)
+        )
+        let userModified = AppUsageSegment(
+            appName: "기록 테스트",
+            bundleIdentifier: bundleIdentifier,
+            category: "개발",
+            startTime: start.addingTimeInterval(10 * 60),
+            endTime: start.addingTimeInterval(15 * 60),
+            isUserModified: true
+        )
+        let mixedRecord = AppUsageRecord(
+            appName: "기록 테스트",
+            bundleIdentifier: bundleIdentifier,
+            category: "개발",
+            date: day
+        )
+        mixedRecord.durationSeconds = 15 * 60
+        context.insert(automatic)
+        context.insert(userModified)
+        context.insert(mixedRecord)
+        try context.save()
+
+        let changedCount = try AppClassificationService.reclassifyExistingUsage(
+            ruleBundleIdentifier: bundleIdentifier,
+            category: "공부",
+            modelContext: context
+        )
+
+        XCTAssertEqual(changedCount, 1)
+        XCTAssertEqual(automatic.category, "공부")
+        XCTAssertEqual(userModified.category, "개발")
+        let records = try context.fetch(FetchDescriptor<AppUsageRecord>())
+        let durations = Dictionary(
+            uniqueKeysWithValues: records.map { ($0.category, $0.durationSeconds) }
+        )
+        XCTAssertEqual(durations["공부"], 10 * 60)
+        XCTAssertEqual(durations["개발"], 5 * 60)
+    }
+
+    @MainActor
+    func testWebsiteHistoryReclassificationAppliesAcrossBrowsersOnlyForMatchingDomain() throws {
+        let schema = Schema([AppUsageSegment.self, AppUsageRecord.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let day = Calendar.current.startOfDay(
+            for: Date(timeIntervalSince1970: 1_800_679_000)
+        )
+        let start = day.addingTimeInterval(10 * 60 * 60)
+        let chromeBundle = "com.google.Chrome.website.youtube.com"
+        let safariBundle = "com.apple.Safari.website.youtu.be"
+        let legacyBundle = "com.brave.Browser.youtube"
+        let unrelatedBundle = "com.apple.Safari.website.claude.ai"
+        let segments = [
+            AppUsageSegment(
+                appName: "Chrome (youtube.com)",
+                bundleIdentifier: chromeBundle,
+                category: "엔터",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Safari (youtu.be)",
+                bundleIdentifier: safariBundle,
+                category: "엔터",
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: start.addingTimeInterval(10 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Brave Browser (YouTube)",
+                bundleIdentifier: legacyBundle,
+                category: "엔터",
+                startTime: start.addingTimeInterval(10 * 60),
+                endTime: start.addingTimeInterval(15 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Safari (claude.ai)",
+                bundleIdentifier: unrelatedBundle,
+                category: "개발",
+                startTime: start.addingTimeInterval(15 * 60),
+                endTime: start.addingTimeInterval(20 * 60)
+            ),
+        ]
+        for segment in segments {
+            context.insert(segment)
+            let record = AppUsageRecord(
+                appName: segment.appName,
+                bundleIdentifier: segment.bundleIdentifier,
+                category: segment.category,
+                date: day
+            )
+            record.durationSeconds = segment.durationSeconds
+            context.insert(record)
+        }
+        try context.save()
+
+        let changedCount = try AppClassificationService.reclassifyExistingUsage(
+            ruleBundleIdentifier: WebsiteCategoryRule.bundleIdentifier(
+                for: "youtube.com"
+            ),
+            category: "공부",
+            modelContext: context
+        )
+
+        XCTAssertEqual(changedCount, 3)
+        XCTAssertEqual(segments[0].category, "공부")
+        XCTAssertEqual(segments[1].category, "공부")
+        XCTAssertEqual(segments[2].category, "공부")
+        XCTAssertEqual(segments[3].category, "개발")
+        let records = try context.fetch(FetchDescriptor<AppUsageRecord>())
+        XCTAssertTrue(records.contains {
+            $0.bundleIdentifier == chromeBundle && $0.category == "공부"
+        })
+        XCTAssertTrue(records.contains {
+            $0.bundleIdentifier == safariBundle && $0.category == "공부"
+        })
+        XCTAssertTrue(records.contains {
+            $0.bundleIdentifier == legacyBundle && $0.category == "공부"
+        })
+        XCTAssertTrue(records.contains {
+            $0.bundleIdentifier == unrelatedBundle && $0.category == "개발"
+        })
+    }
+
+    @MainActor
     func testExcludingDiscoveredAppKeepsHistoryAndPersistsFutureExclusion() throws {
         let schema = Schema([
             AppCategoryRule.self,
@@ -2572,6 +3057,94 @@ final class ConstantsDefaultsTests: XCTestCase {
                 PomodoroAppUsageEntry(appName: "Google Chrome", category: "조사", durationSeconds: 5 * 60),
             ]
         )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationDistinguishesRegisteredWebsitesAcrossBrowsers() {
+        let start = Date(timeIntervalSince1970: 1_800_710_000)
+        let end = start.addingTimeInterval(15 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Google Chrome (chatgpt.com)",
+                bundleIdentifier: "com.google.Chrome.website.chatgpt.com",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Safari (chatgpt.com)",
+                bundleIdentifier: "com.apple.Safari.website.chatgpt.com",
+                category: "개발",
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: start.addingTimeInterval(10 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Safari (youtube.com)",
+                bundleIdentifier: "com.apple.Safari.website.youtube.com",
+                category: "엔터",
+                startTime: start.addingTimeInterval(10 * 60),
+                endTime: end
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.appSwitchCount, 1)
+        XCTAssertEqual(observation.appUsageRunCount, 2)
+        XCTAssertEqual(observation.distinctAppWebCount, 2)
+        XCTAssertEqual(observation.categorySwitchCount, 1)
+        XCTAssertEqual(
+            observation.apps,
+            [
+                PomodoroAppUsageEntry(
+                    appName: "chatgpt.com",
+                    category: "개발",
+                    durationSeconds: 10 * 60
+                ),
+                PomodoroAppUsageEntry(
+                    appName: "youtube.com",
+                    category: "엔터",
+                    durationSeconds: 5 * 60
+                ),
+            ]
+        )
+    }
+
+    @MainActor
+    func testPomodoroSessionObservationCountsWebsiteChangeWithinSameCategory() {
+        let start = Date(timeIntervalSince1970: 1_800_720_000)
+        let end = start.addingTimeInterval(10 * 60)
+        let segments = [
+            AppUsageSegment(
+                appName: "Google Chrome (chatgpt.com)",
+                bundleIdentifier: "com.google.Chrome.website.chatgpt.com",
+                category: "개발",
+                startTime: start,
+                endTime: start.addingTimeInterval(5 * 60)
+            ),
+            AppUsageSegment(
+                appName: "Google Chrome (claude.ai)",
+                bundleIdentifier: "com.google.Chrome.website.claude.ai",
+                category: "개발",
+                startTime: start.addingTimeInterval(5 * 60),
+                endTime: end
+            ),
+        ]
+
+        let observation = PomodoroSessionObservationBuilder.observation(
+            from: start,
+            to: end,
+            segments: segments
+        )
+
+        XCTAssertEqual(observation.appSwitchCount, 1)
+        XCTAssertEqual(observation.appUsageRunCount, 2)
+        XCTAssertEqual(observation.distinctAppWebCount, 2)
+        XCTAssertEqual(observation.categorySwitchCount, 0)
     }
 
     @MainActor
@@ -3786,6 +4359,33 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
+    func testPomodoroComparisonPeriodPreservesEarlyEndStatusAndPlannedDuration() throws {
+        let periodStart = Date(timeIntervalSince1970: 1_801_500_000)
+        let session = FocusSession(
+            focusMinutes: 50,
+            breakMinutes: 10,
+            category: "개발"
+        )
+        session.startedAt = periodStart.addingTimeInterval(60)
+        session.endedAt = session.startedAt.addingTimeInterval(1_200)
+        session.actualFocusSeconds = 1_200
+        session.completed = true
+        session.endKind = .recordedEarly
+
+        let result = PomodoroComparisonPeriodBuilder.build(
+            sessions: [session],
+            segments: [],
+            periodStart: periodStart,
+            periodEnd: periodStart.addingTimeInterval(3_600)
+        )
+
+        let breakdown = try XCTUnwrap(result.first)
+        XCTAssertEqual(breakdown.durationSeconds, 1_200)
+        XCTAssertEqual(breakdown.plannedDurationSeconds, 3_000)
+        XCTAssertEqual(breakdown.endKind, .recordedEarly)
+    }
+
+    @MainActor
     func testAppUsageSegmentTracksUserModifiedProvenance() {
         let start = Date(timeIntervalSince1970: 1_800_900_000)
         let automatic = AppUsageSegment(
@@ -4013,6 +4613,40 @@ final class ConstantsDefaultsTests: XCTestCase {
         legacyContainer.mainContext.insert(session)
         try legacyContainer.mainContext.save()
         return session.id
+    }
+
+    private func makeFocusSessionRow(
+        id: UUID = UUID(),
+        linkedMemoID: UUID? = nil,
+        title: String = "테스트 세션",
+        category: String,
+        startedAt: Date,
+        durationSeconds: Int,
+        plannedDurationSeconds: Int? = nil,
+        endKind: FocusSessionEndKind? = nil,
+        selfAssessmentLabel: String? = nil
+    ) -> FocusSessionRow {
+        let endedAt = startedAt.addingTimeInterval(TimeInterval(durationSeconds))
+        return FocusSessionRow(
+            id: id,
+            linkedMemoID: linkedMemoID,
+            title: title,
+            category: category,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationSeconds: durationSeconds,
+            plannedDurationSeconds: plannedDurationSeconds,
+            endKind: endKind,
+            rating: nil,
+            selfAssessmentLabel: selfAssessmentLabel,
+            observation: PomodoroSessionObservationBuilder.observation(
+                from: startedAt,
+                to: endedAt,
+                segments: []
+            ),
+            inputActivityRatio: nil,
+            markerColorKey: nil
+        )
     }
 
     private func makeIsolatedUserDefaults() throws -> (UserDefaults, String) {

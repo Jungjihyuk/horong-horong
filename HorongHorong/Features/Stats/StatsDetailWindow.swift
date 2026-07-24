@@ -87,6 +87,7 @@ struct StatsDetailWindow: View {
                             FocusDetailView(
                                 sessions: pomodoroComparisonSessions,
                                 reflections: pomodoroReflections,
+                                taskCompletions: pomodoroTaskCompletions,
                                 viewMode: viewMode,
                                 referenceDate: selectedDate
                             )
@@ -465,8 +466,7 @@ struct StatsDetailWindow: View {
         let fetchedSessions = loadTimerSessions(start: startDate, end: endDate)
         let fetchedPomodoroReflections = loadPomodoroReflections(for: fetchedSessions)
         let fetchedPomodoroTaskCompletions = loadPomodoroTaskCompletions(
-            for: fetchedSessions,
-            mode: viewMode
+            for: fetchedSessions
         )
         let fetchedBreakTransitions = loadBreakTransitionIntents(start: startDate, end: endDate)
         let attentionSummaryStart = attentionSummaryLoadStart(for: viewMode, start: startDate)
@@ -706,20 +706,15 @@ struct StatsDetailWindow: View {
     }
 
     private func loadPomodoroTaskCompletions(
-        for sessions: [FocusSession],
-        mode: StatsViewMode
+        for sessions: [FocusSession]
     ) -> [PomodoroTaskCompletion] {
-        guard mode == .daily, !sessions.isEmpty else { return [] }
-
-        return sessions.compactMap { session in
-            let sessionID = session.id
-            var descriptor = FetchDescriptor<PomodoroTaskCompletion>(
-                predicate: #Predicate { $0.focusSessionID == sessionID }
-            )
-            descriptor.fetchLimit = 1
-            return try? modelContext.fetch(descriptor).first
-        }
-        .sorted { $0.completedAt < $1.completedAt }
+        guard !sessions.isEmpty else { return [] }
+        let sessionIDs = sessions.map(\.id)
+        let descriptor = FetchDescriptor<PomodoroTaskCompletion>(
+            predicate: #Predicate { sessionIDs.contains($0.focusSessionID) },
+            sortBy: [SortDescriptor(\.completedAt)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func loadBreakTransitionIntents(start: Date, end: Date) -> [BreakTransitionIntent] {
@@ -950,19 +945,19 @@ enum FocusSessionMetric: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .continuousFocus: return "연속 몰입"
-        case .appSwitches: return "앱 전환"
+        case .continuousFocus: return "한 곳 최장 사용"
+        case .appSwitches: return "전환 횟수"
         case .inputActivity: return "키보드·마우스 사용률"
-        case .appCount: return "사용 앱 수"
+        case .appCount: return "사용한 앱·웹 수"
         }
     }
 
     var axisLabel: String {
         switch self {
-        case .continuousFocus: return "연속 몰입 (분) →"
-        case .appSwitches: return "앱 전환 (회) →"
+        case .continuousFocus: return "한 곳 최장 사용 (분) →"
+        case .appSwitches: return "전환 횟수 (회) →"
         case .inputActivity: return "키보드·마우스 사용률 (%) →"
-        case .appCount: return "사용 앱 수 (개) →"
+        case .appCount: return "사용한 앱·웹 수 (개) →"
         }
     }
 
@@ -973,7 +968,7 @@ enum FocusSessionMetric: String, CaseIterable, Identifiable {
         case .continuousFocus: return row.continuousFocusMinutes
         case .appSwitches: return Double(row.observation.appSwitchCount)
         case .inputActivity: return (row.inputActivityRatio ?? 0) * 100
-        case .appCount: return Double(row.observation.apps.count)
+        case .appCount: return Double(row.appCount)
         }
     }
 
@@ -1014,12 +1009,41 @@ enum FocusMarkerPalette {
     }
 }
 
+enum FocusSessionCompletionStatus: Equatable {
+    case completedAsPlanned
+    case endedEarly
+    case unknown
+
+    var label: String {
+        switch self {
+        case .completedAsPlanned: return "예정된 종료"
+        case .endedEarly: return "조기 종료"
+        case .unknown: return "종료 방식 미기록"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .completedAsPlanned:
+            return "처음 설정한 시간이 모두 지난 뒤 종료된 세션이에요."
+        case .endedEarly:
+            return "처음 설정한 시간이 끝나기 전에 기록 후 종료한 세션이에요."
+        case .unknown:
+            return "종료 방식 기록 기능이 생기기 전의 세션이거나 종료 방식을 확인할 수 없는 기록이에요."
+        }
+    }
+}
+
 struct FocusSessionRow: Identifiable {
     let id: UUID
+    let linkedMemoID: UUID?
     let title: String
     let category: String
     let startedAt: Date
+    let endedAt: Date
     let durationSeconds: Int
+    let plannedDurationSeconds: Int?
+    let endKind: FocusSessionEndKind?
     let rating: Int?
     let selfAssessmentLabel: String?
     let observation: PomodoroSessionObservation
@@ -1041,7 +1065,22 @@ struct FocusSessionRow: Identifiable {
     var averageAppSwitchIntervalSeconds: Double? {
         observation.averageAppUsageRunSeconds
     }
-    var appCount: Int { observation.apps.count }
+    var completionStatus: FocusSessionCompletionStatus {
+        switch endKind {
+        case .timerCompleted:
+            return .completedAsPlanned
+        case .recordedEarly:
+            return .endedEarly
+        case nil:
+            guard let plannedDurationSeconds,
+                  plannedDurationSeconds > 0,
+                  durationSeconds >= plannedDurationSeconds else {
+                return .unknown
+            }
+            return .completedAsPlanned
+        }
+    }
+    var appCount: Int { observation.distinctAppWebCount }
     var unclassifiedAppCount: Int {
         observation.apps.filter { $0.category == Constants.unclassifiedAppCategory }.count
     }
@@ -1050,6 +1089,97 @@ struct FocusSessionRow: Identifiable {
         FocusMarkerPalette.color(forKey: markerColorKey) ?? Constants.categoryColor(for: category)
     }
     var emoji: String { Constants.categoryEmoji(for: category) }
+}
+
+struct FocusCategorySummary: Identifiable, Equatable {
+    var id: String { category }
+    let category: String
+    let durationSeconds: Int
+    let sessionCount: Int
+}
+
+enum FocusCategorySummaryBuilder {
+    static func summaries(rows: [FocusSessionRow]) -> [FocusCategorySummary] {
+        let grouped = Dictionary(grouping: rows, by: \.category)
+        return grouped.map { category, categoryRows in
+            FocusCategorySummary(
+                category: category,
+                durationSeconds: categoryRows.reduce(0) { $0 + $1.durationSeconds },
+                sessionCount: categoryRows.count
+            )
+        }
+        .sorted {
+            if $0.durationSeconds != $1.durationSeconds {
+                return $0.durationSeconds > $1.durationSeconds
+            }
+            return $0.category < $1.category
+        }
+    }
+}
+
+struct FocusTaskSessionGroup: Identifiable {
+    let id: String
+    let linkedMemoID: UUID?
+    let title: String
+    let rows: [FocusSessionRow]
+    let completedInPeriod: Bool
+
+    var totalDurationSeconds: Int {
+        rows.reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    var completedAsPlannedCount: Int {
+        rows.filter { $0.completionStatus == .completedAsPlanned }.count
+    }
+
+    var endedEarlyCount: Int {
+        rows.filter { $0.completionStatus == .endedEarly }.count
+    }
+
+    var unknownEndCount: Int {
+        rows.filter { $0.completionStatus == .unknown }.count
+    }
+
+    var categories: [String] {
+        Array(Set(rows.map(\.category))).sorted()
+    }
+
+    var assessmentCounts: [(label: String, count: Int)] {
+        let labels = rows.compactMap(\.selfAssessmentLabel)
+        return PomodoroFocusExperience.allCases.compactMap { experience in
+            let count = labels.filter { $0 == experience.label }.count
+            return count > 0 ? (experience.label, count) : nil
+        }
+    }
+}
+
+enum FocusTaskSessionGroupBuilder {
+    static func groups(
+        rows: [FocusSessionRow],
+        completedSessionIDs: Set<UUID>
+    ) -> [FocusTaskSessionGroup] {
+        let grouped = Dictionary(grouping: rows) { row in
+            row.linkedMemoID.map { "task:\($0.uuidString)" }
+                ?? "session:\(row.id.uuidString)"
+        }
+
+        return grouped.map { id, groupedRows in
+            let sortedRows = groupedRows.sorted { $0.startedAt < $1.startedAt }
+            return FocusTaskSessionGroup(
+                id: id,
+                linkedMemoID: sortedRows.first?.linkedMemoID,
+                title: sortedRows.last?.title ?? "이름 없는 할 일",
+                rows: sortedRows,
+                completedInPeriod: sortedRows.contains {
+                    completedSessionIDs.contains($0.id)
+                }
+            )
+        }
+        .sorted {
+            ($0.rows.last?.startedAt ?? .distantPast)
+                > ($1.rows.last?.startedAt ?? .distantPast)
+        }
+    }
 }
 
 /// 회고(`focusExperience`)를 1–5 몰입 점수로. `unsure`/미작성은 값 없음(지도 제외).
@@ -1082,6 +1212,7 @@ private let focusScoreLegend = """
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
     let reflections: [PomodoroReflection]
+    let taskCompletions: [PomodoroTaskCompletion]
     let viewMode: StatsViewMode
     let referenceDate: Date
 
@@ -1091,22 +1222,30 @@ struct FocusDetailView: View {
     @State private var showsScoreInfo = false
     @State private var showsSessionMetricInfo = false
     @State private var colorPickerSessionID: UUID?
+    @State private var selectedCategory: String?
+    @State private var showsCategoryFilter = false
+    @State private var categorySearchText = ""
+    @State private var expandedTaskGroupIDs: Set<String> = []
 
     private var rows: [FocusSessionRow] {
         let reflectionByID = Dictionary(
             reflections.map { ($0.focusSessionID, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        return sessions.compactMap { session -> FocusSessionRow? in
-            guard let reflection = reflectionByID[session.id] else { return nil }
+        return sessions.map { session in
+            let reflection = reflectionByID[session.id]
             return FocusSessionRow(
                 id: session.id,
+                linkedMemoID: session.linkedMemoID,
                 title: session.taskTitle ?? "\(session.category) 세션",
                 category: session.category,
                 startedAt: session.startedAt,
+                endedAt: session.endedAt,
                 durationSeconds: session.durationSeconds,
-                rating: focusRating(reflection.focusExperience),
-                selfAssessmentLabel: reflection.focusExperience?.label,
+                plannedDurationSeconds: session.plannedDurationSeconds,
+                endKind: session.endKind,
+                rating: focusRating(reflection?.focusExperience),
+                selfAssessmentLabel: reflection?.focusExperience?.label,
                 observation: session.observation,
                 inputActivityRatio: session.inputActivityRatio,
                 markerColorKey: session.markerColorKey
@@ -1115,8 +1254,17 @@ struct FocusDetailView: View {
         .sorted { $0.startedAt < $1.startedAt }
     }
 
+    private var categorySummaries: [FocusCategorySummary] {
+        FocusCategorySummaryBuilder.summaries(rows: rows)
+    }
+
+    private var filteredRows: [FocusSessionRow] {
+        guard let selectedCategory else { return rows }
+        return rows.filter { $0.category == selectedCategory }
+    }
+
     private var mapRows: [FocusSessionRow] {
-        rows.filter { $0.rating != nil && $0.hasComparableRecord }
+        filteredRows.filter { $0.rating != nil && $0.hasComparableRecord }
     }
 
     /// 선택한 가로축 지표로 실제 그릴 수 있는 세션(예: 키보드·마우스 사용률은 수집된 세션만).
@@ -1125,7 +1273,14 @@ struct FocusDetailView: View {
     }
 
     private var selectedRow: FocusSessionRow? {
-        selectedSessionID.flatMap { id in rows.first { $0.id == id } }
+        selectedSessionID.flatMap { id in filteredRows.first { $0.id == id } }
+    }
+
+    private var taskGroups: [FocusTaskSessionGroup] {
+        FocusTaskSessionGroupBuilder.groups(
+            rows: filteredRows,
+            completedSessionIDs: Set(taskCompletions.map(\.focusSessionID))
+        )
     }
 
     var body: some View {
@@ -1133,11 +1288,21 @@ struct FocusDetailView: View {
             if rows.isEmpty {
                 emptyState
             } else {
-                focusMapCard
-                sessionListSection
+                categoryFilterSection
+                if filteredRows.isEmpty {
+                    filteredEmptyState
+                } else {
+                    focusMapCard
+                    taskGroupListSection
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: categorySummaries.map(\.category)) { _, categories in
+            if let selectedCategory, !categories.contains(selectedCategory) {
+                self.selectedCategory = nil
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -1145,16 +1310,243 @@ struct FocusDetailView: View {
             Image(systemName: "scope")
                 .font(.largeTitle)
                 .foregroundStyle(PopoverChrome.inkTertiary)
-            Text("이 기간에 회고를 남긴 포모도로가 없어요.")
+            Text("이 기간에 기록된 포모도로가 없어요.")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
-            Text("포모도로가 끝난 뒤 집중 경험을 선택하면 몰입 패턴 차트에서 볼 수 있어요.")
+            Text("포모도로를 기록하면 카테고리와 할 일별로 묶어서 볼 수 있어요.")
                 .font(.caption)
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+    }
+
+    private var filteredEmptyState: some View {
+        Text("선택한 카테고리에 표시할 포모도로가 없어요.")
+            .font(.callout)
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+    }
+
+    // MARK: 카테고리 필터
+
+    private var searchedCategorySummaries: [FocusCategorySummary] {
+        let query = categorySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return categorySummaries }
+        return categorySummaries.filter {
+            $0.category.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var categoryFilterSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("카테고리")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                categoryFilterButton
+                Spacer()
+                Text("현재 기간 · \(filteredRows.count)개 세션")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(categorySummaries.prefix(5)) { summary in
+                    categorySummaryTile(summary)
+                }
+                if categorySummaries.count > 5 {
+                    Button {
+                        categorySearchText = ""
+                        showsCategoryFilter = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "ellipsis")
+                            Text("\(categorySummaries.count - 5)개 더보기")
+                            Spacer(minLength: 0)
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .padding(.horizontal, 10)
+                        .frame(height: 32)
+                        .background(
+                            PopoverChrome.surface,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(PopoverChrome.divider, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .popoverCard(padding: 12)
+    }
+
+    private var categoryFilterButton: some View {
+        Button {
+            categorySearchText = ""
+            showsCategoryFilter.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                if let selectedCategory {
+                    Circle()
+                        .fill(Constants.categoryColor(for: selectedCategory))
+                        .frame(width: 8, height: 8)
+                }
+                Text(selectedCategory ?? "전체 카테고리")
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(PopoverChrome.ink)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                PopoverChrome.surface,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showsCategoryFilter) {
+            categoryFilterPopover
+        }
+    }
+
+    private var categoryFilterPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("카테고리 선택")
+                .font(.headline)
+                .foregroundStyle(PopoverChrome.ink)
+
+            TextField("카테고리 검색", text: $categorySearchText)
+                .textFieldStyle(.roundedBorder)
+
+            Button {
+                selectCategory(nil)
+            } label: {
+                categoryFilterRow(
+                    title: "전체 카테고리",
+                    color: nil,
+                    detail: "\(rows.count)개 세션",
+                    selected: selectedCategory == nil
+                )
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(searchedCategorySummaries) { summary in
+                        Button {
+                            selectCategory(summary.category)
+                        } label: {
+                            categoryFilterRow(
+                                title: summary.category,
+                                color: Constants.categoryColor(for: summary.category),
+                                detail: "\(summary.sessionCount)개 · \(formattedMetricDuration(Double(summary.durationSeconds)))",
+                                selected: selectedCategory == summary.category
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+        }
+        .padding(14)
+        .frame(width: 300)
+    }
+
+    private func categoryFilterRow(
+        title: String,
+        color: Color?,
+        detail: String,
+        selected: Bool
+    ) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color ?? PopoverChrome.inkTertiary)
+                .frame(width: 9, height: 9)
+            Text(title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .monospacedDigit()
+            Image(systemName: "checkmark")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(PopoverChrome.accent)
+                .opacity(selected ? 1 : 0)
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 34)
+        .background(
+            selected ? PopoverChrome.selectionFill : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .contentShape(Rectangle())
+    }
+
+    private func categorySummaryTile(_ summary: FocusCategorySummary) -> some View {
+        let selected = selectedCategory == summary.category
+        return Button {
+            selectCategory(summary.category)
+        } label: {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Constants.categoryColor(for: summary.category))
+                    .frame(width: 9, height: 9)
+                Text(summary.category)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text(formattedMetricDuration(Double(summary.durationSeconds)))
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(
+                selected ? PopoverChrome.selectionFill : PopoverChrome.surface,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(
+                        selected ? PopoverChrome.accent : PopoverChrome.divider,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .help("\(summary.category) 카테고리만 봅니다")
+    }
+
+    private func selectCategory(_ category: String?) {
+        selectedCategory = category
+        selectedSessionID = nil
+        showsCategoryFilter = false
+        categorySearchText = ""
     }
 
     // MARK: 몰입 지도
@@ -1352,15 +1744,20 @@ struct FocusDetailView: View {
     }
 
     private func selectedDetailLine(_ row: FocusSessionRow) -> some View {
-        var parts: [String] = [focusTimeFormatter.string(from: row.startedAt)]
+        let longestDuration = formattedMetricDuration(
+            Double(row.observation.longestContinuousAppUsage?.durationSeconds ?? 0)
+        )
+        var parts: [String] = [timeRangeText(row)]
         if let label = row.selfAssessmentLabel {
             parts.append("자기평가: \(label)")
         }
-        parts.append("연속 몰입 \(Int(row.continuousFocusMinutes))분")
-        if let interval = row.averageAppSwitchIntervalSeconds {
-            parts.append("앱 전환 간격 \(formattedMetricDuration(interval))")
+        parts.append(completionDetailText(row))
+        parts.append("한 곳 최장 사용: \(longestDuration)")
+        if row.observation.appSwitchCount > 0,
+           let interval = row.averageAppSwitchIntervalSeconds {
+            parts.append("평균 전환 간격: \(formattedMetricDuration(interval))")
         }
-        parts.append("앱 사용 비중 \(Int((row.appUsageRatio * 100).rounded()))%")
+        parts.append("앱·웹 사용 비중: \(Int((row.appUsageRatio * 100).rounded()))%")
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("\(row.emoji) \(row.title)")
                 .font(.callout.weight(.semibold))
@@ -1376,22 +1773,172 @@ struct FocusDetailView: View {
 
     // MARK: 세션별 지표
 
-    private var sessionListSection: some View {
+    private var taskGroupListSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("세션별 지표")
+                Text("할 일별 세션")
                     .font(.headline)
                     .foregroundStyle(PopoverChrome.ink)
                 sessionMetricInfoButton
                 Spacer()
-                Text("내 평가 + 측정값 그대로")
+                Text("같은 할 일의 세션을 묶어서 표시 · \(filteredRows.count)개 세션")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
-            ForEach(rows) { row in
-                sessionCard(row)
+            ForEach(taskGroups) { group in
+                taskGroupCard(group)
             }
         }
+    }
+
+    private func taskGroupCard(_ group: FocusTaskSessionGroup) -> some View {
+        let isExpanded = expandedTaskGroupIDs.contains(group.id)
+        return VStack(alignment: .leading, spacing: 10) {
+            Button {
+                if isExpanded {
+                    expandedTaskGroupIDs.remove(group.id)
+                } else {
+                    expandedTaskGroupIDs.insert(group.id)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    taskGroupCategoryIndicator(group)
+                    Text(group.title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.ink)
+                        .lineLimit(1)
+                    if group.linkedMemoID == nil {
+                        taskGroupBadge("미연결", tint: PopoverChrome.inkTertiary)
+                    }
+                    if group.completedInPeriod {
+                        taskGroupBadge("이 기간에 완료", tint: PopoverChrome.accent)
+                    }
+                    Spacer(minLength: 8)
+                    Text("\(group.rows.count)개 세션")
+                        .font(.caption)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .monospacedDigit()
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(Array(taskGroupMetricItems(group).enumerated()), id: \.offset) { _, item in
+                        metricLabel(item.text, muted: item.muted, help: item.help)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(taskGroupMetricItems(group).enumerated()), id: \.offset) { _, item in
+                        metricLabel(item.text, muted: item.muted, help: item.help)
+                    }
+                }
+            }
+
+            Text(taskGroupAssessmentText(group))
+                .font(.caption)
+                .foregroundStyle(
+                    group.assessmentCounts.isEmpty
+                        ? PopoverChrome.inkTertiary
+                        : PopoverChrome.inkSecondary
+                )
+                .fixedSize(horizontal: false, vertical: true)
+
+            if isExpanded {
+                Divider()
+                ForEach(group.rows) { row in
+                    sessionCard(row)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            PopoverChrome.surface,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(PopoverChrome.divider, lineWidth: 1)
+        )
+    }
+
+    private func taskGroupCategoryIndicator(
+        _ group: FocusTaskSessionGroup
+    ) -> some View {
+        HStack(spacing: -3) {
+            ForEach(Array(group.categories.prefix(3)), id: \.self) { category in
+                Circle()
+                    .fill(Constants.categoryColor(for: category))
+                    .frame(width: 10, height: 10)
+                    .overlay(Circle().stroke(PopoverChrome.surface, lineWidth: 1))
+            }
+        }
+        .help(
+            group.categories.count == 1
+                ? (group.categories.first ?? "")
+                : group.categories.joined(separator: ", ")
+        )
+    }
+
+    private func taskGroupBadge(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(tint.opacity(0.12), in: Capsule())
+            .lineLimit(1)
+    }
+
+    private func taskGroupMetricItems(
+        _ group: FocusTaskSessionGroup
+    ) -> [SessionMetricItem] {
+        var items: [SessionMetricItem] = [
+            (
+                text: "세션 수: \(group.rows.count)회",
+                muted: false,
+                help: nil
+            ),
+            (
+                text: "실제 진행 시간: \(formattedMetricDuration(Double(group.totalDurationSeconds)))",
+                muted: false,
+                help: nil
+            ),
+            (
+                text: "예정된 종료: \(group.completedAsPlannedCount)회",
+                muted: false,
+                help: nil
+            ),
+            (
+                text: "조기 종료: \(group.endedEarlyCount)회",
+                muted: false,
+                help: nil
+            ),
+        ]
+        if group.unknownEndCount > 0 {
+            items.append((
+                text: "(종료 방식 미기록: \(group.unknownEndCount)회)",
+                muted: true,
+                help: nil
+            ))
+        }
+        return items
+    }
+
+    private func taskGroupAssessmentText(
+        _ group: FocusTaskSessionGroup
+    ) -> String {
+        guard !group.assessmentCounts.isEmpty else {
+            return "자기평가: 없음"
+        }
+        let summary = group.assessmentCounts
+            .map { "\($0.label) \($0.count)회" }
+            .joined(separator: " · ")
+        return "자기평가: \(summary)"
     }
 
     private var sessionMetricInfoButton: some View {
@@ -1423,46 +1970,61 @@ struct FocusDetailView: View {
                 }
 
                 metricExplanation(
-                    title: "연속 몰입",
-                    meaning: "한 앱을 끊김 없이 사용한 구간 중 가장 긴 시간입니다. 높을수록 한 앱에 오래 머문 세션이에요.",
-                    formula: "가장 긴 연속 앱 사용 구간"
+                    title: "실제 진행 시간",
+                    meaning: "이 포모도로에서 카운트다운이 실제로 진행된 시간입니다. 일시정지 시간은 제외하고, 조기 종료했다면 종료 시점까지만 계산해요.",
+                    formula: "카운트다운이 실제로 줄어든 시간"
                 )
                 metricExplanation(
-                    title: "앱 전환",
-                    meaning: "기록 순서에서 사용 앱이 달라진 횟수입니다. A → B → A라면 2회로 셉니다. 기록 공백이 있으면 확인 가능한 최소 전환만 반영해요.",
-                    formula: "앱 사용 순서에서 앞뒤 앱이 달라진 횟수"
+                    title: "진행 상태",
+                    meaning: "‘예정된 종료’는 설정한 시간이 만료된 세션이고, ‘조기 종료’는 시간이 남았을 때 기록 후 종료한 세션입니다. 과거 기록처럼 구분할 수 없으면 ‘종료 방식 미기록’으로 표시해요.",
+                    formula: "타이머 만료 또는 기록 후 종료 여부"
                 )
                 metricExplanation(
-                    title: "사용 앱 수",
-                    meaning: "세션 중 기록된 서로 다른 앱의 수입니다. 브라우저는 사이트에 따라 별도 앱처럼 구분될 수 있어요.",
-                    formula: "중복을 제외한 기록 앱 수"
+                    title: "한 곳 최장 사용",
+                    meaning: "한 앱이나 웹사이트를 끊김 없이 사용한 구간 중 가장 긴 시간입니다.",
+                    formula: "가장 긴 연속 앱·웹 사용 구간"
                 )
                 metricExplanation(
-                    title: "앱 사용 비중",
-                    meaning: "세션 동안 앱 사용 기록이 얼마나 이어졌는지 보여 줍니다. 값이 낮으면 자리 비움뿐 아니라 추적이 중단되거나 기록이 누락된 경우도 확인해야 해요.",
-                    formula: "앱 사용 기록 시간 ÷ 세션 시간 × 100"
+                    title: "평균 전환 간격",
+                    meaning: "전환이 있었던 세션에서 앱이나 웹사이트를 바꾸기 전까지 평균적으로 유지한 시간입니다. 전환이 없으면 표시하지 않아요.",
+                    formula: "명확히 기록된 사용 시간 ÷ (전환 횟수 + 1)"
                 )
                 metricExplanation(
-                    title: "앱 전환 간격",
-                    meaning: "한 앱에 평균적으로 얼마나 오래 머물렀는지 보여 줍니다. 같은 앱의 기록 공백은 합치고, 10초 미만의 생산성 관리 앱 사용은 작업 흐름을 잇는 짧은 확인으로 봐요.",
-                    formula: "명확히 기록된 앱 사용 시간 ÷ (앱 전환 횟수 + 1)"
+                    title: "사용한 앱·웹 수",
+                    meaning: "세션 중 사용한 서로 다른 앱과 구분 가능한 웹사이트의 수입니다. 짧은 생산성 앱 사용은 제외해요.",
+                    formula: "전환 계산에 반영된 앱·웹의 고유 개수"
+                )
+                metricExplanation(
+                    title: "전환 횟수",
+                    meaning: "기록 순서에서 사용한 앱이나 웹사이트가 달라진 횟수입니다. A → B → A라면 2회로 셉니다. 짧은 생산성 앱 사용은 앞뒤 흐름을 잇고 별도로 표시해요.",
+                    formula: "앱·웹 사용 순서에서 앞뒤 대상이 달라진 횟수"
+                )
+                metricExplanation(
+                    title: "짧은 생산성 앱 사용",
+                    meaning: "생산성 관리 카테고리의 앱을 10초 미만으로 사용한 횟수입니다. 짧은 확인이나 타이머 조작이 사용 흐름을 왜곡하지 않도록 앱·웹 사용 수와 전환 횟수에서는 제외해요.",
+                    formula: "10초 미만으로 이어진 생산성 관리 앱 사용 구간 수"
+                )
+                metricExplanation(
+                    title: "앱·웹 사용 비중",
+                    meaning: "세션 동안 앱·웹 사용 기록이 얼마나 이어졌는지 보여 줍니다. 값이 낮으면 자리 비움뿐 아니라 추적 중단이나 기록 누락도 확인해야 해요.",
+                    formula: "앱·웹 사용 기록 시간 ÷ 실제 진행 시간 × 100"
                 )
                 metricExplanation(
                     title: "키보드·마우스 사용률",
-                    meaning: "집중 시간 중 키보드나 마우스 입력이 이어진 비율입니다. 생각하거나 읽는 시간이 많은 작업은 집중했어도 낮게 나올 수 있어요.",
-                    formula: "최근 2초 안에 입력이 있었던 초 ÷ 설정한 집중 시간 × 100"
+                    meaning: "실제 진행 시간 중 키보드나 마우스 입력이 이어진 비율입니다. 생각하거나 읽는 시간이 많은 작업은 집중했어도 낮게 나올 수 있어요.",
+                    formula: "최근 2초 안에 입력이 있었던 초 ÷ 실제 진행 시간 × 100"
                 )
 
                 Divider()
 
-                Text("‘앱 기록 없음’은 해당 세션에 앱 기록이 없다는 뜻이고, ‘—’는 이 지표를 수집하기 전에 생성된 세션이라는 뜻입니다. 미분류 앱도 앱 관련 지표에는 포함됩니다.")
+                Text("‘앱·웹 기록: 없음’은 해당 세션에 사용 기록이 없다는 뜻이고, ‘—’는 이 지표를 수집하기 전에 생성된 세션이라는 뜻입니다. 미분류 기록도 관련 지표에는 포함됩니다.")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(16)
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 420, height: 580)
     }
 
     private func metricExplanation(
@@ -1603,24 +2165,30 @@ struct FocusDetailView: View {
 
     private func sessionCard(_ row: FocusSessionRow) -> some View {
         let isSelected = selectedSessionID == row.id
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 colorSwatchButton(for: row)
                 Text("\(row.emoji) \(row.title)")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)
+                completionBadge(row)
                 Spacer(minLength: 8)
-                ratingDots(row.rating)
-                Text("\(focusTimeFormatter.string(from: row.startedAt)) · \(row.durationSeconds / 60)분")
+                if let selfAssessmentLabel = row.selfAssessmentLabel {
+                    Text(selfAssessmentLabel)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(PopoverChrome.accent)
+                        .lineLimit(1)
+                }
+                Text(timeRangeText(row))
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .monospacedDigit()
             }
 
             ViewThatFits(in: .horizontal) {
-                sessionMetricRow(row)
-                sessionMetricRow(row, wrap: true)
+                sessionMetricGroups(row)
+                sessionMetricGroups(row, stacked: true)
             }
         }
         .padding(12)
@@ -1642,54 +2210,164 @@ struct FocusDetailView: View {
     }
 
     @ViewBuilder
-    private func sessionMetricRow(_ row: FocusSessionRow, wrap: Bool = false) -> some View {
-        let items: [(String, Bool)] = {
-            var result: [(String, Bool)] = []
-            if row.observation.hasRecords {
-                result = [
-                    ("연속 몰입 \(Int(row.continuousFocusMinutes))분", false),
-                    ("앱 전환 \(row.observation.appSwitchCount)회", false),
-                    ("사용 앱 수 \(row.appCount)개", false),
-                    ("앱 사용 비중 \(Int((row.appUsageRatio * 100).rounded()))%", false),
-                ]
-                if let interval = row.averageAppSwitchIntervalSeconds {
-                    result.append(("앱 전환 간격 \(formattedMetricDuration(interval))", false))
-                }
-                if row.unclassifiedAppCount > 0 {
-                    result.append(("미분류 앱 \(row.unclassifiedAppCount)개", true))
-                }
-            } else {
-                result.append(("앱 기록 없음", true))
-            }
-            if let pct = row.inputActivityPercent {
-                result.append(("키보드·마우스 사용률 \(pct)%", false))
-            } else {
-                result.append(("키보드·마우스 사용률 —", true))
-            }
-            result.append(("휴식 준비 중", true))
-            return result
-        }()
-
-        if wrap {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    metricLabel(item.0, pending: item.1)
-                }
+    private func sessionMetricGroups(
+        _ row: FocusSessionRow,
+        stacked: Bool = false
+    ) -> some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: 10) {
+                sessionMetricGroup(title: "시간 지표", items: timeMetricItems(row))
+                Divider()
+                sessionMetricGroup(title: "앱·웹 사용", items: appWebMetricItems(row))
+                Divider()
+                sessionMetricGroup(title: "활동 비중", items: activityMetricItems(row))
             }
         } else {
-            HStack(spacing: 10) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    metricLabel(item.0, pending: item.1)
+            HStack(alignment: .top, spacing: 12) {
+                sessionMetricGroup(title: "시간 지표", items: timeMetricItems(row))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+                sessionMetricGroup(title: "앱·웹 사용", items: appWebMetricItems(row))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+                sessionMetricGroup(title: "활동 비중", items: activityMetricItems(row))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func sessionMetricGroup(
+        title: String,
+        items: [SessionMetricItem]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        metricLabel(item.text, muted: item.muted, help: item.help)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        metricLabel(item.text, muted: item.muted, help: item.help)
+                    }
                 }
             }
         }
     }
 
-    private func metricLabel(_ text: String, pending: Bool) -> some View {
-        Text(text)
+    private typealias SessionMetricItem = (text: String, muted: Bool, help: String?)
+
+    private func timeMetricItems(
+        _ row: FocusSessionRow
+    ) -> [SessionMetricItem] {
+        var sessionDurationText = "실제 진행 시간: \(formattedMetricDuration(Double(row.durationSeconds)))"
+        if row.completionStatus == .endedEarly,
+           let plannedDurationSeconds = row.plannedDurationSeconds,
+           plannedDurationSeconds > row.durationSeconds {
+            sessionDurationText += " (설정 \(formattedMetricDuration(Double(plannedDurationSeconds))))"
+        }
+        var items: [SessionMetricItem] = [
+            (
+                text: sessionDurationText,
+                muted: false,
+                help: nil
+            )
+        ]
+        if let longest = row.observation.longestContinuousAppUsage,
+           longest.durationSeconds > 0 {
+            items.append((
+                text: "한 곳 최장 사용: \(formattedMetricDuration(Double(longest.durationSeconds)))",
+                muted: false,
+                help: nil
+            ))
+        }
+        if row.observation.appSwitchCount > 0,
+           let interval = row.averageAppSwitchIntervalSeconds {
+            items.append((
+                text: "평균 전환 간격: \(formattedMetricDuration(interval))",
+                muted: false,
+                help: nil
+            ))
+        }
+        return items
+    }
+
+    private func appWebMetricItems(
+        _ row: FocusSessionRow
+    ) -> [SessionMetricItem] {
+        guard row.observation.hasRecords else {
+            return [(text: "앱·웹 기록: 없음", muted: true, help: nil)]
+        }
+
+        var items: [SessionMetricItem] = [
+            (text: "사용한 앱·웹 수: \(row.appCount)개", muted: false, help: nil),
+            (
+                text: row.observation.appSwitchCount == 0
+                    ? "전환 횟수: 없음"
+                    : "전환 횟수: \(row.observation.appSwitchCount)회",
+                muted: false,
+                help: nil
+            ),
+        ]
+        if row.observation.shortProductivityManagementVisitCount > 0 {
+            items.append((
+                text: "(짧은 생산성 앱 사용: \(row.observation.shortProductivityManagementVisitCount)회)",
+                muted: true,
+                help: "생산성 관리 카테고리의 앱을 10초 미만으로 사용한 횟수예요. 앱·웹 사용 수와 전환 횟수에서는 제외합니다."
+            ))
+        }
+        if row.unclassifiedAppCount > 0 {
+            items.append((
+                text: "미분류: \(row.unclassifiedAppCount)개",
+                muted: true,
+                help: nil
+            ))
+        }
+        return items
+    }
+
+    private func activityMetricItems(
+        _ row: FocusSessionRow
+    ) -> [SessionMetricItem] {
+        var items: [SessionMetricItem] = [
+            (
+                text: "앱·웹 사용 비중: \(Int((row.appUsageRatio * 100).rounded()))%",
+                muted: !row.observation.hasRecords,
+                help: nil
+            )
+        ]
+        if let pct = row.inputActivityPercent {
+            items.append((
+                text: "키보드·마우스 사용률: \(pct)%",
+                muted: false,
+                help: nil
+            ))
+        } else {
+            items.append((
+                text: "키보드·마우스 사용률: —",
+                muted: true,
+                help: nil
+            ))
+        }
+        return items
+    }
+
+    @ViewBuilder
+    private func metricLabel(_ text: String, muted: Bool, help: String?) -> some View {
+        let label = Text(text)
             .font(.caption)
-            .foregroundStyle(pending ? PopoverChrome.inkTertiary : PopoverChrome.inkSecondary)
+            .foregroundStyle(muted ? PopoverChrome.inkTertiary : PopoverChrome.inkSecondary)
             .monospacedDigit()
+            .lineLimit(1)
+        if let help {
+            label.help(help)
+        } else {
+            label
+        }
     }
 
     private func formattedMetricDuration(_ seconds: Double) -> String {
@@ -1701,19 +2379,32 @@ struct FocusDetailView: View {
         return "\(minutes)분 \(remainingSeconds)초"
     }
 
-    private func ratingDots(_ rating: Int?) -> some View {
-        HStack(spacing: 3) {
-            if let rating {
-                ForEach(1...4, id: \.self) { index in
-                    Circle()
-                        .fill(index <= rating ? PopoverChrome.accent : PopoverChrome.divider)
-                        .frame(width: 7, height: 7)
-                }
-            } else {
-                Text("—")
-                    .font(.caption)
-                    .foregroundStyle(PopoverChrome.inkTertiary)
-            }
+    private func timeRangeText(_ row: FocusSessionRow) -> String {
+        "\(focusTimeFormatter.string(from: row.startedAt))–\(focusTimeFormatter.string(from: row.endedAt))"
+    }
+
+    private func completionDetailText(_ row: FocusSessionRow) -> String {
+        guard row.completionStatus == .endedEarly,
+              let plannedDurationSeconds = row.plannedDurationSeconds,
+              plannedDurationSeconds > row.durationSeconds else {
+            return row.completionStatus.label
         }
+        return "\(row.completionStatus.label) (설정 \(formattedMetricDuration(Double(plannedDurationSeconds))))"
+    }
+
+    private func completionBadge(_ row: FocusSessionRow) -> some View {
+        let tint: Color = switch row.completionStatus {
+        case .completedAsPlanned: PopoverChrome.accent
+        case .endedEarly: .orange
+        case .unknown: PopoverChrome.inkTertiary
+        }
+        return Text(row.completionStatus.label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(tint.opacity(0.12), in: Capsule())
+            .lineLimit(1)
+            .help(row.completionStatus.help)
     }
 }

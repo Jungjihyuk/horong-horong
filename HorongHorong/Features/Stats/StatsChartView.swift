@@ -71,6 +71,10 @@ struct PomodoroSessionObservation: Equatable {
     let longestContinuousAppUsage: PomodoroContinuousAppUsage?
     let apps: [PomodoroAppUsageEntry]
     let categories: [PomodoroCategoryUsageEntry]
+    /// 짧은 생산성 관리 확인을 제외하고 전환 계산에 실제로 참여한 앱·웹의 고유 개수.
+    var distinctAppWebCount: Int = 0
+    /// 전환 흐름에서는 제외했지만 원본 사용 기록에는 남아 있는 짧은 생산성 관리 확인 횟수.
+    var shortProductivityManagementVisitCount: Int = 0
 
     var hasRecords: Bool {
         recordedSeconds > 0
@@ -135,6 +139,12 @@ enum PomodoroSessionObservationBuilder {
         var isProductivityManagementApp: Bool
     }
 
+    private struct AppBehaviorSummary {
+        let visits: [AppBehaviorVisit]
+        let distinctAppWebCount: Int
+        let shortProductivityManagementVisitCount: Int
+    }
+
     private struct TransitionKey: Hashable {
         let source: String
         let target: String
@@ -189,7 +199,8 @@ enum PomodoroSessionObservationBuilder {
                 )
             }
 
-        let behaviorVisits = appBehaviorVisits(from: timeline)
+        let behaviorSummary = appBehaviorSummary(from: timeline)
+        let behaviorVisits = behaviorSummary.visits
         var appDurations: [StateKey: (appName: String, duration: TimeInterval)] = [:]
         var ambiguousOverlapDuration: TimeInterval = 0
         var userModifiedRecordedDuration: TimeInterval = 0
@@ -366,13 +377,16 @@ enum PomodoroSessionObservationBuilder {
                 },
             longestContinuousAppUsage: longestUsage,
             apps: apps,
-            categories: categories
+            categories: categories,
+            distinctAppWebCount: behaviorSummary.distinctAppWebCount,
+            shortProductivityManagementVisitCount:
+                behaviorSummary.shortProductivityManagementVisitCount
         )
     }
 
-    private static func appBehaviorVisits(
+    private static func appBehaviorSummary(
         from timeline: [TimelineInterval]
-    ) -> [AppBehaviorVisit] {
+    ) -> AppBehaviorSummary {
         var observedVisits: [AppBehaviorVisit] = []
 
         for interval in timeline {
@@ -402,6 +416,10 @@ enum PomodoroSessionObservationBuilder {
             !$0.isProductivityManagementApp
                 || $0.duration >= Constants.productivityManagementShortInteractionSeconds
         }
+        let shortProductivityManagementVisitCount = observedVisits.filter {
+            $0.isProductivityManagementApp
+                && $0.duration < Constants.productivityManagementShortInteractionSeconds
+        }.count
         var collapsedVisits: [AppBehaviorVisit] = []
         for visit in significantVisits {
             if let lastIndex = collapsedVisits.indices.last,
@@ -414,7 +432,11 @@ enum PomodoroSessionObservationBuilder {
                 collapsedVisits.append(visit)
             }
         }
-        return collapsedVisits
+        return AppBehaviorSummary(
+            visits: collapsedVisits,
+            distinctAppWebCount: Set(collapsedVisits.map(\.appIdentity)).count,
+            shortProductivityManagementVisitCount: shortProductivityManagementVisitCount
+        )
     }
 
     private static func normalizedApp(
@@ -430,6 +452,14 @@ enum PomodoroSessionObservationBuilder {
             let base = $0.lowercased()
             return normalizedBundle == base || normalizedBundle.hasPrefix("\(base).")
         }) {
+            let websitePrefix = "\(browserBundle.lowercased()).website."
+            if normalizedBundle.hasPrefix(websitePrefix),
+               let domain = WebsiteCategoryRule.normalizedDomain(
+                   from: String(normalizedBundle.dropFirst(websitePrefix.count))
+               ) {
+                return (domain, "website:\(domain)")
+            }
+
             let displayName: String
             if trimmedName.hasSuffix(")"),
                let suffixStart = trimmedName.range(of: " (", options: .backwards)?.lowerBound {
@@ -531,6 +561,8 @@ struct PomodoroSessionBreakdown: Identifiable {
     let linkedMemoID: UUID?
     let taskTitle: String?
     let durationSeconds: Int
+    let plannedDurationSeconds: Int?
+    let endKind: FocusSessionEndKind?
     let observation: PomodoroSessionObservation
     /// 집중 동안 입력이 있었던 비율(0~1). nil = 입력 데이터 없음(도입 이전 기록).
     let inputActivityRatio: Double?
@@ -547,7 +579,9 @@ struct PomodoroSessionBreakdown: Identifiable {
         durationSeconds: Int,
         observation: PomodoroSessionObservation,
         inputActivityRatio: Double? = nil,
-        markerColorKey: String? = nil
+        markerColorKey: String? = nil,
+        plannedDurationSeconds: Int? = nil,
+        endKind: FocusSessionEndKind? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -556,6 +590,8 @@ struct PomodoroSessionBreakdown: Identifiable {
         self.linkedMemoID = linkedMemoID
         self.taskTitle = taskTitle
         self.durationSeconds = durationSeconds
+        self.plannedDurationSeconds = plannedDurationSeconds
+        self.endKind = endKind
         self.observation = observation
         self.inputActivityRatio = inputActivityRatio
         self.markerColorKey = markerColorKey
@@ -1551,16 +1587,18 @@ enum PomodoroComparisonPeriodBuilder {
                 category: session.category ?? Constants.defaultFocusCategory,
                 linkedMemoID: session.linkedMemoID,
                 taskTitle: session.taskTitleSnapshot,
-                durationSeconds: Int(end.timeIntervalSince(session.startedAt)),
+                durationSeconds: session.recordedFocusSeconds,
                 observation: PomodoroSessionObservationBuilder.observation(
                     from: session.startedAt,
                     to: end,
                     segments: overlappingSegments
                 ),
                 inputActivityRatio: session.inputActiveSeconds.map {
-                    Double($0) / Double(max(1, session.focusMinutes * 60))
+                    Double($0) / Double(max(1, session.recordedFocusSeconds))
                 },
-                markerColorKey: session.markerColorKey
+                markerColorKey: session.markerColorKey,
+                plannedDurationSeconds: max(0, session.focusMinutes) * 60,
+                endKind: session.endKind
             )
         }
     }
@@ -3142,7 +3180,9 @@ struct StatsChartView: View {
                 category: session.category ?? Constants.defaultFocusCategory,
                 linkedMemoID: session.linkedMemoID,
                 taskTitle: session.taskTitleSnapshot,
-                durationSeconds: Int(end.timeIntervalSince(start))
+                durationSeconds: start == session.startedAt && end == focusEnd
+                    ? session.recordedFocusSeconds
+                    : Int(end.timeIntervalSince(start))
             )
         }
         .sorted { $0.startedAt < $1.startedAt }
