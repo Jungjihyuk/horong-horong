@@ -1055,6 +1055,7 @@ struct FocusSessionRow: Identifiable {
     let observation: PomodoroSessionObservation
     let inputActivityRatio: Double?
     let markerColorKey: String?
+    var reflectionDeferredAt: Date? = nil
 
     var inputActivityPercent: Int? {
         inputActivityRatio.map { Int(($0 * 100).rounded()) }
@@ -1095,6 +1096,9 @@ struct FocusSessionRow: Identifiable {
         FocusMarkerPalette.color(forKey: markerColorKey) ?? Constants.categoryColor(for: category)
     }
     var emoji: String { Constants.categoryEmoji(for: category) }
+    var isReflectionPending: Bool {
+        reflectionDeferredAt != nil && selfAssessmentLabel == nil
+    }
 }
 
 struct FocusCategorySummary: Identifiable, Equatable {
@@ -1216,6 +1220,10 @@ struct FocusTaskSessionGroup: Identifiable {
             let count = labels.filter { $0 == experience.label }.count
             return count > 0 ? (experience.label, count) : nil
         }
+    }
+
+    var pendingReflectionCount: Int {
+        rows.filter(\.isReflectionPending).count
     }
 }
 
@@ -2206,7 +2214,8 @@ struct FocusDetailView: View {
                 incompleteReason: reflection?.incompleteReason,
                 observation: session.observation,
                 inputActivityRatio: session.inputActivityRatio,
-                markerColorKey: session.markerColorKey
+                markerColorKey: session.markerColorKey,
+                reflectionDeferredAt: session.reflectionDeferredAt
             )
         }
         .sorted { $0.startedAt < $1.startedAt }
@@ -2223,6 +2232,12 @@ struct FocusDetailView: View {
 
     private var mapRows: [FocusSessionRow] {
         filteredRows.filter { $0.rating != nil && $0.hasComparableRecord }
+    }
+
+    private var pendingReflectionRows: [FocusSessionRow] {
+        filteredRows
+            .filter(\.isReflectionPending)
+            .sorted { $0.startedAt > $1.startedAt }
     }
 
     /// 선택한 가로축 지표로 실제 그릴 수 있는 세션(예: 키보드·마우스 사용률은 수집된 세션만).
@@ -2325,6 +2340,9 @@ struct FocusDetailView: View {
                 emptyState
             } else {
                 categoryFilterSection
+                if !pendingReflectionRows.isEmpty {
+                    pendingReflectionBanner
+                }
                 if filteredRows.isEmpty {
                     filteredEmptyState
                 } else {
@@ -2382,6 +2400,42 @@ struct FocusDetailView: View {
             .foregroundStyle(PopoverChrome.inkSecondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
+    }
+
+    private var pendingReflectionBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("나중에 하기로 한 회고가 \(pendingReflectionRows.count)개 있어요")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("가장 최근에 건너뛴 포모도로부터 이어서 작성할 수 있어요.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if let row = pendingReflectionRows.first {
+                Button("회고 작성") {
+                    showReflection(for: row)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(PopoverChrome.accent)
+            }
+        }
+        .padding(12)
+        .background(
+            Color.orange.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.orange.opacity(0.24), lineWidth: 1)
+        )
     }
 
     // MARK: 카테고리 필터
@@ -3495,6 +3549,12 @@ struct FocusDetailView: View {
                     if group.completedInPeriod {
                         taskGroupBadge("이 기간에 완료", tint: PopoverChrome.accent)
                     }
+                    if group.pendingReflectionCount > 0 {
+                        taskGroupBadge(
+                            "회고 대기 \(group.pendingReflectionCount)회",
+                            tint: .orange
+                        )
+                    }
                     Spacer(minLength: 8)
                     Text("\(group.rows.count)개 세션")
                         .font(.caption)
@@ -3873,6 +3933,16 @@ struct FocusDetailView: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(PopoverChrome.accent)
                         .lineLimit(1)
+                } else {
+                    if row.isReflectionPending {
+                        taskGroupBadge("회고 대기", tint: .orange)
+                    }
+                    Button("회고 작성") {
+                        showReflection(for: row)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("이 포모도로의 회고를 지금 작성합니다")
                 }
                 Text(timeRangeText(row))
                     .font(.caption)
@@ -3901,6 +3971,13 @@ struct FocusDetailView: View {
         .onTapGesture {
             selectedSessionID = isPersistentlySelected ? nil : row.id
         }
+    }
+
+    private func showReflection(for row: FocusSessionRow) {
+        PomodoroReflectionPanel.shared.show(
+            focusSessionID: row.id,
+            modelContext: modelContext
+        )
     }
 
     @ViewBuilder

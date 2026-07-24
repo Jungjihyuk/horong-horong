@@ -41,6 +41,8 @@ final class FocusSession {
     var endKindRawValue: String?
     /// 몰입 지도에서 이 세션 점에 쓸 사용자 지정 색 키. nil = 카테고리 기본색.
     var markerColorKey: String?
+    /// 완료 직후 회고를 나중에 작성하기로 한 시각. 회고가 저장되면 nil로 되돌린다.
+    var reflectionDeferredAt: Date?
 
     init(
         focusMinutes: Int,
@@ -61,6 +63,7 @@ final class FocusSession {
         self.actualFocusSeconds = nil
         self.endKindRawValue = nil
         self.markerColorKey = nil
+        self.reflectionDeferredAt = nil
     }
 
     private static func normalizedText(_ value: String?) -> String? {

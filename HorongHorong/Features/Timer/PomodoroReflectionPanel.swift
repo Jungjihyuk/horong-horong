@@ -111,6 +111,7 @@ final class PomodoroReflectionPanel {
                     answeredAt: answeredAt
                 )
                 modelContext.insert(reflection)
+                session?.reflectionDeferredAt = nil
                 do {
                     try AppClassificationService.apply(
                         choices: appChoices,
@@ -170,6 +171,16 @@ final class PomodoroReflectionPanel {
                 }
             },
             onCancel: { [weak self] in
+                session?.reflectionDeferredAt = Date()
+                do {
+                    try modelContext.save()
+                    NotificationCenter.default.post(
+                        name: .pomodoroSessionDidChange,
+                        object: sessionID
+                    )
+                } catch {
+                    modelContext.rollback()
+                }
                 self?.close()
             }
         )
@@ -350,7 +361,7 @@ private struct PomodoroReflectionView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
-            .help("기록하지 않고 닫기")
+            .help("나중에 회고하기")
         }
     }
 
@@ -598,6 +609,10 @@ private struct PomodoroReflectionView: View {
             }
 
             Spacer(minLength: 0)
+
+            Button("나중에 하기", action: onCancel)
+                .buttonStyle(.bordered)
+                .disabled(isSaving)
 
             Button(primaryButtonTitle, action: moveForward)
                 .buttonStyle(.borderedProminent)
