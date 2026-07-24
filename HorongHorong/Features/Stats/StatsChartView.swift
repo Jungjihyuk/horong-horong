@@ -568,6 +568,8 @@ struct PomodoroSessionBreakdown: Identifiable {
     let inputActivityRatio: Double?
     /// 사용자가 지정한 몰입 지도 점 색 키. nil = 카테고리 기본색.
     let markerColorKey: String?
+    /// 완료 직후 회고를 나중에 작성하기로 한 시각.
+    let reflectionDeferredAt: Date?
 
     init(
         id: UUID,
@@ -581,7 +583,8 @@ struct PomodoroSessionBreakdown: Identifiable {
         inputActivityRatio: Double? = nil,
         markerColorKey: String? = nil,
         plannedDurationSeconds: Int? = nil,
-        endKind: FocusSessionEndKind? = nil
+        endKind: FocusSessionEndKind? = nil,
+        reflectionDeferredAt: Date? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -595,6 +598,7 @@ struct PomodoroSessionBreakdown: Identifiable {
         self.observation = observation
         self.inputActivityRatio = inputActivityRatio
         self.markerColorKey = markerColorKey
+        self.reflectionDeferredAt = reflectionDeferredAt
     }
 }
 
@@ -1598,7 +1602,8 @@ enum PomodoroComparisonPeriodBuilder {
                 },
                 markerColorKey: session.markerColorKey,
                 plannedDurationSeconds: max(0, session.focusMinutes) * 60,
-                endKind: session.endKind
+                endKind: session.endKind,
+                reflectionDeferredAt: session.reflectionDeferredAt
             )
         }
     }

@@ -1354,6 +1354,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
         session.inputActiveSeconds = 2_100
         session.markerColorKey = "purple"
+        let reflectionDeferredAt = Date(timeIntervalSince1970: 1_800_000_000)
+        session.reflectionDeferredAt = reflectionDeferredAt
 
         context.insert(session)
         try context.save()
@@ -1361,6 +1363,34 @@ final class ConstantsDefaultsTests: XCTestCase {
         let saved = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
         XCTAssertEqual(saved.inputActiveSeconds, 2_100)
         XCTAssertEqual(saved.markerColorKey, "purple")
+        XCTAssertEqual(saved.reflectionDeferredAt, reflectionDeferredAt)
+    }
+
+    func testFocusSessionRowOnlyMarksDeferredMissingReflectionAsPending() {
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let deferredAt = startedAt.addingTimeInterval(60)
+        let pending = makeFocusSessionRow(
+            category: "개발",
+            startedAt: startedAt,
+            durationSeconds: 25 * 60,
+            reflectionDeferredAt: deferredAt
+        )
+        let reflectionDisabled = makeFocusSessionRow(
+            category: "개발",
+            startedAt: startedAt,
+            durationSeconds: 25 * 60
+        )
+        let answered = makeFocusSessionRow(
+            category: "개발",
+            startedAt: startedAt,
+            durationSeconds: 25 * 60,
+            selfAssessmentLabel: PomodoroFocusExperience.mostlyFocused.label,
+            reflectionDeferredAt: deferredAt
+        )
+
+        XCTAssertTrue(pending.isReflectionPending)
+        XCTAssertFalse(reflectionDisabled.isReflectionPending)
+        XCTAssertFalse(answered.isReflectionPending)
     }
 
     @MainActor
@@ -4618,6 +4648,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         session.actualFocusSeconds = 1_200
         session.completed = true
         session.endKind = .recordedEarly
+        let reflectionDeferredAt = session.endedAt?.addingTimeInterval(5)
+        session.reflectionDeferredAt = reflectionDeferredAt
 
         let result = PomodoroComparisonPeriodBuilder.build(
             sessions: [session],
@@ -4630,6 +4662,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(breakdown.durationSeconds, 1_200)
         XCTAssertEqual(breakdown.plannedDurationSeconds, 3_000)
         XCTAssertEqual(breakdown.endKind, .recordedEarly)
+        XCTAssertEqual(breakdown.reflectionDeferredAt, reflectionDeferredAt)
     }
 
     @MainActor
@@ -4707,6 +4740,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.id), [sessionID])
         XCTAssertNil(sessions.first?.linkedMemoID)
         XCTAssertNil(sessions.first?.taskTitleSnapshot)
+        XCTAssertNil(sessions.first?.reflectionDeferredAt)
         XCTAssertTrue(
             try updatedContainer.mainContext.fetch(
                 FetchDescriptor<PomodoroTaskCompletion>()
@@ -4876,7 +4910,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         progressResult: PomodoroProgressResult? = nil,
         incompleteReason: PomodoroIncompleteReason? = nil,
         segments: [AppUsageSegment] = [],
-        inputActivityRatio: Double? = nil
+        inputActivityRatio: Double? = nil,
+        reflectionDeferredAt: Date? = nil
     ) -> FocusSessionRow {
         let endedAt = startedAt.addingTimeInterval(TimeInterval(durationSeconds))
         return FocusSessionRow(
@@ -4899,7 +4934,8 @@ final class ConstantsDefaultsTests: XCTestCase {
                 segments: segments
             ),
             inputActivityRatio: inputActivityRatio,
-            markerColorKey: nil
+            markerColorKey: nil,
+            reflectionDeferredAt: reflectionDeferredAt
         )
     }
 
