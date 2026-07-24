@@ -89,7 +89,11 @@ struct StatsDetailWindow: View {
                                 reflections: pomodoroReflections,
                                 taskCompletions: pomodoroTaskCompletions,
                                 viewMode: viewMode,
-                                referenceDate: selectedDate
+                                referenceDate: selectedDate,
+                                onNavigate: { mode, date in
+                                    selectedDate = date
+                                    viewMode = mode
+                                }
                             )
                         } else {
                             StatsChartView(
@@ -1119,6 +1123,66 @@ enum FocusCategorySummaryBuilder {
     }
 }
 
+enum FocusPeriodCalendarBuilder {
+    static func weekDates(
+        containing date: Date,
+        calendar: Calendar = .current
+    ) -> [Date] {
+        let start = Constants.mondayWeekStart(for: date, calendar: calendar)
+        return (0..<7).compactMap {
+            calendar.date(byAdding: .day, value: $0, to: start)
+        }
+    }
+
+    static func monthWeeks(
+        containing date: Date,
+        calendar: Calendar = .current
+    ) -> [[Date?]] {
+        guard let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: date)
+        ),
+        let monthEnd = calendar.date(
+            byAdding: .month,
+            value: 1,
+            to: monthStart
+        ) else {
+            return []
+        }
+
+        let leadingEmptyCount = mondayIndex(
+            for: monthStart,
+            calendar: calendar
+        )
+        var cells = Array<Date?>(repeating: nil, count: leadingEmptyCount)
+        var cursor = monthStart
+        while cursor < monthEnd {
+            cells.append(cursor)
+            guard let next = calendar.date(
+                byAdding: .day,
+                value: 1,
+                to: cursor
+            ) else {
+                break
+            }
+            cursor = next
+        }
+        while cells.count.isMultiple(of: 7) == false {
+            cells.append(nil)
+        }
+        return stride(from: 0, to: cells.count, by: 7).map {
+            Array(cells[$0..<min($0 + 7, cells.count)])
+        }
+    }
+
+    static func mondayIndex(
+        for date: Date,
+        calendar: Calendar = .current
+    ) -> Int {
+        let weekday = calendar.component(.weekday, from: date)
+        return (weekday + 5) % 7
+    }
+}
+
 struct FocusTaskSessionGroup: Identifiable {
     let id: String
     let linkedMemoID: UUID?
@@ -2086,12 +2150,26 @@ private struct FocusTaskSessionTrendView: View {
 
 }
 
+private struct WeeklyFocusPlotPoint: Identifiable {
+    var id: UUID { row.id }
+    let row: FocusSessionRow
+    let plotDate: Date
+    let focusLevel: Int
+}
+
+private struct FocusResponseBucket: Identifiable {
+    let id: Int
+    let label: String
+    let color: Color
+}
+
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
     let reflections: [PomodoroReflection]
     let taskCompletions: [PomodoroTaskCompletion]
     let viewMode: StatsViewMode
     let referenceDate: Date
+    let onNavigate: (StatsViewMode, Date) -> Void
 
     @Environment(\.modelContext) private var modelContext
     @State private var xMetric: FocusSessionMetric = .continuousFocus
@@ -2167,6 +2245,80 @@ struct FocusDetailView: View {
         Set(taskCompletions.map(\.focusSessionID))
     }
 
+    private var periodCalendar: Calendar {
+        Calendar.current
+    }
+
+    private var weekDates: [Date] {
+        FocusPeriodCalendarBuilder.weekDates(
+            containing: referenceDate,
+            calendar: periodCalendar
+        )
+    }
+
+    private var monthWeeks: [[Date?]] {
+        FocusPeriodCalendarBuilder.monthWeeks(
+            containing: referenceDate,
+            calendar: periodCalendar
+        )
+    }
+
+    private var filteredRowsByDay: [Date: [FocusSessionRow]] {
+        Dictionary(grouping: filteredRows) {
+            periodCalendar.startOfDay(for: $0.startedAt)
+        }
+    }
+
+    private var focusResponseBuckets: [FocusResponseBucket] {
+        [
+            FocusResponseBucket(id: 4, label: "깊게", color: PopoverChrome.accent),
+            FocusResponseBucket(id: 3, label: "대체로", color: .green),
+            FocusResponseBucket(id: 2, label: "흐트러짐", color: .orange),
+            FocusResponseBucket(id: 1, label: "어려움", color: .red),
+            FocusResponseBucket(
+                id: 0,
+                label: "알 수 없음",
+                color: PopoverChrome.inkTertiary
+            ),
+        ]
+    }
+
+    private var weeklyPlotPoints: [WeeklyFocusPlotPoint] {
+        let reflectedRows = filteredRows.filter {
+            focusLevel(for: $0) != nil
+        }
+        let groupedRows = Dictionary(grouping: reflectedRows) { row in
+            let day = periodCalendar.startOfDay(for: row.startedAt)
+            return "\(day.timeIntervalSinceReferenceDate)-\(focusLevel(for: row) ?? -1)"
+        }
+        return groupedRows.values.flatMap { group in
+            let sorted = group.sorted { $0.startedAt < $1.startedAt }
+            let count = sorted.count
+            return sorted.enumerated().map { index, row in
+                let day = periodCalendar.startOfDay(for: row.startedAt)
+                let center = Double(count - 1) / 2
+                let spacingHours = min(1.6, 6 / Double(max(1, count)))
+                let offsetHours = (Double(index) - center) * spacingHours
+                let noon = periodCalendar.date(
+                    byAdding: .hour,
+                    value: 12,
+                    to: day
+                ) ?? day
+                let plotDate = noon.addingTimeInterval(offsetHours * 3_600)
+                return WeeklyFocusPlotPoint(
+                    row: row,
+                    plotDate: plotDate,
+                    focusLevel: focusLevel(for: row) ?? 0
+                )
+            }
+        }
+        .sorted { $0.row.startedAt < $1.row.startedAt }
+    }
+
+    private var missingReflectionCount: Int {
+        filteredRows.filter { $0.selfAssessmentLabel == nil }.count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if rows.isEmpty {
@@ -2176,7 +2328,7 @@ struct FocusDetailView: View {
                 if filteredRows.isEmpty {
                     filteredEmptyState
                 } else {
-                    focusMapCard
+                    periodFocusContent
                     taskGroupListSection
                 }
             }
@@ -2186,6 +2338,24 @@ struct FocusDetailView: View {
             if let selectedCategory, !categories.contains(selectedCategory) {
                 self.selectedCategory = nil
             }
+        }
+        .onChange(of: viewMode) { _, _ in
+            selectedSessionID = nil
+            hoveredTaskSessionID = nil
+            expandedTaskGroupIDs.removeAll()
+        }
+    }
+
+    @ViewBuilder
+    private var periodFocusContent: some View {
+        switch viewMode {
+        case .daily:
+            focusMapCard
+        case .weekly:
+            weeklyFocusCard
+        case .monthly:
+            monthlyFocusCalendarCard
+            monthlyWeekdayPatternCard
         }
     }
 
@@ -2433,6 +2603,615 @@ struct FocusDetailView: View {
         categorySearchText = ""
     }
 
+    // MARK: 주간 몰입
+
+    private var weeklyFocusCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("요일별 몰입 흐름")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("점 하나는 포모도로 한 세션이에요")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            weeklyProgressLegend
+
+            if weeklyPlotPoints.isEmpty {
+                Text("이번 주에는 집중 체감을 남긴 세션이 없어요.")
+                    .font(.callout)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+            } else {
+                weeklyFocusChart
+            }
+
+            if missingReflectionCount > 0 {
+                Text("회고가 없는 \(missingReflectionCount)개 세션은 차트에서 제외했어요.")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            if let selectedRow {
+                selectedDetailLine(selectedRow)
+            }
+
+            Divider()
+            Text("날짜를 누르면 일간 몰입 기록으로 이동해요.")
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            weeklyDayNavigator
+        }
+        .popoverCard(padding: 16)
+    }
+
+    private var weeklyProgressLegend: some View {
+        HStack(spacing: 12) {
+            progressLegendItem(
+                title: "계획만큼 완료",
+                color: .green
+            )
+            progressLegendItem(
+                title: "의미 있게 진행",
+                color: .blue
+            )
+            progressLegendItem(
+                title: "거의 못함",
+                color: .red
+            )
+            progressLegendItem(
+                title: "목표 변경·미기록",
+                color: PopoverChrome.inkTertiary
+            )
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func progressLegendItem(
+        title: String,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkSecondary)
+        }
+    }
+
+    private var weeklyFocusChart: some View {
+        let start = weekDates.first ?? referenceDate
+        let end = periodCalendar.date(
+            byAdding: .day,
+            value: 7,
+            to: start
+        ) ?? start
+        let axisDates = weekDates.map {
+            periodCalendar.date(byAdding: .hour, value: 12, to: $0) ?? $0
+        }
+        return Chart(weeklyPlotPoints) { point in
+            PointMark(
+                x: .value("날짜", point.plotDate),
+                y: .value("집중 체감", Double(point.focusLevel))
+            )
+            .symbolSize(selectedSessionID == point.id ? 125 : 82)
+            .foregroundStyle(progressTint(point.row.progressResult))
+            .opacity(
+                selectedSessionID == nil || selectedSessionID == point.id
+                    ? 0.9
+                    : 0.3
+            )
+        }
+        .chartXScale(domain: start...end)
+        .chartYScale(domain: -0.4...4.5)
+        .chartXAxis {
+            AxisMarks(values: axisDates) { value in
+                AxisGridLine()
+                    .foregroundStyle(PopoverChrome.divider.opacity(0.65))
+                AxisValueLabel {
+                    if let date = value.as(Date.self) {
+                        Text(weekdayDayText(date))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(
+                position: .leading,
+                values: [0.0, 1.0, 2.0, 3.0, 4.0]
+            ) { value in
+                AxisGridLine()
+                    .foregroundStyle(PopoverChrome.divider.opacity(0.65))
+                AxisValueLabel {
+                    if let level = value.as(Double.self) {
+                        Text(focusLevelLabel(Int(level.rounded())))
+                    }
+                }
+            }
+        }
+        .frame(height: 300)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        SpatialTapGesture().onEnded { event in
+                            selectNearestWeeklyPoint(
+                                to: event.location,
+                                proxy: proxy,
+                                geometry: geometry
+                            )
+                        }
+                    )
+            }
+        }
+    }
+
+    private var weeklyDayNavigator: some View {
+        HStack(spacing: 6) {
+            ForEach(weekDates, id: \.self) { date in
+                let day = periodCalendar.startOfDay(for: date)
+                let count = filteredRowsByDay[day]?.count ?? 0
+                Button {
+                    onNavigate(.daily, date)
+                } label: {
+                    VStack(spacing: 3) {
+                        Text(weekdayDayText(date))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(PopoverChrome.ink)
+                        Text(count == 0 ? "기록 없음" : "\(count)회")
+                            .font(.caption2)
+                            .foregroundStyle(
+                                count == 0
+                                    ? PopoverChrome.inkTertiary
+                                    : PopoverChrome.inkSecondary
+                            )
+                            .monospacedDigit()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(
+                        count > 0
+                            ? PopoverChrome.selectionFill.opacity(0.45)
+                            : PopoverChrome.surface,
+                        in: RoundedRectangle(
+                            cornerRadius: 8,
+                            style: .continuous
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(
+                            cornerRadius: 8,
+                            style: .continuous
+                        )
+                        .stroke(PopoverChrome.divider, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func selectNearestWeeklyPoint(
+        to location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geometry[plotFrame]
+        let relativePoint = CGPoint(
+            x: location.x - frame.minX,
+            y: location.y - frame.minY
+        )
+        var nearest: (id: UUID, distance: CGFloat)?
+        for point in weeklyPlotPoints {
+            guard let x = proxy.position(forX: point.plotDate),
+                  let y = proxy.position(forY: Double(point.focusLevel)) else {
+                continue
+            }
+            let distance = hypot(x - relativePoint.x, y - relativePoint.y)
+            if nearest == nil || distance < nearest!.distance {
+                nearest = (point.id, distance)
+            }
+        }
+        if let nearest, nearest.distance < 44 {
+            selectedSessionID = selectedSessionID == nearest.id
+                ? nil
+                : nearest.id
+        } else {
+            selectedSessionID = nil
+        }
+    }
+
+    // MARK: 월간 몰입
+
+    private var monthlyFocusCalendarCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("월간 몰입 캘린더")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("점은 세션에서 남긴 집중 체감이에요")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            monthlyFocusLegend
+            monthlyCalendarWeekdayHeader
+            ForEach(
+                Array(monthWeeks.enumerated()),
+                id: \.offset
+            ) { index, week in
+                monthlyCalendarWeekRow(
+                    week,
+                    weekNumber: index + 1
+                )
+            }
+
+            Text("날짜는 일간, 왼쪽 주차는 주간 몰입 기록으로 이동해요.")
+                .font(.caption2)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+        }
+        .popoverCard(padding: 16)
+    }
+
+    private var monthlyFocusLegend: some View {
+        HStack(spacing: 12) {
+            ForEach(focusResponseBuckets) { bucket in
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(bucket.color)
+                        .frame(width: 7, height: 7)
+                    Text(bucket.label)
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var monthlyCalendarWeekdayHeader: some View {
+        HStack(spacing: 6) {
+            Color.clear
+                .frame(width: 42, height: 1)
+            ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                Text(symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func monthlyCalendarWeekRow(
+        _ week: [Date?],
+        weekNumber: Int
+    ) -> some View {
+        HStack(spacing: 6) {
+            if let weekDate = week.compactMap({ $0 }).first {
+                Button {
+                    onNavigate(.weekly, weekDate)
+                } label: {
+                    Text("\(weekNumber)주")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .frame(width: 42, height: 76)
+                        .background(
+                            PopoverChrome.surface,
+                            in: RoundedRectangle(
+                                cornerRadius: 8,
+                                style: .continuous
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(
+                                cornerRadius: 8,
+                                style: .continuous
+                            )
+                            .stroke(PopoverChrome.divider, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            } else {
+                Color.clear
+                    .frame(width: 42, height: 76)
+            }
+
+            ForEach(week.indices, id: \.self) { index in
+                if let date = week[index] {
+                    monthlyDayCell(date)
+                } else {
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 76)
+                }
+            }
+        }
+    }
+
+    private func monthlyDayCell(
+        _ date: Date
+    ) -> some View {
+        let day = periodCalendar.startOfDay(for: date)
+        let dayRows = filteredRowsByDay[day] ?? []
+        let reflectedRows = dayRows.filter { focusLevel(for: $0) != nil }
+        let completedCount = dayRows.filter {
+            $0.progressResult == .completedAsPlanned
+        }.count
+        let remainingCount = dayRows.filter {
+            $0.progressResult == .meaningfulProgress
+                || $0.progressResult == .littleProgress
+        }.count
+        let changedCount = dayRows.filter {
+            $0.progressResult == .goalChanged
+        }.count
+        return Button {
+            onNavigate(.daily, date)
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text(dayNumberText(date))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.ink)
+                    Spacer(minLength: 2)
+                    if !dayRows.isEmpty {
+                        Text("\(dayRows.count)회")
+                            .font(.caption2)
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                            .monospacedDigit()
+                    }
+                }
+
+                if dayRows.isEmpty {
+                    Text("기록 없음")
+                        .font(.system(size: 9))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    Spacer(minLength: 0)
+                } else {
+                    HStack(spacing: 3) {
+                        ForEach(
+                            Array(reflectedRows.prefix(6)),
+                            id: \.id
+                        ) { row in
+                            Circle()
+                                .fill(focusTint(for: row))
+                                .frame(width: 7, height: 7)
+                        }
+                        if reflectedRows.count > 6 {
+                            Text("+\(reflectedRows.count - 6)")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 5) {
+                        if completedCount > 0 {
+                            Text("완료 \(completedCount)")
+                                .foregroundStyle(Color.green)
+                        }
+                        if remainingCount > 0 {
+                            Text("남음 \(remainingCount)")
+                                .foregroundStyle(Color.blue)
+                        }
+                        if changedCount > 0 {
+                            Text("변경 \(changedCount)")
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                    }
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .monospacedDigit()
+                }
+            }
+            .padding(7)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: 76)
+            .background(
+                dayRows.isEmpty
+                    ? PopoverChrome.surface
+                    : PopoverChrome.selectionFill.opacity(0.42),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(PopoverChrome.divider, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(monthlyDayHelp(date: date, rows: dayRows))
+    }
+
+    private var monthlyWeekdayPatternCard: some View {
+        let maximum = max(
+            1,
+            focusResponseBuckets.flatMap { bucket in
+                (0..<7).map {
+                    weekdayResponseCount(
+                        bucketID: bucket.id,
+                        weekdayIndex: $0
+                    )
+                }
+            }.max() ?? 1
+        )
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("요일별 반복 패턴")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("평균이 아니라 실제 회고 응답 횟수예요")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            HStack(spacing: 6) {
+                Color.clear
+                    .frame(width: 86, height: 1)
+                ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                    Text(symbol)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            ForEach(focusResponseBuckets) { bucket in
+                HStack(spacing: 6) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(bucket.color)
+                            .frame(width: 7, height: 7)
+                        Text(bucket.label)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                    }
+                    .frame(width: 86, alignment: .leading)
+
+                    ForEach(0..<7, id: \.self) { weekdayIndex in
+                        let count = weekdayResponseCount(
+                            bucketID: bucket.id,
+                            weekdayIndex: weekdayIndex
+                        )
+                        Text(count == 0 ? "–" : "\(count)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(
+                                count == 0
+                                    ? PopoverChrome.inkTertiary
+                                    : PopoverChrome.ink
+                            )
+                            .monospacedDigit()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 28)
+                            .background(
+                                bucket.color.opacity(
+                                    count == 0
+                                        ? 0.03
+                                        : 0.08
+                                            + 0.22
+                                            * Double(count)
+                                            / Double(maximum)
+                                ),
+                                in: RoundedRectangle(
+                                    cornerRadius: 6,
+                                    style: .continuous
+                                )
+                            )
+                    }
+                }
+            }
+
+            if missingReflectionCount > 0 {
+                Text("회고가 없는 세션: \(missingReflectionCount)회")
+                    .font(.caption2)
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+        }
+        .popoverCard(padding: 16)
+    }
+
+    private var weekdaySymbols: [String] {
+        ["월", "화", "수", "목", "금", "토", "일"]
+    }
+
+    private func weekdayResponseCount(
+        bucketID: Int,
+        weekdayIndex: Int
+    ) -> Int {
+        filteredRows.filter { row in
+            guard focusLevel(for: row) == bucketID else { return false }
+            return FocusPeriodCalendarBuilder.mondayIndex(
+                for: row.startedAt,
+                calendar: periodCalendar
+            ) == weekdayIndex
+        }.count
+    }
+
+    private func monthlyDayHelp(
+        date: Date,
+        rows: [FocusSessionRow]
+    ) -> String {
+        guard !rows.isEmpty else {
+            return "\(fullDateText(date)) · 기록 없음 · 눌러서 일간 보기"
+        }
+        let responses = focusResponseBuckets.compactMap { bucket -> String? in
+            let count = rows.filter { focusLevel(for: $0) == bucket.id }.count
+            return count > 0 ? "\(bucket.label) \(count)회" : nil
+        }
+        return "\(fullDateText(date)) · \(rows.count)회 · \(responses.joined(separator: " · "))"
+    }
+
+    private func focusLevel(
+        for row: FocusSessionRow
+    ) -> Int? {
+        if let rating = row.rating {
+            return rating
+        }
+        if row.selfAssessmentLabel == PomodoroFocusExperience.unsure.label {
+            return 0
+        }
+        return nil
+    }
+
+    private func focusTint(
+        for row: FocusSessionRow
+    ) -> Color {
+        guard let level = focusLevel(for: row) else {
+            return PopoverChrome.divider
+        }
+        return focusResponseBuckets.first { $0.id == level }?.color
+            ?? PopoverChrome.inkTertiary
+    }
+
+    private func progressTint(
+        _ progressResult: PomodoroProgressResult?
+    ) -> Color {
+        switch progressResult {
+        case .completedAsPlanned: return .green
+        case .meaningfulProgress: return .blue
+        case .littleProgress: return .red
+        case .goalChanged, .none: return PopoverChrome.inkTertiary
+        }
+    }
+
+    private func focusLevelLabel(
+        _ level: Int
+    ) -> String {
+        focusResponseBuckets.first { $0.id == level }?.label ?? ""
+    }
+
+    private func weekdayDayText(
+        _ date: Date
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "E d"
+        return formatter.string(from: date)
+    }
+
+    private func dayNumberText(
+        _ date: Date
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter.string(from: date)
+    }
+
+    private func fullDateText(
+        _ date: Date
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일 EEEE"
+        return formatter.string(from: date)
+    }
+
     // MARK: 몰입 지도
 
     private var focusMapCard: some View {
@@ -2660,18 +3439,37 @@ struct FocusDetailView: View {
     private var taskGroupListSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("할 일별 세션")
+                Text(taskGroupSectionTitle)
                     .font(.headline)
                     .foregroundStyle(PopoverChrome.ink)
                 sessionMetricInfoButton
                 Spacer()
-                Text("같은 할 일의 세션을 묶어서 표시 · \(filteredRows.count)개 세션")
+                Text(taskGroupSectionSubtitle)
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
             ForEach(taskGroups) { group in
                 taskGroupCard(group)
             }
+        }
+    }
+
+    private var taskGroupSectionTitle: String {
+        switch viewMode {
+        case .daily: return "할 일별 세션"
+        case .weekly: return "이번 주 할 일별 세션"
+        case .monthly: return "이번 달 할 일별 세션"
+        }
+    }
+
+    private var taskGroupSectionSubtitle: String {
+        switch viewMode {
+        case .daily:
+            return "같은 할 일의 세션을 묶어서 표시 · \(filteredRows.count)개 세션"
+        case .weekly:
+            return "펼치면 회차별 집중·진척 흐름을 확인 · \(filteredRows.count)개 세션"
+        case .monthly:
+            return "여러 날 이어진 회차 흐름을 확인 · \(filteredRows.count)개 세션"
         }
     }
 
@@ -3276,7 +4074,12 @@ struct FocusDetailView: View {
     }
 
     private func timeRangeText(_ row: FocusSessionRow) -> String {
-        "\(focusTimeFormatter.string(from: row.startedAt))–\(focusTimeFormatter.string(from: row.endedAt))"
+        let timeRange = "\(focusTimeFormatter.string(from: row.startedAt))–\(focusTimeFormatter.string(from: row.endedAt))"
+        guard viewMode != .daily else { return timeRange }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M/d(E)"
+        return "\(formatter.string(from: row.startedAt)) \(timeRange)"
     }
 
     private func completionDetailText(_ row: FocusSessionRow) -> String {
