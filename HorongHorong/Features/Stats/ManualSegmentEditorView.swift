@@ -230,14 +230,14 @@ struct ManualSegmentEditorView: View {
         guard validatePomodoroEdit(session: session, draft: draft) else {
             return false
         }
-        guard let oldEnd = focusEnd(for: session) else {
+        guard focusEnd(for: session) != nil else {
             editError = "종료 시간이 없는 포모도로 기록은 수정할 수 없습니다."
             return false
         }
 
         let oldCategory = session.category ?? Constants.defaultFocusCategory
         let oldStart = session.startedAt
-        let oldDuration = Int(oldEnd.timeIntervalSince(oldStart))
+        let oldDuration = session.recordedFocusSeconds
         let newDuration = Int(draft.end.timeIntervalSince(draft.start))
 
         session.category = draft.category
@@ -245,6 +245,7 @@ struct ManualSegmentEditorView: View {
         session.endedAt = draft.end
         session.focusMinutes = max(1, Int(ceil(draft.end.timeIntervalSince(draft.start) / 60)))
         session.completed = true
+        session.actualFocusSeconds = newDuration
 
         syncFocusRecord(category: oldCategory, date: oldStart, deltaSeconds: -oldDuration)
         syncFocusRecord(category: draft.category, date: draft.start, deltaSeconds: newDuration)
@@ -336,8 +337,8 @@ struct ManualSegmentEditorView: View {
     private func deleteFocusRecord(for session: FocusSession) {
         let category = session.category ?? Constants.defaultFocusCategory
         let bundleId = Constants.focusSessionBundleId(for: category)
-        guard let end = focusEnd(for: session) else { return }
-        let duration = Int(end.timeIntervalSince(session.startedAt))
+        let duration = session.recordedFocusSeconds
+        guard duration > 0 else { return }
         syncRecord(
             bundleId: bundleId,
             appName: Constants.focusSessionAppName,
@@ -451,29 +452,14 @@ struct ManualSegmentEditorView: View {
 
     /// AppUsageRecord 에 증감분을 반영한다. 없으면 deltaSeconds > 0 일 때만 새로 생성.
     private func syncRecord(bundleId: String, appName: String, category: String, date: Date, deltaSeconds: Int) {
-        guard deltaSeconds != 0 else { return }
-        let dayStart = Calendar.current.startOfDay(for: date)
-        let descriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.bundleIdentifier == bundleId && $0.date == dayStart }
+        try? AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleId,
+            appName: appName,
+            category: category,
+            date: date,
+            deltaSeconds: deltaSeconds,
+            modelContext: modelContext
         )
-        if let record = try? modelContext.fetch(descriptor).first {
-            let newTotal = max(0, record.durationSeconds + deltaSeconds)
-            if newTotal == 0 {
-                modelContext.delete(record)
-            } else {
-                record.durationSeconds = newTotal
-                if record.category != category { record.category = category }
-            }
-        } else if deltaSeconds > 0 {
-            let record = AppUsageRecord(
-                appName: appName,
-                bundleIdentifier: bundleId,
-                category: category,
-                date: dayStart
-            )
-            record.durationSeconds = deltaSeconds
-            modelContext.insert(record)
-        }
     }
 
     private func defaultInitial() -> SegmentDraft {
@@ -675,7 +661,7 @@ private struct PomodoroEditRowView: View {
     }
 
     private var durationSeconds: Int {
-        max(0, Int(focusEnd.timeIntervalSince(session.startedAt)))
+        session.recordedFocusSeconds
     }
 
     private var childTotalSeconds: Int {

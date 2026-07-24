@@ -287,6 +287,7 @@ struct TimerView: View {
     @AppStorage(Constants.AppStorageKey.customBreakMinutes)
     private var customBreakMinutes: Int = Constants.defaultCustomBreakMinutes
     var timerManager: TimerManager
+    var requestFocusEnd: () -> Void
     var closePopover: (() -> Void)?
 
     var body: some View {
@@ -450,9 +451,9 @@ struct TimerView: View {
                 .buttonStyle(LanternSecondaryButtonStyle())
 
                 Button {
-                    timerManager.reset()
+                    requestFocusEnd()
                 } label: {
-                    Label("리셋", systemImage: "arrow.counterclockwise")
+                    Label("종료", systemImage: "stop.fill")
                 }
                 .buttonStyle(LanternSecondaryButtonStyle())
 
@@ -465,9 +466,9 @@ struct TimerView: View {
                 .buttonStyle(TimerGradientButtonStyle())
 
                 Button {
-                    timerManager.reset()
+                    requestFocusEnd()
                 } label: {
-                    Label("리셋", systemImage: "arrow.counterclockwise")
+                    Label("종료", systemImage: "stop.fill")
                 }
                 .buttonStyle(LanternSecondaryButtonStyle())
 
@@ -1049,4 +1050,5 @@ struct TimerView: View {
         guard total > 0 else { return 0 }
         return Double(total - appState.remainingSeconds) / Double(total)
     }
+
 }

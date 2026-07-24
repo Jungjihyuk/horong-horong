@@ -13,6 +13,11 @@ extension Notification.Name {
     )
 }
 
+enum FocusSessionEndKind: String {
+    case timerCompleted = "timer_completed"
+    case recordedEarly = "recorded_early"
+}
+
 @Model
 final class FocusSession {
     var id: UUID
@@ -29,6 +34,11 @@ final class FocusSession {
     /// 집중(focusing) 동안 키보드·마우스 입력이 있었던 초. 유휴(입력 없음) 시간은 빼고 센다.
     /// nil = 이 기능 도입 이전에 만들어진 기록(입력 데이터 없음).
     var inputActiveSeconds: Int?
+    /// 일시정지를 제외하고 카운트다운이 실제 진행된 초.
+    /// nil = 이 기능 도입 이전에 만들어진 기록.
+    var actualFocusSeconds: Int?
+    /// 타이머 만료와 사용자의 기록 후 종료를 구분한다.
+    var endKindRawValue: String?
     /// 몰입 지도에서 이 세션 점에 쓸 사용자 지정 색 키. nil = 카테고리 기본색.
     var markerColorKey: String?
 
@@ -48,6 +58,8 @@ final class FocusSession {
         self.linkedMemoID = linkedMemoID
         self.taskTitleSnapshot = linkedMemoID == nil ? nil : Self.normalizedText(taskTitleSnapshot)
         self.inputActiveSeconds = nil
+        self.actualFocusSeconds = nil
+        self.endKindRawValue = nil
         self.markerColorKey = nil
     }
 
@@ -58,6 +70,24 @@ final class FocusSession {
 }
 
 extension FocusSession {
+    var endKind: FocusSessionEndKind? {
+        get { endKindRawValue.flatMap(FocusSessionEndKind.init(rawValue:)) }
+        set { endKindRawValue = newValue?.rawValue }
+    }
+
+    var recordedFocusSeconds: Int {
+        let plannedSeconds = max(0, focusMinutes * 60)
+        guard plannedSeconds > 0 else { return 0 }
+        if let actualFocusSeconds {
+            return min(plannedSeconds, max(0, actualFocusSeconds))
+        }
+        guard let endedAt else { return 0 }
+        return min(
+            plannedSeconds,
+            max(0, Int(endedAt.timeIntervalSince(startedAt)))
+        )
+    }
+
     @MainActor
     @discardableResult
     static func resetMarkerColors(

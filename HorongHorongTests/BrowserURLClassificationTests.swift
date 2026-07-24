@@ -3,11 +3,83 @@ import SwiftData
 @testable import 호롱호롱
 
 final class BrowserURLClassificationTests: XCTestCase {
-    func testEntertainmentURLClassification() {
-        XCTAssertEqual(AppTracker.entertainmentLabel(for: "https://www.youtube.com/watch?v=abc"), "YouTube")
-        XCTAssertEqual(AppTracker.entertainmentLabel(for: "https://youtu.be/abc"), "YouTube")
-        XCTAssertEqual(AppTracker.entertainmentLabel(for: "https://www.netflix.com/watch/123"), "Netflix")
-        XCTAssertNil(AppTracker.entertainmentLabel(for: "https://developer.apple.com/documentation"))
+    func testWebsiteURLInspectionRespectsExplicitNonBrowserMappings() {
+        XCTAssertFalse(
+            AppTracker.shouldInspectWebsiteURL(
+                isKnownBrowser: false,
+                classification: .category("개발"),
+                hasWebsiteRules: true
+            )
+        )
+        XCTAssertTrue(
+            AppTracker.shouldInspectWebsiteURL(
+                isKnownBrowser: false,
+                classification: .unclassified,
+                hasWebsiteRules: true
+            )
+        )
+        XCTAssertFalse(
+            AppTracker.shouldInspectWebsiteURL(
+                isKnownBrowser: false,
+                classification: .unclassified,
+                hasWebsiteRules: false
+            )
+        )
+        XCTAssertTrue(
+            AppTracker.shouldInspectWebsiteURL(
+                isKnownBrowser: true,
+                classification: .category("개발"),
+                hasWebsiteRules: false
+            )
+        )
+        XCTAssertFalse(
+            AppTracker.shouldInspectWebsiteURL(
+                isKnownBrowser: true,
+                classification: .excluded,
+                hasWebsiteRules: true
+            )
+        )
+    }
+
+    func testUnmappedNonBrowserAppHandlingModes() {
+        XCTAssertEqual(
+            AppTracker.categoryForNonBrowserApp(
+                classification: .unclassified,
+                unmappedAppHandling: .pendingClassification
+            ),
+            Constants.unclassifiedAppCategory
+        )
+        XCTAssertEqual(
+            AppTracker.categoryForNonBrowserApp(
+                classification: .unclassified,
+                unmappedAppHandling: .recordAsOther
+            ),
+            Constants.categoryName("기타")
+        )
+        XCTAssertNil(
+            AppTracker.categoryForNonBrowserApp(
+                classification: .unclassified,
+                unmappedAppHandling: .doNotRecord
+            )
+        )
+    }
+
+    func testExplicitNonBrowserAppRulesOverrideUnmappedHandling() {
+        for handling in Constants.UnmappedAppHandling.allCases {
+            XCTAssertEqual(
+                AppTracker.categoryForNonBrowserApp(
+                    classification: .category("개발"),
+                    unmappedAppHandling: handling
+                ),
+                "개발"
+            )
+            XCTAssertNil(
+                AppTracker.categoryForNonBrowserApp(
+                    classification: .excluded,
+                    unmappedAppHandling: handling
+                )
+            )
+        }
     }
 
     func testResearchURLClassification() {
@@ -57,6 +129,12 @@ final class BrowserURLClassificationTests: XCTestCase {
                 rules: rules
             )
         )
+        XCTAssertNil(
+            WebsiteCategoryRule.bestMatch(
+                for: "https://example.com/?next=https://chatgpt.com",
+                rules: rules
+            )
+        )
     }
 
     func testMoreSpecificWebsiteRuleWins() {
@@ -83,6 +161,27 @@ final class BrowserURLClassificationTests: XCTestCase {
         XCTAssertNil(WebsiteCategoryRule.domain(from: "com.google.Chrome"))
     }
 
+    func testWebsiteRuleMatchesTrackedDomainAcrossBrowsers() {
+        XCTAssertTrue(
+            WebsiteCategoryRule.matchesTrackedBundleIdentifier(
+                "com.google.Chrome.website.chatgpt.com",
+                domain: "chatgpt.com"
+            )
+        )
+        XCTAssertTrue(
+            WebsiteCategoryRule.matchesTrackedBundleIdentifier(
+                "com.apple.Safari.website.chatgpt.com",
+                domain: "https://www.chatgpt.com/codex"
+            )
+        )
+        XCTAssertFalse(
+            WebsiteCategoryRule.matchesTrackedBundleIdentifier(
+                "com.apple.Safari.website.fakechatgpt.com",
+                domain: "chatgpt.com"
+            )
+        )
+    }
+
     func testRequestedServicesAreDefaultWebsiteCategoryRules() {
         let rules = Dictionary(
             uniqueKeysWithValues: Constants.defaultWebsiteCategoryRules.map {
@@ -95,6 +194,18 @@ final class BrowserURLClassificationTests: XCTestCase {
         XCTAssertEqual(rules["gemini.google.com"], Constants.categoryName("개발"))
         XCTAssertEqual(rules["youtube.com"], Constants.categoryName("엔터"))
         XCTAssertEqual(rules["netflix.com"], Constants.categoryName("엔터"))
+    }
+
+    func testYouTubeDefaultWebsiteRuleIncludesShortLinkAlias() {
+        XCTAssertEqual(
+            Constants.websiteRuleDomains(for: "youtube.com"),
+            ["youtube.com", "youtu.be"]
+        )
+        XCTAssertEqual(
+            Constants.canonicalWebsiteRuleDomain(for: "https://youtu.be/abc"),
+            "youtube.com"
+        )
+        XCTAssertTrue(Constants.websiteAliases(for: "netflix.com").isEmpty)
     }
 
     @MainActor
@@ -131,6 +242,57 @@ final class BrowserURLClassificationTests: XCTestCase {
         XCTAssertEqual(
             CategoryManager.shared.trackingClassification(for: identifier),
             .unclassified
+        )
+    }
+
+    @MainActor
+    func testYouTubeCategoryChangeAppliesToRootSubdomainsAndShortLinkAlias() throws {
+        let schema = Schema([
+            AppCategoryRule.self,
+            AppUsageSegment.self,
+            AppUsageRecord.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let identifier = WebsiteCategoryRule.bundleIdentifier(for: "youtube.com")
+        let rule = AppCategoryRule(
+            bundleIdentifier: identifier,
+            appName: "youtube.com",
+            category: "공부",
+            isUserDefined: true
+        )
+        context.insert(rule)
+        try context.save()
+
+        CategoryManager.shared.loadUserRules(from: context)
+        defer {
+            context.delete(rule)
+            try? context.save()
+            CategoryManager.shared.loadUserRules(from: context)
+        }
+
+        let expected = WebsiteCategoryMatch(domain: "youtube.com", category: "공부")
+        XCTAssertEqual(
+            CategoryManager.shared.websiteMatch(
+                for: "https://youtube.com/watch?v=abc"
+            ),
+            expected
+        )
+        XCTAssertEqual(
+            CategoryManager.shared.websiteMatch(
+                for: "https://music.youtube.com/watch?v=abc"
+            ),
+            expected
+        )
+        XCTAssertEqual(
+            CategoryManager.shared.websiteMatch(for: "https://youtu.be/abc"),
+            WebsiteCategoryMatch(domain: "youtu.be", category: "공부")
+        )
+        XCTAssertNil(
+            CategoryManager.shared.websiteMatch(
+                for: "https://notyoutube.com/?next=youtu.be"
+            )
         )
     }
 }

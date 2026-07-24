@@ -6,7 +6,19 @@ import UniformTypeIdentifiers
 struct CategoryMappingPage: View {
     private static let excludedRuleGroup = "__tracking_excluded__"
 
+    private struct PendingRuleCategoryChange {
+        let rule: AppCategoryRule
+        let displayName: String
+        let oldCategory: String
+        let newCategory: String
+        let replacementAppName: String?
+        let closesAddRuleForm: Bool
+    }
+
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(Constants.AppStorageKey.unmappedAppHandling)
+    private var unmappedAppHandlingRaw: String =
+        Constants.defaultUnmappedAppHandling.rawValue
 
     @State private var categoryRules: [AppCategoryRule] = []
     @State private var websiteRules: [AppCategoryRule] = []
@@ -35,6 +47,7 @@ struct CategoryMappingPage: View {
         ?? Constants.categoryName("기타")
     @State private var categoryMutationError: String?
     @State private var markerColorResetCategory: String?
+    @State private var pendingRuleCategoryChange: PendingRuleCategoryChange?
 
     var body: some View {
         SettingsPageScroll {
@@ -59,6 +72,26 @@ struct CategoryMappingPage: View {
             }
         } message: {
             Text(categoryMutationError ?? "잠시 후 다시 시도해 주세요.")
+        }
+        .confirmationDialog(
+            "기존 기록도 변경할까요?",
+            isPresented: Binding(
+                get: { pendingRuleCategoryChange != nil },
+                set: { if !$0 { pendingRuleCategoryChange = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("앞으로만 적용") {
+                applyPendingRuleCategoryChange(includeExistingUsage: false)
+            }
+            Button("기존 기록도 변경", role: .destructive) {
+                applyPendingRuleCategoryChange(includeExistingUsage: true)
+            }
+            Button("취소", role: .cancel) {
+                pendingRuleCategoryChange = nil
+            }
+        } message: {
+            Text(ruleCategoryChangeMessage)
         }
         .confirmationDialog(
             "세션별 색상을 초기화할까요?",
@@ -204,6 +237,12 @@ struct CategoryMappingPage: View {
                     .font(.caption)
                 Spacer(minLength: 0)
             }
+            if let message = newCategoryInputMessage {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack {
                 Spacer()
                 Button("취소") {
@@ -232,6 +271,19 @@ struct CategoryMappingPage: View {
     private var appRulesCard: some View {
         SettingsGroupCard("앱 → 카테고리") {
             VStack(spacing: 0) {
+                SettingsRow(
+                    "새 앱 처리",
+                    subtitle: unmappedAppHandling.wrappedValue.subtitle
+                ) {
+                    Picker("", selection: unmappedAppHandling) {
+                        ForEach(Constants.UnmappedAppHandling.allCases) { handling in
+                            Text(handling.label).tag(handling)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                }
+
                 if !unclassifiedApps.isEmpty {
                     appRuleGroupHeader(
                         category: Constants.unclassifiedAppCategory,
@@ -273,7 +325,7 @@ struct CategoryMappingPage: View {
                     }
                     .buttonStyle(.borderless)
                     Spacer()
-                    Text("처음 발견한 앱은 미분류로 기록되며, 번들 ID는 자동으로 확인합니다.")
+                    Text("직접 등록한 규칙이 우선하며, 변경 사항은 앞으로 생성되는 기록부터 적용됩니다.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -281,6 +333,16 @@ struct CategoryMappingPage: View {
                 .padding(.vertical, 10)
             }
         }
+    }
+
+    private var unmappedAppHandling: Binding<Constants.UnmappedAppHandling> {
+        Binding(
+            get: {
+                Constants.UnmappedAppHandling(rawValue: unmappedAppHandlingRaw)
+                    ?? Constants.defaultUnmappedAppHandling
+            },
+            set: { unmappedAppHandlingRaw = $0.rawValue }
+        )
     }
 
     private var productivityManagementExplanation: some View {
@@ -318,7 +380,7 @@ struct CategoryMappingPage: View {
             return "기록 안 함"
         }
         if Constants.isProductivityManagementCategory(category) {
-            return "생산성 관리 앱"
+            return Constants.productivityManagementAppCategory
         }
         return category
     }
@@ -352,7 +414,10 @@ struct CategoryMappingPage: View {
                     }
                 }
             )) {
-                Text("\(Constants.productivityManagementAppEmoji) 생산성 관리 앱")
+                Text(
+                    "\(Constants.productivityManagementAppEmoji) "
+                        + Constants.productivityManagementAppCategory
+                )
                     .tag(Constants.productivityManagementAppCategory)
                 Divider()
                 ForEach(Constants.allCategories, id: \.self) { cat in
@@ -391,7 +456,10 @@ struct CategoryMappingPage: View {
             subtitle: "\(formattedDuration(app.durationSeconds)) · \(app.bundleIdentifier)"
         ) {
             Menu("분류 선택") {
-                Button("\(Constants.productivityManagementAppEmoji) 생산성 관리 앱") {
+                Button(
+                    "\(Constants.productivityManagementAppEmoji) "
+                        + Constants.productivityManagementAppCategory
+                ) {
                     classify(app, as: Constants.productivityManagementAppCategory)
                 }
                 Divider()
@@ -430,7 +498,10 @@ struct CategoryMappingPage: View {
             }
             HStack {
                 Picker("카테고리", selection: $newCategory) {
-                    Text("\(Constants.productivityManagementAppEmoji) 생산성 관리 앱")
+                    Text(
+                        "\(Constants.productivityManagementAppEmoji) "
+                            + Constants.productivityManagementAppCategory
+                    )
                         .tag(Constants.productivityManagementAppCategory)
                     Divider()
                     ForEach(Constants.allCategories, id: \.self) { cat in
@@ -446,11 +517,11 @@ struct CategoryMappingPage: View {
                 }
                 .controlSize(.small)
                 Button("추가") {
-                    upsertUserRule()
-                    try? modelContext.save()
-                    showAddRule = false
-                    resetRuleForm()
-                    loadRules()
+                    if upsertUserRule() {
+                        showAddRule = false
+                        resetRuleForm()
+                        loadRules()
+                    }
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
@@ -503,9 +574,13 @@ struct CategoryMappingPage: View {
 
     private func websiteRuleRow(_ rule: AppCategoryRule) -> some View {
         let domain = WebsiteCategoryRule.domain(from: rule.bundleIdentifier) ?? rule.appName
+        let aliases = Constants.websiteAliases(for: domain)
+        let subtitle = aliases.isEmpty
+            ? "모든 브라우저 · 하위 도메인 포함"
+            : "모든 브라우저 · 하위 도메인 및 \(aliases.joined(separator: ", ")) 포함"
         return SettingsRow(
             domain,
-            subtitle: "모든 브라우저 · 하위 도메인 포함"
+            subtitle: subtitle
         ) {
             Text(rule.isUserDefined ? "사용자" : "기본")
                 .font(.caption2)
@@ -772,12 +847,26 @@ struct CategoryMappingPage: View {
             && !Constants.reservedCategoryNames.contains(name)
     }
 
+    private var newCategoryInputMessage: String? {
+        let name = newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        if Constants.allCategories.contains(name) {
+            return "이미 사용 중인 카테고리 이름입니다."
+        }
+        if Constants.reservedCategoryNames.contains(name) {
+            return "시스템에서 사용하는 카테고리 이름입니다."
+        }
+        return nil
+    }
+
     private var canSaveNewRule: Bool {
         !trimmedNewBundleId.isEmpty && !trimmedNewAppName.isEmpty
     }
 
     private var normalizedNewWebsiteDomain: String? {
-        WebsiteCategoryRule.normalizedDomain(from: newWebsiteAddress)
+        WebsiteCategoryRule.normalizedDomain(from: newWebsiteAddress).map(
+            Constants.canonicalWebsiteRuleDomain(for:)
+        )
     }
 
     private var canSaveNewWebsiteRule: Bool {
@@ -1025,31 +1114,46 @@ struct CategoryMappingPage: View {
         try? DefaultAppCategoryRuleStore.reconcile(in: modelContext)
     }
 
-    private func upsertUserRule() {
+    @discardableResult
+    private func upsertUserRule() -> Bool {
         let bundleId = trimmedNewBundleId
         let appName = trimmedNewAppName
-        guard !bundleId.isEmpty, !appName.isEmpty else { return }
+        guard !bundleId.isEmpty, !appName.isEmpty else { return false }
 
         if let existing = categoryRules.first(where: { $0.bundleIdentifier == bundleId }) {
-            Constants.restoreDefaultCategoryRule(bundleId)
-            existing.appName = appName
-            updateRule(existing, category: newCategory)
-        } else {
-            Constants.restoreDefaultCategoryRule(bundleId)
-            let rule = AppCategoryRule(
-                bundleIdentifier: bundleId,
-                appName: appName,
+            requestRuleCategoryChange(
+                existing,
                 category: newCategory,
-                isUserDefined: true
+                replacementAppName: appName,
+                closesAddRuleForm: true
             )
-            modelContext.insert(rule)
-            CategoryManager.shared.setUserRule(bundleIdentifier: bundleId, category: newCategory)
+            return false
         }
-        try? AppClassificationService.reclassifyUnclassifiedUsage(
+
+        Constants.restoreDefaultCategoryRule(bundleId)
+        let rule = AppCategoryRule(
             bundleIdentifier: bundleId,
+            appName: appName,
             category: newCategory,
-            modelContext: modelContext
+            isUserDefined: true
         )
+        modelContext.insert(rule)
+        do {
+            try AppClassificationService.reclassifyUnclassifiedUsage(
+                bundleIdentifier: bundleId,
+                category: newCategory,
+                modelContext: modelContext
+            )
+            CategoryManager.shared.setUserRule(
+                bundleIdentifier: bundleId,
+                category: newCategory
+            )
+            return true
+        } catch {
+            modelContext.rollback()
+            categoryMutationError = error.localizedDescription
+            return false
+        }
     }
 
     private func addWebsiteRule() {
@@ -1070,25 +1174,7 @@ struct CategoryMappingPage: View {
     }
 
     private func updateRule(_ rule: AppCategoryRule, category: String) {
-        rule.category = category
-        rule.isExcluded = false
-        if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
-           defaultRule.category == category {
-            Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
-            rule.isUserDefined = false
-            CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
-        } else {
-            Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
-            rule.isUserDefined = true
-            CategoryManager.shared.setUserRule(bundleIdentifier: rule.bundleIdentifier, category: category)
-        }
-        try? modelContext.save()
-        try? AppClassificationService.reclassifyUnclassifiedUsage(
-            bundleIdentifier: rule.bundleIdentifier,
-            category: category,
-            modelContext: modelContext
-        )
-        loadRules()
+        requestRuleCategoryChange(rule, category: category)
     }
 
     private func excludeRule(_ rule: AppCategoryRule) {
@@ -1107,14 +1193,94 @@ struct CategoryMappingPage: View {
 
     private func resetRuleToDefault(_ rule: AppCategoryRule) {
         guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) else { return }
-        Constants.restoreDefaultCategoryRule(rule.bundleIdentifier)
-        rule.appName = defaultRule.appName
-        rule.category = defaultRule.category
-        rule.isUserDefined = false
+        requestRuleCategoryChange(
+            rule,
+            category: defaultRule.category,
+            replacementAppName: defaultRule.appName
+        )
+    }
+
+    private var ruleCategoryChangeMessage: String {
+        guard let change = pendingRuleCategoryChange else {
+            return "앞으로 기록되는 데이터에만 적용할지 선택해 주세요."
+        }
+        return "\(change.displayName)의 카테고리를 '\(change.oldCategory)'에서 '\(change.newCategory)'로 변경합니다. 사용자가 직접 수정한 세션 기록은 그대로 유지됩니다."
+    }
+
+    private func requestRuleCategoryChange(
+        _ rule: AppCategoryRule,
+        category: String,
+        replacementAppName: String? = nil,
+        closesAddRuleForm: Bool = false
+    ) {
+        let change = PendingRuleCategoryChange(
+            rule: rule,
+            displayName: replacementAppName ?? rule.appName,
+            oldCategory: rule.category,
+            newCategory: category,
+            replacementAppName: replacementAppName,
+            closesAddRuleForm: closesAddRuleForm
+        )
+
+        guard rule.category != category else {
+            pendingRuleCategoryChange = change
+            applyPendingRuleCategoryChange(includeExistingUsage: false)
+            return
+        }
+        pendingRuleCategoryChange = change
+    }
+
+    private func applyPendingRuleCategoryChange(includeExistingUsage: Bool) {
+        guard let change = pendingRuleCategoryChange else { return }
+        let rule = change.rule
+        let bundleIdentifier = rule.bundleIdentifier
+
+        if let replacementAppName = change.replacementAppName {
+            rule.appName = replacementAppName
+        }
+        rule.category = change.newCategory
         rule.isExcluded = false
-        CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
-        try? modelContext.save()
-        loadRules()
+        Constants.restoreDefaultCategoryRule(bundleIdentifier)
+        if let defaultRule = Constants.defaultCategoryRule(for: bundleIdentifier),
+           defaultRule.category == change.newCategory {
+            rule.isUserDefined = false
+        } else {
+            rule.isUserDefined = true
+        }
+
+        do {
+            if includeExistingUsage {
+                try AppClassificationService.reclassifyExistingUsage(
+                    ruleBundleIdentifier: bundleIdentifier,
+                    category: change.newCategory,
+                    modelContext: modelContext
+                )
+            } else {
+                try modelContext.save()
+            }
+
+            if rule.isUserDefined {
+                CategoryManager.shared.setUserRule(
+                    bundleIdentifier: bundleIdentifier,
+                    category: change.newCategory
+                )
+            } else {
+                CategoryManager.shared.removeUserRule(
+                    bundleIdentifier: bundleIdentifier
+                )
+            }
+            if change.closesAddRuleForm {
+                showAddRule = false
+                resetRuleForm()
+            }
+            pendingRuleCategoryChange = nil
+            loadRules()
+        } catch {
+            modelContext.rollback()
+            pendingRuleCategoryChange = nil
+            categoryMutationError = error.localizedDescription
+            loadRules()
+        }
     }
 
     private func deleteRule(_ rule: AppCategoryRule) {
