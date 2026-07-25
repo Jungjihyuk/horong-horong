@@ -332,9 +332,7 @@ final class TimerManager: @unchecked Sendable {
             NotificationManager.shared.send(
                 title: content.title,
                 subtitle: content.subtitle,
-                body: content.body,
-                identifier: Constants.timerCompletionNotificationIdentifier,
-                replacesExisting: true
+                body: content.body
             )
             guard shouldRequestReflection else { return }
             Task { @MainActor [weak self] in
@@ -368,9 +366,7 @@ final class TimerManager: @unchecked Sendable {
             NotificationManager.shared.send(
                 title: content.title,
                 subtitle: content.subtitle,
-                body: content.body,
-                identifier: Constants.timerCompletionNotificationIdentifier,
-                replacesExisting: true
+                body: content.body
             )
 
         case .horong:
