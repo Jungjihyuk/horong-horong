@@ -106,7 +106,13 @@ final class ToastPanel {
         }
         panel.contentView = NSHostingView(rootView: toastView)
 
-        if let screen = NSScreen.main {
+        // 백그라운드 앱에서 NSScreen.main은 주 디스플레이만 반환하므로,
+        // 사용자가 실제로 보고 있는(마우스가 있는) 화면에 토스트를 띄운다.
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first {
+            NSMouseInRect(mouseLocation, $0.frame, false)
+        } ?? NSScreen.main
+        if let screen = targetScreen {
             let screenFrame = screen.visibleFrame
             let x = screenFrame.maxX - size.width - 16
             let y = screenFrame.maxY - size.height - 8

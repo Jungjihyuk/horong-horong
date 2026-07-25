@@ -359,8 +359,6 @@ enum Constants {
     static let defaultCustomFocusMinutes = 60
     static let defaultCustomBreakMinutes = 10
     static let defaultPostBreakTransitionPromptDelayMinutes = 10
-    static let timerCompletionNotificationIdentifier = "app.horonghorong.timerCompletion"
-    static let timerCompletionPreviewNotificationIdentifier = "app.horonghorong.timerCompletion.preview"
     static let timerCompletionNativeReflectionDelaySeconds: TimeInterval = 4
     static let todayPlanningReminderNotificationIdentifier = "app.horonghorong.todayPlanningReminder"
 

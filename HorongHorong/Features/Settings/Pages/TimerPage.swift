@@ -350,9 +350,7 @@ struct TimerPage: View {
             NotificationManager.shared.send(
                 title: content.title,
                 subtitle: content.subtitle,
-                body: content.body,
-                identifier: Constants.timerCompletionPreviewNotificationIdentifier,
-                replacesExisting: true
+                body: content.body
             )
 
         case .horong:

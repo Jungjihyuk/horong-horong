@@ -331,9 +331,7 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
     func send(
         title: String,
         subtitle: String = "",
-        body: String,
-        identifier: String? = nil,
-        replacesExisting: Bool = false
+        body: String
     ) {
         let center = UNUserNotificationCenter.current()
         let content = UNMutableNotificationContent()
@@ -341,15 +339,8 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
         content.subtitle = subtitle
         content.body = body
         content.sound = .default
-
-        let requestIdentifier = identifier ?? UUID().uuidString
-        if replacesExisting {
-            center.removePendingNotificationRequests(withIdentifiers: [requestIdentifier])
-            center.removeDeliveredNotifications(withIdentifiers: [requestIdentifier])
-        }
-
         let request = UNNotificationRequest(
-            identifier: requestIdentifier,
+            identifier: UUID().uuidString,
             content: content,
             trigger: nil
         )

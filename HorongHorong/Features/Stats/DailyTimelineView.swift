@@ -72,6 +72,45 @@ struct DailyFocusSummary {
         case .empty: return .noRecord
         }
     }
+
+    /// 카드에 함께 보이는 사실(총 시간·전환·최장 몰입·대표 카테고리)만으로 그날의 성격을 한 마디로 요약한다.
+    /// overallScore(불투명한 가중 점수)에 의존하지 않으므로, 옆에 표시된 지표들이 그대로 이 문구의 근거가 된다.
+    /// 임계값은 첫 제안값이며 사용 데이터를 보며 조정할 수 있다.
+    /// - Parameter hasDetailedMetrics: 그날 앱 관찰 세그먼트가 있어 전환/최장 몰입이 의미 있는지 여부.
+    func headline(hasDetailedMetrics: Bool) -> String {
+        guard totalSeconds > 0 else { return "아직 기록이 없어요" }
+
+        let minutes = totalSeconds / 60
+
+        // 총 기록이 매우 짧으면 세부 판정 없이 '가벼운 하루'.
+        if minutes < 30 {
+            return "가볍게 기록된 하루"
+        }
+
+        // 앱 관찰 세그먼트가 없으면 전환/최장 몰입이 의미 없으므로 카테고리 중심으로만 표현.
+        guard hasDetailedMetrics else {
+            if let topCategory { return "\(topCategory) 중심의 하루" }
+            return "차분히 기록된 하루"
+        }
+
+        // 전환 횟수는 하루가 길수록 절대값이 커지므로, 총 시간으로 정규화해
+        // "평균적으로 한 카테고리에 얼마나 머물렀는지"로 판정한다.
+        let averageStretchMinutes = totalSeconds / (switches + 1) / 60
+        let longestMinutes = longestFocusSeconds / 60
+
+        // 평균 지속이 짧으면(짧게 자주 바꿈) '여러 일을 오간 하루'.
+        if averageStretchMinutes < 5 {
+            return "여러 일을 오간 하루"
+        }
+        // 평균적으로 오래 머물고 최장 몰입도 충분하면 '몰입'.
+        if averageStretchMinutes >= 15, longestMinutes >= 25 {
+            if let topCategory { return "오늘은 \(topCategory) 몰입" }
+            return "깊이 몰입한 하루"
+        }
+        // 그 외에는 대표 카테고리 중심으로.
+        if let topCategory { return "\(topCategory) 중심의 하루" }
+        return "고르게 보낸 하루"
+    }
 }
 
 // MARK: - Analytics
@@ -243,7 +282,7 @@ struct DailyFocusSummaryCard: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            Label("관찰 기록", systemImage: "chart.xyaxis.line")
+            Label(summary.headline(hasDetailedMetrics: showsDetailedMetrics), systemImage: "sparkles")
                 .font(.callout.bold())
                 .foregroundStyle(PopoverChrome.ink)
                 .padding(.vertical, 6)

@@ -293,6 +293,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        _ = NotificationManager.shared
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let context = modelContainer.mainContext
 
