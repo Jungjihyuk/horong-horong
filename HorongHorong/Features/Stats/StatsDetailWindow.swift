@@ -53,6 +53,8 @@ struct StatsDetailWindow: View {
     @State private var breakTransitionIntents: [BreakTransitionIntent] = []
     @State private var aggregateSnapshot: StatsAggregateSnapshot?
     @State private var attentionDaySummaries: [AttentionDaySummary] = []
+    @State private var focusNudge: FocusNudgeSnapshot?
+    @State private var historicalFocusTrend: HistoricalFocusTrendSnapshot?
     @State private var showEditor: Bool = false
     @State private var contentMode: StatsContentMode = .period
     @State private var hoveredViewMode: StatsViewMode?
@@ -110,6 +112,8 @@ struct StatsDetailWindow: View {
                                 breakTransitionIntents: breakTransitionIntents,
                                 aggregateSnapshot: aggregateSnapshot,
                                 attentionDaySummaries: attentionDaySummaries,
+                                focusNudge: focusNudge,
+                                historicalFocusTrend: historicalFocusTrend,
                                 vacationDays: viewMode == .monthly ? vacationDaysInMonth : []
                             )
                         }
@@ -544,7 +548,36 @@ struct StatsDetailWindow: View {
         Self.logger.notice("StatsDetail loaded mode=\(viewMode.rawValue, privacy: .public) records=\(fetchedRecords.count) dailySegments=\(loadedSegments.daily.count) weekSegments=\(loadedSegments.week.count) periodSegments=\(loadedSegments.period.count) sessions=\(fetchedSessions.count) recordsFetch=\(recordsElapsedMs)ms apply=\(applyElapsedMs)ms total=\(elapsedMs)ms")
     }
 
+    /// 오늘은 현재 상태를, 과거는 선택일로 끝나는 두 개의 7일 구간을 매번 다시 계산한다.
+    private func refreshFocusCards() {
+        guard viewMode == .daily else {
+            focusNudge = nil
+            historicalFocusTrend = nil
+            return
+        }
+
+        let calendar = Calendar.current
+        if calendar.isDateInToday(selectedDate) {
+            focusNudge = FocusNudgeSnapshot.make(
+                day: selectedDate,
+                modelContext: modelContext
+            )
+            historicalFocusTrend = nil
+        } else if calendar.startOfDay(for: selectedDate)
+                    < calendar.startOfDay(for: Date()) {
+            focusNudge = nil
+            historicalFocusTrend = HistoricalFocusTrendSnapshot.make(
+                day: selectedDate,
+                modelContext: modelContext
+            )
+        } else {
+            focusNudge = nil
+            historicalFocusTrend = nil
+        }
+    }
+
     private func applyLoadedData(_ data: StatsLoadedData) {
+        refreshFocusCards()
         records = data.records
         dailySegments = data.dailySegments
         weekSegments = data.weekSegments
