@@ -144,7 +144,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.horonghorong.app.tests
         CODE_SIGNING_ALLOWED: "NO"
         SWIFT_VERSION: "6.0"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/호롱호롱"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/HorongHorong"
         BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: HorongHorong

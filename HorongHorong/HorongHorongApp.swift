@@ -271,6 +271,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Memo.self,
             AchievementGoalRecord.self,
             FocusSession.self,
+            PomodoroReflection.self,
+            CategoryBehaviorConditionSet.self,
+            PomodoroTaskCompletion.self,
             AppUsageRecord.self,
             AppUsageSegment.self,
             BreakTransitionIntent.self,
@@ -290,11 +293,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        _ = NotificationManager.shared
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let context = modelContainer.mainContext
 
         migrateRemovedDocumentCategory(in: context)
         seedDefaultCategoryRules(in: context)
+        repairOrphanedPomodoroRecords(in: context)
 
         timerManager.setModelContext(context)
 
@@ -306,6 +314,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTracker.setModelContainer(modelContainer)
         appTracker.startTracking()
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(openTodayTaskComposer(_:)),
+            name: .todayPlanningReminderSelected,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSCalendarDayChanged,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSSystemClockDidChange,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(todayPlanningDateDidChange(_:)),
+            name: .NSSystemTimeZoneDidChange,
+            object: nil
+        )
+        TodayPlanningReminderCoordinator.shared.start(modelContext: context)
         NotificationManager.shared.requestAuthorization()
         #if DIRECT_DISTRIBUTION
         AppUpdateManager.shared.refreshState()
@@ -315,6 +348,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.quickMemoPanel.toggle(modelContext: context)
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        TodayPlanningReminderCoordinator.shared.stop()
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func openTodayTaskComposer(_ notification: Notification) {
+        guard UserDefaults.standard.bool(
+            forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+        ) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+
+        let context = modelContainer.mainContext
+        guard let memos = try? context.fetch(FetchDescriptor<Memo>()) else { return }
+        guard !TodayPlanningReminderPolicy.hasTodayTask(in: memos, now: Date()) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+        quickMemoPanel.showTodayTask(modelContext: context)
+    }
+
+    @objc private func todayPlanningDateDidChange(_ notification: Notification) {
+        TodayPlanningReminderCoordinator.shared.systemDateDidChange()
     }
 
     private func presentScreenshotWindow(config: ScreenshotCaptureConfiguration) {
@@ -408,21 +471,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func seedDefaultCategoryRules(in context: ModelContext) {
-        let descriptor = FetchDescriptor<AppCategoryRule>()
-        let existingRules = (try? context.fetch(descriptor)) ?? []
-        let existingBundleIds = Set(existingRules.map(\.bundleIdentifier))
+        try? DefaultAppCategoryRuleStore.reconcile(in: context)
+    }
 
-        for rule in Constants.defaultCategoryRules where !Constants.isDefaultCategoryRuleHidden(rule.bundleId) {
-            guard !existingBundleIds.contains(rule.bundleId) else { continue }
-            let categoryRule = AppCategoryRule(
-                bundleIdentifier: rule.bundleId,
-                appName: rule.appName,
-                category: rule.category,
-                isUserDefined: false
+    private func repairOrphanedPomodoroRecords(in context: ModelContext) {
+        do {
+            let affectedMemos = try PomodoroSessionDeletion.repairOrphanedRecords(
+                modelContext: context
             )
-            context.insert(categoryRule)
+            try context.save()
+            for memo in affectedMemos {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
+                    to: memo,
+                    modelContext: context
+                )
+            }
+        } catch {
+            context.rollback()
         }
-        try? context.save()
     }
 
     private func migrateRemovedDocumentCategory(in context: ModelContext) {
@@ -431,47 +497,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let oldCategory = Constants.categoryName("문서")
         let newCategory = Constants.categoryName("기록")
-        if oldCategory != newCategory {
-            migrateCategory(from: oldCategory, to: newCategory, in: context)
-            CategoryStore.shared.delete(name: oldCategory)
+        do {
+            if oldCategory != newCategory {
+                try migrateCategory(from: oldCategory, to: newCategory, in: context)
+                CategoryStore.shared.delete(name: oldCategory)
+            }
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
         }
-
-        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
-    private func migrateCategory(from oldCategory: String, to newCategory: String, in context: ModelContext) {
+    private func migrateCategory(
+        from oldCategory: String,
+        to newCategory: String,
+        in context: ModelContext
+    ) throws {
+        guard !context.hasChanges else {
+            throw CategoryBehaviorConditionSetValidationError.pendingChanges
+        }
         let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate { $0.category == oldCategory }
         )
-        for segment in (try? context.fetch(segmentDescriptor)) ?? [] {
-            segment.category = newCategory
-        }
-
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for record in (try? context.fetch(recordDescriptor)) ?? [] {
-            record.category = newCategory
-        }
-
-        let focusDescriptor = FetchDescriptor<FocusSession>()
-        for session in (try? context.fetch(focusDescriptor)) ?? [] where session.category == oldCategory {
-            session.category = newCategory
-        }
-
-        let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
-            predicate: #Predicate { $0.category == oldCategory }
-        )
-        for rule in (try? context.fetch(ruleDescriptor)) ?? [] {
-            rule.category = newCategory
-            if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
-               defaultRule.category == newCategory {
-                rule.isUserDefined = false
-                CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
-            } else {
-                rule.isUserDefined = true
-                CategoryManager.shared.setUserRule(bundleIdentifier: rule.bundleIdentifier, category: newCategory)
+        do {
+            for segment in try context.fetch(segmentDescriptor) {
+                segment.category = newCategory
             }
+
+            let recordDescriptor = FetchDescriptor<AppUsageRecord>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for record in try context.fetch(recordDescriptor) {
+                record.category = newCategory
+            }
+
+            let focusDescriptor = FetchDescriptor<FocusSession>()
+            for session in try context.fetch(focusDescriptor)
+                where session.category == oldCategory {
+                session.category = newCategory
+            }
+
+            let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
+                predicate: #Predicate { $0.category == oldCategory }
+            )
+            for rule in try context.fetch(ruleDescriptor) {
+                rule.category = newCategory
+                if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
+                   defaultRule.category == newCategory {
+                    rule.isUserDefined = false
+                } else {
+                    rule.isUserDefined = true
+                }
+            }
+
+            try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+                from: oldCategory,
+                to: newCategory,
+                modelContext: context
+            )
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
         }
 
         if UserDefaults.standard.string(forKey: Constants.AppStorageKey.selectedFocusCategory) == oldCategory {
@@ -487,7 +574,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
-        try? context.save()
         CategoryManager.shared.loadUserRules(from: context)
     }
 }

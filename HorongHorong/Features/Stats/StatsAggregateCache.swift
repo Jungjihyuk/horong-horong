@@ -126,6 +126,8 @@ enum StatsAggregateBuilder {
                     $0.category ?? Constants.defaultFocusCategory,
                     String($0.focusMinutes),
                     $0.completed ? "1" : "0",
+                    String($0.actualFocusSeconds ?? -1),
+                    $0.endKindRawValue ?? "",
                 ].joined(separator: ":")
             }
             .joined(separator: "|")

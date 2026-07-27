@@ -60,6 +60,7 @@
 		45A7BCF4EB46440E9A298087 /* QuickMemoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A030D0949903C9FA062FB4D1 /* QuickMemoPanel.swift */; };
 		45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */; };
 		46A453BF1EF4944AB3ABC7D7 /* HorongHorongApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */; };
+		46C549D84D10731ECFB7623D /* PomodoroReflectionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */; };
 		47E469E49FE2CA4A3564A585 /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */; };
 		4999BFE7F0B2D40FCBA447B6 /* CategoryPairStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */; };
 		4AF7DB95F4F14DA73338634E /* ToastPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28560EC4AA259D92267C28F5 /* ToastPanel.swift */; };
@@ -98,12 +99,14 @@
 		810F835E1B1589060EBD5D67 /* achievement_weekly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */; };
 		84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
 		853DD6929C384C8932D1626E /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D6422AFDFDFF4A0C229A93 /* FocusSession.swift */; };
+		87514069E0442B45EE871778 /* PomodoroReflectionEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */; };
 		87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658FBB3D526E45D220DD3A3A /* NumberField.swift */; };
 		89797B000FD3E42C96016E72 /* HotkeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */; };
 		89CC7ED84F662AE66906C38D /* SettingsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC54C82F858CC10262B1A3E /* SettingsRoot.swift */; };
 		8AE9D2079C15D42F575B9737 /* AttentionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098E315A72C4170158DD4C8 /* AttentionEvent.swift */; };
 		907C5CA32BE34AE21DEDCB6A /* StatsAggregateCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */; };
 		9187F8ED3C5941A72C6CF2C8 /* AppCategoryRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */; };
+		9223F1ACB039B0BD67F6B69A /* PomodoroReflectionEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */; };
 		93D9F4D663EFE21581AA00F8 /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */; };
 		946449EA22D62F0085AFBC3E /* AppearancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */; };
 		9539A27FD1F5F353F5AC3C03 /* Chips.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A6B136440DF771D0649296 /* Chips.swift */; };
@@ -112,6 +115,7 @@
 		9F078A825024A0C21A665F45 /* AchievementViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0424CD9D3311EDFEC29D3EC7 /* AchievementViews.swift */; };
 		A350A5EAE13EA123D76BFB02 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
 		A388D280BCC9EB6032282ECD /* TelemetryConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7295A6537FEB7087333AD889 /* TelemetryConfig.swift */; };
+		A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */; };
 		A5A899F873928691D361DCEE /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
 		A80C053F7415CA29695F7B8A /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
 		AA7A24CBAC88249FDEE03744 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */; };
@@ -162,6 +166,13 @@
 		FA4C0EC8BCBD4E91B2FBD41A /* ManualSegmentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */; };
 		FCF61CDE25B4A3C4E6965FC3 /* AchievementViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0424CD9D3311EDFEC29D3EC7 /* AchievementViews.swift */; };
 		FFB67723BAB290AFB9E66A55 /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */; };
+		7F627C4149F37BA156A52CF8 /* FocusNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C865926BCD78E02E23D313 /* FocusNudge.swift */; };
+		900D434D6E09EFBB206D038E /* FocusNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C865926BCD78E02E23D313 /* FocusNudge.swift */; };
+		8DFED43AB1D06BC621C59DD3 /* FocusNudgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108DB55F3875A176FD79E0FA /* FocusNudgeCatalog.swift */; };
+		3CE6FE253D1D9D5C1E35051B /* FocusNudgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108DB55F3875A176FD79E0FA /* FocusNudgeCatalog.swift */; };
+		BA6A1C6D990B7637381D3631 /* FocusPulseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492C10B751169FA6CD70B81C /* FocusPulseCard.swift */; };
+		C466CEE2D8D67E8BFBAD00C1 /* FocusPulseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492C10B751169FA6CD70B81C /* FocusPulseCard.swift */; };
+		565DFAF6C5E0E2B20E12D268 /* FocusNudgeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8179785FEE53CE2895CB1AFE /* FocusNudgeEngineTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -215,6 +226,7 @@
 		6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearancePage.swift; sourceTree = "<group>"; };
 		6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = achievement_weekly_goal_suggestion.md; sourceTree = "<group>"; };
 		7295A6537FEB7087333AD889 /* TelemetryConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConfig.swift; sourceTree = "<group>"; };
+		74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionEditSheet.swift; sourceTree = "<group>"; };
 		755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleThresholdStore.swift; sourceTree = "<group>"; };
 		76B92287537E68101A2064BE /* MemoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoListView.swift; sourceTree = "<group>"; };
 		7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongApp.swift; sourceTree = "<group>"; };
@@ -250,6 +262,7 @@
 		CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoReminderLinkService.swift; sourceTree = "<group>"; };
 		CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPairStore.swift; sourceTree = "<group>"; };
 		D1F22FB5645934CB4A1A7D0F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionPanel.swift; sourceTree = "<group>"; };
 		D6D6422AFDFDFF4A0C229A93 /* FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSession.swift; sourceTree = "<group>"; };
 		D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryClient.swift; sourceTree = "<group>"; };
 		D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryMappingPage.swift; sourceTree = "<group>"; };
@@ -262,6 +275,10 @@
 		F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		FBE525D349FF0055233F37CE /* CategoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryManager.swift; sourceTree = "<group>"; };
 		FFB95F028C60D0DD5F0EEC47 /* AttentionAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionAnalytics.swift; sourceTree = "<group>"; };
+		E8C865926BCD78E02E23D313 /* FocusNudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudge.swift; sourceTree = "<group>"; };
+		108DB55F3875A176FD79E0FA /* FocusNudgeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeCatalog.swift; sourceTree = "<group>"; };
+		492C10B751169FA6CD70B81C /* FocusPulseCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusPulseCard.swift; sourceTree = "<group>"; };
+		8179785FEE53CE2895CB1AFE /* FocusNudgeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeEngineTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -401,6 +418,7 @@
 				A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */,
 				B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
+				8179785FEE53CE2895CB1AFE /* FocusNudgeEngineTests.swift */,
 			);
 			path = HorongHorongTests;
 			sourceTree = "<group>";
@@ -467,6 +485,7 @@
 		B9036DF71B70E130CCBCE424 /* Timer */ = {
 			isa = PBXGroup;
 			children = (
+				D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */,
 				47BCD9DC2B0CED624438303A /* TimerManager.swift */,
 				5439DBA4DA11226E1FD32E0F /* TimerView.swift */,
 			);
@@ -492,10 +511,14 @@
 				881B92C8DB05873BF8307228 /* DailyAttentionReport.swift */,
 				99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */,
 				DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */,
+				74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */,
 				4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */,
 				3449422DE95BD818E909C196 /* StatsChartView.swift */,
 				7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */,
 				0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */,
+				E8C865926BCD78E02E23D313 /* FocusNudge.swift */,
+				108DB55F3875A176FD79E0FA /* FocusNudgeCatalog.swift */,
+				492C10B751169FA6CD70B81C /* FocusPulseCard.swift */,
 			);
 			path = Stats;
 			sourceTree = "<group>";
@@ -782,6 +805,8 @@
 				2B8DEA8E72AC0CC016E86887 /* NewsView.swift in Sources */,
 				30D731ADD408AF38CC53CE5B /* NotificationManager.swift in Sources */,
 				87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */,
+				9223F1ACB039B0BD67F6B69A /* PomodoroReflectionEditSheet.swift in Sources */,
+				A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */,
 				C78A6683548FD6B079DBE7AB /* QuickMemoPanel.swift in Sources */,
 				7C922A7F268962B08B1E4CF8 /* QuickMemoView.swift in Sources */,
 				B993B2B4F9A1B5B33F7810B8 /* SettingsCard.swift in Sources */,
@@ -805,6 +830,9 @@
 				C188D409EA4A7C34F06ADB97 /* ToastPanel.swift in Sources */,
 				B8975E412D2FEA7E1E6773D8 /* TrackerStateStore.swift in Sources */,
 				47E469E49FE2CA4A3564A585 /* WindowAccessor.swift in Sources */,
+				7F627C4149F37BA156A52CF8 /* FocusNudge.swift in Sources */,
+				8DFED43AB1D06BC621C59DD3 /* FocusNudgeCatalog.swift in Sources */,
+				BA6A1C6D990B7637381D3631 /* FocusPulseCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -860,6 +888,8 @@
 				E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */,
 				AA7A24CBAC88249FDEE03744 /* NotificationManager.swift in Sources */,
 				315AFD0EDCF1F229F02DEC9F /* NumberField.swift in Sources */,
+				87514069E0442B45EE871778 /* PomodoroReflectionEditSheet.swift in Sources */,
+				46C549D84D10731ECFB7623D /* PomodoroReflectionPanel.swift in Sources */,
 				45A7BCF4EB46440E9A298087 /* QuickMemoPanel.swift in Sources */,
 				675C4D477215891B268F51A1 /* QuickMemoView.swift in Sources */,
 				532725CCFBCA016CF30E224A /* SettingsCard.swift in Sources */,
@@ -883,6 +913,9 @@
 				4AF7DB95F4F14DA73338634E /* ToastPanel.swift in Sources */,
 				391102A0C2CE4E98866D76DE /* TrackerStateStore.swift in Sources */,
 				7B3C4397A9973380E6209E19 /* WindowAccessor.swift in Sources */,
+				900D434D6E09EFBB206D038E /* FocusNudge.swift in Sources */,
+				3CE6FE253D1D9D5C1E35051B /* FocusNudgeCatalog.swift in Sources */,
+				C466CEE2D8D67E8BFBAD00C1 /* FocusPulseCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -895,6 +928,7 @@
 				0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */,
 				45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
+				565DFAF6C5E0E2B20E12D268 /* FocusNudgeEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -966,7 +1000,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -979,7 +1013,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1029,7 +1063,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/호롱호롱";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/HorongHorong";
 			};
 			name = Debug;
 		};
@@ -1115,7 +1149,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1134,7 +1168,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1160,7 +1194,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app.tests;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/호롱호롱";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/호롱호롱.app/Contents/MacOS/HorongHorong";
 			};
 			name = Release;
 		};
