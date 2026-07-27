@@ -3,6 +3,7 @@ import SwiftData
 
 private enum MemoBrowserFilter: Hashable {
     case all
+    case today
     case completed
     case reminders
     case pinned
@@ -13,6 +14,8 @@ private enum MemoBrowserFilter: Hashable {
         switch self {
         case .all:
             return "전체"
+        case .today:
+            return "오늘 할 일"
         case .completed:
             return "완료"
         case .reminders:
@@ -30,6 +33,8 @@ private enum MemoBrowserFilter: Hashable {
         switch self {
         case .all:
             return "tray.full"
+        case .today:
+            return "calendar"
         case .completed:
             return "checkmark.circle"
         case .reminders:
@@ -87,6 +92,7 @@ struct MemoBrowserWindow: View {
     @State private var selectedFilter: MemoBrowserFilter = .all
     @State private var selectedMemoID: UUID?
     @State private var searchText: String = ""
+    @State private var todayReferenceDate = Date()
     @State private var sort: MemoBrowserSort = .updated
     @State private var reminderStatusMessage: String = ""
     @State private var reminderLists: [ReminderListOption] = []
@@ -106,6 +112,12 @@ struct MemoBrowserWindow: View {
         allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue }
     }
 
+    private var todayMemos: [Memo] {
+        return allMemos.filter {
+            TodayPlanningReminderPolicy.isTodayTask($0, now: todayReferenceDate)
+        }
+    }
+
     private var selectedMemo: Memo? {
         filteredMemos.first { $0.id == selectedMemoID } ?? filteredMemos.first
     }
@@ -123,6 +135,11 @@ struct MemoBrowserWindow: View {
             switch selectedFilter {
             case .all:
                 return !memo.isCompletedValue && !memo.isArchivedValue
+            case .today:
+                return TodayPlanningReminderPolicy.isTodayTask(
+                    memo,
+                    now: todayReferenceDate
+                )
             case .completed:
                 return memo.isCompletedValue && !memo.isArchivedValue
             case .reminders:
@@ -182,7 +199,7 @@ struct MemoBrowserWindow: View {
                 return !item.isCompleted
             case .dueSoon:
                 return item.dueDate != nil && !item.isCompleted
-            case .completed, .pinned, .icon:
+            case .today, .completed, .pinned, .icon:
                 return false
             }
         }
@@ -209,9 +226,19 @@ struct MemoBrowserWindow: View {
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {
+            todayReferenceDate = Date()
             selectedMemoID = selectedMemo?.id
             loadReminderLists()
             loadExternalReminderItems()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            todayReferenceDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in
+            todayReferenceDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+            todayReferenceDate = Date()
         }
         .onChange(of: filteredMemos.map(\.id)) { _, ids in
             guard !ids.isEmpty else {
@@ -229,6 +256,7 @@ struct MemoBrowserWindow: View {
         VStack(alignment: .leading, spacing: 18) {
             sidebarSectionTitle("보기")
             sidebarButton(.all, count: activeMemos.count + unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
+            sidebarButton(.today, count: todayMemos.count)
             sidebarButton(.completed, count: allMemos.filter { $0.isCompletedValue && !$0.isArchivedValue }.count)
             sidebarButton(.reminders, count: unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
             sidebarButton(.pinned, count: activeMemos.filter(\.isPinned).count)
@@ -251,7 +279,7 @@ struct MemoBrowserWindow: View {
             Spacer()
         }
         .padding(.horizontal, 18)
-        .padding(.top, 24)
+        .padding(.top, 34)
         .frame(width: 204)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(PopoverChrome.surfaceAlt)
@@ -370,23 +398,40 @@ struct MemoBrowserWindow: View {
 
     private var emptyList: some View {
         VStack(spacing: 10) {
-            if isLoadingExternalReminders {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "note.text")
+            if selectedFilter == .today {
+                Image(systemName: "calendar.badge.exclamationmark")
                     .font(.system(size: 30, weight: .regular))
                     .foregroundStyle(PopoverChrome.inkTertiary)
-            }
-            Text(isLoadingExternalReminders ? "미리알림을 불러오는 중입니다" : "표시할 메모가 없습니다")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkSecondary)
-            if !externalReminderMessage.isEmpty {
-                Text(externalReminderMessage)
+                Text(todayMemos.isEmpty ? "오늘 시작할 할 일이 없습니다" : "검색 결과가 없습니다")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                Text(
+                    todayMemos.isEmpty
+                        ? "완료하지 않은 메모의 시작일을 오늘로 설정하면\n여기에 표시되고 계획 알림에서도 등록된 것으로 봅니다."
+                        : "오늘 할 일 \(todayMemos.count)개가 있지만\n현재 검색어와 일치하는 항목은 없습니다."
+                )
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+            } else {
+                if isLoadingExternalReminders {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 30, weight: .regular))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                Text(isLoadingExternalReminders ? "미리알림을 불러오는 중입니다" : "표시할 메모가 없습니다")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                if !externalReminderMessage.isEmpty {
+                    Text(externalReminderMessage)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

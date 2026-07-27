@@ -11,15 +11,81 @@ final class AppTracker: @unchecked Sendable {
     private var trackingContext: ModelContext?
     var isTracking: Bool = false
 
-    // 세그먼트 최소 길이(초). 깜빡 포커스 이동은 저장하지 않음
-    private static let minSegmentSeconds: TimeInterval = 3
+    // 앱 방문 최소 길이(초). 이보다 짧은 포커스 이동은 일일/세션 기록 모두에서 제외한다.
+    static let minimumSegmentSeconds: TimeInterval = 5
+
+    static func shouldPersistSegment(
+        elapsed: TimeInterval,
+        hasPreviousSegment: Bool
+    ) -> Bool {
+        guard elapsed >= 0 else { return false }
+        return hasPreviousSegment || elapsed >= minimumSegmentSeconds
+    }
+
+    struct DailyDurationSlice: Equatable {
+        let date: Date
+        let durationSeconds: Int
+    }
+
+    static func dailyDurationSlices(
+        from start: Date,
+        to end: Date,
+        calendar: Calendar = .current
+    ) -> [DailyDurationSlice] {
+        guard end > start else { return [] }
+
+        var cursor = start
+        var rawSlices: [(date: Date, duration: TimeInterval)] = []
+        while cursor < end {
+            let dayStart = calendar.startOfDay(for: cursor)
+            guard let nextDay = calendar.date(
+                byAdding: .day,
+                value: 1,
+                to: dayStart
+            ), nextDay > cursor else {
+                break
+            }
+
+            let sliceEnd = min(end, nextDay)
+            rawSlices.append((
+                date: dayStart,
+                duration: sliceEnd.timeIntervalSince(cursor)
+            ))
+            cursor = sliceEnd
+        }
+
+        var durationSeconds = rawSlices.map { max(0, Int($0.duration)) }
+        var remainingSeconds = max(0, Int(end.timeIntervalSince(start)))
+            - durationSeconds.reduce(0, +)
+        let remainderOrder = rawSlices.indices.sorted {
+            let lhsFraction = rawSlices[$0].duration.rounded(.down)
+            let rhsFraction = rawSlices[$1].duration.rounded(.down)
+            let lhsRemainder = rawSlices[$0].duration - lhsFraction
+            let rhsRemainder = rawSlices[$1].duration - rhsFraction
+            if lhsRemainder != rhsRemainder {
+                return lhsRemainder > rhsRemainder
+            }
+            return rawSlices[$0].date < rawSlices[$1].date
+        }
+        for index in remainderOrder where remainingSeconds > 0 {
+            durationSeconds[index] += 1
+            remainingSeconds -= 1
+        }
+
+        return rawSlices.indices.compactMap { index in
+            guard durationSeconds[index] > 0 else { return nil }
+            return DailyDurationSlice(
+                date: rawSlices[index].date,
+                durationSeconds: durationSeconds[index]
+            )
+        }
+    }
 
     // MARK: - 유휴(자리 비움 후보) 세그먼트
     private struct PendingIdleSegment {
         let bundleIdentifier: String
         let appName: String
         let category: String
-        let date: Date        // startOfDay — AppUsageRecord 조회용
         let startedAt: Date   // 유휴가 시작된 순간 (= 마지막 입력 시각)
     }
 
@@ -69,8 +135,9 @@ final class AppTracker: @unchecked Sendable {
     }
 
     func stopTracking() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
+        let endedAt = Date()
+        let target = resolveCurrentTarget()
+        saveCurrentUsage(endedAt: endedAt, target: target)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         pollTimer?.invalidate()
         pollTimer = nil
@@ -78,27 +145,28 @@ final class AppTracker: @unchecked Sendable {
     }
 
     @objc private func appDidActivate(_ notification: Notification) {
-        saveCurrentAppUsage()
-        // 직전 앱의 세그먼트를 먼저 저장한 뒤에 포커스 앱을 교체
-        saveCurrentSegment()
+        let transitionedAt = Date()
+        let previousTarget = resolveCurrentTarget()
+        // 직전 앱의 일일 기록과 세션 세그먼트를 같은 기준으로 저장한 뒤 포커스 앱을 교체
+        saveCurrentUsage(endedAt: transitionedAt, target: previousTarget)
 
         if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
             currentApp = app
-            currentAppStartTime = Date()
-            currentSegmentStart = Date()
+            currentAppStartTime = transitionedAt
+            currentSegmentStart = transitionedAt
         }
 
         // 앱 전환은 클릭/단축키 등 사용자 입력 → 유휴 상태에서 돌아온 신호일 수 있음
-        checkIdleState()
+        checkIdleState(target: resolveCurrentTarget())
     }
 
     @objc private func systemWillSleep() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
+        let endedAt = Date()
+        let target = resolveCurrentTarget()
+        saveCurrentUsage(endedAt: endedAt, target: target)
 
         // 슬립은 확실한 자리 비움 → 프롬프트 없이 pending 구간 자동 차감
         if let pending = pendingIdleSegment {
-            let endedAt = Date()
             subtractIdleTime(from: pending, endedAt: endedAt)
             pendingIdleSegment = nil
         }
@@ -118,64 +186,56 @@ final class AppTracker: @unchecked Sendable {
     }
 
     private func onPoll() {
-        saveCurrentAppUsage()
-        saveCurrentSegment()
-        checkIdleState()
+        let endedAt = Date()
+        let target = resolveCurrentTarget()
+        saveCurrentUsage(endedAt: endedAt, target: target)
+        checkIdleState(target: target)
     }
 
-    private func saveCurrentAppUsage() {
-        guard let app = currentApp,
-              let startTime = currentAppStartTime,
-              let bundleId = app.bundleIdentifier,
-              let appName = app.localizedName,
+    private func saveCurrentUsage(
+        endedAt: Date,
+        target: ResolvedTarget?
+    ) {
+        guard trackingContext != nil,
+              TrackerStateStore.shared.shouldRecord(),
+              let target else {
+            currentAppStartTime = endedAt
+            currentSegmentStart = endedAt
+            return
+        }
+
+        // 새 앱 방문은 누적 5초가 되었을 때 처음부터 기록하고,
+        // 이미 시작된 방문의 마지막 짧은 조각은 실제 종료 시각까지 함께 반영한다.
+        guard saveCurrentSegment(endedAt: endedAt, target: target) else {
+            return
+        }
+        saveCurrentAppUsage(endedAt: endedAt, target: target)
+    }
+
+    private func saveCurrentAppUsage(
+        endedAt: Date,
+        target: ResolvedTarget
+    ) {
+        guard let startTime = currentAppStartTime,
               let trackingContext else { return }
 
-        // 추적이 꺼져있거나(민감 작업/휴가) 비활성 기간이면 저장 건너뛰고 타이머만 리셋.
-        guard TrackerStateStore.shared.shouldRecord() else {
-            currentAppStartTime = Date()
+        let elapsed = Int(endedAt.timeIntervalSince(startTime))
+        guard elapsed > 0 else {
+            currentAppStartTime = endedAt
             return
         }
 
-        let elapsed = Int(Date().timeIntervalSince(startTime))
-        guard elapsed > 0 else { return }
-
-        // 카테고리/대상 결정: 브라우저 엔터 URL 은 pseudo bundleId 로 분리 저장
-        // (예: com.google.Chrome.youtube → "Google Chrome (YouTube)")
-        guard let target = resolveTarget(bundleId: bundleId, appName: appName) else {
-            // 추적 대상 아님: 타이머만 리셋하고 저장은 건너뜀
-            currentAppStartTime = Date()
-            return
-        }
-
-        let today = Calendar.current.startOfDay(for: Date())
-        let targetBundleId = target.bundleId
-        let targetDate = today
-
-        let descriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate {
-                $0.bundleIdentifier == targetBundleId && $0.date == targetDate
-            }
+        try? AppUsageRecordStore.applyDelta(
+            bundleIdentifier: target.bundleId,
+            appName: target.appName,
+            category: target.category,
+            date: endedAt,
+            deltaSeconds: elapsed,
+            modelContext: trackingContext
         )
 
-        if let existing = try? trackingContext.fetch(descriptor).first {
-            existing.durationSeconds += elapsed
-            // 브라우저는 URL 에 따라 카테고리가 매 번 달라질 수 있으므로 갱신
-            if existing.category != target.category {
-                existing.category = target.category
-            }
-        } else {
-            let record = AppUsageRecord(
-                appName: target.appName,
-                bundleIdentifier: target.bundleId,
-                category: target.category,
-                date: today
-            )
-            record.durationSeconds = elapsed
-            trackingContext.insert(record)
-        }
-
         try? trackingContext.save()
-        currentAppStartTime = Date()
+        currentAppStartTime = endedAt
     }
 
     // MARK: - 타임라인 세그먼트 저장
@@ -183,82 +243,66 @@ final class AppTracker: @unchecked Sendable {
     /// 현재 앱의 세그먼트(진입~현재)를 AppUsageSegment 로 기록한다.
     /// - 폴링/전환/슬립/종료 시점에 호출된다.
     /// - 같은 앱에 머무는 동안에는 직전 세그먼트를 연장해 `AppUsageSegment` 를 통계 원천으로 유지한다.
-    /// - `Self.minSegmentSeconds` 미만의 깜빡 전환은 저장하지 않는다.
-    private func saveCurrentSegment() {
-        guard let app = currentApp,
-              let start = currentSegmentStart,
-              let bundleId = app.bundleIdentifier,
-              let appName = app.localizedName,
-              let trackingContext else { return }
+    /// - `Self.minimumSegmentSeconds` 미만의 새 앱 깜빡 전환은 저장하지 않는다.
+    /// - 이미 저장 중인 앱의 짧은 마지막 조각은 실제 종료 시각까지 연장한다.
+    private func saveCurrentSegment(
+        endedAt: Date,
+        target: ResolvedTarget
+    ) -> Bool {
+        guard let start = currentSegmentStart,
+              let trackingContext else { return false }
 
-        // 추적 비활성(민감/휴가) 시 세그먼트 저장도 건너뛴다.
-        guard TrackerStateStore.shared.shouldRecord() else {
-            currentSegmentStart = Date()
-            return
-        }
-
-        let now = Date()
-        let elapsed = now.timeIntervalSince(start)
-        guard elapsed >= Self.minSegmentSeconds else {
-            currentSegmentStart = now
-            return
-        }
-
-        guard let target = resolveTarget(bundleId: bundleId, appName: appName) else {
-            currentSegmentStart = now
-            return
+        let elapsed = endedAt.timeIntervalSince(start)
+        guard elapsed >= 0 else {
+            currentSegmentStart = endedAt
+            return false
         }
 
         let targetBundleId = target.bundleId
         let targetCategory = target.category
-        let mergeLowerBound = start.addingTimeInterval(-1)
-        let mergeUpperBound = start.addingTimeInterval(1)
         let descriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate {
                 $0.bundleIdentifier == targetBundleId &&
                 $0.category == targetCategory &&
-                $0.endTime >= mergeLowerBound &&
-                $0.endTime <= mergeUpperBound
+                $0.endTime == start
             },
             sortBy: [SortDescriptor(\.endTime, order: .reverse)]
         )
 
-        if let previous = try? trackingContext.fetch(descriptor).first {
+        let previous = try? trackingContext.fetch(descriptor).first
+        guard Self.shouldPersistSegment(
+            elapsed: elapsed,
+            hasPreviousSegment: previous != nil
+        ) else {
+            return false
+        }
+
+        if let previous {
             previous.appName = target.appName
-            previous.endTime = now
+            previous.endTime = endedAt
         } else {
             let segment = AppUsageSegment(
                 appName: target.appName,
                 bundleIdentifier: target.bundleId,
                 category: target.category,
                 startTime: start,
-                endTime: now
+                endTime: endedAt
             )
             trackingContext.insert(segment)
         }
         try? trackingContext.save()
-        currentSegmentStart = now
+        currentSegmentStart = endedAt
+        return true
     }
 
     // MARK: - 브라우저 URL 조회 (AppleScript)
 
     private func currentBrowserURL(for bundleId: String) -> String? {
-        let source: String
+        let source: String?
         switch bundleId {
-        case "com.google.Chrome":
+        case "com.apple.Safari", "com.apple.SafariTechnologyPreview":
             source = """
-            tell application "Google Chrome"
-                if (count of windows) is 0 then return ""
-                try
-                    return URL of active tab of front window
-                on error
-                    return ""
-                end try
-            end tell
-            """
-        case "com.apple.Safari":
-            source = """
-            tell application "Safari"
+            tell application id "\(bundleId)"
                 if (count of windows) is 0 then return ""
                 try
                     return URL of current tab of front window
@@ -267,20 +311,78 @@ final class AppTracker: @unchecked Sendable {
                 end try
             end tell
             """
+        case let identifier where Constants.browserBundleIds.contains(identifier)
+            && identifier != "org.mozilla.firefox"
+            && identifier != "org.mozilla.firefoxdeveloperedition":
+            source = """
+            tell application id "\(identifier)"
+                if (count of windows) is 0 then return ""
+                try
+                    return URL of active tab of front window
+                on error
+                    return ""
+                end try
+            end tell
+            """
         default:
+            source = nil
+        }
+
+        if let source,
+           let script = NSAppleScript(source: source) {
+            var errorDict: NSDictionary?
+            let descriptor = script.executeAndReturnError(&errorDict)
+            if errorDict == nil,
+               let url = validWebURL(descriptor.stringValue) {
+                return url
+            }
+        }
+
+        guard let app = currentApp,
+              app.bundleIdentifier == bundleId else {
             return nil
         }
-        guard let script = NSAppleScript(source: source) else { return nil }
-        var errorDict: NSDictionary?
-        let descriptor = script.executeAndReturnError(&errorDict)
-        if errorDict != nil { return nil }
-        return descriptor.stringValue
+        return accessibilityDocumentURL(for: app)
     }
 
-    static func entertainmentLabel(for url: String) -> String? {
-        guard !url.isEmpty else { return nil }
-        let lower = url.lowercased()
-        return Constants.entertainmentURLHosts.first { lower.contains($0.host) }?.label
+    private func accessibilityDocumentURL(for app: NSRunningApplication) -> String? {
+        let applicationElement = AXUIElementCreateApplication(app.processIdentifier)
+        var focusedWindowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            applicationElement,
+            kAXFocusedWindowAttribute as CFString,
+            &focusedWindowValue
+        ) == .success,
+              let focusedWindowValue else {
+            return nil
+        }
+
+        let focusedWindow = focusedWindowValue as! AXUIElement
+        var documentValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            focusedWindow,
+            kAXDocumentAttribute as CFString,
+            &documentValue
+        ) == .success,
+              let documentValue else {
+            return nil
+        }
+
+        if let url = documentValue as? URL {
+            return validWebURL(url.absoluteString)
+        }
+        return validWebURL(documentValue as? String)
+    }
+
+    private func validWebURL(_ value: String?) -> String? {
+        guard let value,
+              let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host != nil else {
+            return nil
+        }
+        return value
     }
 
     static func researchLabel(for url: String) -> String? {
@@ -304,16 +406,71 @@ final class AppTracker: @unchecked Sendable {
         let appName: String
     }
 
+    static func shouldInspectWebsiteURL(
+        isKnownBrowser: Bool,
+        classification: CategoryManager.TrackingClassification,
+        hasWebsiteRules: Bool
+    ) -> Bool {
+        guard classification != .excluded else { return false }
+        return isKnownBrowser
+            || (classification == .unclassified && hasWebsiteRules)
+    }
+
+    static func categoryForNonBrowserApp(
+        classification: CategoryManager.TrackingClassification,
+        unmappedAppHandling: Constants.UnmappedAppHandling
+    ) -> String? {
+        switch classification {
+        case let .category(mappedCategory):
+            return mappedCategory
+        case .unclassified:
+            switch unmappedAppHandling {
+            case .pendingClassification:
+                return Constants.unclassifiedAppCategory
+            case .recordAsOther:
+                return Constants.categoryName("기타")
+            case .doNotRecord:
+                return nil
+            }
+        case .excluded:
+            return nil
+        }
+    }
+
+    private func resolveCurrentTarget() -> ResolvedTarget? {
+        guard let app = currentApp,
+              let bundleId = app.bundleIdentifier,
+              let appName = app.localizedName else {
+            return nil
+        }
+        return resolveTarget(bundleId: bundleId, appName: appName)
+    }
+
     private func resolveTarget(bundleId: String, appName: String) -> ResolvedTarget? {
-        if Constants.browserBundleIds.contains(bundleId) {
-            let url = currentBrowserURL(for: bundleId) ?? ""
-            if let label = Self.entertainmentLabel(for: url) {
-                return ResolvedTarget(
-                    category: Constants.categoryName("엔터"),
-                    bundleId: "\(bundleId).\(label.lowercased())",
-                    appName: "\(appName) (\(label))"
-                )
-            } else if let label = Self.researchLabel(for: url) {
+        let classification = CategoryManager.shared.trackingClassification(
+            for: bundleId
+        )
+        guard classification != .excluded else { return nil }
+        let isKnownBrowser = Constants.browserBundleIds.contains(bundleId)
+        let shouldInspectWebsiteURL = Self.shouldInspectWebsiteURL(
+            isKnownBrowser: isKnownBrowser,
+            classification: classification,
+            hasWebsiteRules: CategoryManager.shared.hasWebsiteRules
+        )
+        let url = shouldInspectWebsiteURL
+            ? currentBrowserURL(for: bundleId) ?? ""
+            : ""
+
+        if let match = CategoryManager.shared.websiteMatch(for: url) {
+            return ResolvedTarget(
+                category: match.category,
+                bundleId: "\(bundleId).website.\(match.domain)",
+                appName: "\(appName) (\(match.domain))"
+            )
+        }
+
+        if isKnownBrowser {
+            if let label = Self.researchLabel(for: url) {
                 return ResolvedTarget(
                     category: Constants.categoryName("조사"),
                     bundleId: "\(bundleId).research.\(label.lowercased().replacingOccurrences(of: " ", with: "-"))",
@@ -323,7 +480,10 @@ final class AppTracker: @unchecked Sendable {
                 return ResolvedTarget(category: Constants.categoryName("기타"), bundleId: bundleId, appName: appName)
             }
         } else {
-            guard let category = CategoryManager.shared.matchedCategory(for: bundleId) else { return nil }
+            guard let category = Self.categoryForNonBrowserApp(
+                classification: classification,
+                unmappedAppHandling: Constants.storedUnmappedAppHandling()
+            ) else { return nil }
             return ResolvedTarget(category: category, bundleId: bundleId, appName: appName)
         }
     }
@@ -336,7 +496,7 @@ final class AppTracker: @unchecked Sendable {
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyType)
     }
 
-    private func checkIdleState() {
+    private func checkIdleState(target: ResolvedTarget?) {
         let idleSeconds = currentIdleSeconds()
         defer { lastIdleSeconds = idleSeconds }
 
@@ -366,11 +526,7 @@ final class AppTracker: @unchecked Sendable {
         }
 
         // pending 아님 → 임계 초과 시 생성
-        guard let app = currentApp,
-              let bundleId = app.bundleIdentifier,
-              let appName = app.localizedName else { return }
-
-        guard let target = resolveTarget(bundleId: bundleId, appName: appName) else { return }
+        guard let target else { return }
 
         let thresholdSeconds = IdleThresholdStore.shared.seconds(for: target.category)
         if idleSeconds >= TimeInterval(thresholdSeconds) {
@@ -379,7 +535,6 @@ final class AppTracker: @unchecked Sendable {
                 bundleIdentifier: target.bundleId,
                 appName: target.appName,
                 category: target.category,
-                date: Calendar.current.startOfDay(for: startedAt),
                 startedAt: startedAt
             )
         }
@@ -412,15 +567,15 @@ final class AppTracker: @unchecked Sendable {
         guard idleSeconds > 0 else { return }
 
         // (1) 일일 총사용 시간 차감
-        let bundleId = segment.bundleIdentifier
-        let date = segment.date
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate {
-                $0.bundleIdentifier == bundleId && $0.date == date
-            }
-        )
-        if let record = try? trackingContext.fetch(recordDescriptor).first {
-            record.durationSeconds = max(0, record.durationSeconds - idleSeconds)
+        for slice in Self.dailyDurationSlices(from: idleStart, to: idleEnd) {
+            try? AppUsageRecordStore.applyDelta(
+                bundleIdentifier: segment.bundleIdentifier,
+                appName: segment.appName,
+                category: segment.category,
+                date: slice.date,
+                deltaSeconds: -slice.durationSeconds,
+                modelContext: trackingContext
+            )
         }
 
         // (2) 타임라인 세그먼트 보정 — idle 구간과 겹치는 세그먼트를 잘라내거나 삭제
@@ -430,7 +585,7 @@ final class AppTracker: @unchecked Sendable {
             }
         )
         let overlapping = (try? trackingContext.fetch(segDescriptor)) ?? []
-        let minSec = Self.minSegmentSeconds
+        let minSec = Self.minimumSegmentSeconds
 
         for seg in overlapping {
             let origStart = seg.startTime
@@ -458,6 +613,8 @@ final class AppTracker: @unchecked Sendable {
                 let app = seg.appName
                 let bundle = seg.bundleIdentifier
                 let cat = seg.category
+                let isManual = seg.isManual
+                let isUserModified = seg.isUserModified || seg.isManual
 
                 if frontDuration >= minSec {
                     seg.endTime = idleStart
@@ -470,7 +627,9 @@ final class AppTracker: @unchecked Sendable {
                         bundleIdentifier: bundle,
                         category: cat,
                         startTime: idleEnd,
-                        endTime: origEnd
+                        endTime: origEnd,
+                        isManual: isManual,
+                        isUserModified: isUserModified
                     )
                     trackingContext.insert(tail)
                 }
