@@ -46,6 +46,7 @@ struct StatsSummaryView: View {
         overallScore: 0
     )
     @State private var hasTodaySegmentDetails = false
+    @State private var focusNudge: FocusNudgeSnapshot?
     @State private var weekLongestSessionSeconds: Int = 0
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
@@ -57,7 +58,11 @@ struct StatsSummaryView: View {
             ScrollView {
                 Group {
                     if scope == .today, categoryUsages.isEmpty {
-                        emptyState
+                        // 기록이 없는 콜드스타트에서도 시작 유도 문구는 보여준다.
+                        VStack(spacing: 10) {
+                            horongStatusCard
+                            emptyState
+                        }
                     } else if scope == .week, weeklyDailyTotals.allSatisfy({ $0.durationSeconds == 0 }) {
                         emptyState
                     } else {
@@ -273,16 +278,19 @@ struct StatsSummaryView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text("오늘의 관찰")
+                    Text(focusNudge?.nudge.badge ?? "오늘의 관찰")
                         .font(.system(size: 12.5, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.accent)
-                    Text("— 패턴을 알아가는 중")
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    if focusNudge == nil {
+                        Text("— 패턴을 알아가는 중")
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                    }
                 }
-                Text(horongStatusMessage)
+                Text(focusNudge?.nudge.message ?? horongStatusMessage)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
 
             }
             Spacer(minLength: 0)
@@ -544,6 +552,7 @@ struct StatsSummaryView: View {
             !Constants.hiddenLegacyCategories.contains($0.category)
         }
         hasTodaySegmentDetails = !visibleSegments.isEmpty
+        focusNudge = FocusNudgeSnapshot.make(day: today, modelContext: modelContext)
         let timerSessions = loadTimerSessions(from: today, to: tomorrow)
         let buckets = TimelineAnalytics.buckets(
             for: today,

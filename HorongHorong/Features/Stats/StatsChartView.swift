@@ -1860,6 +1860,10 @@ struct StatsChartView: View {
     var aggregateSnapshot: StatsAggregateSnapshot? = nil
     /// 하루가 지난 뒤 확정 저장된 대표 주의 상태. 과거 날짜의 상태 점에 우선 사용한다.
     var attentionDaySummaries: [AttentionDaySummary] = []
+    /// 오늘 일간 탭 상단에 보여줄 넛지와 근거 지표. 과거 날짜에서는 nil.
+    var focusNudge: FocusNudgeSnapshot? = nil
+    /// 선택한 과거 날짜까지의 최근 7일과 그 직전 7일을 비교한 몰입 흐름.
+    var historicalFocusTrend: HistoricalFocusTrendSnapshot? = nil
 
     @State private var weeklySelection: Date? = nil
     @State private var dailyAngleSelection: Double? = nil
@@ -1975,14 +1979,24 @@ struct StatsChartView: View {
 
     private var dailyView: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // 기록이 전혀 없는 콜드스타트에서도 시작을 유도해야 하므로 noDataView 보다 위에 둔다.
+            if let focusNudge {
+                FocusPulseCard(snapshot: focusNudge)
+            } else if let historicalFocusTrend {
+                HistoricalFocusTrendCard(snapshot: historicalFocusTrend)
+            }
+
             if categoryData.isEmpty, pomodoroTimeSummaries.isEmpty {
                 noDataView
             } else {
                 if !categoryData.isEmpty {
-                    DailyFocusSummaryCard(
-                        summary: dailySummary,
-                        showsDetailedMetrics: hasDailySegmentDetails
-                    )
+                    // 상단 스냅샷을 만들 수 없는 경우에만 기존 하루 요약을 사용한다.
+                    if focusNudge == nil, historicalFocusTrend == nil {
+                        DailyFocusSummaryCard(
+                            summary: dailySummary,
+                            showsDetailedMetrics: hasDailySegmentDetails
+                        )
+                    }
 
                     HStack(alignment: .top, spacing: 20) {
                         VStack(alignment: .leading, spacing: 10) {
