@@ -159,7 +159,146 @@ final class AttentionAnalyticsTests: XCTestCase {
         XCTAssertEqual(report.flowState, .steady)
     }
 
-    func testFinalizedDailyAttentionReportUsesFullDayLongestRun() {
+    func testLiveDailyObservationUsesLongestAndMostSwitchedWindows() {
+        let start = date(hour: 9)
+        let lowestScore = date(hour: 12)
+        let later = date(hour: 15)
+        let report = DailyAttentionReportBuilder.build(
+            day: start,
+            buckets: [
+                TimelineBucket(
+                    startTime: start,
+                    endTime: start.addingTimeInterval(30 * 60),
+                    categoryDurations: ["개발": 10 * 60],
+                    switches: 0
+                ),
+                TimelineBucket(
+                    startTime: lowestScore,
+                    endTime: lowestScore.addingTimeInterval(30 * 60),
+                    categoryDurations: ["조사": 5 * 60],
+                    switches: 0
+                ),
+                TimelineBucket(
+                    startTime: later,
+                    endTime: later.addingTimeInterval(30 * 60),
+                    categoryDurations: ["개발": 30 * 60],
+                    switches: 4
+                ),
+            ],
+            segments: [],
+            timerSessions: [],
+            attentionSummary: .empty,
+            thresholds: .standard,
+            isFinalized: false
+        )
+
+        XCTAssertEqual(report.bestWindow?.start, later)
+        XCTAssertEqual(report.bestWindow?.durationSeconds, 30 * 60)
+        XCTAssertEqual(report.worstWindow?.start, later)
+        XCTAssertEqual(report.worstWindow?.switches, 4)
+    }
+
+    func testColdStartObservationCopyDoesNotExposeLegacyFlowLabels() {
+        let copy = [
+            DailyAttentionObservationPresentation.learningStatus,
+            DailyAttentionObservationPresentation.learningMessage,
+            DailyAttentionObservationPresentation.title(isFinalized: false),
+            DailyAttentionObservationPresentation.title(isFinalized: true),
+            DailyAttentionObservationPresentation.introduction(isFinalized: false),
+            DailyAttentionObservationPresentation.introduction(isFinalized: true),
+            DailyAttentionObservationPresentation.longestWindowTitle(isFinalized: false),
+            DailyAttentionObservationPresentation.mostSwitchedWindowTitle(isFinalized: true),
+            DailyAttentionObservationPresentation.insufficientDataMessage(isFinalized: false),
+        ].joined(separator: " ")
+
+        XCTAssertEqual(DailyAttentionObservationPresentation.learningStatus, "패턴을 알아가는 중")
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.learningMessage,
+            "지금은 기록된 활동을 사실대로 보여드려요. 이 기록만으로 몰입 여부를 판단하지 않아요."
+        )
+        XCTAssertEqual(DailyAttentionObservationPresentation.title(isFinalized: true), "하루 기록")
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.longestWindowTitle(isFinalized: true),
+            "기록 시간이 가장 길었던 구간"
+        )
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.weeklySummary(currentDayCount: 4, previousDayCount: 5),
+            "이번 주 4일과 지난 주 5일의 기록을 모았어요."
+        )
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.monthlySummary(currentDayCount: 12, previousDayCount: 18),
+            "이번 달 12일과 지난 달 18일의 기록을 모았어요."
+        )
+        XCTAssertFalse(copy.contains("흐름 유지"))
+        XCTAssertFalse(copy.contains("흐름 변동"))
+        XCTAssertFalse(copy.contains("복귀 필요"))
+    }
+
+    func testColdStartObservationCopyDescribesRecordedFactsPrecisely() {
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.windowDescription(
+                primaryCategory: "개발",
+                durationText: "30분",
+                switches: 2
+            ),
+            "개발 중심의 기록 구간은 30분이고, 카테고리 전환은 2회예요."
+        )
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.recoveryDescription(
+                kind: .quickReturn,
+                category: "개발",
+                durationText: "3분"
+            ),
+            "예정된 휴식 종료 후 개발 카테고리가 3분 뒤 기록됐어요."
+        )
+        XCTAssertEqual(
+            DailyAttentionObservationPresentation.recoveryDescription(
+                kind: .delayedReturn,
+                category: "개발",
+                durationText: "20분"
+            ),
+            "예정된 휴식 종료 후 20분 동안 개발 카테고리 기록이 없었어요."
+        )
+    }
+
+    func testQuickRecoveryShowsActuallyRecordedPairedCategory() {
+        let start = date(hour: 9)
+        let focusEnd = start.addingTimeInterval(25 * 60)
+        let expectedReturn = focusEnd.addingTimeInterval(5 * 60)
+        let pairedCategory = "테스트 짝 카테고리"
+        let pair = CategoryPairStore.PairKey("개발", pairedCategory)
+        let pairAlreadyExisted = CategoryPairStore.shared.contains("개발", pairedCategory)
+        if !pairAlreadyExisted {
+            CategoryPairStore.shared.add("개발", pairedCategory)
+        }
+        defer {
+            if !pairAlreadyExisted {
+                CategoryPairStore.shared.remove(pair)
+            }
+        }
+
+        let report = DailyAttentionReportBuilder.build(
+            day: start,
+            buckets: [],
+            segments: [
+                segment(
+                    "Browser",
+                    pairedCategory,
+                    expectedReturn.addingTimeInterval(2 * 60),
+                    expectedReturn.addingTimeInterval(10 * 60)
+                ),
+            ],
+            timerSessions: [focusSession(start: start, endedAt: focusEnd, completed: true)],
+            attentionSummary: .empty,
+            thresholds: .standard,
+            isFinalized: true
+        )
+
+        XCTAssertEqual(report.quickRecovery?.category, pairedCategory)
+        XCTAssertEqual(report.quickRecovery?.durationSeconds, 2 * 60)
+    }
+
+    func testFinalizedDailyAttentionReportUsesFullDayLongestRecordedTime() {
         let start = date(hour: 9)
         let longRunEnd = start.addingTimeInterval(75 * 60)
         let segments = [
@@ -181,8 +320,85 @@ final class AttentionAnalyticsTests: XCTestCase {
 
         XCTAssertEqual(report.bestWindow?.start, start)
         XCTAssertEqual(report.bestWindow?.end, longRunEnd)
-        XCTAssertEqual(report.bestWindow?.durationSeconds, 75 * 60)
-        XCTAssertTrue(report.bestWindow?.reason.contains("75분") == true || report.bestWindow?.reason.contains("1시간") == true)
+        XCTAssertEqual(report.bestWindow?.durationSeconds, 74 * 60)
+    }
+
+    func testDailyObservationCountsRecordedCategoryChangesEvenInsideTimerSession() {
+        let start = date(hour: 9)
+        let session = focusSession(
+            start: start,
+            endedAt: start.addingTimeInterval(25 * 60),
+            completed: true
+        )
+        let segments = [
+            segment("Xcode", "개발", start, start.addingTimeInterval(10 * 60)),
+            segment("Browser", "조사", start.addingTimeInterval(10 * 60), start.addingTimeInterval(20 * 60)),
+        ]
+        let buckets = TimelineAnalytics.buckets(
+            for: start,
+            segments: segments,
+            timerSessions: [session]
+        )
+        let summary = TimelineAnalytics.summary(
+            for: start,
+            segments: segments,
+            buckets: buckets,
+            timerSessions: [session]
+        )
+
+        let report = DailyAttentionReportBuilder.build(
+            day: start,
+            buckets: buckets,
+            segments: segments,
+            timerSessions: [session],
+            attentionSummary: .empty,
+            thresholds: .standard,
+            isFinalized: true
+        )
+
+        XCTAssertEqual(buckets.first?.switches, 0)
+        XCTAssertEqual(summary.switches, 1)
+        XCTAssertEqual(report.bestWindow?.switches, 1)
+        XCTAssertEqual(report.worstWindow?.switches, 1)
+    }
+
+    func testDailyObservationDoesNotCountCategoryBeforeWindowAsSwitch() {
+        let start = date(hour: 9)
+        let segments = [
+            segment("Xcode", "개발", start, start.addingTimeInterval(10 * 60)),
+            segment("Browser", "조사", date(hour: 10), date(hour: 10).addingTimeInterval(20 * 60)),
+        ]
+        let buckets = TimelineAnalytics.buckets(for: start, segments: segments)
+
+        let report = DailyAttentionReportBuilder.build(
+            day: start,
+            buckets: buckets,
+            segments: segments,
+            timerSessions: [],
+            attentionSummary: .empty,
+            thresholds: .standard,
+            isFinalized: true
+        )
+
+        XCTAssertEqual(report.bestWindow?.switches, 0)
+        XCTAssertNil(report.worstWindow)
+    }
+
+    func testDailySummaryDoesNotCountCategoryChangeAcrossLongUnrecordedGap() {
+        let start = date(hour: 9)
+        let segments = [
+            segment("Xcode", "개발", start, start.addingTimeInterval(10 * 60)),
+            segment("Browser", "조사", date(hour: 10), date(hour: 10).addingTimeInterval(10 * 60)),
+        ]
+        let buckets = TimelineAnalytics.buckets(for: start, segments: segments)
+
+        let summary = TimelineAnalytics.summary(
+            for: start,
+            segments: segments,
+            buckets: buckets
+        )
+
+        XCTAssertEqual(summary.switches, 0)
     }
 
     func testDailyAttentionReportUsesDelayedReturnForGuidance() {
@@ -244,7 +460,7 @@ final class AttentionAnalyticsTests: XCTestCase {
         XCTAssertTrue(report.hasComparableData)
         XCTAssertEqual(report.currentDayCount, 2)
         XCTAssertEqual(report.previousDayCount, 2)
-        XCTAssertTrue(report.metrics.contains { $0.title == "평균 흐름 점수" && $0.direction == .improved })
+        XCTAssertFalse(report.metrics.contains { $0.title.contains("점수") })
         XCTAssertTrue(report.metrics.contains { $0.title == "복귀 지연" && $0.direction == .improved })
     }
 

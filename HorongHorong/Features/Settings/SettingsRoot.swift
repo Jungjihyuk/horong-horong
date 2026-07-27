@@ -154,6 +154,7 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.customBreakMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.postBreakTransitionPromptMode)
             defaults.removeObject(forKey: Constants.AppStorageKey.postBreakTransitionPromptDelayMinutes)
+            defaults.removeObject(forKey: Constants.AppStorageKey.timerCompletionNotificationStyle)
             defaults.removeObject(forKey: Constants.AppStorageKey.menubarLabelStyle)
             defaults.removeObject(forKey: Constants.AppStorageKey.menubarTimeStyle)
         case .stats:
@@ -182,6 +183,7 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
         case .category:
             defaults.removeObject(forKey: Constants.AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
+            defaults.removeObject(forKey: Constants.AppStorageKey.unmappedAppHandling)
             for category in Constants.allCategories {
                 IdleThresholdStore.shared.resetToDefault(category: category)
             }

@@ -5,6 +5,8 @@ import SwiftUI
 final class ToastPanel {
     static let shared = ToastPanel()
 
+    typealias DismissalHandler = @MainActor @Sendable () -> Void
+
     enum Style {
         case standard
         case timerAlert
@@ -30,15 +32,38 @@ final class ToastPanel {
 
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
+    private var dismissalHandler: DismissalHandler?
 
     private init() {}
 
     func show(icon: String, title: String, subtitle: String, duration: TimeInterval = 4.0) {
-        show(icon: icon, title: title, subtitle: subtitle, detail: nil, duration: duration, style: .standard)
+        show(
+            icon: icon,
+            title: title,
+            subtitle: subtitle,
+            detail: nil,
+            duration: duration,
+            style: .standard,
+            onDismiss: nil
+        )
     }
 
-    func showTimerAlert(title: String, subtitle: String, detail: String? = nil, duration: TimeInterval = 4.0) {
-        show(icon: "", title: title, subtitle: subtitle, detail: detail, duration: duration, style: .timerAlert)
+    func showTimerAlert(
+        title: String,
+        subtitle: String,
+        detail: String? = nil,
+        duration: TimeInterval = 4.0,
+        onDismiss: DismissalHandler? = nil
+    ) {
+        show(
+            icon: "",
+            title: title,
+            subtitle: subtitle,
+            detail: detail,
+            duration: duration,
+            style: .timerAlert,
+            onDismiss: onDismiss
+        )
     }
 
     private func show(
@@ -47,7 +72,8 @@ final class ToastPanel {
         subtitle: String,
         detail: String?,
         duration: TimeInterval,
-        style: Style
+        style: Style,
+        onDismiss: DismissalHandler?
     ) {
         dismiss()
 
@@ -80,7 +106,13 @@ final class ToastPanel {
         }
         panel.contentView = NSHostingView(rootView: toastView)
 
-        if let screen = NSScreen.main {
+        // 백그라운드 앱에서 NSScreen.main은 주 디스플레이만 반환하므로,
+        // 사용자가 실제로 보고 있는(마우스가 있는) 화면에 토스트를 띄운다.
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first {
+            NSMouseInRect(mouseLocation, $0.frame, false)
+        } ?? NSScreen.main
+        if let screen = targetScreen {
             let screenFrame = screen.visibleFrame
             let x = screenFrame.maxX - size.width - 16
             let y = screenFrame.maxY - size.height - 8
@@ -97,6 +129,7 @@ final class ToastPanel {
         }
 
         self.panel = panel
+        dismissalHandler = onDismiss
 
         NSSound.beep()
 
@@ -110,15 +143,36 @@ final class ToastPanel {
         dismissTask?.cancel()
         dismissTask = nil
 
-        guard let panel else { return }
+        let dismissalHandler = self.dismissalHandler
+        self.dismissalHandler = nil
+
+        guard let panel else {
+            dismissalHandler?()
+            return
+        }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.3
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            self?.panel?.orderOut(nil)
-            self?.panel = nil
+        }, completionHandler: { [weak self, weak panel] in
+            MainActor.assumeIsolated {
+                panel?.orderOut(nil)
+                if self?.panel === panel {
+                    self?.panel = nil
+                }
+                dismissalHandler?()
+            }
         })
+    }
+
+    func waitUntilDismissed() async {
+        while panel != nil {
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return
+            }
+        }
     }
 }
 
