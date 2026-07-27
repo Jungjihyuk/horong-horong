@@ -9,6 +9,7 @@ final class Memo {
     var updatedAt: Date
     var isPinned: Bool
     var isCompleted: Bool?
+    var completionStateChangedAt: Date?
     var isArchived: Bool?
     var icon: String?
     var startDate: Date?
@@ -25,6 +26,7 @@ final class Memo {
         self.updatedAt = Date()
         self.isPinned = false
         self.isCompleted = false
+        self.completionStateChangedAt = nil
         self.isArchived = false
         self.icon = icon
         self.startDate = nil
@@ -39,7 +41,16 @@ final class Memo {
 extension Memo {
     var isCompletedValue: Bool {
         get { isCompleted == true }
-        set { isCompleted = newValue }
+        set { setCompleted(newValue, at: Date()) }
+    }
+
+    func setCompleted(_ value: Bool, at changedAt: Date) {
+        guard isCompletedValue != value else {
+            isCompleted = value
+            return
+        }
+        isCompleted = value
+        completionStateChangedAt = changedAt
     }
 
     var isArchivedValue: Bool {

@@ -7,24 +7,6 @@ enum AttentionFlowState: String, Codable, CaseIterable {
     case returnNeeded
     case noRecord
 
-    var label: String {
-        switch self {
-        case .steady: return "흐름 유지"
-        case .variable: return "흐름 변동"
-        case .returnNeeded: return "복귀 필요"
-        case .noRecord: return "기록 대기"
-        }
-    }
-
-    var emoji: String {
-        switch self {
-        case .steady: return "🌿"
-        case .variable: return "〰️"
-        case .returnNeeded: return "↩️"
-        case .noRecord: return "⚪️"
-        }
-    }
-
     static func fromLegacyValue(_ value: String) -> AttentionFlowState {
         switch value {
         case "steady", "focused":
@@ -119,14 +101,6 @@ struct AttentionSummary {
         if overallScore >= 0.75 { return .steady }
         if overallScore >= 0.55 { return .variable }
         return .returnNeeded
-    }
-
-    var levelLabel: String {
-        flowState.label
-    }
-
-    var levelEmoji: String {
-        flowState.emoji
     }
 
     var primaryMessage: String {
@@ -295,7 +269,11 @@ enum AttentionAnalytics {
         isAllowedSwitch: ((String, String) -> Bool)?,
         breakTransitions: [BreakTransitionIntent]
     ) -> AttentionEventCandidate? {
-        guard session.completed, let endedAt = session.endedAt else { return nil }
+        guard session.completed,
+              session.endKind != .recordedEarly,
+              let endedAt = session.endedAt else {
+            return nil
+        }
         let expectedReturnAt = endedAt.addingTimeInterval(TimeInterval(max(0, session.breakMinutes * 60)))
         guard expectedReturnAt < dayEnd else { return nil }
         guard !hasResolvedBreakTransition(near: expectedReturnAt, in: breakTransitions) else { return nil }

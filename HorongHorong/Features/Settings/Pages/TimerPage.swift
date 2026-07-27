@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct TimerPage: View {
@@ -18,6 +19,15 @@ struct TimerPage: View {
     private var postBreakTransitionPromptModeRaw: String = Constants.PostBreakTransitionPromptMode.afterDelay.rawValue
     @AppStorage(Constants.AppStorageKey.postBreakTransitionPromptDelayMinutes)
     private var postBreakTransitionPromptDelayMinutes: Int = Constants.defaultPostBreakTransitionPromptDelayMinutes
+    @AppStorage(Constants.AppStorageKey.pomodoroReflectionEnabled)
+    private var pomodoroReflectionEnabled: Bool = Constants.defaultPomodoroReflectionEnabled
+    @AppStorage(Constants.AppStorageKey.timerCompletionNotificationStyle)
+    private var timerCompletionNotificationStyleRaw: String =
+        Constants.defaultTimerCompletionNotificationStyle.rawValue
+    @AppStorage(Constants.AppStorageKey.todayPlanningReminderEnabled)
+    private var todayPlanningReminderEnabled: Bool = Constants.defaultTodayPlanningReminderEnabled
+    @AppStorage(Constants.AppStorageKey.todayPlanningReminderDelayMinutes)
+    private var todayPlanningReminderDelayMinutes: Int = Constants.defaultTodayPlanningReminderDelayMinutes
 
     @AppStorage(Constants.AppStorageKey.menubarLabelStyle)
     private var menubarLabelStyleRaw: String = Constants.defaultMenubarLabelStyle
@@ -26,6 +36,7 @@ struct TimerPage: View {
 
     @State private var autoBreak: Bool = true
     @State private var soundEnabled: Bool = true
+    @State private var notificationAuthorizationState: NotificationManager.AlertAuthorizationState?
 
     private var menubarLabelStyle: Binding<Constants.MenubarLabelStyle> {
         Binding(
@@ -52,6 +63,26 @@ struct TimerPage: View {
             },
             set: { postBreakTransitionPromptModeRaw = $0.rawValue }
         )
+    }
+
+    private var timerCompletionNotificationStyle: Binding<Constants.TimerCompletionNotificationStyle> {
+        Binding(
+            get: {
+                Constants.TimerCompletionNotificationStyle(
+                    rawValue: timerCompletionNotificationStyleRaw
+                ) ?? Constants.defaultTimerCompletionNotificationStyle
+            },
+            set: { timerCompletionNotificationStyleRaw = $0.rawValue }
+        )
+    }
+
+    private var requiresSystemNotificationPermission: Bool {
+        timerCompletionNotificationStyle.wrappedValue == .system
+            || todayPlanningReminderEnabled
+    }
+
+    private var notificationPermissionTaskID: String {
+        "\(timerCompletionNotificationStyleRaw):\(todayPlanningReminderEnabled)"
     }
 
     var body: some View {
@@ -110,7 +141,76 @@ struct TimerPage: View {
             }
             .padding(.leading, 4)
 
+            SettingsGroupCard("알림") {
+                notificationStyleSelector
+
+                SettingsRow(
+                    "선택한 스타일 미리 확인",
+                    subtitle: "실제 포모도로가 끝나기를 기다리지 않고 현재 선택한 알림을 보내봅니다."
+                ) {
+                    Button("시험 알림 보내기") {
+                        Task {
+                            await showSelectedNotificationPreview()
+                        }
+                    }
+                    .controlSize(.small)
+                }
+
+                if requiresSystemNotificationPermission,
+                   notificationAuthorizationState == .unavailable {
+                    SettingsRow(
+                        "macOS 알림이 꺼져 있어요",
+                        subtitle: "macOS 알림을 사용하는 기능을 받으려면 시스템 설정에서 호롱호롱 알림을 허용하고 배너 또는 알림을 선택해 주세요."
+                    ) {
+                        Button("알림 설정 열기") {
+                            openNotificationSettings()
+                        }
+                        .controlSize(.small)
+                    }
+                }
+
+                SettingsRow(
+                    "오늘 할 일 계획 알림",
+                    subtitle: "앱 실행 \(todayPlanningReminderDelayMinutes)분 뒤 시작일이 오늘인 미완료 할 일이 없으면 하루 한 번 알려줍니다."
+                ) {
+                    Toggle("", isOn: $todayPlanningReminderEnabled)
+                        .labelsHidden()
+                        .onChange(of: todayPlanningReminderEnabled) { _, isEnabled in
+                            TodayPlanningReminderCoordinator.shared.settingDidChange(
+                                isEnabled: isEnabled
+                            )
+                        }
+                }
+
+                if todayPlanningReminderEnabled {
+                    SettingsRow(
+                        "알림까지 기다릴 시간",
+                        subtitle: "이 시간 안에 오늘 시작할 할 일을 등록하면 알림을 보내지 않습니다."
+                    ) {
+                        NumberField(
+                            value: $todayPlanningReminderDelayMinutes,
+                            range: Constants.todayPlanningReminderDelayMinutesRange,
+                            suffix: "분",
+                            width: 48
+                        )
+                        .onChange(of: todayPlanningReminderDelayMinutes) { _, _ in
+                            TodayPlanningReminderCoordinator.shared.settingDidChange(
+                                isEnabled: true
+                            )
+                        }
+                    }
+                }
+            }
+
             SettingsGroupCard("동작") {
+                SettingsRow(
+                    "포모도로 완료 후 돌아보기",
+                    subtitle: "집중 경험과 진행 결과를 기기에 저장해, 나에게 맞는 몰입 패턴을 찾는 데 사용합니다."
+                ) {
+                    Toggle("", isOn: $pomodoroReflectionEnabled)
+                        .labelsHidden()
+                }
+
                 SettingsRow(
                     "휴식 후 다음 흐름 확인",
                     subtitle: postBreakTransitionPromptMode.wrappedValue.subtitle
@@ -186,6 +286,213 @@ struct TimerPage: View {
                 }
             }
         }
+        .task(id: notificationPermissionTaskID) {
+            guard requiresSystemNotificationPermission else {
+                notificationAuthorizationState = nil
+                return
+            }
+            await prepareSystemNotifications()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard requiresSystemNotificationPermission else { return }
+            Task {
+                await refreshSystemNotificationState()
+            }
+        }
+    }
+
+    @MainActor
+    private func prepareSystemNotifications() async {
+        let previousState = await NotificationManager.shared.alertAuthorizationState()
+        let state = await NotificationManager.shared.requestAuthorizationIfNeeded()
+        guard requiresSystemNotificationPermission else { return }
+
+        notificationAuthorizationState = state
+        if todayPlanningReminderEnabled,
+           previousState != .available,
+           state == .available {
+            TodayPlanningReminderCoordinator.shared.settingDidChange(isEnabled: true)
+        }
+    }
+
+    @MainActor
+    private func refreshSystemNotificationState() async {
+        let previousState = notificationAuthorizationState
+        let currentState = await NotificationManager.shared.alertAuthorizationState()
+        guard requiresSystemNotificationPermission else { return }
+
+        notificationAuthorizationState = currentState
+        if todayPlanningReminderEnabled,
+           previousState != .available,
+           currentState == .available {
+            TodayPlanningReminderCoordinator.shared.settingDidChange(isEnabled: true)
+        }
+    }
+
+    @MainActor
+    private func showSelectedNotificationPreview() async {
+        let content = Constants.focusCompletionNotificationContent(
+            focusMinutes: pomodoroFocusMinutes
+        )
+
+        switch timerCompletionNotificationStyle.wrappedValue {
+        case .system:
+            await prepareSystemNotifications()
+            guard timerCompletionNotificationStyle.wrappedValue == .system else { return }
+            guard notificationAuthorizationState == .available else {
+                ToastPanel.shared.show(
+                    icon: "🔕",
+                    title: "알림을 보낼 수 없어요",
+                    subtitle: "macOS 알림 설정에서 호롱호롱 알림을 확인해 주세요."
+                )
+                return
+            }
+            NotificationManager.shared.send(
+                title: content.title,
+                subtitle: content.subtitle,
+                body: content.body
+            )
+
+        case .horong:
+            ToastPanel.shared.showTimerAlert(
+                title: content.title,
+                subtitle: content.subtitle,
+                detail: content.body
+            )
+        }
+    }
+
+    private var notificationStyleSelector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("포모도로 종료 알림 스타일")
+                    .font(.callout)
+                Text("집중과 휴식이 끝났을 때 사용할 디자인을 하나 선택해 주세요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(Constants.TimerCompletionNotificationStyle.allCases) { style in
+                notificationStyleCard(style)
+            }
+
+            Text("이 선택은 포모도로 종료 알림에만 적용됩니다. 오늘 할 일과 메모 미리알림은 계속 macOS 알림으로 표시돼요.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(height: 0.5)
+                .padding(.leading, 14)
+        }
+    }
+
+    private func notificationStyleCard(
+        _ style: Constants.TimerCompletionNotificationStyle
+    ) -> some View {
+        let isSelected = timerCompletionNotificationStyle.wrappedValue == style
+        let content = Constants.focusCompletionNotificationContent(
+            focusMinutes: pomodoroFocusMinutes
+        )
+
+        return Button {
+            timerCompletionNotificationStyle.wrappedValue = style
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(style.label)
+                                .font(.callout.bold())
+                            if style == Constants.defaultTimerCompletionNotificationStyle {
+                                Text("기본")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(SettingsTheme.accent)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        SettingsTheme.accent.opacity(0.12),
+                                        in: Capsule()
+                                    )
+                            }
+                        }
+                        Text(style.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(
+                            isSelected
+                                ? SettingsTheme.accent
+                                : Color.secondary.opacity(0.45)
+                        )
+                }
+
+                notificationPreview(style: style, content: content)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? SettingsTheme.accent.opacity(0.08)
+                            : Color.primary.opacity(0.035)
+                    )
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? SettingsTheme.accent.opacity(0.75)
+                            : Color.primary.opacity(0.1),
+                        lineWidth: isSelected ? 1.5 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(style.label) 선택")
+        .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
+    }
+
+    @ViewBuilder
+    private func notificationPreview(
+        style: Constants.TimerCompletionNotificationStyle,
+        content: Constants.TimerCompletionNotificationContent
+    ) -> some View {
+        switch style {
+        case .system:
+            SystemTimerNotificationPreview(content: content)
+        case .horong:
+            ToastView(
+                icon: "",
+                title: content.title,
+                subtitle: content.subtitle,
+                detail: content.body,
+                style: .timerAlert,
+                onDismiss: {}
+            )
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+        ) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     private var presetGrid: some View {
@@ -265,4 +572,54 @@ struct TimerPage: View {
         }
     }
 
+}
+
+private struct SystemTimerNotificationPreview: View {
+    let content: Constants.TimerCompletionNotificationContent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 46, height: 46)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(content.title)
+                        .font(.system(size: 13.5, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text("지금")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Text(content.subtitle)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(content.body)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(width: 430, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "macOS 알림 예시. \(content.title), \(content.subtitle), \(content.body)"
+        )
+    }
 }

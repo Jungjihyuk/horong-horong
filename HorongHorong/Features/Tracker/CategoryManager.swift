@@ -2,25 +2,64 @@ import Foundation
 import SwiftData
 
 final class CategoryManager: @unchecked Sendable {
+    enum TrackingClassification: Equatable {
+        case category(String)
+        case unclassified
+        case excluded
+    }
+
     static let shared = CategoryManager()
 
     private var userRules: [String: String] = [:]
+    private var websiteRules: [String: String] = [:]
+    private var excludedBundleIdentifiers: Set<String> = []
 
     private init() {}
 
     func loadUserRules(from context: ModelContext) {
+        migrateLegacyProductivityManagementCategory(in: context)
         userRules.removeAll()
+        websiteRules.removeAll()
+        excludedBundleIdentifiers.removeAll()
+
+        for rule in Constants.defaultWebsiteCategoryRules {
+            let bundleIdentifier = WebsiteCategoryRule.bundleIdentifier(for: rule.domain)
+            guard !Constants.isDefaultCategoryRuleHidden(bundleIdentifier) else { continue }
+            setWebsiteCategory(rule.category, for: rule.domain)
+        }
+
         let descriptor = FetchDescriptor<AppCategoryRule>(
             predicate: #Predicate { $0.isUserDefined == true }
         )
         if let rules = try? context.fetch(descriptor) {
+            var persistedWebsiteRules: [(domain: String, category: String)] = []
             for rule in rules {
-                userRules[rule.bundleIdentifier] = rule.category
+                if let domain = WebsiteCategoryRule.domain(from: rule.bundleIdentifier) {
+                    persistedWebsiteRules.append((domain, rule.category))
+                    continue
+                }
+                if rule.isExcluded {
+                    excludedBundleIdentifiers.insert(rule.bundleIdentifier)
+                } else {
+                    userRules[rule.bundleIdentifier] = rule.category
+                }
+            }
+
+            for rule in persistedWebsiteRules where
+                !Constants.websiteAliases(for: rule.domain).isEmpty {
+                setWebsiteCategory(rule.category, for: rule.domain)
+            }
+            for rule in persistedWebsiteRules where
+                Constants.websiteAliases(for: rule.domain).isEmpty {
+                websiteRules[rule.domain] = rule.category
             }
         }
     }
 
     func category(for bundleIdentifier: String) -> String {
+        guard WebsiteCategoryRule.domain(from: bundleIdentifier) == nil else {
+            return Constants.categoryName("기타")
+        }
         if let userCategory = userRules[bundleIdentifier] {
             return userCategory
         }
@@ -31,21 +70,101 @@ final class CategoryManager: @unchecked Sendable {
     /// 브라우저처럼 URL 기반으로 별도 분류하는 경우는 이 메서드를 통해서는 nil 이 나오도록
     /// defaultRules 에도 넣지 않아야 한다.
     func matchedCategory(for bundleIdentifier: String) -> String? {
+        guard WebsiteCategoryRule.domain(from: bundleIdentifier) == nil else {
+            return nil
+        }
         if let userCategory = userRules[bundleIdentifier] {
             return userCategory
         }
         return Constants.defaultCategoryRule(for: bundleIdentifier)?.category
     }
 
+    func trackingClassification(for bundleIdentifier: String) -> TrackingClassification {
+        if excludedBundleIdentifiers.contains(bundleIdentifier) {
+            return .excluded
+        }
+        if let category = matchedCategory(for: bundleIdentifier) {
+            return .category(category)
+        }
+        return .unclassified
+    }
+
+    func websiteMatch(for url: String) -> WebsiteCategoryMatch? {
+        WebsiteCategoryRule.bestMatch(for: url, rules: websiteRules)
+    }
+
+    var hasWebsiteRules: Bool {
+        !websiteRules.isEmpty
+    }
+
     func setUserRule(bundleIdentifier: String, category: String) {
+        if let domain = WebsiteCategoryRule.domain(from: bundleIdentifier) {
+            setWebsiteCategory(category, for: domain)
+            return
+        }
+        excludedBundleIdentifiers.remove(bundleIdentifier)
         userRules[bundleIdentifier] = category
     }
 
     func removeUserRule(bundleIdentifier: String) {
+        if let domain = WebsiteCategoryRule.domain(from: bundleIdentifier) {
+            for relatedDomain in Constants.websiteRuleDomains(for: domain) {
+                websiteRules.removeValue(forKey: relatedDomain)
+            }
+            return
+        }
         userRules.removeValue(forKey: bundleIdentifier)
+        excludedBundleIdentifiers.remove(bundleIdentifier)
+    }
+
+    func setExcluded(bundleIdentifier: String) {
+        userRules.removeValue(forKey: bundleIdentifier)
+        excludedBundleIdentifiers.insert(bundleIdentifier)
     }
 
     func colorForCategory(_ category: String) -> String {
         Constants.categoryEmoji(for: category)
+    }
+
+    private func setWebsiteCategory(_ category: String, for domain: String) {
+        for relatedDomain in Constants.websiteRuleDomains(for: domain) {
+            websiteRules[relatedDomain] = category
+        }
+    }
+
+    private func migrateLegacyProductivityManagementCategory(
+        in context: ModelContext
+    ) {
+        let legacyCategory = Constants.legacySupportAppCategory
+        let currentCategory = Constants.productivityManagementAppCategory
+        var changed = false
+
+        let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
+            predicate: #Predicate { $0.category == legacyCategory }
+        )
+        for rule in (try? context.fetch(ruleDescriptor)) ?? [] {
+            rule.category = currentCategory
+            changed = true
+        }
+
+        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
+            predicate: #Predicate { $0.category == legacyCategory }
+        )
+        for segment in (try? context.fetch(segmentDescriptor)) ?? [] {
+            segment.category = currentCategory
+            changed = true
+        }
+
+        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
+            predicate: #Predicate { $0.category == legacyCategory }
+        )
+        for record in (try? context.fetch(recordDescriptor)) ?? [] {
+            record.category = currentCategory
+            changed = true
+        }
+
+        if changed {
+            try? context.save()
+        }
     }
 }

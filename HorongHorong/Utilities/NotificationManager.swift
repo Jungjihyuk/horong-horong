@@ -1,7 +1,274 @@
 import Foundation
+import SwiftData
 import UserNotifications
 
+extension Notification.Name {
+    static let todayPlanningReminderSelected = Notification.Name(
+        "app.horonghorong.todayPlanningReminderSelected"
+    )
+}
+
+enum TodayPlanningReminderPolicy {
+    static func isTodayTask(
+        _ memo: Memo,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard !memo.isCompletedValue,
+              !memo.isArchivedValue,
+              let startDate = memo.startDate else {
+            return false
+        }
+        return calendar.isDate(startDate, inSameDayAs: now)
+    }
+
+    static func hasTodayTask(
+        in memos: [Memo],
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        memos.contains {
+            isTodayTask($0, now: now, calendar: calendar)
+        }
+    }
+
+    static func shouldPrompt(
+        isEnabled: Bool,
+        memos: [Memo],
+        lastPromptedAt: Date?,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard isEnabled, !hasTodayTask(in: memos, now: now, calendar: calendar) else {
+            return false
+        }
+        guard let lastPromptedAt else { return true }
+        return !calendar.isDate(lastPromptedAt, inSameDayAs: now)
+    }
+
+    static func nextDayEvaluationDate(
+        after date: Date,
+        delaySeconds: TimeInterval,
+        calendar: Calendar = .current
+    ) -> Date {
+        let startOfDay = calendar.startOfDay(for: date)
+        let startOfNextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+        return startOfNextDay.addingTimeInterval(delaySeconds)
+    }
+}
+
+@MainActor
+final class TodayPlanningReminderCoordinator {
+    static let shared = TodayPlanningReminderCoordinator()
+
+    private var modelContext: ModelContext?
+    private var evaluationTask: Task<Void, Never>?
+    private var retryAttemptCount = 0
+
+    private init() {}
+
+    private var configuredDelaySeconds: TimeInterval {
+        let defaults = UserDefaults.standard
+        let key = Constants.AppStorageKey.todayPlanningReminderDelayMinutes
+        let minutes = defaults.object(forKey: key) == nil
+            ? Constants.defaultTodayPlanningReminderDelayMinutes
+            : defaults.integer(forKey: key)
+        return Constants.todayPlanningReminderDelaySeconds(for: minutes)
+    }
+
+    func start(modelContext: ModelContext) {
+        self.modelContext = modelContext
+        settingDidChange(
+            isEnabled: UserDefaults.standard.bool(
+                forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+            )
+        )
+    }
+
+    func settingDidChange(isEnabled: Bool) {
+        evaluationTask?.cancel()
+        evaluationTask = nil
+        retryAttemptCount = 0
+
+        guard isEnabled, modelContext != nil else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+        scheduleEvaluation(after: configuredDelaySeconds)
+    }
+
+    func systemDateDidChange() {
+        evaluationTask?.cancel()
+        evaluationTask = nil
+        retryAttemptCount = 0
+
+        guard UserDefaults.standard.bool(
+            forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+        ), modelContext != nil else {
+            return
+        }
+        scheduleEvaluation(after: configuredDelaySeconds)
+    }
+
+    func stop() {
+        evaluationTask?.cancel()
+        evaluationTask = nil
+        retryAttemptCount = 0
+        modelContext = nil
+    }
+
+    private func scheduleEvaluation(after delay: TimeInterval) {
+        evaluationTask?.cancel()
+        let nanoseconds = UInt64(max(0, delay) * 1_000_000_000)
+        evaluationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task<Never, Never>.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.evaluate()
+        }
+    }
+
+    private func evaluate() async {
+        guard let modelContext,
+              UserDefaults.standard.bool(
+                  forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+              ) else {
+            return
+        }
+
+        let now = Date()
+        let memos: [Memo]
+        do {
+            memos = try modelContext.fetch(FetchDescriptor<Memo>())
+        } catch {
+            print("오늘 할 일 계획 알림 판정 실패: \(error.localizedDescription)")
+            scheduleRetryOrNextDay()
+            return
+        }
+
+        let lastPromptedAt = lastPromptedAtFromDefaults()
+        guard TodayPlanningReminderPolicy.shouldPrompt(
+            isEnabled: true,
+            memos: memos,
+            lastPromptedAt: lastPromptedAt,
+            now: now
+        ) else {
+            retryAttemptCount = 0
+            scheduleNextDay(after: now)
+            return
+        }
+
+        let sendResult = await NotificationManager.shared.sendAwaitingResult(
+            title: "오늘은 무엇을 할 건가요?",
+            body: "오늘 시작할 할 일을 먼저 등록하면 포모도로와 진행 기록을 함께 볼 수 있어요.",
+            identifier: Constants.todayPlanningReminderNotificationIdentifier
+        )
+
+        guard !Task.isCancelled,
+              UserDefaults.standard.bool(
+                  forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+              ) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            return
+        }
+
+        switch sendResult {
+        case .unavailable:
+            retryAttemptCount = 0
+            scheduleNextDay(after: Date())
+            return
+        case .failed:
+            scheduleRetryOrNextDay()
+            return
+        case .scheduled:
+            break
+        }
+
+        let promptedAt = Date()
+        guard Calendar.current.isDate(now, inSameDayAs: promptedAt) else {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            retryAttemptCount = 0
+            scheduleEvaluation(after: configuredDelaySeconds)
+            return
+        }
+
+        do {
+            let latestMemos = try modelContext.fetch(FetchDescriptor<Memo>())
+            guard !TodayPlanningReminderPolicy.hasTodayTask(
+                in: latestMemos,
+                now: promptedAt
+            ) else {
+                NotificationManager.shared.cancel(
+                    identifier: Constants.todayPlanningReminderNotificationIdentifier
+                )
+                retryAttemptCount = 0
+                scheduleNextDay(after: promptedAt)
+                return
+            }
+        } catch {
+            NotificationManager.shared.cancel(
+                identifier: Constants.todayPlanningReminderNotificationIdentifier
+            )
+            print("오늘 할 일 계획 알림 재확인 실패: \(error.localizedDescription)")
+            scheduleRetryOrNextDay()
+            return
+        }
+
+        retryAttemptCount = 0
+        UserDefaults.standard.set(
+            promptedAt.timeIntervalSince1970,
+            forKey: Constants.AppStorageKey.todayPlanningReminderLastPromptDay
+        )
+        scheduleNextDay(after: promptedAt)
+    }
+
+    private func scheduleRetryOrNextDay() {
+        if retryAttemptCount == 0 {
+            retryAttemptCount = 1
+            scheduleEvaluation(after: 60)
+        } else {
+            retryAttemptCount = 0
+            scheduleNextDay(after: Date())
+        }
+    }
+
+    private func scheduleNextDay(after date: Date) {
+        let nextDate = TodayPlanningReminderPolicy.nextDayEvaluationDate(
+            after: date,
+            delaySeconds: configuredDelaySeconds
+        )
+        scheduleEvaluation(after: nextDate.timeIntervalSinceNow)
+    }
+
+    private func lastPromptedAtFromDefaults() -> Date? {
+        let key = Constants.AppStorageKey.todayPlanningReminderLastPromptDay
+        guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
+        return Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: key))
+    }
+}
+
 final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificationCenterDelegate {
+    enum AlertAuthorizationState: Equatable {
+        case available
+        case notDetermined
+        case unavailable
+    }
+
+    enum ImmediateSendResult {
+        case scheduled
+        case unavailable
+        case failed
+    }
+
     static let shared = NotificationManager()
 
     private override init() {
@@ -10,14 +277,91 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
     }
 
     func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        Task {
+            _ = await requestAuthorizationIfNeeded()
+        }
+    }
+
+    func requestAuthorizationIfNeeded() async -> AlertAuthorizationState {
+        let center = UNUserNotificationCenter.current()
+        let currentState = await alertAuthorizationState()
+        guard currentState == .notDetermined else {
+            return currentState
+        }
+
+        await withCheckedContinuation { continuation in
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { _, error in
+                if let error {
+                    print("알림 권한 요청 실패: \(error.localizedDescription)")
+                }
+                continuation.resume()
+            }
+        }
+        return await alertAuthorizationState()
+    }
+
+    func alertAuthorizationState() async -> AlertAuthorizationState {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return Self.alertAuthorizationState(
+            authorizationStatus: settings.authorizationStatus,
+            alertSetting: settings.alertSetting,
+            alertStyle: settings.alertStyle
+        )
+    }
+
+    static func alertAuthorizationState(
+        authorizationStatus: UNAuthorizationStatus,
+        alertSetting: UNNotificationSetting,
+        alertStyle: UNAlertStyle
+    ) -> AlertAuthorizationState {
+        switch authorizationStatus {
+        case .notDetermined:
+            return .notDetermined
+        case .authorized, .provisional, .ephemeral:
+            return alertSetting == .enabled && alertStyle != .none
+                ? .available
+                : .unavailable
+        case .denied:
+            return .unavailable
+        @unknown default:
+            return .unavailable
+        }
+    }
+
+    func send(
+        title: String,
+        subtitle: String = "",
+        body: String
+    ) {
+        let center = UNUserNotificationCenter.current()
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.subtitle = subtitle
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        center.add(request) { error in
             if let error = error {
-                print("알림 권한 요청 실패: \(error.localizedDescription)")
+                print("알림 전송 실패: \(error.localizedDescription)")
             }
         }
     }
 
-    func send(title: String, body: String, identifier: String? = nil) {
+    func sendAwaitingResult(
+        title: String,
+        body: String,
+        identifier: String? = nil
+    ) async -> ImmediateSendResult {
+        guard await alertAuthorizationState() == .available else {
+            return .unavailable
+        }
+        let center = UNUserNotificationCenter.current()
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -29,9 +373,12 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
             trigger: nil
         )
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("알림 전송 실패: \(error.localizedDescription)")
+        return await withCheckedContinuation { continuation in
+            center.add(request) { error in
+                if let error {
+                    print("알림 전송 실패: \(error.localizedDescription)")
+                }
+                continuation.resume(returning: error == nil ? .scheduled : .failed)
             }
         }
     }
@@ -69,5 +416,25 @@ final class NotificationManager: NSObject, @unchecked Sendable, UNUserNotificati
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let shouldOpenTodayTaskComposer = response.notification.request.identifier
+            == Constants.todayPlanningReminderNotificationIdentifier
+        completionHandler()
+
+        guard shouldOpenTodayTaskComposer,
+              UserDefaults.standard.bool(
+                  forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
+              ) else {
+            return
+        }
+        Task { @MainActor in
+            NotificationCenter.default.post(name: .todayPlanningReminderSelected, object: nil)
+        }
     }
 }

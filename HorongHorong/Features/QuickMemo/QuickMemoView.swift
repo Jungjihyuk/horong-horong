@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 struct QuickMemoView: View {
-    var onSave: (String, String) -> Void
+    @ObservedObject var presentationState: QuickMemoPresentationState
+    var onSave: (String, String) -> Bool
     var onCancel: () -> Void
 
     @AppStorage(Constants.AppStorageKey.menubarIcon)
@@ -10,7 +11,12 @@ struct QuickMemoView: View {
 
     @State private var memoContent: String = ""
     @State private var selectedIcon: String = MemoIcon.defaultIcon
+    @State private var saveErrorMessage: String?
     @FocusState private var isTextFieldFocused: Bool
+
+    private var savesAsTodayTask: Bool {
+        presentationState.savesAsTodayTask
+    }
 
     private var menubarIcon: Constants.MenubarIconStyle {
         Constants.MenubarIconStyle(rawValue: menubarIconRaw) ?? .horong
@@ -63,11 +69,13 @@ struct QuickMemoView: View {
                         .background(Color(red: 1.0, green: 0.80, blue: 0.68), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(MemoIcon.label(for: selectedIcon))
+                        Text(savesAsTodayTask ? "오늘 할 일" : MemoIcon.label(for: selectedIcon))
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.58, green: 0.27, blue: 0.08))
                         HStack(spacing: 4) {
-                            Text("카테고리 바꾸기")
+                            Text(savesAsTodayTask
+                                 ? "\(MemoIcon.label(for: selectedIcon)) · 오늘 시작"
+                                 : "카테고리 바꾸기")
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 10, weight: .bold))
                         }
@@ -124,7 +132,7 @@ struct QuickMemoView: View {
             )
             .overlay(alignment: .topLeading) {
                 if memoContent.isEmpty {
-                    Text("빠르게 메모하세요...")
+                    Text(savesAsTodayTask ? "오늘 할 일을 입력하세요..." : "빠르게 메모하세요...")
                         .font(.system(size: 20, weight: .regular, design: .rounded))
                         .foregroundStyle(Color(red: 0.68, green: 0.57, blue: 0.47).opacity(0.58))
                         .padding(.horizontal, 26)
@@ -136,12 +144,18 @@ struct QuickMemoView: View {
 
     private var footer: some View {
         HStack(alignment: .center) {
-            HStack(spacing: 8) {
-                shortcutKey("⌘")
-                shortcutKey("↩")
-                Text("저장")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color(red: 0.58, green: 0.45, blue: 0.34).opacity(0.72))
+            if let saveErrorMessage {
+                Label(saveErrorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.72, green: 0.16, blue: 0.14))
+            } else {
+                HStack(spacing: 8) {
+                    shortcutKey("⌘")
+                    shortcutKey("↩")
+                    Text(savesAsTodayTask ? "오늘 할 일로 저장" : "저장")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.58, green: 0.45, blue: 0.34).opacity(0.72))
+                }
             }
 
             Spacer()
@@ -149,10 +163,11 @@ struct QuickMemoView: View {
             Button {
                 save()
             } label: {
-                Text("저장")
+                Text(savesAsTodayTask ? "오늘 할 일로 저장" : "저장")
                     .font(.system(size: 21, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                    .frame(width: 88, height: 46)
+                    .padding(.horizontal, savesAsTodayTask ? 18 : 0)
+                    .frame(width: savesAsTodayTask ? 148 : 88, height: 46)
                     .background(Color(red: 0.63, green: 0.31, blue: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -185,7 +200,10 @@ struct QuickMemoView: View {
 
     private func save() {
         guard !memoContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        onSave(memoContent, selectedIcon)
+        saveErrorMessage = nil
+        if !onSave(memoContent, selectedIcon) {
+            saveErrorMessage = "저장하지 못했어요. 다시 시도해 주세요."
+        }
     }
 
     private func focusEditor() {

@@ -211,6 +211,7 @@ struct ManualSegmentEditorView: View {
         seg.category = draft.category
         seg.startTime = draft.start
         seg.endTime = draft.end
+        seg.isUserModified = true
 
         // Record 재동기화: 기존에 반영된 만큼 빼고, 새 값으로 더한다.
         syncRecord(bundleId: oldBundle, appName: oldApp, category: oldCat, date: oldDate, deltaSeconds: -oldDuration)
@@ -229,14 +230,14 @@ struct ManualSegmentEditorView: View {
         guard validatePomodoroEdit(session: session, draft: draft) else {
             return false
         }
-        guard let oldEnd = focusEnd(for: session) else {
+        guard focusEnd(for: session) != nil else {
             editError = "종료 시간이 없는 포모도로 기록은 수정할 수 없습니다."
             return false
         }
 
         let oldCategory = session.category ?? Constants.defaultFocusCategory
         let oldStart = session.startedAt
-        let oldDuration = Int(oldEnd.timeIntervalSince(oldStart))
+        let oldDuration = session.recordedFocusSeconds
         let newDuration = Int(draft.end.timeIntervalSince(draft.start))
 
         session.category = draft.category
@@ -244,6 +245,7 @@ struct ManualSegmentEditorView: View {
         session.endedAt = draft.end
         session.focusMinutes = max(1, Int(ceil(draft.end.timeIntervalSince(draft.start) / 60)))
         session.completed = true
+        session.actualFocusSeconds = newDuration
 
         syncFocusRecord(category: oldCategory, date: oldStart, deltaSeconds: -oldDuration)
         syncFocusRecord(category: draft.category, date: draft.start, deltaSeconds: newDuration)
@@ -266,13 +268,27 @@ struct ManualSegmentEditorView: View {
         guard let end = focusEnd(for: session) else { return }
         let start = session.startedAt
 
-        for segment in segments {
-            removeSegmentOverlap(segment, from: start, to: end)
+        do {
+            for segment in segments {
+                removeSegmentOverlap(segment, from: start, to: end)
+            }
+            deleteFocusRecord(for: session)
+            let affectedMemo = try PomodoroSessionDeletion.delete(
+                session,
+                modelContext: modelContext
+            )
+            try modelContext.save()
+            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
+            if let affectedMemo {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
+                    to: affectedMemo,
+                    modelContext: modelContext
+                )
+            }
+        } catch {
+            modelContext.rollback()
+            editError = "포모도로 기록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."
         }
-
-        deleteFocusRecord(for: session)
-        modelContext.delete(session)
-        try? modelContext.save()
     }
 
     private func removeSegmentOverlap(_ segment: AppUsageSegment, from start: Date, to end: Date) {
@@ -287,6 +303,7 @@ struct ManualSegmentEditorView: View {
         let appName = segment.appName
         let category = segment.category
         let isManual = segment.isManual
+        let isUserModified = segment.isUserModified || segment.isManual
 
         if overlapStart <= originalStart, overlapEnd >= originalEnd {
             modelContext.delete(segment)
@@ -302,7 +319,8 @@ struct ManualSegmentEditorView: View {
                 category: category,
                 startTime: overlapEnd,
                 endTime: originalEnd,
-                isManual: isManual
+                isManual: isManual,
+                isUserModified: isUserModified
             )
             modelContext.insert(tail)
         }
@@ -319,8 +337,8 @@ struct ManualSegmentEditorView: View {
     private func deleteFocusRecord(for session: FocusSession) {
         let category = session.category ?? Constants.defaultFocusCategory
         let bundleId = Constants.focusSessionBundleId(for: category)
-        guard let end = focusEnd(for: session) else { return }
-        let duration = Int(end.timeIntervalSince(session.startedAt))
+        let duration = session.recordedFocusSeconds
+        guard duration > 0 else { return }
         syncRecord(
             bundleId: bundleId,
             appName: Constants.focusSessionAppName,
@@ -434,29 +452,14 @@ struct ManualSegmentEditorView: View {
 
     /// AppUsageRecord 에 증감분을 반영한다. 없으면 deltaSeconds > 0 일 때만 새로 생성.
     private func syncRecord(bundleId: String, appName: String, category: String, date: Date, deltaSeconds: Int) {
-        guard deltaSeconds != 0 else { return }
-        let dayStart = Calendar.current.startOfDay(for: date)
-        let descriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.bundleIdentifier == bundleId && $0.date == dayStart }
+        try? AppUsageRecordStore.applyDelta(
+            bundleIdentifier: bundleId,
+            appName: appName,
+            category: category,
+            date: date,
+            deltaSeconds: deltaSeconds,
+            modelContext: modelContext
         )
-        if let record = try? modelContext.fetch(descriptor).first {
-            let newTotal = max(0, record.durationSeconds + deltaSeconds)
-            if newTotal == 0 {
-                modelContext.delete(record)
-            } else {
-                record.durationSeconds = newTotal
-                if record.category != category { record.category = category }
-            }
-        } else if deltaSeconds > 0 {
-            let record = AppUsageRecord(
-                appName: appName,
-                bundleIdentifier: bundleId,
-                category: category,
-                date: dayStart
-            )
-            record.durationSeconds = deltaSeconds
-            modelContext.insert(record)
-        }
     }
 
     private func defaultInitial() -> SegmentDraft {
@@ -499,8 +502,8 @@ private struct SegmentRowView: View {
                     Text(segment.appName)
                         .font(.callout.weight(.medium))
                         .lineLimit(1)
-                    if segment.isManual {
-                        Text("수동")
+                    if segment.isManual || segment.isUserModified {
+                        Text(segment.isManual ? "직접 추가" : "사용자 수정")
                             .font(.caption2.bold())
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -658,7 +661,7 @@ private struct PomodoroEditRowView: View {
     }
 
     private var durationSeconds: Int {
-        max(0, Int(focusEnd.timeIntervalSince(session.startedAt)))
+        session.recordedFocusSeconds
     }
 
     private var childTotalSeconds: Int {
