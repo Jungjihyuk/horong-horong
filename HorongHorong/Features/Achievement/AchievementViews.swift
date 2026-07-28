@@ -58,6 +58,8 @@ private struct AchievementGoal: Identifiable {
     let quarterGoal: String?
     let monthGoal: String?
     let recordDate: Date
+    let createdAt: Date
+    let dueDate: Date?
     let sourceMemoIDs: [UUID]
 
     var progress: Double {
@@ -67,6 +69,20 @@ private struct AchievementGoal: Identifiable {
 
     var isComplete: Bool {
         done >= total
+    }
+
+    /// 마감일을 지정했고, 그 날이 지났는데 아직 끝내지 못한 상태.
+    var isOverdue: Bool {
+        guard let dueDate, !(total > 0 && done >= total) else { return false }
+        return Calendar.current.startOfDay(for: dueDate) < Calendar.current.startOfDay(for: Date())
+    }
+
+    var dueDateText: String? {
+        guard let dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일"
+        return formatter.string(from: dueDate)
     }
 
     var nextTodo: AchievementTodo? {
@@ -229,6 +245,7 @@ private struct AchievementGoalEditDraft {
     let targetCount: Int
     let rewardText: String
     let linkedMemoIDs: [UUID]?
+    var dueDate: Date?
 }
 
 private struct AchievementPersonaVisionDraft {
@@ -261,6 +278,12 @@ private enum AchievementJourneyFlagStore {
             ids.append(nil)
         }
 
+        if let goalID {
+            // 같은 월간 목표는 하나의 깃발에만 지정한다.
+            for (offset, existing) in ids.enumerated() where existing == goalID {
+                ids[offset] = nil
+            }
+        }
         ids[index] = goalID
 
         let encoded = ids
@@ -273,6 +296,28 @@ private enum AchievementJourneyFlagStore {
     }
 
     private static func flagSelections() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+    }
+}
+
+private enum AchievementVisionOrderStore {
+    private static var defaultsKey: String { Constants.AppStorageKey.achievementVisionOrder }
+
+    /// 역할별로 사용자가 지정한 비전 순서(UUID 목록)를 돌려준다.
+    static func order(for roleID: String) -> [UUID] {
+        guard let value = orders()[roleID] else { return [] }
+        return value
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
+    }
+
+    static func setOrder(_ ids: [UUID], for roleID: String) {
+        var orders = orders()
+        orders[roleID] = ids.map(\.uuidString).joined(separator: ",")
+        UserDefaults.standard.set(orders, forKey: defaultsKey)
+    }
+
+    private static func orders() -> [String: String] {
         UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
     }
 }
@@ -1156,6 +1201,40 @@ private struct FoundationModelsGoalSuggestionProvider {
 #endif
 
 private enum AchievementDataBuilder {
+    static func weekStart(for date: Date, calendar: Calendar = .current) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+
+    /// 목표가 화면에 노출되는 주 구간.
+    /// 시작은 목표를 만든 주, 끝은 완료한 주(미완료면 이번 주)다.
+    /// 저장하지 않고 매번 계산하므로, 완료한 목표에 할 일을 다시 연결하면 구간이 자동으로 이번 주까지 다시 열린다.
+    static func goalWeekSpan(for goal: AchievementGoal, now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let start = weekStart(for: goal.createdAt, calendar: calendar)
+        let isComplete = goal.total > 0 && goal.done >= goal.total
+        let rawEnd = isComplete ? weekStart(for: goal.recordDate, calendar: calendar) : weekStart(for: now, calendar: calendar)
+        return (start, max(start, rawEnd))
+    }
+
+    static func goal(_ goal: AchievementGoal, belongsToWeekStarting weekStart: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let span = goalWeekSpan(for: goal, now: now, calendar: calendar)
+        return weekStart >= span.start && weekStart <= span.end
+    }
+
+    /// 시작한 주부터 이 주까지 몇 주째인지. 그 주에 시작했으면 1이다.
+    static func goalWeekCount(for goal: AchievementGoal, inWeekStarting weekStart: Date, calendar: Calendar = .current) -> Int {
+        let start = goalWeekSpan(for: goal, calendar: calendar).start
+        let weeks = calendar.dateComponents([.weekOfYear], from: start, to: weekStart).weekOfYear ?? 0
+        return max(1, weeks + 1)
+    }
+
+    static func weekRangeText(forWeekStarting weekStart: Date, calendar: Calendar = .current) -> String {
+        let end = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일"
+        return "\(formatter.string(from: weekStart)) – \(formatter.string(from: end))"
+    }
+
     static func goals(from records: [AchievementGoalRecord], memos: [Memo]) -> [AchievementGoal] {
         let memoByID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         func nonEmpty(_ value: String?) -> String? {
@@ -1247,6 +1326,8 @@ private enum AchievementDataBuilder {
                 quarterGoal: record.quarterGoal,
                 monthGoal: record.monthGoal,
                 recordDate: recordDate,
+                createdAt: record.createdAt,
+                dueDate: record.dueDate,
                 sourceMemoIDs: sourceMemoIDs
             )
         }
@@ -1317,7 +1398,7 @@ private enum AchievementDataBuilder {
                     AchievementTimelineTodo(
                         id: memo.id,
                         memoID: memo.id,
-                        title: shortText(memo.content, limit: 15),
+                        title: shortText(memo.content, limit: 200),
                         meta: todoMetaText(for: memo),
                         isCompleted: memo.isCompletedValue,
                         isFuture: todoStatus(for: memo, referenceDate: referenceDate) == .future
@@ -1490,8 +1571,15 @@ struct AchievementSummaryView: View {
         AchievementDataBuilder.goals(from: goalRecords, memos: memos)
     }
 
+    private var currentWeekStart: Date {
+        AchievementDataBuilder.weekStart(for: Date())
+    }
+
     private var weeklyGoals: [AchievementGoal] {
-        goals.filter { $0.cadence == "주간" }
+        goals.filter { goal in
+            goal.cadence == "주간"
+                && AchievementDataBuilder.goal(goal, belongsToWeekStarting: currentWeekStart)
+        }
     }
 
     var body: some View {
@@ -1504,7 +1592,11 @@ struct AchievementSummaryView: View {
                         emptyGoalState
                     } else {
                         ForEach(weeklyGoals) { goal in
-                            AchievementGoalSummaryCard(goal: goal, textScale: textScale)
+                            AchievementGoalSummaryCard(
+                                goal: goal,
+                                textScale: textScale,
+                                weekCount: AchievementDataBuilder.goalWeekCount(for: goal, inWeekStarting: currentWeekStart)
+                            )
                         }
                     }
 
@@ -1535,7 +1627,7 @@ struct AchievementSummaryView: View {
                 detailButton(label: "성취 상세")
             }
 
-            Text("목표 \(completedGoalCount)/\(weeklyGoals.count) 달성 · 연결된 메모 \(linkedMemoCount)개")
+            Text("\(AchievementDataBuilder.weekRangeText(forWeekStarting: currentWeekStart)) · 목표 \(completedGoalCount)/\(weeklyGoals.count) 달성 · 연결된 메모 \(linkedMemoCount)개")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
         }
@@ -1636,9 +1728,29 @@ final class AchievementDetailLaunchOptions {
     }
 }
 
+private struct AchievementOverdueBadge: View {
+    var dueDateText: String?
+    var textScale: CGFloat = 1
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 9 * textScale, weight: .bold))
+            Text(dueDateText.map { "기한 지남 · \($0)" } ?? "기한 지남")
+                .font(.system(size: 9.5 * textScale, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(Color.red.opacity(0.85))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.red.opacity(0.12), in: Capsule())
+        .help(dueDateText.map { "마감일 \($0)이 지났어요." } ?? "마감일이 지났어요.")
+    }
+}
+
 private struct AchievementGoalSummaryCard: View {
     let goal: AchievementGoal
     var textScale: CGFloat = 1
+    var weekCount = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -1648,11 +1760,26 @@ private struct AchievementGoalSummaryCard: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(goal.title)
-                        .font(.system(size: scaled(16), weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        Text(goal.title)
+                            .font(.system(size: scaled(16), weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if goal.isOverdue {
+                            AchievementOverdueBadge(dueDateText: goal.dueDateText, textScale: textScale)
+                        }
+                        if weekCount > 1 {
+                            Text("\(weekCount)주째")
+                                .font(.system(size: scaled(9.5), weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                                .monospacedDigit()
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(PopoverChrome.surfaceAlt, in: Capsule())
+                                .help("\(weekCount - 1)주 전에 시작해 아직 진행 중이에요.")
+                        }
+                    }
                     Text("\(goal.cadence) · \(goal.rule)")
                         .font(.system(size: scaled(12), weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
@@ -1825,6 +1952,7 @@ struct AchievementDetailWindow: View {
     @State private var selectedTab: AchievementDetailTab = .progress
     @State private var selectedPeriod: AchievementPeriod = .week
     @State private var displayedMonth = Date()
+    @State private var displayedWeek = Date()
     @State private var selectedGoalID: UUID?
     @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .goal
     @State private var selectedRecordScope: AchievementRecordScope = .all
@@ -1839,6 +1967,11 @@ struct AchievementDetailWindow: View {
     @State private var selectedJourneyVisionID: UUID?
     @State private var selectedJourneyFlagIndex: Int?
     @State private var journeyFlagRefreshID = UUID()
+    @State private var visionOrderRefreshID = UUID()
+    @State private var visionDragID: UUID?
+    @State private var visionDragTranslation: CGFloat = 0
+    @State private var visionDragStartIndex = 0
+    @State private var visionDragOrder: [UUID] = []
 
     init(initialScreenshotState: AchievementDetailScreenshotState? = nil) {
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
@@ -2098,8 +2231,22 @@ struct AchievementDetailWindow: View {
 
     private var weekContent: some View {
         VStack(spacing: 14) {
+            AchievementPeriodHeader(
+                title: AchievementDataBuilder.weekRangeText(forWeekStarting: displayedWeekStart),
+                subtitle: isDisplayingCurrentWeek
+                    ? "이번 주 목표와 이전 주에서 이어진 목표를 함께 봅니다"
+                    : "그 주에 시작했거나 그 주까지 진행 중이던 목표를 봅니다",
+                leading: "이전주",
+                trailing: "다음주",
+                onLeading: {
+                    moveDisplayedWeek(by: -1)
+                },
+                onTrailing: {
+                    moveDisplayedWeek(by: 1)
+                }
+            )
             HStack(spacing: 10) {
-                AchievementMetricCard(label: "이번 주 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
+                AchievementMetricCard(label: isDisplayingCurrentWeek ? "이번 주 성취" : "주간 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
                 AchievementMetricCard(label: "지급 대기", value: "\(weeklyPendingRewardCount)", icon: "gift")
                 AchievementMetricCard(label: "연결된 메모", value: "\(weeklyLinkedMemoCount)", icon: "checkmark.seal")
             }
@@ -2435,12 +2582,25 @@ struct AchievementDetailWindow: View {
             HStack(spacing: 10) {
                 AchievementMetricCard(label: "등록 목표", value: "월간: \(monthlyGoals.count)", icon: "arrow.up.right.circle", valueSize: 14.5)
                 AchievementMetricCard(label: "완료 목표", value: "월간: \(completedMonthlyGoalCount)", icon: "checkmark.seal", valueSize: 14.5)
-                AchievementMetricCard(label: "가장 잘한 목표", value: bestMonthlyGoal?.title ?? "없음", icon: "trophy", valueSize: 14.5, isHighlighted: true) {
+                AchievementMetricCard(
+                    label: "가장 잘한 목표",
+                    value: bestMonthlyGoal?.title ?? "없음",
+                    icon: "trophy",
+                    valueSize: 14.5,
+                    isHighlighted: true,
+                    infoDetails: bestGoalInfoDetails
+                ) {
                     if let bestMonthlyGoal {
                         manageGoal(bestMonthlyGoal)
                     }
                 }
-                AchievementMetricCard(label: "흔들린 목표", value: shakyMonthlyGoal?.title ?? "없음", icon: "flag", valueSize: 14.5) {
+                AchievementMetricCard(
+                    label: "흔들린 목표",
+                    value: shakyMonthlyGoal?.title ?? "없음",
+                    icon: "flag",
+                    valueSize: 14.5,
+                    infoDetails: shakyGoalInfoDetails
+                ) {
                     if let shakyMonthlyGoal {
                         manageGoal(shakyMonthlyGoal)
                     }
@@ -2630,9 +2790,7 @@ struct AchievementDetailWindow: View {
                         AchievementJourneyScene(
                             role: displayRole,
                             destinationImageURL: imageURL,
-                            currentGoal: journeyCurrentGoal,
-                            milestones: journeyFlagSlots,
-                            progress: journeyProgress
+                            milestones: journeyFlagSlots
                         )
                         .frame(height: 390)
 
@@ -2726,43 +2884,117 @@ struct AchievementDetailWindow: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showsJourneyVisionOptions, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("비전 선택")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    let orderedVisions = visionsInDragOrder(visions)
 
-                        ForEach(visions) { vision in
-                            Button {
-                                selectedJourneyVisionID = vision.id
-                                showsJourneyVisionOptions = false
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: selectedJourneyVisionID == vision.id ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(selectedJourneyVisionID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
-                                    Text(vision.title)
-                                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                                        .foregroundStyle(PopoverChrome.ink)
-                                        .lineLimit(1)
-                                    Spacer(minLength: 8)
+                    VStack(alignment: .leading, spacing: Constants.achievementVisionRowSpacing) {
+                        HStack {
+                            Text("비전 선택")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                            Spacer(minLength: 8)
+                            Text("손잡이를 끌어 순서 변경")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+
+                        ForEach(Array(orderedVisions.enumerated()), id: \.element.id) { index, vision in
+                            HStack(spacing: 4) {
+                                Button {
+                                    selectedJourneyVisionID = vision.id
+                                    showsJourneyVisionOptions = false
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: selectedJourneyVisionID == vision.id ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(selectedJourneyVisionID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                                        Text(vision.title)
+                                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                                            .foregroundStyle(PopoverChrome.ink)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 8)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .frame(height: Constants.achievementVisionRowHeight)
+                                    .background(
+                                        selectedJourneyVisionID == vision.id ? PopoverChrome.accentSoft.opacity(0.68) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                                    )
+                                    .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
                                 }
-                                .padding(.horizontal, 10)
-                                .frame(height: 34)
-                                .background(
-                                    selectedJourneyVisionID == vision.id ? PopoverChrome.accentSoft.opacity(0.68) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
-                                )
-                                .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                                .buttonStyle(.plain)
+                                .allowsHitTesting(visionDragID == nil)
+
+                                visionDragHandle(for: vision, at: index, in: role, total: orderedVisions.count)
                             }
-                            .buttonStyle(.plain)
+                            .background(
+                                RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                                    .fill(visionDragID == vision.id ? PopoverChrome.surfaceAlt.opacity(0.9) : Color.clear)
+                                    .shadow(color: .black.opacity(visionDragID == vision.id ? 0.18 : 0), radius: 6, x: 0, y: 2)
+                            )
+                            .offset(y: visionRowOffset(at: index, id: vision.id))
+                            .zIndex(visionDragID == vision.id ? 1 : 0)
                         }
                     }
                     .padding(12)
-                    .frame(width: 280)
+                    .frame(width: 324)
                     .background(PopoverChrome.card)
                 }
             }
         }
+    }
+
+    /// 드래그 중에는 임시 순서(visionDragOrder)를, 아니면 저장된 순서를 그대로 쓴다.
+    private func visionsInDragOrder(_ visions: [AchievementGoal]) -> [AchievementGoal] {
+        guard !visionDragOrder.isEmpty else { return visions }
+        let byID = Dictionary(visions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let reordered = visionDragOrder.compactMap { byID[$0] }
+        guard reordered.count == visions.count else { return visions }
+        return reordered
+    }
+
+    /// 끌고 있는 행만 손가락을 따라가고, 나머지는 재배열 애니메이션으로 자리를 비켜준다.
+    private func visionRowOffset(at index: Int, id: UUID) -> CGFloat {
+        guard visionDragID == id else { return 0 }
+        let stride = Constants.achievementVisionRowHeight + Constants.achievementVisionRowSpacing
+        return visionDragTranslation - CGFloat(index - visionDragStartIndex) * stride
+    }
+
+    private func visionDragHandle(for vision: AchievementGoal, at index: Int, in role: AchievementRole, total: Int) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(visionDragID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+            .frame(width: 26, height: Constants.achievementVisionRowHeight)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        if visionDragID == nil {
+                            visionDragID = vision.id
+                            visionDragStartIndex = index
+                            visionDragOrder = visionGoals(for: role).map(\.id)
+                        }
+                        visionDragTranslation = value.translation.height
+
+                        let stride = Constants.achievementVisionRowHeight + Constants.achievementVisionRowSpacing
+                        let steps = Int((value.translation.height / stride).rounded())
+                        let target = min(max(0, visionDragStartIndex + steps), total - 1)
+                        guard let current = visionDragOrder.firstIndex(of: vision.id), current != target else { return }
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            let moved = visionDragOrder.remove(at: current)
+                            visionDragOrder.insert(moved, at: target)
+                        }
+                    }
+                    .onEnded { _ in
+                        if !visionDragOrder.isEmpty {
+                            AchievementVisionOrderStore.setOrder(visionDragOrder, for: role.id)
+                            visionOrderRefreshID = UUID()
+                        }
+                        visionDragID = nil
+                        visionDragTranslation = 0
+                        visionDragStartIndex = 0
+                        visionDragOrder = []
+                    }
+            )
     }
 
     @ViewBuilder
@@ -2848,16 +3080,20 @@ struct AchievementDetailWindow: View {
                     .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
             } else {
                 ForEach(selectedJourneyMonthlyGoals) { goal in
+                    let slots = journeyFlagSlots
+                    let isUsedElsewhere = slots.enumerated().contains { $0.offset != index && $0.element?.id == goal.id }
                     Button {
                         setJourneyFlagGoal(goal, at: index)
                     } label: {
                         journeyFlagPickerRow(
                             title: "\(goal.emoji) \(goal.title)",
                             systemImage: "target",
-                            isSelected: journeyFlagSlots[index]?.id == goal.id
+                            isSelected: slots[index]?.id == goal.id,
+                            isDisabled: isUsedElsewhere
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isUsedElsewhere)
                 }
             }
         }
@@ -2866,16 +3102,21 @@ struct AchievementDetailWindow: View {
         .background(PopoverChrome.card)
     }
 
-    private func journeyFlagPickerRow(title: String, systemImage: String, isSelected: Bool) -> some View {
+    private func journeyFlagPickerRow(title: String, systemImage: String, isSelected: Bool, isDisabled: Bool = false) -> some View {
         HStack(spacing: 8) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : systemImage)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(isSelected ? PopoverChrome.accent : PopoverChrome.inkTertiary)
             Text(title)
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
+                .foregroundStyle(isDisabled ? PopoverChrome.inkTertiary : PopoverChrome.ink)
                 .lineLimit(1)
             Spacer(minLength: 8)
+            if isDisabled {
+                Text("다른 깃발에 지정됨")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 34)
@@ -2920,20 +3161,22 @@ struct AchievementDetailWindow: View {
                                     )
                                 )
                         } else {
-                            VStack(spacing: 10) {
-                                Text(role.emoji)
-                                    .font(.system(size: 54))
-                                Text(role.name)
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                            }
-                            .padding(.horizontal, 20)
+                            Image("AchievementJourneyDefault")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 270, height: 210)
+                                .clipped()
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [.clear, .black.opacity(0.56)],
+                                        startPoint: .center,
+                                        endPoint: .bottom
+                                    )
+                                )
                         }
                     }
 
-                Text(imageURL == nil ? "페르소나 이미지" : role.name)
+                Text(role.name)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 14)
@@ -3025,20 +3268,30 @@ struct AchievementDetailWindow: View {
                 AchievementJourneyStat(label: "완료한 일", value: "\(journeyLinkedMemos.filter(\.isCompletedValue).count)")
             }
 
-            if let goal = journeyCurrentGoal {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(goal.title)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
-                        .lineLimit(2)
-                    AchievementProgressBar(progress: goal.progress, color: goal.color)
-                    Text(journeyProgressCaption(for: goal))
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkTertiary)
-                        .lineLimit(1)
+            let remainingGoals = journeyRemainingMonthlyGoals
+            let completedGoals = journeyCompletedMonthlyGoals
+
+            if !remainingGoals.isEmpty {
+                journeyGoalSectionHeader(title: "남은 월간 목표", count: remainingGoals.count)
+                ForEach(remainingGoals) { goal in
+                    journeyRemainingGoalRow(goal)
                 }
-                .padding(12)
-                .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+            }
+
+            if !completedGoals.isEmpty {
+                journeyGoalSectionHeader(title: "완료한 월간 목표", count: completedGoals.count)
+                ForEach(completedGoals) { goal in
+                    journeyCompletedGoalRow(goal)
+                }
+            }
+
+            if remainingGoals.isEmpty && completedGoals.isEmpty {
+                Text("선택한 비전에 연결된 월간 목표가 없습니다.")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -3123,6 +3376,57 @@ struct AchievementDetailWindow: View {
         }
     }
 
+    private func journeyGoalSectionHeader(title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            Text("\(count)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+    }
+
+    private func journeyRemainingGoalRow(_ goal: AchievementGoal) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(goal.title)
+                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(2)
+            AchievementProgressBar(progress: goal.progress, color: goal.color)
+            Text(journeyProgressCaption(for: goal))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+    }
+
+    private func journeyCompletedGoalRow(_ goal: AchievementGoal) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(PopoverChrome.accent)
+            Text(goal.title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(goal.done)/\(goal.total)")
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+    }
+
     private func journeyProgressCaption(for goal: AchievementGoal) -> String {
         let progressTarget = goal.cadence == "월간" ? "연결된 주간 목표 진행" : "연결된 일 진행"
         return "\(goal.done)/\(goal.total) · \(progressTarget)"
@@ -3133,7 +3437,8 @@ struct AchievementDetailWindow: View {
     }
 
     private func visionGoals(for role: AchievementRole) -> [AchievementGoal] {
-        goals
+        _ = visionOrderRefreshID
+        let sorted = goals
             .filter { $0.cadence == "비전" && $0.roleName == role.id }
             .sorted { lhs, rhs in
                 if lhs.recordDate == rhs.recordDate {
@@ -3141,6 +3446,23 @@ struct AchievementDetailWindow: View {
                 }
                 return lhs.recordDate > rhs.recordDate
             }
+
+        // 사용자가 지정한 순서를 먼저 배치하고, 새로 생긴 비전은 뒤에 붙인다.
+        let storedOrder = AchievementVisionOrderStore.order(for: role.id)
+        guard !storedOrder.isEmpty else { return sorted }
+        let rank = Dictionary(
+            storedOrder.enumerated().map { ($0.element, $0.offset) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return sorted.enumerated().sorted { lhs, rhs in
+            let lhsRank = rank[lhs.element.id] ?? Int.max
+            let rhsRank = rank[rhs.element.id] ?? Int.max
+            if lhsRank == rhsRank {
+                return lhs.offset < rhs.offset
+            }
+            return lhsRank < rhsRank
+        }
+        .map(\.element)
     }
 
     private func selectedJourneyVision(for role: AchievementRole) -> AchievementGoal? {
@@ -3192,17 +3514,15 @@ struct AchievementDetailWindow: View {
         }
         let storedIDs = AchievementJourneyFlagStore.goalIDs(for: key, maxCount: clampedJourneyMaxFlagCount)
         let goalsByID = Dictionary(uniqueKeysWithValues: selectedJourneyMonthlyGoals.map { ($0.id, $0) })
-        var slots = storedIDs.map { id in
-            id.flatMap { goalsByID[$0] }
+        var usedIDs = Set<UUID>()
+        var slots = storedIDs.map { id -> AchievementGoal? in
+            guard let goal = id.flatMap({ goalsByID[$0] }) else { return nil }
+            return usedIDs.insert(goal.id).inserted ? goal : nil
         }
         while slots.count < clampedJourneyMaxFlagCount {
             slots.append(nil)
         }
         return Array(slots.prefix(clampedJourneyMaxFlagCount))
-    }
-
-    private var journeyFlagGoals: [AchievementGoal] {
-        journeyFlagSlots.compactMap { $0 }
     }
 
     private func setJourneyFlagGoal(_ goal: AchievementGoal?, at index: Int) {
@@ -3247,25 +3567,34 @@ struct AchievementDetailWindow: View {
         return ""
     }
 
-    private var journeyCurrentGoal: AchievementGoal? {
-        if let selectedGoal,
-           journeyFlagGoals.contains(where: { $0.id == selectedGoal.id }) {
-            return selectedGoal
-        }
-        return journeyFlagGoals.max { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
+    /// 여정 깃발에 지정된 순서를 우선하고, 지정되지 않은 목표는 뒤에 붙인다.
+    private var journeyMonthlyGoalsInJourneyOrder: [AchievementGoal] {
+        let flagOrder = Dictionary(
+            journeyFlagSlots.enumerated().compactMap { index, goal in
+                goal.map { ($0.id, index) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return selectedJourneyMonthlyGoals.sorted { lhs, rhs in
+            let lhsOrder = flagOrder[lhs.id] ?? Int.max
+            let rhsOrder = flagOrder[rhs.id] ?? Int.max
+            if lhsOrder == rhsOrder {
+                return lhs.title < rhs.title
             }
-            return lhs.progress < rhs.progress
+            return lhsOrder < rhsOrder
         }
     }
 
-    private var journeyProgress: Double {
-        let measurableGoals = journeyFlagGoals.filter { $0.total > 0 }
-        guard !measurableGoals.isEmpty else { return 0 }
-        let total = measurableGoals.reduce(0) { $0 + $1.total }
-        let done = measurableGoals.reduce(0) { $0 + min($1.done, $1.total) }
-        return min(1, Double(done) / Double(total))
+    private func isJourneyGoalComplete(_ goal: AchievementGoal) -> Bool {
+        goal.total > 0 && goal.done >= goal.total
+    }
+
+    private var journeyRemainingMonthlyGoals: [AchievementGoal] {
+        journeyMonthlyGoalsInJourneyOrder.filter { !isJourneyGoalComplete($0) }
+    }
+
+    private var journeyCompletedMonthlyGoals: [AchievementGoal] {
+        journeyMonthlyGoalsInJourneyOrder.filter { isJourneyGoalComplete($0) }
     }
 
     private var selectedRoleLinkedMemos: [Memo] {
@@ -3473,8 +3802,26 @@ struct AchievementDetailWindow: View {
         goals.filter { $0.cadence == "월간" }
     }
 
+    private var displayedWeekStart: Date {
+        AchievementDataBuilder.weekStart(for: displayedWeek)
+    }
+
     private var weeklyGoals: [AchievementGoal] {
-        goals.filter { $0.cadence == "주간" }
+        goals.filter { goal in
+            goal.cadence == "주간"
+                && AchievementDataBuilder.goal(goal, belongsToWeekStarting: displayedWeekStart)
+        }
+    }
+
+    private var isDisplayingCurrentWeek: Bool {
+        displayedWeekStart >= AchievementDataBuilder.weekStart(for: Date())
+    }
+
+    private func moveDisplayedWeek(by offset: Int) {
+        let calendar = Calendar.current
+        guard let moved = calendar.date(byAdding: .weekOfYear, value: offset, to: displayedWeekStart) else { return }
+        guard moved <= AchievementDataBuilder.weekStart(for: Date()) else { return }
+        displayedWeek = moved
     }
 
     private var completedAchievementGoals: [AchievementGoal] {
@@ -3565,22 +3912,93 @@ struct AchievementDetailWindow: View {
         Set(weeklyGoals.flatMap(\.sourceMemoIDs)).count
     }
 
-    private var bestMonthlyGoal: AchievementGoal? {
-        monthlyGoals.max { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
-            }
-            return lhs.progress < rhs.progress
+    /// 이 아래로 떨어지면 흔들린 목표로 본다.
+    private static let shakyGoalProgressThreshold = 0.5
+
+    private func goalProgressSummary(_ goal: AchievementGoal) -> String {
+        "‘\(goal.title)’ · \(goal.done)/\(goal.total) (\(Int((goal.progress * 100).rounded()))%)"
+    }
+
+    private var bestGoalInfoDetails: [String] {
+        var details = [
+            "이번 달 월간 목표 중 달성률이 가장 높은 목표예요.",
+            "달성률이 같으면 더 많이 끝낸 목표를 골라요.",
+        ]
+        if let bestMonthlyGoal {
+            details.append("지금은 \(goalProgressSummary(bestMonthlyGoal))이 1위예요.")
+        } else if measurableMonthlyGoals.isEmpty {
+            details.append("이번 달에는 진행률을 잴 수 있는 월간 목표가 없어 표시하지 않아요.")
+        } else {
+            details.append("아직 한 개도 진행한 목표가 없어 표시하지 않아요.")
+        }
+        return details
+    }
+
+    private var shakyGoalInfoDetails: [String] {
+        var details = [
+            "달성률이 50% 미만인 목표 중 가장 낮은 목표예요.",
+            "모든 목표가 50% 이상이면 표시하지 않아요.",
+        ]
+        if let shakyMonthlyGoal {
+            details.append("지금은 \(goalProgressSummary(shakyMonthlyGoal))이 가장 낮아요.")
+        } else if measurableMonthlyGoals.isEmpty {
+            details.append("이번 달에는 진행률을 잴 수 있는 월간 목표가 없어 표시하지 않아요.")
+        } else if !measurableMonthlyGoals.contains(where: { $0.progress < Self.shakyGoalProgressThreshold }) {
+            details.append("이번 달 목표가 모두 50% 이상이라 표시하지 않아요.")
+        } else {
+            details.append("가장 잘한 목표와 같은 목표뿐이라 표시하지 않아요.")
+        }
+        return details
+    }
+
+    /// 화면에 표시 중인 달에 속한 월간 목표. 그 달에 만들었거나, 그 달의 일과 연결된 목표를 뜻한다.
+    private var displayedMonthlyGoals: [AchievementGoal] {
+        let calendar = Calendar.current
+        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth) else {
+            return monthlyGoals
+        }
+        return monthlyGoals.filter { goal in
+            monthInterval.contains(goal.recordDate)
+                || memos.contains { memo in
+                    goal.sourceMemoIDs.contains(memo.id)
+                        && monthInterval.contains(AchievementDataBuilder.memoDate(memo))
+                }
         }
     }
 
-    private var shakyMonthlyGoal: AchievementGoal? {
-        monthlyGoals.min { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
+    /// 진행률을 잴 수 있는(연결된 주간 목표가 있는) 월간 목표만 두 지표의 후보로 삼는다.
+    private var measurableMonthlyGoals: [AchievementGoal] {
+        displayedMonthlyGoals.filter { $0.total > 0 }
+    }
+
+    /// 가장 잘한 목표: 진행한 목표 전체에서 달성률이 가장 높은 것.
+    /// 30%·20%·10%처럼 모두 낮아도 그중 최고인 30%를 고른다.
+    /// 진행률이 같으면 실제로 더 많이 해낸 목표를 고른다.
+    private var bestMonthlyGoal: AchievementGoal? {
+        measurableMonthlyGoals
+            .filter { $0.done > 0 }
+            .max { lhs, rhs in
+                if lhs.progress == rhs.progress {
+                    return lhs.done < rhs.done
+                }
+                return lhs.progress < rhs.progress
             }
-            return lhs.progress < rhs.progress
-        }
+    }
+
+    /// 흔들린 목표: 달성률이 50% 미만인 목표 중 가장 낮은 것.
+    /// 모든 목표가 50% 이상이면 표시하지 않고, 가장 잘한 목표와 겹쳐도 표시하지 않는다.
+    /// 진행률이 같으면 남은 개수가 많은 쪽이 더 흔들린 것으로 본다.
+    private var shakyMonthlyGoal: AchievementGoal? {
+        let candidate = measurableMonthlyGoals
+            .filter { $0.progress < Self.shakyGoalProgressThreshold }
+            .min { lhs, rhs in
+                if lhs.progress == rhs.progress {
+                    return (lhs.total - lhs.done) > (rhs.total - rhs.done)
+                }
+                return lhs.progress < rhs.progress
+            }
+        guard let candidate, candidate.id != bestMonthlyGoal?.id else { return nil }
+        return candidate
     }
 
     private var currentMonthTitle: String {
@@ -3707,6 +4125,7 @@ struct AchievementDetailWindow: View {
         record.rule = draft.rule.trimmingCharacters(in: .whitespacesAndNewlines)
         record.targetCount = max(1, draft.targetCount)
         record.rewardText = draft.rewardText.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.dueDate = draft.dueDate
         if let linkedMemoIDs = draft.linkedMemoIDs {
             record.linkedMemoIDs = linkedMemoIDs
             record.targetCount = max(1, linkedMemoIDs.count)
@@ -3912,15 +4331,13 @@ struct AchievementDetailWindow: View {
 private struct AchievementJourneyScene: View {
     let role: AchievementRole
     let destinationImageURL: URL?
-    let currentGoal: AchievementGoal?
     let milestones: [AchievementGoal?]
-    let progress: Double
 
     var body: some View {
         TimelineView(.animation) { context in
             GeometryReader { proxy in
                 let size = proxy.size
-                let cappedPhase = walkerPhase(at: context.date)
+                let cappedPhase = walkerPhase
                 let walkerPoint = routePoint(at: cappedPhase, in: size)
                 let beamPoint = routePoint(at: min(1, cappedPhase + 0.08), in: size)
                 let destinationPoint = CGPoint(x: size.width - 72, y: size.height * 0.31)
@@ -3960,7 +4377,7 @@ private struct AchievementJourneyScene: View {
 
                     ForEach(Array(milestones.enumerated()), id: \.offset) { index, goal in
                         let point = routePoint(at: milestonePhase(index, total: milestones.count), in: size)
-                        AchievementJourneyMilestone(goal: goal, index: index, isLit: Double(index + 1) / Double(max(1, milestones.count)) <= max(progress, 0.08))
+                        AchievementJourneyMilestone(goal: goal, index: index, isLit: (slotFractions[index] ?? 0) >= 1)
                             .position(x: point.x, y: point.y - 54)
                     }
 
@@ -3995,10 +4412,34 @@ private struct AchievementJourneyScene: View {
         return trimmed.isEmpty ? "오늘의 일이 목적지로 이어진다" : trimmed
     }
 
-    private func walkerPhase(at date: Date) -> CGFloat {
+    /// 깃발 슬롯별 하위 목표 달성률. 비어 있는 슬롯은 nil.
+    private var slotFractions: [Double?] {
+        milestones.map { goal in
+            guard let goal else { return nil }
+            guard goal.total > 0 else { return goal.done > 0 ? 1 : 0 }
+            return min(1, Double(goal.done) / Double(goal.total))
+        }
+    }
+
+    /// 지정된 깃발을 순서대로 지나며, 각 구간을 해당 목표의 하위 목표 달성률만큼만 전진한다.
+    /// 하위 목표를 모두 달성한 깃발에서만 다음 구간으로 넘어간다.
+    private var walkerPhase: CGFloat {
         let startPhase: CGFloat = 0.04
-        let endPhase = max(startPhase, min(0.96, CGFloat(max(0, min(1, progress))) * 0.96))
-        return endPhase
+        var current = startPhase
+        let total = milestones.count
+
+        for (index, fraction) in slotFractions.enumerated() {
+            guard let fraction else { continue }
+            let target = milestonePhase(index, total: total)
+            guard target > current else { continue }
+            if fraction >= 1 {
+                current = target
+            } else {
+                return min(0.96, current + (target - current) * CGFloat(max(0, fraction)))
+            }
+        }
+
+        return min(0.96, current)
     }
 
     private var starPositions: [CGPoint] {
@@ -4203,7 +4644,7 @@ private struct AchievementJourneyScene: View {
     }
 
     private func unexploredFogLayer(in size: CGSize) -> some View {
-        let clampedProgress = CGFloat(max(0, min(1, progress)))
+        let clampedProgress = walkerPhase
         let width = size.width * max(0.18, 1 - clampedProgress + 0.08)
         let centerX = size.width - width / 2
 
@@ -4253,7 +4694,7 @@ private struct AchievementJourneyScene: View {
 
     private func completedRoutePath(in size: CGSize) -> Path {
         var path = Path()
-        let clampedProgress = CGFloat(max(0, min(1, progress)))
+        let clampedProgress = walkerPhase
         path.move(to: routePoint(at: 0, in: size))
         let steps = max(2, Int(clampedProgress * 40))
         for step in 1...steps {
@@ -4485,8 +4926,11 @@ private struct AchievementJourneyDestination: View {
                         .frame(width: 62, height: 62)
                         .clipShape(Circle())
                 } else {
-                    Text(role.emoji)
-                        .font(.system(size: 31))
+                    Image("AchievementJourneyDefault")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 62, height: 62)
+                        .clipShape(Circle())
                 }
             }
             .frame(width: 70, height: 70)
@@ -4614,7 +5058,11 @@ private struct AchievementMetricCard: View {
     let icon: String
     var valueSize: CGFloat = 18
     var isHighlighted = false
+    var infoDetails: [String] = []
     var onTap: (() -> Void)? = nil
+
+    @State private var showsInfo = false
+    @State private var isInfoHovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -4633,6 +5081,10 @@ private struct AchievementMetricCard: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+
+            if !infoDetails.isEmpty {
+                infoButton
+            }
         }
         .padding(14)
         .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(14), style: .continuous))
@@ -4643,6 +5095,44 @@ private struct AchievementMetricCard: View {
         )
         .onTapGesture {
             onTap?()
+        }
+    }
+
+    private var infoButton: some View {
+        Button {
+            showsInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(isInfoHovering || showsInfo ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("\(label) 선정 기준 보기")
+        .onHover { isInfoHovering = $0 }
+        .popover(isPresented: $showsInfo, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("\(label) 선정 기준")
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+
+                ForEach(Array(infoDetails.enumerated()), id: \.offset) { _, detail in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("·")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                        Text(detail)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: 264, alignment: .leading)
+            .background(PopoverChrome.card)
         }
     }
 }
@@ -4706,6 +5196,7 @@ private struct AchievementGoalTimelineView: View {
     let items: [AchievementTimelineItem]
     let onMoveTodo: (UUID, Date) -> Void
     @State private var expandedItemIDs = Set<UUID>()
+    @State private var hoveredColumnID: UUID?
 
     private let columnWidth: CGFloat = 132
     private let axisY: CGFloat = 86
@@ -4760,8 +5251,13 @@ private struct AchievementGoalTimelineView: View {
                                     expandedItemIDs.insert(item.id)
                                 }
                             },
-                            onMoveTodo: onMoveTodo
+                            onMoveTodo: onMoveTodo,
+                            onTodoHoverChange: { hovering in
+                                hoveredColumnID = hovering ? item.id : (hoveredColumnID == item.id ? nil : hoveredColumnID)
+                            }
                         )
+                        // 상세 패널이 옆 컬럼 카드에 가리지 않도록 컬럼 자체를 앞으로 끌어올린다.
+                        .zIndex(hoveredColumnID == item.id ? 1 : 0)
                     }
                 }
                 .frame(width: contentWidth, height: timelineHeight - 10, alignment: .topLeading)
@@ -4795,10 +5291,16 @@ private struct AchievementTimelineColumn: View {
     let isLast: Bool
     let onToggleExpanded: () -> Void
     let onMoveTodo: (UUID, Date) -> Void
+    var onTodoHoverChange: (Bool) -> Void = { _ in }
     @State private var isDropTargeted = false
 
     private var todoStep: CGFloat {
         todoBoxHeight + todoSpacing
+    }
+
+    /// 할일 카드가 쓸 수 있는 안쪽 폭. 컬럼이 넓어지면 카드도 같이 넓어져 제목이 덜 잘린다.
+    private var todoBoxContentWidth: CGFloat {
+        max(94, columnWidth - 12 - 16)
     }
 
     var body: some View {
@@ -4833,7 +5335,11 @@ private struct AchievementTimelineColumn: View {
 
                 VStack(spacing: 8) {
                     ForEach(visibleTodos) { todo in
-                        AchievementTimelineTodoBox(todo: todo)
+                        AchievementTimelineTodoBox(
+                            todo: todo,
+                            width: todoBoxContentWidth,
+                            onHoverChange: onTodoHoverChange
+                        )
                     }
 
                     if hiddenTodoCount > 0 || isExpanded {
@@ -4847,7 +5353,7 @@ private struct AchievementTimelineColumn: View {
                             }
                             .font(.system(size: 10.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.accent)
-                            .frame(width: 94, height: moreButtonHeight)
+                            .frame(width: todoBoxContentWidth, height: moreButtonHeight)
                             .background(PopoverChrome.accentSoft.opacity(0.55), in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -4972,17 +5478,26 @@ private struct AchievementTimelineBadge: View {
 
 private struct AchievementTimelineTodoBox: View {
     let todo: AchievementTimelineTodo
+    var width: CGFloat = 94
+    var onHoverChange: (Bool) -> Void = { _ in }
+
+    @State private var isHovering = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    private static let hoverDelay: Duration = .milliseconds(500)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
+            HStack(alignment: .top, spacing: 5) {
                 Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
                 Text(todo.title)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
             if !todo.meta.isEmpty {
                 Text(todo.meta)
@@ -4991,7 +5506,7 @@ private struct AchievementTimelineTodoBox: View {
                     .lineLimit(1)
             }
         }
-        .frame(width: 94, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(height: 54, alignment: .leading)
@@ -5000,9 +5515,73 @@ private struct AchievementTimelineTodoBox: View {
             RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
                 .stroke(todo.isCompleted ? PopoverChrome.accent.opacity(0.55) : PopoverChrome.border, style: StrokeStyle(lineWidth: 1, dash: todo.isCompleted ? [] : [3, 3]))
         )
-        .onDrag {
-            NSItemProvider(object: AchievementTimelineDragPayload.string(for: todo.memoID) as NSString)
+        .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+        .overlay(alignment: .topLeading) {
+            if isHovering {
+                hoverDetail
+                    .offset(y: -6)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
+        .zIndex(isHovering ? 1 : 0)
+        .onHover { hovering in
+            hoverTask?.cancel()
+            guard hovering else {
+                setHovering(false)
+                return
+            }
+            hoverTask = Task {
+                try? await Task.sleep(for: Self.hoverDelay)
+                guard !Task.isCancelled else { return }
+                setHovering(true)
+            }
+        }
+        .onDisappear {
+            hoverTask?.cancel()
+        }
+        .onDrag {
+            hoverTask?.cancel()
+            setHovering(false)
+            return NSItemProvider(object: AchievementTimelineDragPayload.string(for: todo.memoID) as NSString)
+        }
+    }
+
+    private func setHovering(_ hovering: Bool) {
+        guard isHovering != hovering else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            isHovering = hovering
+        }
+        onHoverChange(hovering)
+    }
+
+    /// 카드와 확실히 구분되도록 어두운 배경으로 띄우는 상세 패널.
+    /// 카드는 크림/화이트 계열이라 같은 색을 쓰면 겹쳐도 경계가 보이지 않는다.
+    private var hoverDetail: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(todo.title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.96))
+                .fixedSize(horizontal: false, vertical: true)
+            if !todo.meta.isEmpty {
+                Text(todo.meta)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(width: max(width, 210), alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                .fill(Color(red: 0.16, green: 0.13, blue: 0.11))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                .stroke(PopoverChrome.accent.opacity(0.65), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 6)
     }
 }
 
@@ -5018,9 +5597,14 @@ private struct AchievementDetailGoalRow: View {
                 Text(goal.emoji)
                     .font(.system(size: 22))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(goal.title)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
+                    HStack(spacing: 6) {
+                        Text(goal.title)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                        if goal.isOverdue {
+                            AchievementOverdueBadge(dueDateText: goal.dueDateText)
+                        }
+                    }
                     Text("\(goal.cadence) · \(goal.rule)")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
@@ -5226,6 +5810,8 @@ private struct AchievementGoalManagementSheet: View {
     @State private var rule: String
     @State private var rewardText: String
     @State private var selectedMemoIDs: Set<UUID>
+    @State private var dueDate: Date
+    @State private var hasDueDate: Bool
     @State private var newChildTitle = ""
     @State private var newChildEmoji = "🎯"
     @State private var showsDeleteConfirmation = false
@@ -5257,6 +5843,8 @@ private struct AchievementGoalManagementSheet: View {
         _rule = State(initialValue: record.rule)
         _rewardText = State(initialValue: record.rewardText)
         _selectedMemoIDs = State(initialValue: Set(record.linkedMemoIDs))
+        _dueDate = State(initialValue: record.dueDate ?? Date())
+        _hasDueDate = State(initialValue: record.dueDate != nil)
         _newChildEmoji = State(initialValue: AchievementGoalManagementSheet.defaultEmoji(for: childCadence))
     }
 
@@ -5334,6 +5922,30 @@ private struct AchievementGoalManagementSheet: View {
                         )
                 }
 
+                field(label: "마감일") {
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: $hasDueDate)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                        if hasDueDate {
+                            DatePicker("", selection: $dueDate, displayedComponents: .date)
+                                .labelsHidden()
+                                .datePickerStyle(.compact)
+                        } else {
+                            Text("마감일 없음")
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                            .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+                    )
+                }
+
                 if childCadence != nil {
                     childGoalSection
                 } else if supportsMemoLinks {
@@ -5363,7 +5975,8 @@ private struct AchievementGoalManagementSheet: View {
                         rule: rule,
                         targetCount: supportsMemoLinks ? max(1, selectedMemoIDs.count) : record.targetCount,
                         rewardText: rewardText,
-                        linkedMemoIDs: supportsMemoLinks ? Array(selectedMemoIDs) : nil
+                        linkedMemoIDs: supportsMemoLinks ? Array(selectedMemoIDs) : nil,
+                        dueDate: hasDueDate ? dueDate : nil
                     ))
                     dismiss()
                 } label: {
@@ -5660,12 +6273,15 @@ private struct AchievementPersonaVisionComposerSheet: View {
 
                     if mode == "새 페르소나" {
                         fieldLabel("페르소나")
-                        emojiTextField(emoji: $personaEmoji, isFocused: $isPersonaEmojiFocused, placeholder: "이모지")
-                        TextField("예: AI Engineer", text: $personaName)
-                            .textFieldStyle(.plain)
-                            .padding(10)
-                            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                        HStack(spacing: 8) {
+                            emojiChip(emoji: $personaEmoji, isFocused: $isPersonaEmojiFocused, fallback: "👤")
+                            TextField("예: AI Engineer", text: $personaName)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                        }
+                        quickEmojiRow(selection: $personaEmoji, options: Self.personaQuickEmojis)
                     } else {
                         fieldLabel("페르소나 선택")
                         Menu {
@@ -5683,12 +6299,15 @@ private struct AchievementPersonaVisionComposerSheet: View {
                     }
 
                     fieldLabel("비전")
-                    emojiTextField(emoji: $visionEmoji, isFocused: $isVisionEmojiFocused, placeholder: "비전 이모지")
-                    TextField("예: 사람들에게 쓰이는 생산성 제품을 만든다", text: $visionTitle)
-                        .textFieldStyle(.plain)
-                        .padding(10)
-                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    HStack(spacing: 8) {
+                        emojiChip(emoji: $visionEmoji, isFocused: $isVisionEmojiFocused, fallback: "🧭")
+                        TextField("예: 사람들에게 쓰이는 생산성 제품을 만든다", text: $visionTitle)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    }
+                    quickEmojiRow(selection: $visionEmoji, options: Self.visionQuickEmojis)
                 }
                 .padding(14)
             }
@@ -5771,43 +6390,73 @@ private struct AchievementPersonaVisionComposerSheet: View {
         .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
     }
 
-    private func emojiTextField(emoji: Binding<String>, isFocused: FocusState<Bool>.Binding, placeholder: String) -> some View {
-        HStack(spacing: 8) {
-            Text(emoji.wrappedValue)
-                .font(.system(size: 20))
-                .frame(width: 38, height: 36)
-                .background(PopoverChrome.accentSoft, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+    private static let personaQuickEmojis = ["👤", "🧑‍💻", "🎨", "📚", "💪", "✍️"]
+    private static let visionQuickEmojis = ["🧭", "🚀", "🌱", "🎯", "⭐", "🔥"]
 
-            TextField(placeholder, text: Binding(
-                get: { emoji.wrappedValue },
-                set: { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    emoji.wrappedValue = trimmed.isEmpty ? "🎯" : String(trimmed.prefix(1))
-                }
-            ))
-            .focused(isFocused)
-            .textFieldStyle(.plain)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .padding(.horizontal, 10)
-            .frame(width: 64, height: 36)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
+    /// 미리보기 칸과 입력 칸을 하나로 합친 이모지 칩.
+    /// 칩 자체가 입력 필드라 클릭해 바로 타이핑·붙여넣기할 수 있고,
+    /// 오른쪽 아래 배지로 시스템 이모지 팔레트를 연다.
+    private func emojiChip(emoji: Binding<String>, isFocused: FocusState<Bool>.Binding, fallback: String) -> some View {
+        TextField("", text: Binding(
+            get: { emoji.wrappedValue },
+            set: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                emoji.wrappedValue = trimmed.isEmpty ? fallback : String(trimmed.suffix(1))
+            }
+        ))
+        .focused(isFocused)
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.center)
+        .font(.system(size: 19))
+        .frame(width: 44, height: 40)
+        .background(PopoverChrome.accentSoft, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+                .stroke(isFocused.wrappedValue ? PopoverChrome.accent : PopoverChrome.border, lineWidth: isFocused.wrappedValue ? 1.6 : PopoverChrome.borderWidth)
+        )
+        .overlay(alignment: .bottomTrailing) {
             Button {
                 isFocused.wrappedValue = true
                 DispatchQueue.main.async {
                     NSApplication.shared.orderFrontCharacterPalette(nil)
                 }
             } label: {
-                Label("이모지 선택", systemImage: "face.smiling")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.ink)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accentInk)
+                    .frame(width: 17, height: 17)
+                    .background(PopoverChrome.accent, in: Circle())
+                    .overlay(Circle().stroke(PopoverChrome.surface, lineWidth: 1.5))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .help("이모지 팔레트 열기")
+            .offset(x: 6, y: 6)
+        }
+    }
+
+    private func quickEmojiRow(selection: Binding<String>, options: [String]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    selection.wrappedValue = option
+                } label: {
+                    Text(option)
+                        .font(.system(size: 15))
+                        .frame(width: 30, height: 28)
+                        .background(
+                            selection.wrappedValue == option ? PopoverChrome.accentSoft : PopoverChrome.card,
+                            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                                .stroke(selection.wrappedValue == option ? PopoverChrome.accent : PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -6018,6 +6667,7 @@ private struct AchievementGoalComposerSheet: View {
     @State private var didLoadSuggestions = false
     @State private var isAdvancedSettingsExpanded = false
     @State private var selectedPeriodDate = Date()
+    @State private var hasDueDate = false
     @State private var expandedSuggestionKeys = Set<String>()
     @FocusState private var isEmojiInputFocused: Bool
 
@@ -6424,13 +7074,26 @@ private struct AchievementGoalComposerSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    fieldLabel("기간")
+                    HStack(spacing: 6) {
+                        fieldLabel("마감일")
+                        Spacer(minLength: 0)
+                        if hasDueDate {
+                            Button("지우기") {
+                                hasDueDate = false
+                                periodText = defaultPeriodText(for: selectedTargetLevel)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                    }
                     DatePicker(
                         "",
                         selection: Binding(
                             get: { selectedPeriodDate },
                             set: { date in
                                 selectedPeriodDate = date
+                                hasDueDate = true
                                 periodText = periodText(for: date)
                             }
                         ),
@@ -6438,11 +7101,15 @@ private struct AchievementGoalComposerSheet: View {
                     )
                         .labelsHidden()
                         .datePickerStyle(.compact)
+                        .opacity(hasDueDate ? 1 : 0.5)
                         .padding(.horizontal, 10)
                         .frame(height: 36, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    Text(hasDueDate ? "기한이 지나면 목표에 ‘기한 지남’이 표시돼요." : "지정하지 않으면 마감일 없이 계속 진행돼요.")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                 }
             }
 
@@ -7279,6 +7946,7 @@ private struct AchievementGoalComposerSheet: View {
             targetCount: max(1, linkedMemoIDs.count),
             targetValueText: resolvedTargetValueText,
             periodText: resolvedPeriodText,
+            dueDate: hasDueDate ? selectedPeriodDate : nil,
             rewardText: "",
             colorHex: colorHex,
             roleName: hierarchy.roleName,
