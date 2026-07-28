@@ -10,6 +10,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case achievement
     case news
     case agent
+    case companion
     case memo
     case data
     case about
@@ -27,6 +28,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .achievement: return "성취"
         case .news:       return "뉴스"
         case .agent:      return "AI Agent"
+        case .companion:  return "루미롱"
         case .memo:       return "메모"
         case .data:       return "데이터"
         case .about:      return "정보"
@@ -45,6 +47,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .achievement: return "할일을 목표로 묶는 추천 방식과 생성 기본값을 설정합니다."
         case .news:       return "관심사 키워드와 뉴스 큐레이션 옵션을 설정합니다."
         case .agent:      return "AI Agent 실험에 사용할 기본값을 설정합니다."
+        case .companion:  return "화면 위 AI 컴패니언의 표시·이동·브리핑을 설정합니다."
         case .memo:       return "퀵 메모 동작을 설정합니다."
         case .data:       return "백업·복원과 데이터 초기화를 관리합니다."
         case .about:      return "호롱호롱 소개와 버전 정보."
@@ -62,6 +65,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .achievement: return "target"
         case .news:       return "newspaper"
         case .agent:      return "bolt.horizontal.circle"
+        case .companion:  return "sparkles"
         case .memo:       return "note.text"
         case .data:       return "externaldrive"
         case .about:      return "info.circle"
@@ -104,6 +108,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
             return ["실행 환경", "실험 루트 폴더", "기본 Agent",
                     "계획 일수", "관심사", "터미널 명령 실행 전 확인",
                     "Codex", "Claude", "Gemini"]
+        case .companion:
+            return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
+                    "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이"]
         case .memo:
             return ["퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기"]
         case .data:
@@ -130,7 +137,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
     var tabs: [SettingsTab] {
         switch self {
         case .preferences: return [.general, .appearance, .hotkey]
-        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .achievement]
+        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .companion, .achievement]
         case .advanced:    return [.data, .about]
         }
     }

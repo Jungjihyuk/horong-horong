@@ -117,6 +117,7 @@ struct SettingsRoot: View {
         case .achievement: AchievementPage()
         case .news:       NewsPage()
         case .agent:      AgentPage()
+        case .companion:  CompanionPage()
         case .memo:       MemoPage()
         case .data:       DataPage()
         case .about:      AboutPage()
@@ -178,6 +179,14 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.selectedAgentType)
             defaults.removeObject(forKey: Constants.AppStorageKey.planDayCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.interestKeywords)
+        case .companion:
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionEnabled)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionSelectedIdentifier)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionRoamingRegion)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionHideDuringFocus)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingEnabled)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingHour)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingMinute)
         case .memo:
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportEnabled)
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)

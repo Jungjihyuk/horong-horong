@@ -53,6 +53,9 @@ targets:
         excludes:
           - "**/*.entitlements"
           - "Info-AppStore.plist"
+      - path: assets/companion
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: HorongHorong/Info.plist
@@ -101,6 +104,9 @@ targets:
           - "**/*.entitlements"
           - "Info.plist"
           - "Services/AppUpdate/**"
+      - path: assets/companion
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: HorongHorong/Info-AppStore.plist
