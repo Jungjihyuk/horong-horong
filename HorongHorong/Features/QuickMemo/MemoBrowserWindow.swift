@@ -311,33 +311,40 @@ struct MemoBrowserWindow: View {
     }
 
     private func sidebar(_ snapshot: Snapshot) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             sidebarSectionTitle("보기")
-            sidebarButton(.all, count: snapshot.allCount)
-            sidebarButton(.today, count: snapshot.todayCount)
-            sidebarButton(.completed, count: snapshot.completedCount)
-            sidebarButton(.reminders, count: snapshot.reminderCount)
-            sidebarButton(.pinned, count: snapshot.pinnedCount)
-            sidebarButton(.dueSoon, count: snapshot.dueSoonCount)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 18)
+                .padding(.bottom, 18)
 
-            sidebarSectionTitle("카테고리")
-                .padding(.top, 8)
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 18) {
+                    sidebarButton(.all, count: snapshot.allCount)
+                    sidebarButton(.today, count: snapshot.todayCount)
+                    sidebarButton(.completed, count: snapshot.completedCount)
+                    sidebarButton(.reminders, count: snapshot.reminderCount)
+                    sidebarButton(.pinned, count: snapshot.pinnedCount)
+                    sidebarButton(.dueSoon, count: snapshot.dueSoonCount)
 
-            if snapshot.iconFilters.isEmpty {
-                Text("카테고리 없음")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkTertiary)
-                    .padding(.horizontal, 14)
-            } else {
-                ForEach(snapshot.iconFilters, id: \.self) { icon in
-                    sidebarIconButton(icon, count: snapshot.iconCounts[icon] ?? 0)
+                    sidebarSectionTitle("카테고리")
+                        .padding(.top, 8)
+
+                    if snapshot.iconFilters.isEmpty {
+                        Text("카테고리 없음")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                            .padding(.horizontal, 14)
+                    } else {
+                        ForEach(snapshot.iconFilters, id: \.self) { icon in
+                            sidebarIconButton(icon, count: snapshot.iconCounts[icon] ?? 0)
+                        }
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 18)
             }
-
-            Spacer()
         }
         .padding(.horizontal, 18)
-        .padding(.top, 34)
         .frame(width: 204)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(PopoverChrome.surfaceAlt)
