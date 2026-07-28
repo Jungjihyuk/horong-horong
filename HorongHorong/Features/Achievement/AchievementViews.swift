@@ -58,6 +58,8 @@ private struct AchievementGoal: Identifiable {
     let quarterGoal: String?
     let monthGoal: String?
     let recordDate: Date
+    let createdAt: Date
+    let dueDate: Date?
     let sourceMemoIDs: [UUID]
 
     var progress: Double {
@@ -67,6 +69,20 @@ private struct AchievementGoal: Identifiable {
 
     var isComplete: Bool {
         done >= total
+    }
+
+    /// 마감일을 지정했고, 그 날이 지났는데 아직 끝내지 못한 상태.
+    var isOverdue: Bool {
+        guard let dueDate, !(total > 0 && done >= total) else { return false }
+        return Calendar.current.startOfDay(for: dueDate) < Calendar.current.startOfDay(for: Date())
+    }
+
+    var dueDateText: String? {
+        guard let dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일"
+        return formatter.string(from: dueDate)
     }
 
     var nextTodo: AchievementTodo? {
@@ -229,6 +245,7 @@ private struct AchievementGoalEditDraft {
     let targetCount: Int
     let rewardText: String
     let linkedMemoIDs: [UUID]?
+    var dueDate: Date?
 }
 
 private struct AchievementPersonaVisionDraft {
@@ -1184,6 +1201,40 @@ private struct FoundationModelsGoalSuggestionProvider {
 #endif
 
 private enum AchievementDataBuilder {
+    static func weekStart(for date: Date, calendar: Calendar = .current) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+
+    /// 목표가 화면에 노출되는 주 구간.
+    /// 시작은 목표를 만든 주, 끝은 완료한 주(미완료면 이번 주)다.
+    /// 저장하지 않고 매번 계산하므로, 완료한 목표에 할 일을 다시 연결하면 구간이 자동으로 이번 주까지 다시 열린다.
+    static func goalWeekSpan(for goal: AchievementGoal, now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let start = weekStart(for: goal.createdAt, calendar: calendar)
+        let isComplete = goal.total > 0 && goal.done >= goal.total
+        let rawEnd = isComplete ? weekStart(for: goal.recordDate, calendar: calendar) : weekStart(for: now, calendar: calendar)
+        return (start, max(start, rawEnd))
+    }
+
+    static func goal(_ goal: AchievementGoal, belongsToWeekStarting weekStart: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let span = goalWeekSpan(for: goal, now: now, calendar: calendar)
+        return weekStart >= span.start && weekStart <= span.end
+    }
+
+    /// 시작한 주부터 이 주까지 몇 주째인지. 그 주에 시작했으면 1이다.
+    static func goalWeekCount(for goal: AchievementGoal, inWeekStarting weekStart: Date, calendar: Calendar = .current) -> Int {
+        let start = goalWeekSpan(for: goal, calendar: calendar).start
+        let weeks = calendar.dateComponents([.weekOfYear], from: start, to: weekStart).weekOfYear ?? 0
+        return max(1, weeks + 1)
+    }
+
+    static func weekRangeText(forWeekStarting weekStart: Date, calendar: Calendar = .current) -> String {
+        let end = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일"
+        return "\(formatter.string(from: weekStart)) – \(formatter.string(from: end))"
+    }
+
     static func goals(from records: [AchievementGoalRecord], memos: [Memo]) -> [AchievementGoal] {
         let memoByID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         func nonEmpty(_ value: String?) -> String? {
@@ -1275,6 +1326,8 @@ private enum AchievementDataBuilder {
                 quarterGoal: record.quarterGoal,
                 monthGoal: record.monthGoal,
                 recordDate: recordDate,
+                createdAt: record.createdAt,
+                dueDate: record.dueDate,
                 sourceMemoIDs: sourceMemoIDs
             )
         }
@@ -1518,8 +1571,15 @@ struct AchievementSummaryView: View {
         AchievementDataBuilder.goals(from: goalRecords, memos: memos)
     }
 
+    private var currentWeekStart: Date {
+        AchievementDataBuilder.weekStart(for: Date())
+    }
+
     private var weeklyGoals: [AchievementGoal] {
-        goals.filter { $0.cadence == "주간" }
+        goals.filter { goal in
+            goal.cadence == "주간"
+                && AchievementDataBuilder.goal(goal, belongsToWeekStarting: currentWeekStart)
+        }
     }
 
     var body: some View {
@@ -1532,7 +1592,11 @@ struct AchievementSummaryView: View {
                         emptyGoalState
                     } else {
                         ForEach(weeklyGoals) { goal in
-                            AchievementGoalSummaryCard(goal: goal, textScale: textScale)
+                            AchievementGoalSummaryCard(
+                                goal: goal,
+                                textScale: textScale,
+                                weekCount: AchievementDataBuilder.goalWeekCount(for: goal, inWeekStarting: currentWeekStart)
+                            )
                         }
                     }
 
@@ -1563,7 +1627,7 @@ struct AchievementSummaryView: View {
                 detailButton(label: "성취 상세")
             }
 
-            Text("목표 \(completedGoalCount)/\(weeklyGoals.count) 달성 · 연결된 메모 \(linkedMemoCount)개")
+            Text("\(AchievementDataBuilder.weekRangeText(forWeekStarting: currentWeekStart)) · 목표 \(completedGoalCount)/\(weeklyGoals.count) 달성 · 연결된 메모 \(linkedMemoCount)개")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
         }
@@ -1664,9 +1728,29 @@ final class AchievementDetailLaunchOptions {
     }
 }
 
+private struct AchievementOverdueBadge: View {
+    var dueDateText: String?
+    var textScale: CGFloat = 1
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 9 * textScale, weight: .bold))
+            Text(dueDateText.map { "기한 지남 · \($0)" } ?? "기한 지남")
+                .font(.system(size: 9.5 * textScale, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(Color.red.opacity(0.85))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.red.opacity(0.12), in: Capsule())
+        .help(dueDateText.map { "마감일 \($0)이 지났어요." } ?? "마감일이 지났어요.")
+    }
+}
+
 private struct AchievementGoalSummaryCard: View {
     let goal: AchievementGoal
     var textScale: CGFloat = 1
+    var weekCount = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -1676,11 +1760,26 @@ private struct AchievementGoalSummaryCard: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(goal.title)
-                        .font(.system(size: scaled(16), weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 6) {
+                        Text(goal.title)
+                            .font(.system(size: scaled(16), weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if goal.isOverdue {
+                            AchievementOverdueBadge(dueDateText: goal.dueDateText, textScale: textScale)
+                        }
+                        if weekCount > 1 {
+                            Text("\(weekCount)주째")
+                                .font(.system(size: scaled(9.5), weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                                .monospacedDigit()
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(PopoverChrome.surfaceAlt, in: Capsule())
+                                .help("\(weekCount - 1)주 전에 시작해 아직 진행 중이에요.")
+                        }
+                    }
                     Text("\(goal.cadence) · \(goal.rule)")
                         .font(.system(size: scaled(12), weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
@@ -1853,6 +1952,7 @@ struct AchievementDetailWindow: View {
     @State private var selectedTab: AchievementDetailTab = .progress
     @State private var selectedPeriod: AchievementPeriod = .week
     @State private var displayedMonth = Date()
+    @State private var displayedWeek = Date()
     @State private var selectedGoalID: UUID?
     @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .goal
     @State private var selectedRecordScope: AchievementRecordScope = .all
@@ -2131,8 +2231,22 @@ struct AchievementDetailWindow: View {
 
     private var weekContent: some View {
         VStack(spacing: 14) {
+            AchievementPeriodHeader(
+                title: AchievementDataBuilder.weekRangeText(forWeekStarting: displayedWeekStart),
+                subtitle: isDisplayingCurrentWeek
+                    ? "이번 주 목표와 이전 주에서 이어진 목표를 함께 봅니다"
+                    : "그 주에 시작했거나 그 주까지 진행 중이던 목표를 봅니다",
+                leading: "이전주",
+                trailing: "다음주",
+                onLeading: {
+                    moveDisplayedWeek(by: -1)
+                },
+                onTrailing: {
+                    moveDisplayedWeek(by: 1)
+                }
+            )
             HStack(spacing: 10) {
-                AchievementMetricCard(label: "이번 주 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
+                AchievementMetricCard(label: isDisplayingCurrentWeek ? "이번 주 성취" : "주간 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
                 AchievementMetricCard(label: "지급 대기", value: "\(weeklyPendingRewardCount)", icon: "gift")
                 AchievementMetricCard(label: "연결된 메모", value: "\(weeklyLinkedMemoCount)", icon: "checkmark.seal")
             }
@@ -3688,8 +3802,26 @@ struct AchievementDetailWindow: View {
         goals.filter { $0.cadence == "월간" }
     }
 
+    private var displayedWeekStart: Date {
+        AchievementDataBuilder.weekStart(for: displayedWeek)
+    }
+
     private var weeklyGoals: [AchievementGoal] {
-        goals.filter { $0.cadence == "주간" }
+        goals.filter { goal in
+            goal.cadence == "주간"
+                && AchievementDataBuilder.goal(goal, belongsToWeekStarting: displayedWeekStart)
+        }
+    }
+
+    private var isDisplayingCurrentWeek: Bool {
+        displayedWeekStart >= AchievementDataBuilder.weekStart(for: Date())
+    }
+
+    private func moveDisplayedWeek(by offset: Int) {
+        let calendar = Calendar.current
+        guard let moved = calendar.date(byAdding: .weekOfYear, value: offset, to: displayedWeekStart) else { return }
+        guard moved <= AchievementDataBuilder.weekStart(for: Date()) else { return }
+        displayedWeek = moved
     }
 
     private var completedAchievementGoals: [AchievementGoal] {
@@ -3993,6 +4125,7 @@ struct AchievementDetailWindow: View {
         record.rule = draft.rule.trimmingCharacters(in: .whitespacesAndNewlines)
         record.targetCount = max(1, draft.targetCount)
         record.rewardText = draft.rewardText.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.dueDate = draft.dueDate
         if let linkedMemoIDs = draft.linkedMemoIDs {
             record.linkedMemoIDs = linkedMemoIDs
             record.targetCount = max(1, linkedMemoIDs.count)
@@ -5375,9 +5508,14 @@ private struct AchievementDetailGoalRow: View {
                 Text(goal.emoji)
                     .font(.system(size: 22))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(goal.title)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
+                    HStack(spacing: 6) {
+                        Text(goal.title)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                        if goal.isOverdue {
+                            AchievementOverdueBadge(dueDateText: goal.dueDateText)
+                        }
+                    }
                     Text("\(goal.cadence) · \(goal.rule)")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
@@ -5583,6 +5721,8 @@ private struct AchievementGoalManagementSheet: View {
     @State private var rule: String
     @State private var rewardText: String
     @State private var selectedMemoIDs: Set<UUID>
+    @State private var dueDate: Date
+    @State private var hasDueDate: Bool
     @State private var newChildTitle = ""
     @State private var newChildEmoji = "🎯"
     @State private var showsDeleteConfirmation = false
@@ -5614,6 +5754,8 @@ private struct AchievementGoalManagementSheet: View {
         _rule = State(initialValue: record.rule)
         _rewardText = State(initialValue: record.rewardText)
         _selectedMemoIDs = State(initialValue: Set(record.linkedMemoIDs))
+        _dueDate = State(initialValue: record.dueDate ?? Date())
+        _hasDueDate = State(initialValue: record.dueDate != nil)
         _newChildEmoji = State(initialValue: AchievementGoalManagementSheet.defaultEmoji(for: childCadence))
     }
 
@@ -5691,6 +5833,30 @@ private struct AchievementGoalManagementSheet: View {
                         )
                 }
 
+                field(label: "마감일") {
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: $hasDueDate)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                        if hasDueDate {
+                            DatePicker("", selection: $dueDate, displayedComponents: .date)
+                                .labelsHidden()
+                                .datePickerStyle(.compact)
+                        } else {
+                            Text("마감일 없음")
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                            .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+                    )
+                }
+
                 if childCadence != nil {
                     childGoalSection
                 } else if supportsMemoLinks {
@@ -5720,7 +5886,8 @@ private struct AchievementGoalManagementSheet: View {
                         rule: rule,
                         targetCount: supportsMemoLinks ? max(1, selectedMemoIDs.count) : record.targetCount,
                         rewardText: rewardText,
-                        linkedMemoIDs: supportsMemoLinks ? Array(selectedMemoIDs) : nil
+                        linkedMemoIDs: supportsMemoLinks ? Array(selectedMemoIDs) : nil,
+                        dueDate: hasDueDate ? dueDate : nil
                     ))
                     dismiss()
                 } label: {
@@ -6411,6 +6578,7 @@ private struct AchievementGoalComposerSheet: View {
     @State private var didLoadSuggestions = false
     @State private var isAdvancedSettingsExpanded = false
     @State private var selectedPeriodDate = Date()
+    @State private var hasDueDate = false
     @State private var expandedSuggestionKeys = Set<String>()
     @FocusState private var isEmojiInputFocused: Bool
 
@@ -6817,13 +6985,26 @@ private struct AchievementGoalComposerSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    fieldLabel("기간")
+                    HStack(spacing: 6) {
+                        fieldLabel("마감일")
+                        Spacer(minLength: 0)
+                        if hasDueDate {
+                            Button("지우기") {
+                                hasDueDate = false
+                                periodText = defaultPeriodText(for: selectedTargetLevel)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+                    }
                     DatePicker(
                         "",
                         selection: Binding(
                             get: { selectedPeriodDate },
                             set: { date in
                                 selectedPeriodDate = date
+                                hasDueDate = true
                                 periodText = periodText(for: date)
                             }
                         ),
@@ -6831,11 +7012,15 @@ private struct AchievementGoalComposerSheet: View {
                     )
                         .labelsHidden()
                         .datePickerStyle(.compact)
+                        .opacity(hasDueDate ? 1 : 0.5)
                         .padding(.horizontal, 10)
                         .frame(height: 36, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    Text(hasDueDate ? "기한이 지나면 목표에 ‘기한 지남’이 표시돼요." : "지정하지 않으면 마감일 없이 계속 진행돼요.")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
                 }
             }
 
@@ -7672,6 +7857,7 @@ private struct AchievementGoalComposerSheet: View {
             targetCount: max(1, linkedMemoIDs.count),
             targetValueText: resolvedTargetValueText,
             periodText: resolvedPeriodText,
+            dueDate: hasDueDate ? selectedPeriodDate : nil,
             rewardText: "",
             colorHex: colorHex,
             roleName: hierarchy.roleName,
