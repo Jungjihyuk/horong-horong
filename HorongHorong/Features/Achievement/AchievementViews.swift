@@ -2468,12 +2468,25 @@ struct AchievementDetailWindow: View {
             HStack(spacing: 10) {
                 AchievementMetricCard(label: "등록 목표", value: "월간: \(monthlyGoals.count)", icon: "arrow.up.right.circle", valueSize: 14.5)
                 AchievementMetricCard(label: "완료 목표", value: "월간: \(completedMonthlyGoalCount)", icon: "checkmark.seal", valueSize: 14.5)
-                AchievementMetricCard(label: "가장 잘한 목표", value: bestMonthlyGoal?.title ?? "없음", icon: "trophy", valueSize: 14.5, isHighlighted: true) {
+                AchievementMetricCard(
+                    label: "가장 잘한 목표",
+                    value: bestMonthlyGoal?.title ?? "없음",
+                    icon: "trophy",
+                    valueSize: 14.5,
+                    isHighlighted: true,
+                    infoDetails: bestGoalInfoDetails
+                ) {
                     if let bestMonthlyGoal {
                         manageGoal(bestMonthlyGoal)
                     }
                 }
-                AchievementMetricCard(label: "흔들린 목표", value: shakyMonthlyGoal?.title ?? "없음", icon: "flag", valueSize: 14.5) {
+                AchievementMetricCard(
+                    label: "흔들린 목표",
+                    value: shakyMonthlyGoal?.title ?? "없음",
+                    icon: "flag",
+                    valueSize: 14.5,
+                    infoDetails: shakyGoalInfoDetails
+                ) {
                     if let shakyMonthlyGoal {
                         manageGoal(shakyMonthlyGoal)
                     }
@@ -3767,22 +3780,93 @@ struct AchievementDetailWindow: View {
         Set(weeklyGoals.flatMap(\.sourceMemoIDs)).count
     }
 
-    private var bestMonthlyGoal: AchievementGoal? {
-        monthlyGoals.max { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
-            }
-            return lhs.progress < rhs.progress
+    /// 이 아래로 떨어지면 흔들린 목표로 본다.
+    private static let shakyGoalProgressThreshold = 0.5
+
+    private func goalProgressSummary(_ goal: AchievementGoal) -> String {
+        "‘\(goal.title)’ · \(goal.done)/\(goal.total) (\(Int((goal.progress * 100).rounded()))%)"
+    }
+
+    private var bestGoalInfoDetails: [String] {
+        var details = [
+            "이번 달 월간 목표 중 달성률이 가장 높은 목표예요.",
+            "달성률이 같으면 더 많이 끝낸 목표를 골라요.",
+        ]
+        if let bestMonthlyGoal {
+            details.append("지금은 \(goalProgressSummary(bestMonthlyGoal))이 1위예요.")
+        } else if measurableMonthlyGoals.isEmpty {
+            details.append("이번 달에는 진행률을 잴 수 있는 월간 목표가 없어 표시하지 않아요.")
+        } else {
+            details.append("아직 한 개도 진행한 목표가 없어 표시하지 않아요.")
+        }
+        return details
+    }
+
+    private var shakyGoalInfoDetails: [String] {
+        var details = [
+            "달성률이 50% 미만인 목표 중 가장 낮은 목표예요.",
+            "모든 목표가 50% 이상이면 표시하지 않아요.",
+        ]
+        if let shakyMonthlyGoal {
+            details.append("지금은 \(goalProgressSummary(shakyMonthlyGoal))이 가장 낮아요.")
+        } else if measurableMonthlyGoals.isEmpty {
+            details.append("이번 달에는 진행률을 잴 수 있는 월간 목표가 없어 표시하지 않아요.")
+        } else if !measurableMonthlyGoals.contains(where: { $0.progress < Self.shakyGoalProgressThreshold }) {
+            details.append("이번 달 목표가 모두 50% 이상이라 표시하지 않아요.")
+        } else {
+            details.append("가장 잘한 목표와 같은 목표뿐이라 표시하지 않아요.")
+        }
+        return details
+    }
+
+    /// 화면에 표시 중인 달에 속한 월간 목표. 그 달에 만들었거나, 그 달의 일과 연결된 목표를 뜻한다.
+    private var displayedMonthlyGoals: [AchievementGoal] {
+        let calendar = Calendar.current
+        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth) else {
+            return monthlyGoals
+        }
+        return monthlyGoals.filter { goal in
+            monthInterval.contains(goal.recordDate)
+                || memos.contains { memo in
+                    goal.sourceMemoIDs.contains(memo.id)
+                        && monthInterval.contains(AchievementDataBuilder.memoDate(memo))
+                }
         }
     }
 
-    private var shakyMonthlyGoal: AchievementGoal? {
-        monthlyGoals.min { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
+    /// 진행률을 잴 수 있는(연결된 주간 목표가 있는) 월간 목표만 두 지표의 후보로 삼는다.
+    private var measurableMonthlyGoals: [AchievementGoal] {
+        displayedMonthlyGoals.filter { $0.total > 0 }
+    }
+
+    /// 가장 잘한 목표: 진행한 목표 전체에서 달성률이 가장 높은 것.
+    /// 30%·20%·10%처럼 모두 낮아도 그중 최고인 30%를 고른다.
+    /// 진행률이 같으면 실제로 더 많이 해낸 목표를 고른다.
+    private var bestMonthlyGoal: AchievementGoal? {
+        measurableMonthlyGoals
+            .filter { $0.done > 0 }
+            .max { lhs, rhs in
+                if lhs.progress == rhs.progress {
+                    return lhs.done < rhs.done
+                }
+                return lhs.progress < rhs.progress
             }
-            return lhs.progress < rhs.progress
-        }
+    }
+
+    /// 흔들린 목표: 달성률이 50% 미만인 목표 중 가장 낮은 것.
+    /// 모든 목표가 50% 이상이면 표시하지 않고, 가장 잘한 목표와 겹쳐도 표시하지 않는다.
+    /// 진행률이 같으면 남은 개수가 많은 쪽이 더 흔들린 것으로 본다.
+    private var shakyMonthlyGoal: AchievementGoal? {
+        let candidate = measurableMonthlyGoals
+            .filter { $0.progress < Self.shakyGoalProgressThreshold }
+            .min { lhs, rhs in
+                if lhs.progress == rhs.progress {
+                    return (lhs.total - lhs.done) > (rhs.total - rhs.done)
+                }
+                return lhs.progress < rhs.progress
+            }
+        guard let candidate, candidate.id != bestMonthlyGoal?.id else { return nil }
+        return candidate
     }
 
     private var currentMonthTitle: String {
@@ -4841,7 +4925,11 @@ private struct AchievementMetricCard: View {
     let icon: String
     var valueSize: CGFloat = 18
     var isHighlighted = false
+    var infoDetails: [String] = []
     var onTap: (() -> Void)? = nil
+
+    @State private var showsInfo = false
+    @State private var isInfoHovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -4860,6 +4948,10 @@ private struct AchievementMetricCard: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+
+            if !infoDetails.isEmpty {
+                infoButton
+            }
         }
         .padding(14)
         .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(14), style: .continuous))
@@ -4870,6 +4962,44 @@ private struct AchievementMetricCard: View {
         )
         .onTapGesture {
             onTap?()
+        }
+    }
+
+    private var infoButton: some View {
+        Button {
+            showsInfo.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12.5, weight: .bold))
+                .foregroundStyle(isInfoHovering || showsInfo ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("\(label) 선정 기준 보기")
+        .onHover { isInfoHovering = $0 }
+        .popover(isPresented: $showsInfo, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("\(label) 선정 기준")
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+
+                ForEach(Array(infoDetails.enumerated()), id: \.offset) { _, detail in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("·")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                        Text(detail)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: 264, alignment: .leading)
+            .background(PopoverChrome.card)
         }
     }
 }
