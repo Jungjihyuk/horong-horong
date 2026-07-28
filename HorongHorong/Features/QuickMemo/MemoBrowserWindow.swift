@@ -85,7 +85,10 @@ private struct MemoCompactControlButtonStyle: ButtonStyle {
 
 struct MemoBrowserWindow: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
+    // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다.
+    // updatedAt 을 쓰면 메모를 수정할 때마다 fetch 가 무효화돼 창 전체가 재계산된다.
+    // 표시 순서는 어차피 makeSnapshot() 에서 sort 옵션대로 다시 정한다.
+    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
 
@@ -99,6 +102,8 @@ struct MemoBrowserWindow: View {
     @State private var externalReminderItems: [ReminderListItem] = []
     @State private var isLoadingExternalReminders = false
     @State private var externalReminderMessage: String = ""
+    @State private var pendingContentMemo: Memo?
+    @State private var contentSaveTask: Task<Void, Never>?
 
     private let reminderOffsetOptions = [
         ReminderOffsetOption(id: -1, label: "알림 없음", minutes: nil),
@@ -108,27 +113,62 @@ struct MemoBrowserWindow: View {
         ReminderOffsetOption(id: 1440, label: "1일 전", minutes: 1440)
     ]
 
-    private var activeMemos: [Memo] {
-        allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue }
+    /// 한 번의 body 평가에서 쓰는 모든 파생 값.
+    /// computed property 로 두면 사이드바·리스트·디테일에서 각각 다시 계산된다.
+    private struct Snapshot {
+        var memos: [Memo] = []
+        var memoIDs: [UUID] = []
+        var externalItems: [ReminderListItem] = []
+        var iconFilters: [String] = []
+        var iconCounts: [String: Int] = [:]
+        var allCount = 0
+        var todayCount = 0
+        var completedCount = 0
+        var reminderCount = 0
+        var pinnedCount = 0
+        var dueSoonCount = 0
     }
 
-    private var todayMemos: [Memo] {
-        return allMemos.filter {
-            TodayPlanningReminderPolicy.isTodayTask($0, now: todayReferenceDate)
-        }
-    }
-
-    private var selectedMemo: Memo? {
-        filteredMemos.first { $0.id == selectedMemoID } ?? filteredMemos.first
-    }
-
-    private var filteredMemos: [Memo] {
+    /// allMemos 를 한 번만 순회하며 검색·필터·사이드바 카운트를 모두 계산한다.
+    private func makeSnapshot() -> Snapshot {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let searched = allMemos.filter { memo in
-            guard !query.isEmpty else { return true }
+
+        var activeCount = 0
+        var pinnedCount = 0
+        var deadlineCount = 0
+        var completedCount = 0
+        var todayCount = 0
+        var iconCounts: [String: Int] = [:]
+        var linkedIdentifiers: Set<String> = []
+        var searched: [Memo] = []
+
+        for memo in allMemos {
+            if let identifier = memo.reminderIdentifier {
+                linkedIdentifiers.insert(identifier)
+            }
+
             let icon = memo.icon ?? MemoIcon.defaultIcon
-            return memo.content.localizedCaseInsensitiveContains(query)
-                || MemoIcon.label(for: icon).localizedCaseInsensitiveContains(query)
+            let isCompleted = memo.isCompletedValue
+            let isArchived = memo.isArchivedValue
+
+            if TodayPlanningReminderPolicy.isTodayTask(memo, now: todayReferenceDate) {
+                todayCount += 1
+            }
+            if isCompleted && !isArchived {
+                completedCount += 1
+            }
+            if !isCompleted && !isArchived {
+                activeCount += 1
+                if memo.isPinned { pinnedCount += 1 }
+                if memo.deadline != nil { deadlineCount += 1 }
+                iconCounts[icon, default: 0] += 1
+            }
+
+            if query.isEmpty
+                || memo.content.localizedCaseInsensitiveContains(query)
+                || MemoIcon.label(for: icon).localizedCaseInsensitiveContains(query) {
+                searched.append(memo)
+            }
         }
 
         let filtered = searched.filter { memo in
@@ -152,48 +192,18 @@ struct MemoBrowserWindow: View {
                 return (memo.icon ?? MemoIcon.defaultIcon) == icon && !memo.isCompletedValue && !memo.isArchivedValue
             }
         }
+        let sortedMemos = sortMemos(filtered)
 
-        switch sort {
-        case .updated:
-            return filtered.sorted {
-                if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
-                return $0.updatedAt > $1.updatedAt
-            }
-        case .deadline:
-            return filtered.sorted {
-                let left = $0.deadline ?? .distantFuture
-                let right = $1.deadline ?? .distantFuture
-                if left != right { return left < right }
-                return $0.updatedAt > $1.updatedAt
-            }
-        case .category:
-            return filtered.sorted {
-                let left = MemoIcon.label(for: $0.icon ?? MemoIcon.defaultIcon)
-                let right = MemoIcon.label(for: $1.icon ?? MemoIcon.defaultIcon)
-                if left != right { return left < right }
-                return $0.updatedAt > $1.updatedAt
-            }
-        }
-    }
-
-    private var linkedReminderIdentifiers: Set<String> {
-        Set(allMemos.compactMap(\.reminderIdentifier))
-    }
-
-    private var unlinkedExternalReminderItems: [ReminderListItem] {
-        externalReminderItems.filter { !linkedReminderIdentifiers.contains($0.id) }
-    }
-
-    private var filteredExternalReminderItems: [ReminderListItem] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let searched = unlinkedExternalReminderItems.filter { item in
-            guard !query.isEmpty else { return true }
-            return item.title.localizedCaseInsensitiveContains(query)
+        // Set 생성을 클로저 밖으로 빼야 O(n) 이 항목마다 반복되지 않는다.
+        let unlinked = externalReminderItems.filter { !linkedIdentifiers.contains($0.id) }
+        let activeExternalCount = unlinked.lazy.filter { !$0.isCompleted }.count
+        let externalFiltered = unlinked.filter { item in
+            let matchesQuery = query.isEmpty
+                || item.title.localizedCaseInsensitiveContains(query)
                 || (item.notes?.localizedCaseInsensitiveContains(query) ?? false)
                 || item.calendarTitle.localizedCaseInsensitiveContains(query)
-        }
+            guard matchesQuery else { return false }
 
-        let filtered = searched.filter { item in
             switch selectedFilter {
             case .all, .reminders:
                 return !item.isCompleted
@@ -204,30 +214,68 @@ struct MemoBrowserWindow: View {
             }
         }
 
-        return sortExternalReminderItems(filtered)
+        let configured = MemoIcon.options.filter { iconCounts[$0] != nil }
+        let extras = Set(iconCounts.keys).subtracting(MemoIcon.options).sorted()
+
+        return Snapshot(
+            memos: sortedMemos,
+            memoIDs: sortedMemos.map(\.id),
+            externalItems: sortExternalReminderItems(externalFiltered),
+            iconFilters: configured + extras,
+            iconCounts: iconCounts,
+            allCount: activeCount + activeExternalCount,
+            todayCount: todayCount,
+            completedCount: completedCount,
+            reminderCount: activeExternalCount,
+            pinnedCount: pinnedCount,
+            dueSoonCount: deadlineCount + unlinked.lazy.filter { $0.dueDate != nil && !$0.isCompleted }.count
+        )
     }
 
-    private var iconFilters: [String] {
-        let existing = Set(activeMemos.map { $0.icon ?? MemoIcon.defaultIcon })
-        let configured = MemoIcon.options.filter { existing.contains($0) }
-        let extras = existing.subtracting(MemoIcon.options).sorted()
-        return configured + extras
+    private func sortMemos(_ memos: [Memo]) -> [Memo] {
+        switch sort {
+        case .updated:
+            return memos.sorted {
+                if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
+                return $0.updatedAt > $1.updatedAt
+            }
+        case .deadline:
+            return memos.sorted {
+                let left = $0.deadline ?? .distantFuture
+                let right = $1.deadline ?? .distantFuture
+                if left != right { return left < right }
+                return $0.updatedAt > $1.updatedAt
+            }
+        case .category:
+            return memos.sorted {
+                let left = MemoIcon.label(for: $0.icon ?? MemoIcon.defaultIcon)
+                let right = MemoIcon.label(for: $1.icon ?? MemoIcon.defaultIcon)
+                if left != right { return left < right }
+                return $0.updatedAt > $1.updatedAt
+            }
+        }
+    }
+
+    private func selectedMemo(in snapshot: Snapshot) -> Memo? {
+        snapshot.memos.first { $0.id == selectedMemoID } ?? snapshot.memos.first
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
+        let snapshot = makeSnapshot()
+
+        return HStack(spacing: 0) {
+            sidebar(snapshot)
             Divider()
-            memoListPane
+            memoListPane(snapshot)
             Divider()
-            detailPane
+            detailPane(snapshot)
         }
         .frame(minWidth: 920, minHeight: 560)
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {
             todayReferenceDate = Date()
-            selectedMemoID = selectedMemo?.id
+            selectedMemoID = selectedMemo(in: snapshot)?.id
             loadReminderLists()
             loadExternalReminderItems()
         }
@@ -240,7 +288,17 @@ struct MemoBrowserWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
             todayReferenceDate = Date()
         }
-        .onChange(of: filteredMemos.map(\.id)) { _, ids in
+        .onDisappear {
+            flushPendingContentSave()
+        }
+        // 앱 종료 경로에서는 onDisappear 가 보장되지 않는다.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            flushPendingContentSave()
+        }
+        .onChange(of: selectedMemoID) { _, _ in
+            flushPendingContentSave()
+        }
+        .onChange(of: snapshot.memoIDs) { _, ids in
             guard !ids.isEmpty else {
                 selectedMemoID = nil
                 return
@@ -252,27 +310,27 @@ struct MemoBrowserWindow: View {
         }
     }
 
-    private var sidebar: some View {
+    private func sidebar(_ snapshot: Snapshot) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             sidebarSectionTitle("보기")
-            sidebarButton(.all, count: activeMemos.count + unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
-            sidebarButton(.today, count: todayMemos.count)
-            sidebarButton(.completed, count: allMemos.filter { $0.isCompletedValue && !$0.isArchivedValue }.count)
-            sidebarButton(.reminders, count: unlinkedExternalReminderItems.filter { !$0.isCompleted }.count)
-            sidebarButton(.pinned, count: activeMemos.filter(\.isPinned).count)
-            sidebarButton(.dueSoon, count: activeMemos.filter { $0.deadline != nil }.count + unlinkedExternalReminderItems.filter { $0.dueDate != nil && !$0.isCompleted }.count)
+            sidebarButton(.all, count: snapshot.allCount)
+            sidebarButton(.today, count: snapshot.todayCount)
+            sidebarButton(.completed, count: snapshot.completedCount)
+            sidebarButton(.reminders, count: snapshot.reminderCount)
+            sidebarButton(.pinned, count: snapshot.pinnedCount)
+            sidebarButton(.dueSoon, count: snapshot.dueSoonCount)
 
             sidebarSectionTitle("카테고리")
                 .padding(.top, 8)
 
-            if iconFilters.isEmpty {
+            if snapshot.iconFilters.isEmpty {
                 Text("카테고리 없음")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .padding(.horizontal, 14)
             } else {
-                ForEach(iconFilters, id: \.self) { icon in
-                    sidebarIconButton(icon)
+                ForEach(snapshot.iconFilters, id: \.self) { icon in
+                    sidebarIconButton(icon, count: snapshot.iconCounts[icon] ?? 0)
                 }
             }
 
@@ -316,9 +374,8 @@ struct MemoBrowserWindow: View {
         .buttonStyle(.plain)
     }
 
-    private func sidebarIconButton(_ icon: String) -> some View {
+    private func sidebarIconButton(_ icon: String, count: Int) -> some View {
         let filter = MemoBrowserFilter.icon(icon)
-        let count = activeMemos.filter { ($0.icon ?? MemoIcon.defaultIcon) == icon }.count
         return Button {
             selectedFilter = filter
         } label: {
@@ -342,7 +399,7 @@ struct MemoBrowserWindow: View {
         .buttonStyle(.plain)
     }
 
-    private var memoListPane: some View {
+    private func memoListPane(_ snapshot: Snapshot) -> some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
@@ -370,16 +427,16 @@ struct MemoBrowserWindow: View {
             .padding(.horizontal, 14)
             .padding(.top, 18)
 
-            if filteredMemos.isEmpty && filteredExternalReminderItems.isEmpty {
-                emptyList
+            if snapshot.memos.isEmpty && snapshot.externalItems.isEmpty {
+                emptyList(snapshot)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(filteredMemos) { memo in
+                        ForEach(snapshot.memos) { memo in
                             memoRow(memo)
                         }
-                        if !filteredExternalReminderItems.isEmpty {
-                            externalReminderSection
+                        if !snapshot.externalItems.isEmpty {
+                            externalReminderSection(snapshot)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -396,19 +453,19 @@ struct MemoBrowserWindow: View {
         .background(PopoverChrome.surface)
     }
 
-    private var emptyList: some View {
+    private func emptyList(_ snapshot: Snapshot) -> some View {
         VStack(spacing: 10) {
             if selectedFilter == .today {
                 Image(systemName: "calendar.badge.exclamationmark")
                     .font(.system(size: 30, weight: .regular))
                     .foregroundStyle(PopoverChrome.inkTertiary)
-                Text(todayMemos.isEmpty ? "오늘 시작할 할 일이 없습니다" : "검색 결과가 없습니다")
+                Text(snapshot.todayCount == 0 ? "오늘 시작할 할 일이 없습니다" : "검색 결과가 없습니다")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                 Text(
-                    todayMemos.isEmpty
+                    snapshot.todayCount == 0
                         ? "완료하지 않은 메모의 시작일을 오늘로 설정하면\n여기에 표시되고 계획 알림에서도 등록된 것으로 봅니다."
-                        : "오늘 할 일 \(todayMemos.count)개가 있지만\n현재 검색어와 일치하는 항목은 없습니다."
+                        : "오늘 할 일 \(snapshot.todayCount)개가 있지만\n현재 검색어와 일치하는 항목은 없습니다."
                 )
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -437,7 +494,7 @@ struct MemoBrowserWindow: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var externalReminderSection: some View {
+    private func externalReminderSection(_ snapshot: Snapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("미리알림")
@@ -447,9 +504,9 @@ struct MemoBrowserWindow: View {
                     .fill(PopoverChrome.border)
                     .frame(height: 1)
             }
-            .padding(.top, filteredMemos.isEmpty ? 0 : 4)
+            .padding(.top, snapshot.memos.isEmpty ? 0 : 4)
 
-            ForEach(filteredExternalReminderItems) { item in
+            ForEach(snapshot.externalItems) { item in
                 externalReminderRow(item)
             }
         }
@@ -475,7 +532,7 @@ struct MemoBrowserWindow: View {
                         Text(item.calendarTitle)
                             .memoBadge(tint: PopoverChrome.inkTertiary)
                         if let dueDate = item.dueDate {
-                            Label(deadlineLabel(dueDate), systemImage: "calendar")
+                            Label(memoDeadlineLabel(dueDate), systemImage: "calendar")
                                 .memoBadge(tint: dueDate < Date() ? .red : .orange)
                         }
                         if item.url != nil {
@@ -515,78 +572,15 @@ struct MemoBrowserWindow: View {
     }
 
     private func memoRow(_ memo: Memo) -> some View {
-        Button {
-            selectedMemoID = memo.id
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Text(rowIcon(for: memo))
-                    .font(.system(size: 20))
-                    .frame(width: 34, height: 34)
-                    .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Text(rowTitle(for: memo))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(memo.isCompletedValue ? PopoverChrome.inkTertiary : PopoverChrome.ink)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    HStack(spacing: 8) {
-                        relativeTime(memo.updatedAt)
-                        if memo.isPinned {
-                            Label("고정됨", systemImage: "pin.fill")
-                                .memoBadge(tint: PopoverChrome.accent)
-                        }
-                        if let deadline = memo.deadline {
-                            Label(deadlineLabel(deadline), systemImage: "calendar")
-                                .memoBadge(tint: deadline < Date() ? .red : .orange)
-                        }
-                        if memo.reminderOffsetMinutes != nil {
-                            Image(systemName: "bell")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.green)
-                        }
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                Menu {
-                    Button(memo.isPinned ? "고정 해제" : "고정") {
-                        togglePinned(memo)
-                    }
-                    Button(memo.isCompletedValue ? "완료 해제" : "완료") {
-                        toggleCompleted(memo)
-                    }
-                    Button(memo.isArchivedValue ? "보관 해제" : "보관") {
-                        toggleArchived(memo)
-                    }
-                    Divider()
-                    Button("삭제", role: .destructive) {
-                        delete(memo)
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(PopoverChrome.inkTertiary)
-                        .frame(width: 22, height: 22)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .frame(width: 22)
-            }
-            .padding(14)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
-                    .stroke(
-                        selectedMemoID == memo.id || PopoverChrome.isGamePixel || PopoverChrome.isWineLantern ? (selectedMemoID == memo.id ? PopoverChrome.accent : PopoverChrome.border) : Color.clear,
-                        lineWidth: selectedMemoID == memo.id ? 1.4 : PopoverChrome.borderWidth
-                    )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
-        }
-        .buttonStyle(.plain)
+        MemoRowView(
+            memo: memo,
+            isSelected: selectedMemoID == memo.id,
+            onSelect: { selectedMemoID = memo.id },
+            onTogglePinned: { togglePinned(memo) },
+            onToggleCompleted: { toggleCompleted(memo) },
+            onToggleArchived: { toggleArchived(memo) },
+            onDelete: { delete(memo) }
+        )
     }
 
     private var newMemoButton: some View {
@@ -611,8 +605,8 @@ struct MemoBrowserWindow: View {
     }
 
     @ViewBuilder
-    private var detailPane: some View {
-        if let memo = selectedMemo {
+    private func detailPane(_ snapshot: Snapshot) -> some View {
+        if let memo = selectedMemo(in: snapshot) {
             memoDetail(memo)
         } else {
             VStack(spacing: 12) {
@@ -635,8 +629,10 @@ struct MemoBrowserWindow: View {
             TextEditor(text: Binding(
                 get: { memo.content },
                 set: { newValue in
+                    // 대입은 즉시(메모리) — 목록 제목·글자 수가 실시간으로 따라온다.
+                    // 비싼 뒷정리(fsync·알림 재예약)만 입력이 멎은 뒤로 미룬다.
                     memo.content = newValue
-                    persist(memo)
+                    scheduleContentSave(for: memo)
                 }
             ))
             .font(.system(size: 18, weight: .regular, design: .rounded))
@@ -806,7 +802,7 @@ struct MemoBrowserWindow: View {
         HStack(spacing: 12) {
             Label(formatDate(memo.createdAt), systemImage: "calendar")
             if let deadline = memo.deadline {
-                Label(deadlineLabel(deadline), systemImage: "calendar.badge.clock")
+                Label(memoDeadlineLabel(deadline), systemImage: "calendar.badge.clock")
             }
             Spacer()
             Text("\(memo.content.count)자 · 자동 저장됨")
@@ -817,45 +813,17 @@ struct MemoBrowserWindow: View {
         .padding(.vertical, 14)
     }
 
-    private func rowTitle(for memo: Memo) -> String {
-        let trimmed = memo.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "새 메모" }
-        return trimmed.components(separatedBy: .newlines).first ?? trimmed
-    }
-
-    private func rowIcon(for memo: Memo) -> String {
-        if memo.isArchivedValue { return "📦" }
-        if memo.isCompletedValue { return "✅" }
-        if memo.isPinned { return MemoIcon.pinnedIcon }
-        return memo.icon ?? MemoIcon.defaultIcon
-    }
-
-    private func relativeTime(_ date: Date) -> some View {
-        HStack(spacing: 0) {
-            Text(date, style: .relative)
-            Text(" 전")
-        }
-        .font(.system(size: 12, weight: .semibold, design: .rounded))
-        .foregroundStyle(PopoverChrome.inkTertiary)
-    }
-
     private func formatDate(_ date: Date) -> String {
+        Self.detailDateFormatter.string(from: date)
+    }
+
+    private static let detailDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-
-    private func deadlineLabel(_ date: Date) -> String {
-        if Calendar.current.isDateInToday(date) {
-            return "오늘 마감"
-        }
-        if date < Date() {
-            return "마감 지남"
-        }
-        return "\(date.formatted(date: .abbreviated, time: .omitted)) 마감"
-    }
+        return formatter
+    }()
 
     private func sortExternalReminderItems(_ items: [ReminderListItem]) -> [ReminderListItem] {
         switch sort {
@@ -979,6 +947,28 @@ struct MemoBrowserWindow: View {
         }
     }
 
+    /// 본문 입력이 멎은 뒤에만 persist() 를 돌린다.
+    /// persist() 한 번은 SQLite fsync + 알림 XPC 라 타건마다 부르면 메인 스레드가 막힌다.
+    private func scheduleContentSave(for memo: Memo) {
+        contentSaveTask?.cancel()
+        pendingContentMemo = memo
+        contentSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            flushPendingContentSave()
+        }
+    }
+
+    /// 저장이 밀린 채로 화면을 떠나지 않도록 강제 기록한다.
+    private func flushPendingContentSave() {
+        contentSaveTask?.cancel()
+        contentSaveTask = nil
+        guard let memo = pendingContentMemo else { return }
+        pendingContentMemo = nil
+        guard memo.modelContext != nil else { return }
+        persist(memo)
+    }
+
     private func persist(_ memo: Memo, syncLinkedReminder: Bool = false) {
         memo.updatedAt = Date()
         scheduleLocalReminder(for: memo)
@@ -1002,7 +992,7 @@ struct MemoBrowserWindow: View {
         NotificationManager.shared.scheduleMemoReminder(
             identifier: identifier,
             title: "메모 마감 알림",
-            body: rowTitle(for: memo),
+            body: memoRowTitle(memo),
             at: fireDate
         )
     }
@@ -1081,6 +1071,11 @@ struct MemoBrowserWindow: View {
 
     private func delete(_ memo: Memo) {
         let deletedID = memo.id
+        if pendingContentMemo?.id == deletedID {
+            contentSaveTask?.cancel()
+            contentSaveTask = nil
+            pendingContentMemo = nil
+        }
         NotificationManager.shared.cancel(identifier: localReminderIdentifier(for: memo))
         if memo.isLinkedToRemindersValue {
             try? MemoReminderLinkService.shared.removeReminder(for: memo)
@@ -1089,8 +1084,117 @@ struct MemoBrowserWindow: View {
         try? modelContext.save()
         loadExternalReminderItems()
         if selectedMemoID == deletedID {
-            selectedMemoID = filteredMemos.first?.id
+            // nil 로 두면 다음 스냅샷의 onChange 가 첫 항목으로 보정한다.
+            selectedMemoID = nil
         }
+    }
+}
+
+private func memoRowTitle(_ memo: Memo) -> String {
+    let trimmed = memo.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return "새 메모" }
+    return trimmed.components(separatedBy: .newlines).first ?? trimmed
+}
+
+private func memoRowIcon(_ memo: Memo) -> String {
+    if memo.isArchivedValue { return "📦" }
+    if memo.isCompletedValue { return "✅" }
+    if memo.isPinned { return MemoIcon.pinnedIcon }
+    return memo.icon ?? MemoIcon.defaultIcon
+}
+
+private func memoDeadlineLabel(_ date: Date) -> String {
+    if Calendar.current.isDateInToday(date) {
+        return "오늘 마감"
+    }
+    if date < Date() {
+        return "마감 지남"
+    }
+    return "\(date.formatted(date: .abbreviated, time: .omitted)) 마감"
+}
+
+/// 행을 독립 View 로 두면 SwiftUI 가 메모별로 재렌더 범위를 좁힐 수 있다.
+private struct MemoRowView: View {
+    let memo: Memo
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onTogglePinned: () -> Void
+    let onToggleCompleted: () -> Void
+    let onToggleArchived: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(memoRowIcon(memo))
+                    .font(.system(size: 20))
+                    .frame(width: 34, height: 34)
+                    .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(memoRowTitle(memo))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(memo.isCompletedValue ? PopoverChrome.inkTertiary : PopoverChrome.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 8) {
+                        relativeTime(memo.updatedAt)
+                        if memo.isPinned {
+                            Label("고정됨", systemImage: "pin.fill")
+                                .memoBadge(tint: PopoverChrome.accent)
+                        }
+                        if let deadline = memo.deadline {
+                            Label(memoDeadlineLabel(deadline), systemImage: "calendar")
+                                .memoBadge(tint: deadline < Date() ? .red : .orange)
+                        }
+                        if memo.reminderOffsetMinutes != nil {
+                            Image(systemName: "bell")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Menu {
+                    Button(memo.isPinned ? "고정 해제" : "고정", action: onTogglePinned)
+                    Button(memo.isCompletedValue ? "완료 해제" : "완료", action: onToggleCompleted)
+                    Button(memo.isArchivedValue ? "보관 해제" : "보관", action: onToggleArchived)
+                    Divider()
+                    Button("삭제", role: .destructive, action: onDelete)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .frame(width: 22, height: 22)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .frame(width: 22)
+            }
+            .padding(14)
+            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                    .stroke(
+                        isSelected || PopoverChrome.isGamePixel || PopoverChrome.isWineLantern ? (isSelected ? PopoverChrome.accent : PopoverChrome.border) : Color.clear,
+                        lineWidth: isSelected ? 1.4 : PopoverChrome.borderWidth
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func relativeTime(_ date: Date) -> some View {
+        HStack(spacing: 0) {
+            Text(date, style: .relative)
+            Text(" 전")
+        }
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .foregroundStyle(PopoverChrome.inkTertiary)
     }
 }
 
