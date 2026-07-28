@@ -11,6 +11,8 @@ final class AchievementGoalRecord {
     var targetCount: Int
     var targetValueText: String?
     var periodText: String?
+    /// 사용자가 지정한 마감일. 지정하지 않으면 nil이고, 기한 지남 표시도 하지 않는다.
+    var dueDate: Date?
     var rewardText: String
     var colorHex: String
     var roleName: String
@@ -30,6 +32,7 @@ final class AchievementGoalRecord {
         targetCount: Int = 1,
         targetValueText: String? = nil,
         periodText: String? = nil,
+        dueDate: Date? = nil,
         rewardText: String = "",
         colorHex: String = "#E87333",
         roleName: String = "나",
@@ -47,6 +50,7 @@ final class AchievementGoalRecord {
         self.targetCount = max(1, targetCount)
         self.targetValueText = targetValueText
         self.periodText = periodText
+        self.dueDate = dueDate
         self.rewardText = rewardText
         self.colorHex = colorHex
         self.roleName = roleName
