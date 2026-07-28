@@ -61,9 +61,10 @@ struct FocusNudgeContext: Sendable {
     let observedSeconds: Int
     let coveredSeconds: Int
 
-    /// 오늘 예정된 할 일(메모) 집계.
+    /// 오늘 예정된 할 일(메모) 집계. 마감이 지난 이전 날짜의 할 일은 포함하지 않는다.
     let openTaskCount: Int
     let totalTaskCount: Int
+    /// 오늘을 포함해 현재 시각까지 마감이 지났지만 완료하지 않은 할 일.
     let overdueTaskCount: Int
     let nextTask: TaskCandidate?
 
@@ -230,6 +231,18 @@ enum FocusNudgeFormat {
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.setLocalizedDateFormatFromTemplate("jm")
         return formatter.string(from: date)
+    }
+
+    static func taskProgress(remaining: Int, total: Int) -> String {
+        total > 0 ? "\(remaining)/\(total)" : "—"
+    }
+
+    static func taskCaption(remaining: Int, total: Int, overdue: Int) -> String {
+        if overdue > 0 {
+            return "남음 \(remaining)개 · 마감 지남 \(overdue)개"
+        }
+        guard total > 0 else { return "메모에 등록해보세요" }
+        return remaining > 0 ? "남음 \(remaining)개" : "모두 끝냈어요"
     }
 }
 
@@ -662,7 +675,7 @@ enum FocusNudgeSnapshotLoader {
         )
     }
 
-    /// 오늘 예정된 할 일. 마감이 지났는데 아직 안 끝낸 것도 오늘 처리 대상으로 본다.
+    /// 오늘 예정된 할 일과 아직 끝내지 않은 마감 초과 할 일을 서로 분리해 집계한다.
     private static func taskSummary(
         dayStart: Date,
         dayEnd: Date,
@@ -678,35 +691,39 @@ enum FocusNudgeSnapshotLoader {
         // Memo 의 날짜 필드는 옵셔널이라 #Predicate 로 다루기 번거롭고, 메모 수는 많지 않으므로 메모리에서 걸러낸다.
         let memos = ((try? modelContext.fetch(FetchDescriptor<Memo>())) ?? []).filter { !$0.isArchivedValue }
 
-        var scoped: [ScopedTask] = []
+        var todayTasks: [ScopedTask] = []
+        var candidates: [ScopedTask] = []
         for memo in memos {
             let todayDates = [memo.startDate, memo.deadline]
                 .compactMap { $0 }
                 .filter { $0 >= dayStart && $0 < dayEnd }
             if let at = todayDates.min() {
-                scoped.append(
-                    ScopedTask(
-                        memo: memo,
-                        at: at,
-                        isOverdue: (memo.deadline ?? .distantFuture) < now
-                    )
+                let task = ScopedTask(
+                    memo: memo,
+                    at: at,
+                    isOverdue: (memo.deadline ?? .distantFuture) < now
                 )
+                todayTasks.append(task)
+                candidates.append(task)
             } else if let deadline = memo.deadline, deadline < dayStart, !memo.isCompletedValue {
-                scoped.append(ScopedTask(memo: memo, at: deadline, isOverdue: true))
+                candidates.append(ScopedTask(memo: memo, at: deadline, isOverdue: true))
             }
         }
 
-        let open = scoped.filter { !$0.memo.isCompletedValue }
-        let upcoming = open
+        let openTodayTasks = todayTasks.filter { !$0.memo.isCompletedValue }
+        let openCandidates = candidates.filter { !$0.memo.isCompletedValue }
+        let upcoming = openCandidates
             .filter { ($0.at ?? .distantPast) >= now }
             .min { ($0.at ?? .distantFuture) < ($1.at ?? .distantFuture) }
         // 다가오는 게 없으면 지난 것 중 가장 최근을 집는다.
-        let next = upcoming ?? open.max { ($0.at ?? .distantPast) < ($1.at ?? .distantPast) }
+        let next = upcoming ?? openCandidates.max {
+            ($0.at ?? .distantPast) < ($1.at ?? .distantPast)
+        }
 
         return (
-            open: open.count,
-            total: scoped.count,
-            overdue: open.filter(\.isOverdue).count,
+            open: openTodayTasks.count,
+            total: todayTasks.count,
+            overdue: openCandidates.filter(\.isOverdue).count,
             next: next.map {
                 FocusNudgeContext.TaskCandidate(
                     title: taskTitle($0.memo.content),
