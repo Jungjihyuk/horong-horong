@@ -1398,7 +1398,7 @@ private enum AchievementDataBuilder {
                     AchievementTimelineTodo(
                         id: memo.id,
                         memoID: memo.id,
-                        title: shortText(memo.content, limit: 15),
+                        title: shortText(memo.content, limit: 200),
                         meta: todoMetaText(for: memo),
                         isCompleted: memo.isCompletedValue,
                         isFuture: todoStatus(for: memo, referenceDate: referenceDate) == .future
@@ -5196,6 +5196,7 @@ private struct AchievementGoalTimelineView: View {
     let items: [AchievementTimelineItem]
     let onMoveTodo: (UUID, Date) -> Void
     @State private var expandedItemIDs = Set<UUID>()
+    @State private var hoveredColumnID: UUID?
 
     private let columnWidth: CGFloat = 132
     private let axisY: CGFloat = 86
@@ -5250,8 +5251,13 @@ private struct AchievementGoalTimelineView: View {
                                     expandedItemIDs.insert(item.id)
                                 }
                             },
-                            onMoveTodo: onMoveTodo
+                            onMoveTodo: onMoveTodo,
+                            onTodoHoverChange: { hovering in
+                                hoveredColumnID = hovering ? item.id : (hoveredColumnID == item.id ? nil : hoveredColumnID)
+                            }
                         )
+                        // 상세 패널이 옆 컬럼 카드에 가리지 않도록 컬럼 자체를 앞으로 끌어올린다.
+                        .zIndex(hoveredColumnID == item.id ? 1 : 0)
                     }
                 }
                 .frame(width: contentWidth, height: timelineHeight - 10, alignment: .topLeading)
@@ -5285,10 +5291,16 @@ private struct AchievementTimelineColumn: View {
     let isLast: Bool
     let onToggleExpanded: () -> Void
     let onMoveTodo: (UUID, Date) -> Void
+    var onTodoHoverChange: (Bool) -> Void = { _ in }
     @State private var isDropTargeted = false
 
     private var todoStep: CGFloat {
         todoBoxHeight + todoSpacing
+    }
+
+    /// 할일 카드가 쓸 수 있는 안쪽 폭. 컬럼이 넓어지면 카드도 같이 넓어져 제목이 덜 잘린다.
+    private var todoBoxContentWidth: CGFloat {
+        max(94, columnWidth - 12 - 16)
     }
 
     var body: some View {
@@ -5323,7 +5335,11 @@ private struct AchievementTimelineColumn: View {
 
                 VStack(spacing: 8) {
                     ForEach(visibleTodos) { todo in
-                        AchievementTimelineTodoBox(todo: todo)
+                        AchievementTimelineTodoBox(
+                            todo: todo,
+                            width: todoBoxContentWidth,
+                            onHoverChange: onTodoHoverChange
+                        )
                     }
 
                     if hiddenTodoCount > 0 || isExpanded {
@@ -5337,7 +5353,7 @@ private struct AchievementTimelineColumn: View {
                             }
                             .font(.system(size: 10.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.accent)
-                            .frame(width: 94, height: moreButtonHeight)
+                            .frame(width: todoBoxContentWidth, height: moreButtonHeight)
                             .background(PopoverChrome.accentSoft.opacity(0.55), in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -5462,17 +5478,26 @@ private struct AchievementTimelineBadge: View {
 
 private struct AchievementTimelineTodoBox: View {
     let todo: AchievementTimelineTodo
+    var width: CGFloat = 94
+    var onHoverChange: (Bool) -> Void = { _ in }
+
+    @State private var isHovering = false
+    @State private var hoverTask: Task<Void, Never>?
+
+    private static let hoverDelay: Duration = .milliseconds(500)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
+            HStack(alignment: .top, spacing: 5) {
                 Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
                 Text(todo.title)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
             if !todo.meta.isEmpty {
                 Text(todo.meta)
@@ -5481,7 +5506,7 @@ private struct AchievementTimelineTodoBox: View {
                     .lineLimit(1)
             }
         }
-        .frame(width: 94, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(height: 54, alignment: .leading)
@@ -5490,9 +5515,73 @@ private struct AchievementTimelineTodoBox: View {
             RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
                 .stroke(todo.isCompleted ? PopoverChrome.accent.opacity(0.55) : PopoverChrome.border, style: StrokeStyle(lineWidth: 1, dash: todo.isCompleted ? [] : [3, 3]))
         )
-        .onDrag {
-            NSItemProvider(object: AchievementTimelineDragPayload.string(for: todo.memoID) as NSString)
+        .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+        .overlay(alignment: .topLeading) {
+            if isHovering {
+                hoverDetail
+                    .offset(y: -6)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
         }
+        .zIndex(isHovering ? 1 : 0)
+        .onHover { hovering in
+            hoverTask?.cancel()
+            guard hovering else {
+                setHovering(false)
+                return
+            }
+            hoverTask = Task {
+                try? await Task.sleep(for: Self.hoverDelay)
+                guard !Task.isCancelled else { return }
+                setHovering(true)
+            }
+        }
+        .onDisappear {
+            hoverTask?.cancel()
+        }
+        .onDrag {
+            hoverTask?.cancel()
+            setHovering(false)
+            return NSItemProvider(object: AchievementTimelineDragPayload.string(for: todo.memoID) as NSString)
+        }
+    }
+
+    private func setHovering(_ hovering: Bool) {
+        guard isHovering != hovering else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            isHovering = hovering
+        }
+        onHoverChange(hovering)
+    }
+
+    /// 카드와 확실히 구분되도록 어두운 배경으로 띄우는 상세 패널.
+    /// 카드는 크림/화이트 계열이라 같은 색을 쓰면 겹쳐도 경계가 보이지 않는다.
+    private var hoverDetail: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(todo.title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.96))
+                .fixedSize(horizontal: false, vertical: true)
+            if !todo.meta.isEmpty {
+                Text(todo.meta)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(width: max(width, 210), alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                .fill(Color(red: 0.16, green: 0.13, blue: 0.11))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                .stroke(PopoverChrome.accent.opacity(0.65), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.34), radius: 14, x: 0, y: 6)
     }
 }
 
