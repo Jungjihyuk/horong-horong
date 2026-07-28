@@ -581,6 +581,7 @@ enum Constants {
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
+        static let achievementVisionOrder = "achievement.visionOrder"
         static let menubarLabelStyle = "menubar.labelStyle"
         static let menubarTimeStyle = "menubar.timeStyle"
         static let menubarIcon = "menubar.icon"
@@ -669,6 +670,9 @@ enum Constants {
     static let achievementMonthlySuggestionCountRange = 1...6
     static let defaultAchievementJourneyMaxFlagCount = 5
     static let achievementJourneyMaxFlagCountRange = 1...8
+    /// 비전 선택 목록의 행 높이·간격. 드래그 재정렬이 이동 거리를 계산할 때 함께 쓴다.
+    static let achievementVisionRowHeight: CGFloat = 34
+    static let achievementVisionRowSpacing: CGFloat = 8
 
     // MARK: - 뉴스 큐레이션 설정
     static var defaultNewsRunnerPath: String {

@@ -261,6 +261,12 @@ private enum AchievementJourneyFlagStore {
             ids.append(nil)
         }
 
+        if let goalID {
+            // 같은 월간 목표는 하나의 깃발에만 지정한다.
+            for (offset, existing) in ids.enumerated() where existing == goalID {
+                ids[offset] = nil
+            }
+        }
         ids[index] = goalID
 
         let encoded = ids
@@ -273,6 +279,28 @@ private enum AchievementJourneyFlagStore {
     }
 
     private static func flagSelections() -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+    }
+}
+
+private enum AchievementVisionOrderStore {
+    private static var defaultsKey: String { Constants.AppStorageKey.achievementVisionOrder }
+
+    /// 역할별로 사용자가 지정한 비전 순서(UUID 목록)를 돌려준다.
+    static func order(for roleID: String) -> [UUID] {
+        guard let value = orders()[roleID] else { return [] }
+        return value
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
+    }
+
+    static func setOrder(_ ids: [UUID], for roleID: String) {
+        var orders = orders()
+        orders[roleID] = ids.map(\.uuidString).joined(separator: ",")
+        UserDefaults.standard.set(orders, forKey: defaultsKey)
+    }
+
+    private static func orders() -> [String: String] {
         UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
     }
 }
@@ -1839,6 +1867,11 @@ struct AchievementDetailWindow: View {
     @State private var selectedJourneyVisionID: UUID?
     @State private var selectedJourneyFlagIndex: Int?
     @State private var journeyFlagRefreshID = UUID()
+    @State private var visionOrderRefreshID = UUID()
+    @State private var visionDragID: UUID?
+    @State private var visionDragTranslation: CGFloat = 0
+    @State private var visionDragStartIndex = 0
+    @State private var visionDragOrder: [UUID] = []
 
     init(initialScreenshotState: AchievementDetailScreenshotState? = nil) {
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
@@ -2630,9 +2663,7 @@ struct AchievementDetailWindow: View {
                         AchievementJourneyScene(
                             role: displayRole,
                             destinationImageURL: imageURL,
-                            currentGoal: journeyCurrentGoal,
-                            milestones: journeyFlagSlots,
-                            progress: journeyProgress
+                            milestones: journeyFlagSlots
                         )
                         .frame(height: 390)
 
@@ -2726,43 +2757,117 @@ struct AchievementDetailWindow: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showsJourneyVisionOptions, arrowEdge: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("비전 선택")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    let orderedVisions = visionsInDragOrder(visions)
 
-                        ForEach(visions) { vision in
-                            Button {
-                                selectedJourneyVisionID = vision.id
-                                showsJourneyVisionOptions = false
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: selectedJourneyVisionID == vision.id ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(selectedJourneyVisionID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
-                                    Text(vision.title)
-                                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                                        .foregroundStyle(PopoverChrome.ink)
-                                        .lineLimit(1)
-                                    Spacer(minLength: 8)
+                    VStack(alignment: .leading, spacing: Constants.achievementVisionRowSpacing) {
+                        HStack {
+                            Text("비전 선택")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                            Spacer(minLength: 8)
+                            Text("손잡이를 끌어 순서 변경")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                        }
+
+                        ForEach(Array(orderedVisions.enumerated()), id: \.element.id) { index, vision in
+                            HStack(spacing: 4) {
+                                Button {
+                                    selectedJourneyVisionID = vision.id
+                                    showsJourneyVisionOptions = false
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: selectedJourneyVisionID == vision.id ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(selectedJourneyVisionID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                                        Text(vision.title)
+                                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                                            .foregroundStyle(PopoverChrome.ink)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 8)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .frame(height: Constants.achievementVisionRowHeight)
+                                    .background(
+                                        selectedJourneyVisionID == vision.id ? PopoverChrome.accentSoft.opacity(0.68) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                                    )
+                                    .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
                                 }
-                                .padding(.horizontal, 10)
-                                .frame(height: 34)
-                                .background(
-                                    selectedJourneyVisionID == vision.id ? PopoverChrome.accentSoft.opacity(0.68) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
-                                )
-                                .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                                .buttonStyle(.plain)
+                                .allowsHitTesting(visionDragID == nil)
+
+                                visionDragHandle(for: vision, at: index, in: role, total: orderedVisions.count)
                             }
-                            .buttonStyle(.plain)
+                            .background(
+                                RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+                                    .fill(visionDragID == vision.id ? PopoverChrome.surfaceAlt.opacity(0.9) : Color.clear)
+                                    .shadow(color: .black.opacity(visionDragID == vision.id ? 0.18 : 0), radius: 6, x: 0, y: 2)
+                            )
+                            .offset(y: visionRowOffset(at: index, id: vision.id))
+                            .zIndex(visionDragID == vision.id ? 1 : 0)
                         }
                     }
                     .padding(12)
-                    .frame(width: 280)
+                    .frame(width: 324)
                     .background(PopoverChrome.card)
                 }
             }
         }
+    }
+
+    /// 드래그 중에는 임시 순서(visionDragOrder)를, 아니면 저장된 순서를 그대로 쓴다.
+    private func visionsInDragOrder(_ visions: [AchievementGoal]) -> [AchievementGoal] {
+        guard !visionDragOrder.isEmpty else { return visions }
+        let byID = Dictionary(visions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let reordered = visionDragOrder.compactMap { byID[$0] }
+        guard reordered.count == visions.count else { return visions }
+        return reordered
+    }
+
+    /// 끌고 있는 행만 손가락을 따라가고, 나머지는 재배열 애니메이션으로 자리를 비켜준다.
+    private func visionRowOffset(at index: Int, id: UUID) -> CGFloat {
+        guard visionDragID == id else { return 0 }
+        let stride = Constants.achievementVisionRowHeight + Constants.achievementVisionRowSpacing
+        return visionDragTranslation - CGFloat(index - visionDragStartIndex) * stride
+    }
+
+    private func visionDragHandle(for vision: AchievementGoal, at index: Int, in role: AchievementRole, total: Int) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(visionDragID == vision.id ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+            .frame(width: 26, height: Constants.achievementVisionRowHeight)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        if visionDragID == nil {
+                            visionDragID = vision.id
+                            visionDragStartIndex = index
+                            visionDragOrder = visionGoals(for: role).map(\.id)
+                        }
+                        visionDragTranslation = value.translation.height
+
+                        let stride = Constants.achievementVisionRowHeight + Constants.achievementVisionRowSpacing
+                        let steps = Int((value.translation.height / stride).rounded())
+                        let target = min(max(0, visionDragStartIndex + steps), total - 1)
+                        guard let current = visionDragOrder.firstIndex(of: vision.id), current != target else { return }
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            let moved = visionDragOrder.remove(at: current)
+                            visionDragOrder.insert(moved, at: target)
+                        }
+                    }
+                    .onEnded { _ in
+                        if !visionDragOrder.isEmpty {
+                            AchievementVisionOrderStore.setOrder(visionDragOrder, for: role.id)
+                            visionOrderRefreshID = UUID()
+                        }
+                        visionDragID = nil
+                        visionDragTranslation = 0
+                        visionDragStartIndex = 0
+                        visionDragOrder = []
+                    }
+            )
     }
 
     @ViewBuilder
@@ -2848,16 +2953,20 @@ struct AchievementDetailWindow: View {
                     .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
             } else {
                 ForEach(selectedJourneyMonthlyGoals) { goal in
+                    let slots = journeyFlagSlots
+                    let isUsedElsewhere = slots.enumerated().contains { $0.offset != index && $0.element?.id == goal.id }
                     Button {
                         setJourneyFlagGoal(goal, at: index)
                     } label: {
                         journeyFlagPickerRow(
                             title: "\(goal.emoji) \(goal.title)",
                             systemImage: "target",
-                            isSelected: journeyFlagSlots[index]?.id == goal.id
+                            isSelected: slots[index]?.id == goal.id,
+                            isDisabled: isUsedElsewhere
                         )
                     }
                     .buttonStyle(.plain)
+                    .disabled(isUsedElsewhere)
                 }
             }
         }
@@ -2866,16 +2975,21 @@ struct AchievementDetailWindow: View {
         .background(PopoverChrome.card)
     }
 
-    private func journeyFlagPickerRow(title: String, systemImage: String, isSelected: Bool) -> some View {
+    private func journeyFlagPickerRow(title: String, systemImage: String, isSelected: Bool, isDisabled: Bool = false) -> some View {
         HStack(spacing: 8) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : systemImage)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(isSelected ? PopoverChrome.accent : PopoverChrome.inkTertiary)
             Text(title)
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
+                .foregroundStyle(isDisabled ? PopoverChrome.inkTertiary : PopoverChrome.ink)
                 .lineLimit(1)
             Spacer(minLength: 8)
+            if isDisabled {
+                Text("다른 깃발에 지정됨")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 34)
@@ -2920,20 +3034,22 @@ struct AchievementDetailWindow: View {
                                     )
                                 )
                         } else {
-                            VStack(spacing: 10) {
-                                Text(role.emoji)
-                                    .font(.system(size: 54))
-                                Text(role.name)
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                            }
-                            .padding(.horizontal, 20)
+                            Image("AchievementJourneyDefault")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 270, height: 210)
+                                .clipped()
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [.clear, .black.opacity(0.56)],
+                                        startPoint: .center,
+                                        endPoint: .bottom
+                                    )
+                                )
                         }
                     }
 
-                Text(imageURL == nil ? "페르소나 이미지" : role.name)
+                Text(role.name)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.92))
                     .padding(.horizontal, 14)
@@ -3025,20 +3141,30 @@ struct AchievementDetailWindow: View {
                 AchievementJourneyStat(label: "완료한 일", value: "\(journeyLinkedMemos.filter(\.isCompletedValue).count)")
             }
 
-            if let goal = journeyCurrentGoal {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(goal.title)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
-                        .lineLimit(2)
-                    AchievementProgressBar(progress: goal.progress, color: goal.color)
-                    Text(journeyProgressCaption(for: goal))
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkTertiary)
-                        .lineLimit(1)
+            let remainingGoals = journeyRemainingMonthlyGoals
+            let completedGoals = journeyCompletedMonthlyGoals
+
+            if !remainingGoals.isEmpty {
+                journeyGoalSectionHeader(title: "남은 월간 목표", count: remainingGoals.count)
+                ForEach(remainingGoals) { goal in
+                    journeyRemainingGoalRow(goal)
                 }
-                .padding(12)
-                .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+            }
+
+            if !completedGoals.isEmpty {
+                journeyGoalSectionHeader(title: "완료한 월간 목표", count: completedGoals.count)
+                ForEach(completedGoals) { goal in
+                    journeyCompletedGoalRow(goal)
+                }
+            }
+
+            if remainingGoals.isEmpty && completedGoals.isEmpty {
+                Text("선택한 비전에 연결된 월간 목표가 없습니다.")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -3123,6 +3249,57 @@ struct AchievementDetailWindow: View {
         }
     }
 
+    private func journeyGoalSectionHeader(title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            Text("\(count)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+    }
+
+    private func journeyRemainingGoalRow(_ goal: AchievementGoal) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(goal.title)
+                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(2)
+            AchievementProgressBar(progress: goal.progress, color: goal.color)
+            Text(journeyProgressCaption(for: goal))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+    }
+
+    private func journeyCompletedGoalRow(_ goal: AchievementGoal) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(PopoverChrome.accent)
+            Text(goal.title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(goal.done)/\(goal.total)")
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 36)
+        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+    }
+
     private func journeyProgressCaption(for goal: AchievementGoal) -> String {
         let progressTarget = goal.cadence == "월간" ? "연결된 주간 목표 진행" : "연결된 일 진행"
         return "\(goal.done)/\(goal.total) · \(progressTarget)"
@@ -3133,7 +3310,8 @@ struct AchievementDetailWindow: View {
     }
 
     private func visionGoals(for role: AchievementRole) -> [AchievementGoal] {
-        goals
+        _ = visionOrderRefreshID
+        let sorted = goals
             .filter { $0.cadence == "비전" && $0.roleName == role.id }
             .sorted { lhs, rhs in
                 if lhs.recordDate == rhs.recordDate {
@@ -3141,6 +3319,23 @@ struct AchievementDetailWindow: View {
                 }
                 return lhs.recordDate > rhs.recordDate
             }
+
+        // 사용자가 지정한 순서를 먼저 배치하고, 새로 생긴 비전은 뒤에 붙인다.
+        let storedOrder = AchievementVisionOrderStore.order(for: role.id)
+        guard !storedOrder.isEmpty else { return sorted }
+        let rank = Dictionary(
+            storedOrder.enumerated().map { ($0.element, $0.offset) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return sorted.enumerated().sorted { lhs, rhs in
+            let lhsRank = rank[lhs.element.id] ?? Int.max
+            let rhsRank = rank[rhs.element.id] ?? Int.max
+            if lhsRank == rhsRank {
+                return lhs.offset < rhs.offset
+            }
+            return lhsRank < rhsRank
+        }
+        .map(\.element)
     }
 
     private func selectedJourneyVision(for role: AchievementRole) -> AchievementGoal? {
@@ -3192,17 +3387,15 @@ struct AchievementDetailWindow: View {
         }
         let storedIDs = AchievementJourneyFlagStore.goalIDs(for: key, maxCount: clampedJourneyMaxFlagCount)
         let goalsByID = Dictionary(uniqueKeysWithValues: selectedJourneyMonthlyGoals.map { ($0.id, $0) })
-        var slots = storedIDs.map { id in
-            id.flatMap { goalsByID[$0] }
+        var usedIDs = Set<UUID>()
+        var slots = storedIDs.map { id -> AchievementGoal? in
+            guard let goal = id.flatMap({ goalsByID[$0] }) else { return nil }
+            return usedIDs.insert(goal.id).inserted ? goal : nil
         }
         while slots.count < clampedJourneyMaxFlagCount {
             slots.append(nil)
         }
         return Array(slots.prefix(clampedJourneyMaxFlagCount))
-    }
-
-    private var journeyFlagGoals: [AchievementGoal] {
-        journeyFlagSlots.compactMap { $0 }
     }
 
     private func setJourneyFlagGoal(_ goal: AchievementGoal?, at index: Int) {
@@ -3247,25 +3440,34 @@ struct AchievementDetailWindow: View {
         return ""
     }
 
-    private var journeyCurrentGoal: AchievementGoal? {
-        if let selectedGoal,
-           journeyFlagGoals.contains(where: { $0.id == selectedGoal.id }) {
-            return selectedGoal
-        }
-        return journeyFlagGoals.max { lhs, rhs in
-            if lhs.progress == rhs.progress {
-                return lhs.done < rhs.done
+    /// 여정 깃발에 지정된 순서를 우선하고, 지정되지 않은 목표는 뒤에 붙인다.
+    private var journeyMonthlyGoalsInJourneyOrder: [AchievementGoal] {
+        let flagOrder = Dictionary(
+            journeyFlagSlots.enumerated().compactMap { index, goal in
+                goal.map { ($0.id, index) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return selectedJourneyMonthlyGoals.sorted { lhs, rhs in
+            let lhsOrder = flagOrder[lhs.id] ?? Int.max
+            let rhsOrder = flagOrder[rhs.id] ?? Int.max
+            if lhsOrder == rhsOrder {
+                return lhs.title < rhs.title
             }
-            return lhs.progress < rhs.progress
+            return lhsOrder < rhsOrder
         }
     }
 
-    private var journeyProgress: Double {
-        let measurableGoals = journeyFlagGoals.filter { $0.total > 0 }
-        guard !measurableGoals.isEmpty else { return 0 }
-        let total = measurableGoals.reduce(0) { $0 + $1.total }
-        let done = measurableGoals.reduce(0) { $0 + min($1.done, $1.total) }
-        return min(1, Double(done) / Double(total))
+    private func isJourneyGoalComplete(_ goal: AchievementGoal) -> Bool {
+        goal.total > 0 && goal.done >= goal.total
+    }
+
+    private var journeyRemainingMonthlyGoals: [AchievementGoal] {
+        journeyMonthlyGoalsInJourneyOrder.filter { !isJourneyGoalComplete($0) }
+    }
+
+    private var journeyCompletedMonthlyGoals: [AchievementGoal] {
+        journeyMonthlyGoalsInJourneyOrder.filter { isJourneyGoalComplete($0) }
     }
 
     private var selectedRoleLinkedMemos: [Memo] {
@@ -3912,15 +4114,13 @@ struct AchievementDetailWindow: View {
 private struct AchievementJourneyScene: View {
     let role: AchievementRole
     let destinationImageURL: URL?
-    let currentGoal: AchievementGoal?
     let milestones: [AchievementGoal?]
-    let progress: Double
 
     var body: some View {
         TimelineView(.animation) { context in
             GeometryReader { proxy in
                 let size = proxy.size
-                let cappedPhase = walkerPhase(at: context.date)
+                let cappedPhase = walkerPhase
                 let walkerPoint = routePoint(at: cappedPhase, in: size)
                 let beamPoint = routePoint(at: min(1, cappedPhase + 0.08), in: size)
                 let destinationPoint = CGPoint(x: size.width - 72, y: size.height * 0.31)
@@ -3960,7 +4160,7 @@ private struct AchievementJourneyScene: View {
 
                     ForEach(Array(milestones.enumerated()), id: \.offset) { index, goal in
                         let point = routePoint(at: milestonePhase(index, total: milestones.count), in: size)
-                        AchievementJourneyMilestone(goal: goal, index: index, isLit: Double(index + 1) / Double(max(1, milestones.count)) <= max(progress, 0.08))
+                        AchievementJourneyMilestone(goal: goal, index: index, isLit: (slotFractions[index] ?? 0) >= 1)
                             .position(x: point.x, y: point.y - 54)
                     }
 
@@ -3995,10 +4195,34 @@ private struct AchievementJourneyScene: View {
         return trimmed.isEmpty ? "오늘의 일이 목적지로 이어진다" : trimmed
     }
 
-    private func walkerPhase(at date: Date) -> CGFloat {
+    /// 깃발 슬롯별 하위 목표 달성률. 비어 있는 슬롯은 nil.
+    private var slotFractions: [Double?] {
+        milestones.map { goal in
+            guard let goal else { return nil }
+            guard goal.total > 0 else { return goal.done > 0 ? 1 : 0 }
+            return min(1, Double(goal.done) / Double(goal.total))
+        }
+    }
+
+    /// 지정된 깃발을 순서대로 지나며, 각 구간을 해당 목표의 하위 목표 달성률만큼만 전진한다.
+    /// 하위 목표를 모두 달성한 깃발에서만 다음 구간으로 넘어간다.
+    private var walkerPhase: CGFloat {
         let startPhase: CGFloat = 0.04
-        let endPhase = max(startPhase, min(0.96, CGFloat(max(0, min(1, progress))) * 0.96))
-        return endPhase
+        var current = startPhase
+        let total = milestones.count
+
+        for (index, fraction) in slotFractions.enumerated() {
+            guard let fraction else { continue }
+            let target = milestonePhase(index, total: total)
+            guard target > current else { continue }
+            if fraction >= 1 {
+                current = target
+            } else {
+                return min(0.96, current + (target - current) * CGFloat(max(0, fraction)))
+            }
+        }
+
+        return min(0.96, current)
     }
 
     private var starPositions: [CGPoint] {
@@ -4203,7 +4427,7 @@ private struct AchievementJourneyScene: View {
     }
 
     private func unexploredFogLayer(in size: CGSize) -> some View {
-        let clampedProgress = CGFloat(max(0, min(1, progress)))
+        let clampedProgress = walkerPhase
         let width = size.width * max(0.18, 1 - clampedProgress + 0.08)
         let centerX = size.width - width / 2
 
@@ -4253,7 +4477,7 @@ private struct AchievementJourneyScene: View {
 
     private func completedRoutePath(in size: CGSize) -> Path {
         var path = Path()
-        let clampedProgress = CGFloat(max(0, min(1, progress)))
+        let clampedProgress = walkerPhase
         path.move(to: routePoint(at: 0, in: size))
         let steps = max(2, Int(clampedProgress * 40))
         for step in 1...steps {
@@ -4485,8 +4709,11 @@ private struct AchievementJourneyDestination: View {
                         .frame(width: 62, height: 62)
                         .clipShape(Circle())
                 } else {
-                    Text(role.emoji)
-                        .font(.system(size: 31))
+                    Image("AchievementJourneyDefault")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 62, height: 62)
+                        .clipShape(Circle())
                 }
             }
             .frame(width: 70, height: 70)
@@ -5660,12 +5887,15 @@ private struct AchievementPersonaVisionComposerSheet: View {
 
                     if mode == "새 페르소나" {
                         fieldLabel("페르소나")
-                        emojiTextField(emoji: $personaEmoji, isFocused: $isPersonaEmojiFocused, placeholder: "이모지")
-                        TextField("예: AI Engineer", text: $personaName)
-                            .textFieldStyle(.plain)
-                            .padding(10)
-                            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                        HStack(spacing: 8) {
+                            emojiChip(emoji: $personaEmoji, isFocused: $isPersonaEmojiFocused, fallback: "👤")
+                            TextField("예: AI Engineer", text: $personaName)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                        }
+                        quickEmojiRow(selection: $personaEmoji, options: Self.personaQuickEmojis)
                     } else {
                         fieldLabel("페르소나 선택")
                         Menu {
@@ -5683,12 +5913,15 @@ private struct AchievementPersonaVisionComposerSheet: View {
                     }
 
                     fieldLabel("비전")
-                    emojiTextField(emoji: $visionEmoji, isFocused: $isVisionEmojiFocused, placeholder: "비전 이모지")
-                    TextField("예: 사람들에게 쓰이는 생산성 제품을 만든다", text: $visionTitle)
-                        .textFieldStyle(.plain)
-                        .padding(10)
-                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    HStack(spacing: 8) {
+                        emojiChip(emoji: $visionEmoji, isFocused: $isVisionEmojiFocused, fallback: "🧭")
+                        TextField("예: 사람들에게 쓰이는 생산성 제품을 만든다", text: $visionTitle)
+                            .textFieldStyle(.plain)
+                            .padding(10)
+                            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    }
+                    quickEmojiRow(selection: $visionEmoji, options: Self.visionQuickEmojis)
                 }
                 .padding(14)
             }
@@ -5771,43 +6004,73 @@ private struct AchievementPersonaVisionComposerSheet: View {
         .background(PopoverChrome.surfaceAlt.opacity(0.84), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
     }
 
-    private func emojiTextField(emoji: Binding<String>, isFocused: FocusState<Bool>.Binding, placeholder: String) -> some View {
-        HStack(spacing: 8) {
-            Text(emoji.wrappedValue)
-                .font(.system(size: 20))
-                .frame(width: 38, height: 36)
-                .background(PopoverChrome.accentSoft, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+    private static let personaQuickEmojis = ["👤", "🧑‍💻", "🎨", "📚", "💪", "✍️"]
+    private static let visionQuickEmojis = ["🧭", "🚀", "🌱", "🎯", "⭐", "🔥"]
 
-            TextField(placeholder, text: Binding(
-                get: { emoji.wrappedValue },
-                set: { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    emoji.wrappedValue = trimmed.isEmpty ? "🎯" : String(trimmed.prefix(1))
-                }
-            ))
-            .focused(isFocused)
-            .textFieldStyle(.plain)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .padding(.horizontal, 10)
-            .frame(width: 64, height: 36)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
+    /// 미리보기 칸과 입력 칸을 하나로 합친 이모지 칩.
+    /// 칩 자체가 입력 필드라 클릭해 바로 타이핑·붙여넣기할 수 있고,
+    /// 오른쪽 아래 배지로 시스템 이모지 팔레트를 연다.
+    private func emojiChip(emoji: Binding<String>, isFocused: FocusState<Bool>.Binding, fallback: String) -> some View {
+        TextField("", text: Binding(
+            get: { emoji.wrappedValue },
+            set: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                emoji.wrappedValue = trimmed.isEmpty ? fallback : String(trimmed.suffix(1))
+            }
+        ))
+        .focused(isFocused)
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.center)
+        .font(.system(size: 19))
+        .frame(width: 44, height: 40)
+        .background(PopoverChrome.accentSoft, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+                .stroke(isFocused.wrappedValue ? PopoverChrome.accent : PopoverChrome.border, lineWidth: isFocused.wrappedValue ? 1.6 : PopoverChrome.borderWidth)
+        )
+        .overlay(alignment: .bottomTrailing) {
             Button {
                 isFocused.wrappedValue = true
                 DispatchQueue.main.async {
                     NSApplication.shared.orderFrontCharacterPalette(nil)
                 }
             } label: {
-                Label("이모지 선택", systemImage: "face.smiling")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.ink)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
-                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accentInk)
+                    .frame(width: 17, height: 17)
+                    .background(PopoverChrome.accent, in: Circle())
+                    .overlay(Circle().stroke(PopoverChrome.surface, lineWidth: 1.5))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .help("이모지 팔레트 열기")
+            .offset(x: 6, y: 6)
+        }
+    }
+
+    private func quickEmojiRow(selection: Binding<String>, options: [String]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    selection.wrappedValue = option
+                } label: {
+                    Text(option)
+                        .font(.system(size: 15))
+                        .frame(width: 30, height: 28)
+                        .background(
+                            selection.wrappedValue == option ? PopoverChrome.accentSoft : PopoverChrome.card,
+                            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                                .stroke(selection.wrappedValue == option ? PopoverChrome.accent : PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
         }
     }
 
