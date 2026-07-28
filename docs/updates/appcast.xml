@@ -10,9 +10,9 @@
       <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
       <pubDate>Tue, 28 Jul 2026 13:07:05 +0000</pubDate>
       <enclosure
-        url="https://github.com/Jungjihyuk/horong-horong/releases/download/v0.2.1/HorongHorong-0.2.1.zip"
-        sparkle:edSignature="pLYPFGe+8HzC+5+UJu5D7PFrTeXx5dTz/LfE1s5mqku5WsOyPpEBFoNCZAAio5NxiU/6nEJ0QN61xQm1x6gvDw=="
-        length="26194175"
+        url="https://github.com/Jungjihyuk/horong-horong/releases/download/v0.2.2/HorongHorong-0.2.2.zip"
+        sparkle:edSignature="prdgzv07o/ibk5iF1j0ynwJxqBzPQXl0nRk8aBU8wn+3odBfPoYS6YyYlNbyLbziuYHpKB3I84AfG1QskwcwAg=="
+        length="26194177"
         type="application/octet-stream" />
     </item>
   </channel>
