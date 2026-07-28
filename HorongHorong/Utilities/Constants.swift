@@ -546,6 +546,22 @@ enum Constants {
         return normalized.isEmpty ? defaultRepresentativeAgentTypes : normalized
     }
 
+    // MARK: - 루미롱 컴패니언
+    static let defaultCompanionEnabled = false
+    static let defaultCompanionIdentifier = "hororong"
+    static let defaultCompanionHideDuringFocus = true
+    static let defaultCompanionBriefingEnabled = true
+    static let defaultCompanionBriefingHour = 9
+    static let defaultCompanionBriefingMinute = 30
+    /// 스프라이트 원본(192×208) 의 절반. 화면에서 부담스럽지 않은 크기.
+    static let companionSpriteSize = CGSize(width: 96, height: 104)
+    /// 말풍선까지 담는 오버레이 창 크기. 스프라이트는 하단 중앙에 놓인다.
+    static let companionOverlaySize = CGSize(width: 300, height: 216)
+    /// 마우스로 지정할 수 있는 활동 영역의 최소 크기. 이보다 작게 그리면 취소로 본다.
+    static let companionMinimumRegionSize = CGSize(width: 160, height: 120)
+    /// 걷는 속도(pt/초).
+    static let companionWalkSpeed: CGFloat = 42
+
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
         static let popoverTheme = "appearance.popoverTheme"
@@ -592,6 +608,14 @@ enum Constants {
         static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
         static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
         static let unmappedAppHandling = "category.unmappedAppHandling"
+        static let companionEnabled = "companion.enabled"
+        static let companionSelectedIdentifier = "companion.selectedIdentifier"
+        static let companionRoamingRegion = "companion.roamingRegion"
+        static let companionHideDuringFocus = "companion.hideDuringFocus"
+        static let companionBriefingEnabled = "companion.briefingEnabled"
+        static let companionBriefingHour = "companion.briefingHour"
+        static let companionBriefingMinute = "companion.briefingMinute"
+        static let companionBriefingLastDeliveredAt = "companion.briefingLastDeliveredAt"
     }
 
     // MARK: - 메뉴바 표시 형식
