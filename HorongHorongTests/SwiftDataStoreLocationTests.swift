@@ -2,7 +2,7 @@ import XCTest
 @testable import 호롱호롱
 
 final class SwiftDataStoreLocationTests: XCTestCase {
-    func testStoreURLUsesAppSpecificApplicationSupportDirectory() throws {
+    func testStoreURLUsesVersionedProductionDirectory() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
 
         let storeURL = try SwiftDataStoreLocation.storeURL(
@@ -11,76 +11,176 @@ final class SwiftDataStoreLocationTests: XCTestCase {
 
         XCTAssertEqual(
             storeURL.path,
-            applicationSupportDirectory
-                .appendingPathComponent("HorongHorong", isDirectory: true)
-                .appendingPathComponent("default.store", isDirectory: false)
-                .path
+            versionedStoreURL(
+                in: applicationSupportDirectory,
+                scope: .production
+            ).path
         )
         XCTAssertTrue(
             FileManager.default.fileExists(
-                atPath: applicationSupportDirectory
-                    .appendingPathComponent("HorongHorong", isDirectory: true)
-                    .path
+                atPath: storeURL.deletingLastPathComponent().path
             )
         )
     }
 
-    func testStoreURLCopiesLegacyStoreFilesWhenNewStoreDoesNotExist() throws {
+    func testStoreURLCopiesUnversionedAppStoreIntoCurrentGeneration() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        try writeLegacyStoreFiles(in: applicationSupportDirectory)
+        let unversionedStoreURL = applicationSupportDirectory
+            .appendingPathComponent("HorongHorong", isDirectory: true)
+            .appendingPathComponent("default.store", isDirectory: false)
+        try writeStoreFiles(at: unversionedStoreURL)
 
-        _ = try SwiftDataStoreLocation.storeURL(
+        let storeURL = try SwiftDataStoreLocation.storeURL(
             applicationSupportDirectory: applicationSupportDirectory
         )
 
-        let appDirectory = applicationSupportDirectory.appendingPathComponent(
-            "HorongHorong",
-            isDirectory: true
+        try assertStoreFiles(at: storeURL)
+    }
+
+    func testStoreURLCopiesPreviousGenerationIntoCurrentGeneration() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        let previousStoreURL = applicationSupportDirectory
+            .appendingPathComponent("HorongHorong", isDirectory: true)
+            .appendingPathComponent("Stores", isDirectory: true)
+            .appendingPathComponent("v1", isDirectory: true)
+            .appendingPathComponent("default.store", isDirectory: false)
+        try writeStoreFiles(at: previousStoreURL)
+
+        let storeURL = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory
         )
-        XCTAssertEqual(
-            try String(contentsOf: appDirectory.appendingPathComponent("default.store")),
-            "store"
+
+        try assertStoreFiles(at: storeURL)
+    }
+
+    func testStoreURLCopiesLegacyRootStoreIntoCurrentGeneration() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        let legacyStoreURL = applicationSupportDirectory.appendingPathComponent(
+            "default.store",
+            isDirectory: false
         )
+        try writeStoreFiles(at: legacyStoreURL)
+
+        let storeURL = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory
+        )
+
+        try assertStoreFiles(at: storeURL)
+    }
+
+    func testStoreURLDoesNotOverwriteExistingVersionedStore() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        let storeURL = versionedStoreURL(
+            in: applicationSupportDirectory,
+            scope: .production
+        )
+        try writeStoreFiles(at: storeURL, includeSidecars: false, storeContents: "existing")
+        try writeStoreFiles(
+            at: applicationSupportDirectory.appendingPathComponent("default.store")
+        )
+
+        _ = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory,
+            scope: .production,
+            backupIdentifier: "existing-build"
+        )
+
+        XCTAssertEqual(try String(contentsOf: storeURL), "existing")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: storeURL.path + "-wal")
+        )
+    }
+
+    func testDevelopmentStoreIsIsolatedFromProductionData() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        try writeStoreFiles(
+            at: applicationSupportDirectory
+                .appendingPathComponent("HorongHorong", isDirectory: true)
+                .appendingPathComponent("default.store", isDirectory: false)
+        )
+        try writeStoreFiles(
+            at: applicationSupportDirectory.appendingPathComponent("default.store")
+        )
+
+        let developmentStoreURL = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory,
+            scope: .development
+        )
+
         XCTAssertEqual(
-            try String(contentsOf: appDirectory.appendingPathComponent("default.store-shm")),
+            developmentStoreURL,
+            versionedStoreURL(
+                in: applicationSupportDirectory,
+                scope: .development
+            )
+        )
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: developmentStoreURL.path)
+        )
+    }
+
+    func testExistingStoreIsBackedUpOncePerBuild() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        let storeURL = versionedStoreURL(
+            in: applicationSupportDirectory,
+            scope: .production
+        )
+        try writeStoreFiles(at: storeURL)
+
+        _ = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory,
+            scope: .production,
+            backupIdentifier: "0.2.2 (3)"
+        )
+        try "changed".write(to: storeURL, atomically: true, encoding: .utf8)
+        _ = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory,
+            scope: .production,
+            backupIdentifier: "0.2.2 (3)"
+        )
+
+        let backupStoreURL = backupRoot(
+            in: applicationSupportDirectory,
+            scope: .production
+        )
+        .appendingPathComponent("0-2-2-3", isDirectory: true)
+        .appendingPathComponent("default.store", isDirectory: false)
+        XCTAssertEqual(try String(contentsOf: backupStoreURL), "store")
+        XCTAssertEqual(
+            try String(contentsOf: URL(fileURLWithPath: backupStoreURL.path + "-shm")),
             "shm"
         )
         XCTAssertEqual(
-            try String(contentsOf: appDirectory.appendingPathComponent("default.store-wal")),
+            try String(contentsOf: URL(fileURLWithPath: backupStoreURL.path + "-wal")),
             "wal"
         )
     }
 
-    func testStoreURLDoesNotOverwriteExistingAppStore() throws {
+    func testBackupRetentionKeepsLatestFiveBuilds() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        let appDirectory = applicationSupportDirectory.appendingPathComponent(
-            "HorongHorong",
-            isDirectory: true
+        let storeURL = versionedStoreURL(
+            in: applicationSupportDirectory,
+            scope: .production
         )
-        try FileManager.default.createDirectory(
-            at: appDirectory,
-            withIntermediateDirectories: true
-        )
-        try "existing".write(
-            to: appDirectory.appendingPathComponent("default.store"),
-            atomically: true,
-            encoding: .utf8
-        )
-        try writeLegacyStoreFiles(in: applicationSupportDirectory)
+        try writeStoreFiles(at: storeURL)
 
-        _ = try SwiftDataStoreLocation.storeURL(
-            applicationSupportDirectory: applicationSupportDirectory
-        )
-
-        XCTAssertEqual(
-            try String(contentsOf: appDirectory.appendingPathComponent("default.store")),
-            "existing"
-        )
-        XCTAssertFalse(
-            FileManager.default.fileExists(
-                atPath: appDirectory.appendingPathComponent("default.store-wal").path
+        for index in 0...SwiftDataStoreLocation.maximumBackupCount {
+            _ = try SwiftDataStoreLocation.storeURL(
+                applicationSupportDirectory: applicationSupportDirectory,
+                scope: .production,
+                backupIdentifier: "build-\(index)"
             )
+        }
+
+        let backups = try FileManager.default.contentsOfDirectory(
+            at: backupRoot(
+                in: applicationSupportDirectory,
+                scope: .production
+            ),
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
         )
+        XCTAssertEqual(backups.count, SwiftDataStoreLocation.maximumBackupCount)
     }
 
     private func temporaryApplicationSupportDirectory() -> URL {
@@ -92,25 +192,80 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         return directory
     }
 
-    private func writeLegacyStoreFiles(in applicationSupportDirectory: URL) throws {
+    private func versionedStoreURL(
+        in applicationSupportDirectory: URL,
+        scope: SwiftDataStoreLocation.Scope
+    ) -> URL {
+        applicationSupportDirectory
+            .appendingPathComponent(scope.directoryName, isDirectory: true)
+            .appendingPathComponent("Stores", isDirectory: true)
+            .appendingPathComponent(
+                "v\(SwiftDataStoreLocation.storeGeneration)",
+                isDirectory: true
+            )
+            .appendingPathComponent("default.store", isDirectory: false)
+    }
+
+    private func backupRoot(
+        in applicationSupportDirectory: URL,
+        scope: SwiftDataStoreLocation.Scope
+    ) -> URL {
+        applicationSupportDirectory
+            .appendingPathComponent(scope.directoryName, isDirectory: true)
+            .appendingPathComponent("Backups", isDirectory: true)
+            .appendingPathComponent(
+                "v\(SwiftDataStoreLocation.storeGeneration)",
+                isDirectory: true
+            )
+    }
+
+    private func writeStoreFiles(
+        at storeURL: URL,
+        includeSidecars: Bool = true,
+        storeContents: String = "store"
+    ) throws {
         try FileManager.default.createDirectory(
-            at: applicationSupportDirectory,
+            at: storeURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try "store".write(
-            to: applicationSupportDirectory.appendingPathComponent("default.store"),
-            atomically: true,
-            encoding: .utf8
-        )
+        try storeContents.write(to: storeURL, atomically: true, encoding: .utf8)
+        guard includeSidecars else { return }
+
         try "shm".write(
-            to: applicationSupportDirectory.appendingPathComponent("default.store-shm"),
+            to: URL(fileURLWithPath: storeURL.path + "-shm"),
             atomically: true,
             encoding: .utf8
         )
         try "wal".write(
-            to: applicationSupportDirectory.appendingPathComponent("default.store-wal"),
+            to: URL(fileURLWithPath: storeURL.path + "-wal"),
             atomically: true,
             encoding: .utf8
         )
     }
+
+    private func assertStoreFiles(at storeURL: URL) throws {
+        XCTAssertEqual(try String(contentsOf: storeURL), "store")
+        XCTAssertEqual(
+            try String(contentsOf: URL(fileURLWithPath: storeURL.path + "-shm")),
+            "shm"
+        )
+        XCTAssertEqual(
+            try String(contentsOf: URL(fileURLWithPath: storeURL.path + "-wal")),
+            "wal"
+        )
+    }
+}
+
+final class AppUpdateManagerSafetyTests: XCTestCase {
+    #if DEBUG
+    @MainActor
+    func testDebugBuildDisablesAppUpdates() {
+        XCTAssertFalse(AppUpdateManager.updatesAllowedForCurrentBuild)
+        XCTAssertFalse(AppUpdateManager.shared.canCheckForUpdates)
+    }
+
+    func testDebugBuildUsesIsolatedStoreScope() {
+        XCTAssertEqual(SwiftDataStoreLocation.currentScope, .development)
+    }
+    #endif
 }

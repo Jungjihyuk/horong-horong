@@ -6,6 +6,12 @@ import Sparkle
 final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     static let shared = AppUpdateManager()
 
+    #if DEBUG
+    static let updatesAllowedForCurrentBuild = false
+    #else
+    static let updatesAllowedForCurrentBuild = true
+    #endif
+
     @Published private(set) var statusMessage: String = ""
     @Published private(set) var canCheckForUpdates: Bool = false
     @Published private(set) var automaticallyChecksForUpdates: Bool = false
@@ -20,6 +26,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
     }
 
     var isConfigured: Bool {
+        guard Self.updatesAllowedForCurrentBuild else { return false }
         guard concreteInfoValue(forKey: "SUFeedURL") != nil,
               concreteInfoValue(forKey: "SUPublicEDKey") != nil else {
             return false
@@ -50,7 +57,9 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
             canCheckForUpdates = false
             automaticallyChecksForUpdates = false
             lastUpdateCheckDate = nil
-            statusMessage = "업데이트 채널 설정이 필요합니다."
+            statusMessage = Self.updatesAllowedForCurrentBuild
+                ? "업데이트 채널 설정이 필요합니다."
+                : "디버그 빌드에서는 업데이트를 사용할 수 없습니다."
             return
         }
 
@@ -84,6 +93,10 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUUpdaterDelegate {
 
     private func configureUpdaterIfNeeded() {
         guard updaterController == nil else { return }
+        guard Self.updatesAllowedForCurrentBuild else {
+            refreshState()
+            return
+        }
         guard isConfigured else {
             refreshState()
             return
