@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "lantern_horong.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
