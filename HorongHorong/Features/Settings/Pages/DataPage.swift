@@ -73,7 +73,7 @@ struct DataPage: View {
     }
 
     private func openDataFolder() {
-        if let url = try? SwiftDataStoreLocation.storeURL().deletingLastPathComponent() {
+        if let url = try? SwiftDataStoreLocation.applicationDirectoryURL() {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }

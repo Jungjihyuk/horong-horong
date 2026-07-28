@@ -2213,6 +2213,7 @@ struct FocusDetailView: View {
     let onNavigate: (StatsViewMode, Date) -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
     @State private var showsScoreInfo = false
@@ -2223,6 +2224,9 @@ struct FocusDetailView: View {
     @State private var categorySearchText = ""
     @State private var expandedTaskGroupIDs: Set<String> = []
     @State private var hoveredTaskSessionID: UUID?
+    @State private var taskEditorSessionID: UUID?
+    @State private var taskEditorSearchText = ""
+    @State private var taskLinkErrorMessage: String?
 
     private var rows: [FocusSessionRow] {
         let reflectionByID = Dictionary(
@@ -2291,6 +2295,14 @@ struct FocusDetailView: View {
 
     private var completedTaskSessionIDs: Set<UUID> {
         Set(taskCompletions.map(\.focusSessionID))
+    }
+
+    private var taskEditorMemos: [Memo] {
+        let query = taskEditorSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return allMemos }
+        return allMemos.filter {
+            $0.content.localizedCaseInsensitiveContains(query)
+        }
     }
 
     private var periodCalendar: Calendar {
@@ -3961,6 +3973,7 @@ struct FocusDetailView: View {
                     .lineLimit(1)
                 completionBadge(row)
                 Spacer(minLength: 8)
+                taskLinkButton(for: row)
                 if let selfAssessmentLabel = row.selfAssessmentLabel {
                     Text(selfAssessmentLabel)
                         .font(.caption.weight(.medium))
@@ -4003,6 +4016,162 @@ struct FocusDetailView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             selectedSessionID = isPersistentlySelected ? nil : row.id
+        }
+    }
+
+    private func taskLinkButton(for row: FocusSessionRow) -> some View {
+        let hasTaskCompletion = completedTaskSessionIDs.contains(row.id)
+        return Button {
+            taskEditorSearchText = ""
+            taskLinkErrorMessage = nil
+            taskEditorSessionID = row.id
+        } label: {
+            Label(
+                row.linkedMemoID == nil ? "할 일 연결" : "할 일 변경",
+                systemImage: "link"
+            )
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(hasTaskCompletion)
+        .help(
+            hasTaskCompletion
+                ? "할 일 완료 기록이 있는 세션은 연결을 변경할 수 없습니다"
+                : "이 포모도로 세션에 연결된 할 일을 수정합니다"
+        )
+        .popover(isPresented: Binding(
+            get: { taskEditorSessionID == row.id },
+            set: {
+                if !$0 {
+                    taskEditorSessionID = nil
+                    taskLinkErrorMessage = nil
+                }
+            }
+        )) {
+            taskLinkEditor(for: row)
+        }
+    }
+
+    private func taskLinkEditor(for row: FocusSessionRow) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("연결 할 일 수정")
+                    .font(.headline)
+                    .foregroundStyle(PopoverChrome.ink)
+                Text("완료되거나 보관된 할 일도 선택할 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            TextField("할 일 검색", text: $taskEditorSearchText)
+                .textFieldStyle(.roundedBorder)
+
+            if row.linkedMemoID != nil {
+                Button {
+                    updateTaskLink(for: row, memo: nil)
+                } label: {
+                    Label("연결 해제", systemImage: "link.badge.minus")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    if taskEditorMemos.isEmpty {
+                        Text("검색 결과가 없습니다.")
+                            .font(.caption)
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 28)
+                    } else {
+                        ForEach(taskEditorMemos) { memo in
+                            taskLinkMemoButton(memo, for: row)
+                        }
+                    }
+                }
+            }
+            .frame(height: 300)
+
+            if let taskLinkErrorMessage {
+                Text(taskLinkErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
+        .background(PopoverChrome.surface)
+    }
+
+    private func taskLinkMemoButton(
+        _ memo: Memo,
+        for row: FocusSessionRow
+    ) -> some View {
+        let title = PomodoroTaskCandidateBuilder.taskTitle(memo.content)
+        let displayTitle = title.isEmpty ? "제목 없는 할 일" : title
+        let isSelected = row.linkedMemoID == memo.id
+        return Button {
+            updateTaskLink(for: row, memo: memo)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(
+                        isSelected ? PopoverChrome.accent : PopoverChrome.inkTertiary
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayTitle)
+                        .font(.callout)
+                        .foregroundStyle(PopoverChrome.ink)
+                        .lineLimit(2)
+                    Text(taskLinkMemoMetadata(memo))
+                        .font(.caption2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(
+                isSelected ? PopoverChrome.selectionFill : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func taskLinkMemoMetadata(_ memo: Memo) -> String {
+        var parts = [
+            memo.updatedAt.formatted(date: .abbreviated, time: .omitted),
+        ]
+        if memo.isCompletedValue {
+            parts.append("완료")
+        }
+        if memo.isArchivedValue {
+            parts.append("보관")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func updateTaskLink(for row: FocusSessionRow, memo: Memo?) {
+        do {
+            try FocusSession.updateTaskLink(
+                sessionID: row.id,
+                memo: memo,
+                modelContext: modelContext
+            )
+            taskEditorSessionID = nil
+            taskLinkErrorMessage = nil
+            NotificationCenter.default.post(
+                name: .pomodoroSessionDidChange,
+                object: row.id
+            )
+        } catch {
+            taskLinkErrorMessage = error.localizedDescription
         }
     }
 

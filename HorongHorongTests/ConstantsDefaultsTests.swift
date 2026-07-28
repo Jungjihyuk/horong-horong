@@ -1234,6 +1234,90 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
+    func testCompletedFocusSessionCanRelinkAndUnlinkExistingMemo() throws {
+        let schema = Schema([
+            FocusSession.self,
+            Memo.self,
+            PomodoroTaskCompletion.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let session = FocusSession(focusMinutes: 25, breakMinutes: 5, category: "개발")
+        session.completed = true
+        let memo = Memo(content: "\n  복구할 할 일  \n상세 내용")
+        context.insert(session)
+        context.insert(memo)
+        try context.save()
+
+        try FocusSession.updateTaskLink(
+            sessionID: session.id,
+            memo: memo,
+            modelContext: context
+        )
+
+        XCTAssertEqual(session.linkedMemoID, memo.id)
+        XCTAssertEqual(session.taskTitleSnapshot, "복구할 할 일")
+
+        try FocusSession.updateTaskLink(
+            sessionID: session.id,
+            memo: nil,
+            modelContext: context
+        )
+
+        XCTAssertNil(session.linkedMemoID)
+        XCTAssertNil(session.taskTitleSnapshot)
+    }
+
+    @MainActor
+    func testFocusSessionWithTaskCompletionRejectsRelink() throws {
+        let schema = Schema([
+            FocusSession.self,
+            Memo.self,
+            PomodoroTaskCompletion.self,
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let originalMemo = Memo(content: "원래 할 일")
+        let replacementMemo = Memo(content: "바꿀 할 일")
+        let session = FocusSession(
+            focusMinutes: 25,
+            breakMinutes: 5,
+            category: "개발",
+            linkedMemoID: originalMemo.id,
+            taskTitleSnapshot: "원래 할 일"
+        )
+        let completion = PomodoroTaskCompletion(
+            focusSessionID: session.id,
+            linkedMemoID: originalMemo.id,
+            taskTitleSnapshot: "원래 할 일",
+            didMarkMemoCompleted: false,
+            memoWasPinnedBeforeCompletion: false
+        )
+        context.insert(originalMemo)
+        context.insert(replacementMemo)
+        context.insert(session)
+        context.insert(completion)
+        try context.save()
+
+        XCTAssertThrowsError(
+            try FocusSession.updateTaskLink(
+                sessionID: session.id,
+                memo: replacementMemo,
+                modelContext: context
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? FocusSessionTaskLinkUpdateError,
+                .taskCompletionExists
+            )
+        }
+        XCTAssertEqual(session.linkedMemoID, originalMemo.id)
+        XCTAssertEqual(session.taskTitleSnapshot, "원래 할 일")
+    }
+
+    @MainActor
     func testFocusSessionEarlyEndMetadataPersistsInSwiftData() throws {
         let schema = Schema([FocusSession.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
