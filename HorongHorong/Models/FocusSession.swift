@@ -18,6 +18,23 @@ enum FocusSessionEndKind: String {
     case recordedEarly = "recorded_early"
 }
 
+enum FocusSessionTaskLinkUpdateError: LocalizedError, Equatable {
+    case pendingChanges
+    case sessionNotFound
+    case taskCompletionExists
+
+    var errorDescription: String? {
+        switch self {
+        case .pendingChanges:
+            "저장되지 않은 다른 변경사항이 있어 할 일 연결을 수정할 수 없습니다."
+        case .sessionNotFound:
+            "수정할 포모도로 세션을 찾을 수 없습니다."
+        case .taskCompletionExists:
+            "할 일 완료 기록이 있는 세션은 연결을 변경할 수 없습니다."
+        }
+    }
+}
+
 @Model
 final class FocusSession {
     var id: UUID
@@ -69,6 +86,50 @@ final class FocusSession {
     private static func normalizedText(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    @MainActor
+    static func updateTaskLink(
+        sessionID: UUID,
+        memo: Memo?,
+        modelContext: ModelContext
+    ) throws {
+        guard !modelContext.hasChanges else {
+            throw FocusSessionTaskLinkUpdateError.pendingChanges
+        }
+
+        let targetID = sessionID
+        var descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { $0.id == targetID }
+        )
+        descriptor.fetchLimit = 1
+        guard let session = try modelContext.fetch(descriptor).first else {
+            throw FocusSessionTaskLinkUpdateError.sessionNotFound
+        }
+        guard try PomodoroTaskCompletionRecorder.completion(
+            focusSessionID: sessionID,
+            modelContext: modelContext
+        ) == nil else {
+            throw FocusSessionTaskLinkUpdateError.taskCompletionExists
+        }
+
+        session.linkedMemoID = memo?.id
+        session.taskTitleSnapshot = memo.map { taskTitle(from: $0.content) }
+
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    private static func taskTitle(from content: String) -> String {
+        let title = content
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "제목 없는 할 일" : title
     }
 }
 
