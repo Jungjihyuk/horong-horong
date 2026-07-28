@@ -86,6 +86,65 @@ final class FocusNudgeEngineTests: XCTestCase {
         XCTAssertEqual(FocusNudgeEngine.resolve(long).ruleID, "today.lowCoverage")
     }
 
+    func testTodayTaskMetricSeparatesRemainingAndOverdueCounts() {
+        XCTAssertEqual(
+            FocusNudgeFormat.taskProgress(remaining: 5, total: 7),
+            "5/7"
+        )
+        XCTAssertEqual(
+            FocusNudgeFormat.taskCaption(remaining: 5, total: 7, overdue: 3),
+            "남음 5개 · 마감 지남 3개"
+        )
+    }
+
+    @MainActor
+    func testTodayTaskSummaryExcludesEarlierOverdueTasksFromProgress() throws {
+        let schema = Schema([
+            FocusSession.self,
+            PomodoroReflection.self,
+            AppUsageSegment.self,
+            Memo.self,
+        ])
+        let configuration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true
+        )
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [configuration]
+        )
+        let modelContext = container.mainContext
+
+        for index in 0..<7 {
+            let memo = Memo(content: "오늘 할 일 \(index + 1)")
+            memo.startDate = day.addingTimeInterval(Double(9 + index) * 60 * 60)
+            if index < 2 {
+                memo.setCompleted(true, at: day.addingTimeInterval(12 * 60 * 60))
+            }
+            if index == 2 {
+                memo.deadline = day.addingTimeInterval(10 * 60 * 60)
+            }
+            modelContext.insert(memo)
+        }
+
+        for index in 0..<2 {
+            let memo = Memo(content: "이전 마감 할 일 \(index + 1)")
+            memo.deadline = day.addingTimeInterval(Double(-index - 1) * 24 * 60 * 60)
+            modelContext.insert(memo)
+        }
+        try modelContext.save()
+
+        let context = FocusNudgeSnapshotLoader.context(
+            day: day,
+            now: day.addingTimeInterval(14 * 60 * 60),
+            modelContext: modelContext
+        )
+
+        XCTAssertEqual(context.openTaskCount, 5)
+        XCTAssertEqual(context.totalTaskCount, 7)
+        XCTAssertEqual(context.overdueTaskCount, 3)
+    }
+
     func testFocusedResponseDeltaUsesComparableCounts() {
         let context = makeContext(
             todayCompletedCount: 2,

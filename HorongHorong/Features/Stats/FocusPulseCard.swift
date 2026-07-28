@@ -15,7 +15,8 @@ struct FocusPulseCard: View {
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
             nudgeBlock
-                .frame(width: 260, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
             Rectangle()
                 .fill(PopoverChrome.divider)
@@ -26,8 +27,7 @@ struct FocusPulseCard: View {
                     metricView(metric)
                 }
             }
-
-            Spacer(minLength: 0)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .popoverCard(padding: 12)
     }
@@ -50,7 +50,6 @@ struct FocusPulseCard: View {
             Text(messageWithSentenceBreaks(snapshot.nudge.message))
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -89,7 +88,10 @@ struct FocusPulseCard: View {
             Metric(
                 id: "tasks",
                 label: "오늘 할 일",
-                value: context.totalTaskCount > 0 ? "\(context.openTaskCount)/\(context.totalTaskCount)" : "—",
+                value: FocusNudgeFormat.taskProgress(
+                    remaining: context.openTaskCount,
+                    total: context.totalTaskCount
+                ),
                 caption: tasksCaption
             ),
         ]
@@ -120,11 +122,11 @@ struct FocusPulseCard: View {
 
     private var tasksCaption: String {
         let context = snapshot.context
-        guard context.totalTaskCount > 0 else { return "메모에 등록해보세요" }
-        if context.overdueTaskCount > 0 {
-            return "남음 · 마감 지남 \(context.overdueTaskCount)개"
-        }
-        return context.openTaskCount > 0 ? "남음" : "모두 끝냈어요"
+        return FocusNudgeFormat.taskCaption(
+            remaining: context.openTaskCount,
+            total: context.totalTaskCount,
+            overdue: context.overdueTaskCount
+        )
     }
 
     private func metricView(_ metric: Metric) -> some View {
@@ -158,7 +160,8 @@ struct HistoricalFocusTrendCard: View {
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
             trendBlock
-                .frame(width: 300, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
 
             Rectangle()
                 .fill(PopoverChrome.divider)
@@ -169,8 +172,7 @@ struct HistoricalFocusTrendCard: View {
                     metricView(metric)
                 }
             }
-
-            Spacer(minLength: 0)
+            .fixedSize(horizontal: true, vertical: false)
         }
         .popoverCard(padding: 12)
     }
@@ -191,7 +193,6 @@ struct HistoricalFocusTrendCard: View {
             Text(messageWithSentenceBreaks(message))
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
