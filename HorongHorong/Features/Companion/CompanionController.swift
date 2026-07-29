@@ -24,6 +24,9 @@ final class CompanionController {
     private var timerStateObservationTask: Task<Void, Never>?
     private var bubbleDismissTask: Task<Void, Never>?
 
+    private let chatResponder: CompanionChatResponder = ScriptedCompanionChatResponder()
+    private var chatReplyTask: Task<Void, Never>?
+
     private var engine: CompanionRoamingEngine?
     private var mode: Mode = .hidden
     private var appliedRoamingRegion: CGRect?
@@ -39,6 +42,14 @@ final class CompanionController {
         let character = CompanionRegistry.character(for: Self.selectedIdentifier)
         self.state = CompanionPresentationState(character: character)
         self.overlay = CompanionOverlayPanel(state: state)
+
+        state.onCharacterTap = { [weak self] in self?.toggleChat() }
+        state.onCloseChat = { [weak self] in self?.endChat() }
+        state.onSendMessage = { [weak self] message in self?.send(message) }
+        state.onDragBegan = { [weak self] in self?.beginDrag() }
+        state.onDragChanged = { [weak self] in self?.updateDrag() }
+        state.onDragEnded = { [weak self] in self?.endDrag() }
+        state.onTurnOff = { [weak self] in self?.turnOff() }
     }
 
     func start(modelContext: ModelContext) {
@@ -67,6 +78,8 @@ final class CompanionController {
         timerStateObservationTask = nil
         bubbleDismissTask?.cancel()
         bubbleDismissTask = nil
+        chatReplyTask?.cancel()
+        chatReplyTask = nil
         stopTicking()
         overlay.hide()
         mode = .hidden
@@ -109,6 +122,11 @@ final class CompanionController {
     private func transition(to newMode: Mode) {
         let previousMode = mode
         mode = newMode
+
+        // 숨거나 상태가 바뀌면 대화는 먼저 정리한다.
+        if newMode != previousMode, state.isChatting {
+            endChat()
+        }
 
         switch newMode {
         case .hidden:
@@ -209,8 +227,8 @@ final class CompanionController {
         let delta = lastTickAt.map { now.timeIntervalSince($0) } ?? Self.tickInterval
         lastTickAt = now
 
-        // 쉬는 시간·브리핑처럼 말풍선이 떠 있는 동안에는 제자리에서 대사에 맞는 동작만 한다.
-        if mode == .roaming, state.bubble == nil, engine != nil {
+        // 대화 중이거나 말풍선이 떠 있는 동안에는 제자리에서 상황에 맞는 동작만 한다.
+        if mode == .roaming, !state.isChatting, state.bubble == nil, engine != nil {
             engine?.advance(by: delta, using: &generator)
             moveOverlay()
             setAnimation(engine?.animation ?? .idle)
@@ -307,13 +325,105 @@ final class CompanionController {
                         thenRestoreBreakMenu: true
                     )
                 },
-                CompanionBubbleAction(
-                    title: "대화하기",
-                    isEnabled: false,
-                    hint: "로컬 AI 대화는 준비 중이에요."
-                ) {},
+                CompanionBubbleAction(title: "대화하기") { [weak self] in
+                    self?.beginChat()
+                },
             ]
         )
+    }
+
+    // MARK: - 끌어서 옮기기 / 끄기
+
+    private var dragGrabOffset: CGSize?
+
+    /// 드래그 중에는 SwiftUI 의 translation 대신 전역 마우스 좌표를 쓴다.
+    /// 창 자체가 커서를 따라 움직여 제스처 좌표계가 같이 흔들리기 때문이다.
+    private func beginDrag() {
+        guard let engine else { return }
+        let mouse = NSEvent.mouseLocation
+        dragGrabOffset = CGSize(
+            width: mouse.x - engine.position.x,
+            height: mouse.y - engine.position.y
+        )
+        bubbleDismissTask?.cancel()
+        state.bubble = nil
+        setAnimation(.waiting)
+    }
+
+    private func updateDrag() {
+        guard let offset = dragGrabOffset else { return }
+        let mouse = NSEvent.mouseLocation
+        engine?.reposition(
+            to: CGPoint(x: mouse.x - offset.width, y: mouse.y - offset.height)
+        )
+        moveOverlay()
+    }
+
+    private func endDrag() {
+        dragGrabOffset = nil
+        setAnimation(.idle)
+    }
+
+    private func turnOff() {
+        endChat()
+        UserDefaults.standard.set(false, forKey: Constants.AppStorageKey.companionEnabled)
+        applySettings()
+    }
+
+    // MARK: - 대화
+
+    private func toggleChat() {
+        if state.isChatting {
+            endChat()
+        } else {
+            beginChat()
+        }
+    }
+
+    private func beginChat() {
+        guard !state.isChatting, mode != .hidden else { return }
+        bubbleDismissTask?.cancel()
+        state.bubble = nil
+        state.isChatting = true
+        setAnimation(.waiting)
+        overlay.setChatting(true)
+
+        if state.chatMessages.isEmpty {
+            state.chatMessages = [
+                CompanionChatMessage(role: .companion, text: line(\.greeting))
+            ]
+        }
+    }
+
+    private func endChat() {
+        guard state.isChatting else { return }
+        chatReplyTask?.cancel()
+        chatReplyTask = nil
+        state.isAwaitingReply = false
+        state.isChatting = false
+        overlay.setChatting(false)
+        setAnimation(.idle)
+    }
+
+    private func send(_ message: String) {
+        state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
+        state.isAwaitingReply = true
+        setAnimation(.review)
+
+        chatReplyTask?.cancel()
+        chatReplyTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let reply = await self.chatResponder.reply(
+                to: message,
+                character: self.state.character
+            )
+            guard !Task.isCancelled, self.state.isChatting else { return }
+            self.state.isAwaitingReply = false
+            self.state.chatMessages.append(
+                CompanionChatMessage(role: .companion, text: reply)
+            )
+            self.setAnimation(.waiting)
+        }
     }
 
     // MARK: - 일정 브리핑
