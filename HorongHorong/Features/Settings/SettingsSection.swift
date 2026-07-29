@@ -110,7 +110,8 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "Codex", "Claude", "Gemini"]
         case .companion:
             return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
-                    "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이"]
+                    "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",
+                    "대화 공급자", "AI 대화", "온디바이스", "개인정보", "음성"]
         case .memo:
             return ["퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기"]
         case .data:

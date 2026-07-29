@@ -24,8 +24,10 @@ final class CompanionController {
     private var timerStateObservationTask: Task<Void, Never>?
     private var bubbleDismissTask: Task<Void, Never>?
 
-    private let chatResponder: CompanionChatResponder = ScriptedCompanionChatResponder()
+    private lazy var chatProvider: CompanionChatProvider = CompanionChatProviderFactory.make()
+    private var chatSession: CompanionChatSession?
     private var chatReplyTask: Task<Void, Never>?
+    private var streamingMessageID: UUID?
 
     private var engine: CompanionRoamingEngine?
     private var mode: Mode = .hidden
@@ -399,31 +401,56 @@ final class CompanionController {
         guard state.isChatting else { return }
         chatReplyTask?.cancel()
         chatReplyTask = nil
+        streamingMessageID = nil
         state.isAwaitingReply = false
         state.isChatting = false
         overlay.setChatting(false)
         setAnimation(.idle)
     }
 
+    /// 대화 문맥은 세션에 남는다. 창을 닫았다 열어도 앞의 대화를 이어서 기억한다.
+    private func chatSessionForCurrentCharacter() -> CompanionChatSession {
+        if let chatSession { return chatSession }
+        let session = chatProvider.makeSession(for: state.character)
+        chatSession = session
+        return session
+    }
+
     private func send(_ message: String) {
         state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
         state.isAwaitingReply = true
+        streamingMessageID = nil
         setAnimation(.review)
 
+        let session = chatSessionForCurrentCharacter()
         chatReplyTask?.cancel()
         chatReplyTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let reply = await self.chatResponder.reply(
-                to: message,
-                character: self.state.character
-            )
+            let reply = await session.reply(to: message) { [weak self] partial in
+                self?.applyStreamedReply(partial)
+            }
             guard !Task.isCancelled, self.state.isChatting else { return }
+            self.applyStreamedReply(reply)
             self.state.isAwaitingReply = false
-            self.state.chatMessages.append(
-                CompanionChatMessage(role: .companion, text: reply)
-            )
+            self.streamingMessageID = nil
             self.setAnimation(.waiting)
         }
+    }
+
+    /// 스트리밍으로 들어오는 누적 텍스트를 말풍선 하나에 계속 덮어쓴다.
+    private func applyStreamedReply(_ text: String) {
+        guard !text.isEmpty else { return }
+        state.isAwaitingReply = false
+
+        if let id = streamingMessageID,
+           let index = state.chatMessages.firstIndex(where: { $0.id == id }) {
+            state.chatMessages[index].text = text
+            return
+        }
+
+        let message = CompanionChatMessage(role: .companion, text: text)
+        streamingMessageID = message.id
+        state.chatMessages.append(message)
     }
 
     // MARK: - 일정 브리핑
