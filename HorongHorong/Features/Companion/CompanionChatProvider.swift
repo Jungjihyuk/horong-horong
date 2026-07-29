@@ -1,10 +1,22 @@
 import Foundation
+import SwiftData
+
+/// 대화 세션을 만들 때 필요한 것들. 인자가 늘어나도 시그니처가 번지지 않도록 한데 묶는다.
+struct CompanionChatContext {
+    let character: CompanionCharacter
+    let profile: CompanionUserProfile
+    /// 할일 조회 도구에 넘길 저장소. 없으면 도구 없이 대화한다.
+    let modelContainer: ModelContainer?
+}
 
 /// 대화 한 세션. 이전 turn 의 문맥을 유지한다.
 @MainActor
 protocol CompanionChatSession: AnyObject {
-    /// 답을 만든다. 부분 응답이 들어올 때마다 `onPartial` 이 누적 텍스트로 불린다.
-    func reply(to message: String, onPartial: @escaping (String) -> Void) async -> String
+    /// 답을 만든다. 부분 응답이 들어올 때마다 `onPartial` 이 누적 결과로 불린다.
+    func reply(
+        to message: String,
+        onPartial: @escaping (CompanionChatReply) -> Void
+    ) async -> CompanionChatReply
 }
 
 /// 대화 공급자. 로컬 모델을 쓸 수 있으면 그쪽이, 아니면 고정 응답이 선택된다.
@@ -14,7 +26,7 @@ protocol CompanionChatProvider {
     var displayName: String { get }
     /// 지금 이 기기에서 실제로 답을 만들 수 있는지.
     var isAvailable: Bool { get }
-    func makeSession(for character: CompanionCharacter) -> CompanionChatSession
+    func makeSession(_ context: CompanionChatContext) -> CompanionChatSession
 }
 
 enum CompanionChatProviderFactory {
@@ -38,24 +50,33 @@ final class ScriptedCompanionChatProvider: CompanionChatProvider {
     var displayName: String { "고정 응답" }
     var isAvailable: Bool { true }
 
-    func makeSession(for character: CompanionCharacter) -> CompanionChatSession {
+    func makeSession(_ context: CompanionChatContext) -> CompanionChatSession {
         ScriptedCompanionChatSession()
     }
 }
 
 @MainActor
 private final class ScriptedCompanionChatSession: CompanionChatSession {
-    func reply(to message: String, onPartial: @escaping (String) -> Void) async -> String {
+    func reply(
+        to message: String,
+        onPartial: @escaping (CompanionChatReply) -> Void
+    ) async -> CompanionChatReply {
         try? await Task.sleep(for: .milliseconds(400))
-        return "이 기기에서는 아직 로컬 AI 모델을 쓸 수 없어요. "
-            + "그래도 얘기는 잘 들었어요 — 필요한 게 있으면 설정에서 확인해 보세요."
+        return CompanionChatReply(
+            text: "이 기기에서는 아직 로컬 AI 모델을 쓸 수 없어요. "
+                + "그래도 얘기는 잘 들었어요 — 필요한 게 있으면 설정에서 확인해 보세요.",
+            mood: .calm
+        )
     }
 }
 
 /// 컴패니언 대화용 프롬프트. 성취 기능과 같은 규약(`Resources/Prompts/*.md` + `{{key}}`)을 쓴다.
 enum CompanionPromptTemplate {
-    static func instructions(for character: CompanionCharacter) -> String {
-        render(
+    static func instructions(
+        for character: CompanionCharacter,
+        profile: CompanionUserProfile = .empty
+    ) -> String {
+        let base = render(
             fileName: "companion_chat",
             fallback: fallbackInstructions,
             values: [
@@ -63,6 +84,7 @@ enum CompanionPromptTemplate {
                 "tagline": character.tagline,
             ]
         )
+        return base + profile.promptSection
     }
 
     private static func render(

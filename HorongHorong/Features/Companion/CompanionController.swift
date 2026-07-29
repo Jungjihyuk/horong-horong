@@ -18,16 +18,23 @@ final class CompanionController {
     private let state: CompanionPresentationState
     private let overlay: CompanionOverlayPanel
 
-    private var modelContext: ModelContext?
+    private var modelContainer: ModelContainer?
     private var tickTimer: Timer?
+    private var briefingTimer: Timer?
+    private var systemTimeObservers: [NSObjectProtocol] = []
     private var defaultsObserver: NSObjectProtocol?
     private var timerStateObservationTask: Task<Void, Never>?
     private var bubbleDismissTask: Task<Void, Never>?
 
     private lazy var chatProvider: CompanionChatProvider = CompanionChatProviderFactory.make()
     private var chatSession: CompanionChatSession?
+    private var appliedUserProfile: CompanionUserProfile?
     private var chatReplyTask: Task<Void, Never>?
     private var streamingMessageID: UUID?
+    private var moodResetTask: Task<Void, Never>?
+
+    /// 감정 동작을 보여줄 시간. 이후에는 듣는 자세로 돌아온다.
+    private static let moodReactionSeconds: Double = 2.5
 
     private var engine: CompanionRoamingEngine?
     private var mode: Mode = .hidden
@@ -52,10 +59,14 @@ final class CompanionController {
         state.onDragChanged = { [weak self] in self?.updateDrag() }
         state.onDragEnded = { [weak self] in self?.endDrag() }
         state.onTurnOff = { [weak self] in self?.turnOff() }
+        state.onDismissBubble = { [weak self] in self?.dismissBubble() }
+        state.onShowSchedule = { [weak self] in self?.showScheduleOnDemand() }
+        state.onRequestMenu = { [weak self] in self?.toggleMenu() }
+        state.onDismissMenu = { [weak self] in self?.hideMenu() }
     }
 
-    func start(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    func start(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
 
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
@@ -68,6 +79,7 @@ final class CompanionController {
         }
 
         observeTimerState()
+        observeSystemTimeChanges()
         applySettings()
     }
 
@@ -82,14 +94,75 @@ final class CompanionController {
         bubbleDismissTask = nil
         chatReplyTask?.cancel()
         chatReplyTask = nil
+        moodResetTask?.cancel()
+        moodResetTask = nil
+        briefingTimer?.invalidate()
+        briefingTimer = nil
+        for observer in systemTimeObservers {
+            NotificationCenter.default.removeObserver(observer)
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        systemTimeObservers.removeAll()
         stopTicking()
         overlay.hide()
         mode = .hidden
     }
 
+    /// 설정한 시각에 정확히 한 번 깨어나도록 예약한다.
+    ///
+    /// 브리핑을 쓰지 않으면 타이머를 걸지 않는다.
+    /// 잠자기·시계 변경으로 예약이 어긋나는 경우는 `observeSystemTimeChanges()` 가 다시 잡는다.
+    private func updateBriefingSchedule() {
+        briefingTimer?.invalidate()
+        briefingTimer = nil
+        guard Self.isEnabled, Self.isBriefingEnabled else { return }
+
+        let fireDate = CompanionBriefingSchedule.nextFireDate(
+            after: Date(),
+            hour: Self.briefingHour,
+            minute: Self.briefingMinute
+        )
+        let timer = Timer(fire: fireDate, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.deliverBriefingIfDue()
+                // 다음 날치를 다시 예약한다.
+                self.updateBriefingSchedule()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        briefingTimer = timer
+    }
+
+    /// 잠자기에서 깨어나거나 시계·시간대가 바뀌면 예약이 어긋난다.
+    /// 다시 예약하고, 자는 사이에 지나가 버린 브리핑이 있으면 그 자리에서 전달한다.
+    private func observeSystemTimeChanges() {
+        let handler: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateBriefingSchedule()
+                self.deliverBriefingIfDue()
+            }
+        }
+        for name in [Notification.Name.NSSystemClockDidChange, .NSSystemTimeZoneDidChange, .NSCalendarDayChanged] {
+            systemTimeObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: nil, queue: .main, using: handler
+                )
+            )
+        }
+        systemTimeObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: handler
+            )
+        )
+    }
+
     // MARK: - 설정 반영
 
     private func applySettings() {
+        updateBriefingSchedule()
+
         let character = CompanionRegistry.character(for: Self.selectedIdentifier)
         if character != state.character {
             state.character = character
@@ -229,11 +302,17 @@ final class CompanionController {
         let delta = lastTickAt.map { now.timeIntervalSince($0) } ?? Self.tickInterval
         lastTickAt = now
 
-        // 대화 중이거나 말풍선이 떠 있는 동안에는 제자리에서 상황에 맞는 동작만 한다.
-        if mode == .roaming, !state.isChatting, state.bubble == nil, engine != nil {
-            engine?.advance(by: delta, using: &generator)
-            moveOverlay()
-            setAnimation(engine?.animation ?? .idle)
+        // 대화·말풍선이 떠 있는 동안에는 그쪽 동작을 유지한다.
+        if mode == .roaming, !state.isChatting, state.bubble == nil {
+            if state.isMenuVisible || state.isHovering {
+                // 커서를 올리거나 메뉴를 열면 멈춰 선다.
+                // 위치만 고정하고 걷는 애니메이션을 그대로 두면 제자리에서 출렁인다.
+                setAnimation(.idle)
+            } else if engine != nil {
+                engine?.advance(by: delta, using: &generator)
+                moveOverlay()
+                setAnimation(engine?.animation ?? .idle)
+            }
         }
 
         advanceFrame(by: delta)
@@ -384,11 +463,12 @@ final class CompanionController {
 
     private func beginChat() {
         guard !state.isChatting, mode != .hidden else { return }
+        state.isMenuVisible = false
         bubbleDismissTask?.cancel()
         state.bubble = nil
         state.isChatting = true
         setAnimation(.waiting)
-        overlay.setChatting(true)
+        overlay.setPresentation(expanded: true, acceptsInput: true)
 
         if state.chatMessages.isEmpty {
             state.chatMessages = [
@@ -401,18 +481,30 @@ final class CompanionController {
         guard state.isChatting else { return }
         chatReplyTask?.cancel()
         chatReplyTask = nil
+        moodResetTask?.cancel()
+        moodResetTask = nil
         streamingMessageID = nil
         state.isAwaitingReply = false
         state.isChatting = false
-        overlay.setChatting(false)
+        overlay.setPresentation(expanded: false, acceptsInput: false)
         setAnimation(.idle)
     }
 
     /// 대화 문맥은 세션에 남는다. 창을 닫았다 열어도 앞의 대화를 이어서 기억한다.
+    /// 사용자 정보가 바뀌면 시스템 프롬프트가 달라지므로 세션을 새로 연다.
     private func chatSessionForCurrentCharacter() -> CompanionChatSession {
-        if let chatSession { return chatSession }
-        let session = chatProvider.makeSession(for: state.character)
+        let profile = CompanionUserProfile.load()
+        if let chatSession, profile == appliedUserProfile { return chatSession }
+
+        let session = chatProvider.makeSession(
+            CompanionChatContext(
+                character: state.character,
+                profile: profile,
+                modelContainer: modelContainer
+            )
+        )
         chatSession = session
+        appliedUserProfile = profile
         return session
     }
 
@@ -423,22 +515,70 @@ final class CompanionController {
         setAnimation(.review)
 
         let session = chatSessionForCurrentCharacter()
+        let isTaskQuestion = CompanionTaskQuestion.matches(message)
+        let items = isTaskQuestion ? todayBriefingItems() : []
+        let modelInput = CompanionChatComposer.modelInput(
+            userMessage: message,
+            taskDigest: isTaskQuestion
+                ? CompanionTaskDigest.format(items: items, now: Date())
+                : nil
+        )
+        // 일정은 모델의 문장이 아니라 저장된 데이터로 그린다.
+        pendingSchedule = isTaskQuestion
+            ? CompanionScheduleBuilder.entries(from: items, now: Date())
+            : []
+
         chatReplyTask?.cancel()
         chatReplyTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let reply = await session.reply(to: message) { [weak self] partial in
-                self?.applyStreamedReply(partial)
+            let reply = await session.reply(to: modelInput) { [weak self] partial in
+                self?.applyStreamedReply(partial.text)
             }
             guard !Task.isCancelled, self.state.isChatting else { return }
-            self.applyStreamedReply(reply)
+            self.applyStreamedReply(reply.text)
+            self.attachPendingSchedule()
             self.state.isAwaitingReply = false
             self.streamingMessageID = nil
+            self.reactWithMood(reply.mood)
+        }
+    }
+
+    /// 답변에 붙일 일정. 스트리밍이 끝난 뒤 마지막 말풍선에 실린다.
+    private var pendingSchedule: [CompanionScheduleEntry] = []
+
+    private func attachPendingSchedule() {
+        defer { pendingSchedule = [] }
+        guard !pendingSchedule.isEmpty else { return }
+
+        if let id = streamingMessageID,
+           let index = state.chatMessages.firstIndex(where: { $0.id == id }) {
+            state.chatMessages[index].schedule = pendingSchedule
+        } else {
+            state.chatMessages.append(
+                CompanionChatMessage(role: .companion, text: "", schedule: pendingSchedule)
+            )
+        }
+    }
+
+    /// 답의 감정에 맞는 동작을 잠깐 보여준 뒤 다시 듣는 자세로 돌아온다.
+    private func reactWithMood(_ mood: CompanionMood?) {
+        moodResetTask?.cancel()
+        guard let mood else {
+            setAnimation(.waiting)
+            return
+        }
+        setAnimation(mood.animation)
+
+        moodResetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.moodReactionSeconds))
+            guard let self, !Task.isCancelled, self.state.isChatting else { return }
             self.setAnimation(.waiting)
         }
     }
 
     /// 스트리밍으로 들어오는 누적 텍스트를 말풍선 하나에 계속 덮어쓴다.
     private func applyStreamedReply(_ text: String) {
+        let text = CompanionReplyFormatter.clean(text)
         guard !text.isEmpty else { return }
         state.isAwaitingReply = false
 
@@ -456,6 +596,8 @@ final class CompanionController {
     // MARK: - 일정 브리핑
 
     private func deliverBriefingIfDue() {
+        // 숨어 있거나 대화 중이면 건너뛴다. 다시 나타날 때 같은 조건으로 재시도된다.
+        guard mode == .roaming, !state.isChatting else { return }
         guard Self.isBriefingEnabled else { return }
         guard CompanionBriefingSchedule.shouldDeliver(
             now: Date(),
@@ -464,37 +606,81 @@ final class CompanionController {
             lastDeliveredAt: Self.lastBriefingDeliveredAt
         ) else { return }
 
-        let briefing = composeBriefing()
         UserDefaults.standard.set(
             Date().timeIntervalSince1970,
             forKey: Constants.AppStorageKey.companionBriefingLastDeliveredAt
         )
+        presentSchedule()
+    }
 
-        if briefing.isEmpty {
+    /// 캐릭터 오른쪽 클릭. 한 번 더 누르면 닫힌다.
+    private func toggleMenu() {
+        guard mode != .hidden else { return }
+        if state.isMenuVisible {
+            hideMenu()
+            return
+        }
+        bubbleDismissTask?.cancel()
+        bubbleDismissTask = nil
+        state.bubble = nil
+        state.isMenuVisible = true
+        // 메뉴가 캐릭터 위에 온전히 들어가도록 창을 넓힌다.
+        overlay.setPresentation(expanded: true, acceptsInput: false)
+    }
+
+    private func hideMenu() {
+        guard state.isMenuVisible else { return }
+        state.isMenuVisible = false
+        // 대화나 말풍선이 이어서 뜨면 그쪽에서 다시 크기를 정한다.
+        if !state.isChatting, state.bubble?.schedule.isEmpty ?? true {
+            overlay.setPresentation(expanded: false, acceptsInput: false)
+        }
+    }
+
+    /// 우클릭 메뉴에서 부르는 "오늘 일정 보기".
+    /// 하루 한 번 제한과 무관하게 언제든 다시 볼 수 있어야 하므로 전달 이력을 건드리지 않는다.
+    private func showScheduleOnDemand() {
+        guard mode != .hidden else { return }
+        if state.isChatting { endChat() }
+        presentSchedule()
+    }
+
+    /// 오늘 일정을 타임라인 말풍선으로 띄운다. 사용자가 닫을 때까지 남는다.
+    private func presentSchedule() {
+        state.isMenuVisible = false
+        // 채팅 답변과 같은 타임라인을 쓴다. 완료된 항목도 상태를 유지한 채 보여준다.
+        let entries = CompanionScheduleBuilder.entries(from: todayBriefingItems(), now: Date())
+        if entries.isEmpty {
             presentTemporaryBubble(
-                CompanionBubble(headline: briefing.headline, message: line(\.briefingEmpty)),
+                CompanionBubble(
+                    headline: CompanionBriefingSummary.headline(for: entries),
+                    message: line(\.briefingEmpty),
+                    isDismissible: true
+                ),
                 animation: .review,
-                seconds: 8
+                seconds: nil
             )
         } else {
             presentTemporaryBubble(
                 CompanionBubble(
-                    headline: briefing.headline,
+                    headline: CompanionBriefingSummary.headline(for: entries),
                     message: line(\.briefingIntro),
-                    detailLines: briefing.lines
+                    schedule: entries,
+                    isDismissible: true
                 ),
                 animation: .review,
-                seconds: 12
+                seconds: nil
             )
         }
     }
 
-    private func composeBriefing() -> CompanionBriefing {
-        guard let modelContext,
-              let memos = try? modelContext.fetch(FetchDescriptor<Memo>()) else {
-            return CompanionBriefing(headline: "오늘 일정 없음", lines: [])
+    /// 보관하지 않은 메모 전체를 브리핑·대화가 함께 쓰는 형태로 바꾼다.
+    private func todayBriefingItems() -> [CompanionBriefingItem] {
+        guard let modelContainer,
+              let memos = try? modelContainer.mainContext.fetch(FetchDescriptor<Memo>()) else {
+            return []
         }
-        let items = memos
+        return memos
             .filter { !$0.isArchivedValue }
             .map {
                 CompanionBriefingItem(
@@ -504,20 +690,33 @@ final class CompanionController {
                     deadline: $0.deadline
                 )
             }
-        return CompanionBriefingComposer.compose(items: items, now: Date())
     }
 
     // MARK: - 말풍선 유틸
 
+    /// 사용자가 직접 닫을 때까지 말풍선을 유지한다.
+    private func dismissBubble() {
+        bubbleDismissTask?.cancel()
+        bubbleDismissTask = nil
+        state.bubble = nil
+        overlay.setPresentation(expanded: false, acceptsInput: false)
+        setAnimation(.idle)
+    }
+
+    /// `seconds` 가 nil 이면 저절로 사라지지 않는다(브리핑처럼 사용자가 닫아야 하는 경우).
     private func presentTemporaryBubble(
         _ bubble: CompanionBubble,
         animation: CompanionAnimation,
-        seconds: Double,
+        seconds: Double?,
         thenRestoreBreakMenu: Bool = false
     ) {
         bubbleDismissTask?.cancel()
+        bubbleDismissTask = nil
         state.bubble = bubble
+        overlay.setPresentation(expanded: !bubble.schedule.isEmpty, acceptsInput: false)
         setAnimation(animation)
+
+        guard let seconds else { return }
 
         bubbleDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
@@ -526,13 +725,18 @@ final class CompanionController {
                 self.presentBreakMenu()
             } else if self.mode != .hidden {
                 self.state.bubble = nil
+                self.overlay.setPresentation(expanded: false, acceptsInput: false)
                 self.setAnimation(.idle)
             }
         }
     }
 
+    /// 상황에 맞는 대사 하나. 부를 이름을 정해뒀으면 앞에 붙인다.
     private func line(_ keyPath: KeyPath<CompanionLineCatalog, [String]>) -> String {
-        state.character.lines.pick(keyPath, using: &generator)
+        let text = state.character.lines.pick(keyPath, using: &generator)
+        let nickname = CompanionUserProfile.load().nickname
+        guard !nickname.isEmpty else { return text }
+        return "\(nickname), \(text)"
     }
 
     // MARK: - 설정 값

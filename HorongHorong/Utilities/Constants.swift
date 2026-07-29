@@ -563,6 +563,9 @@ enum Constants {
     static let companionMinimumRegionSize = CGSize(width: 160, height: 120)
     /// 걷는 속도(pt/초).
     static let companionWalkSpeed: CGFloat = 42
+    /// 컴패니언에게 넘길 사용자 메모 길이 상한. 온디바이스 모델의 짧은 컨텍스트를 지키기 위한 값이다.
+    static let companionUserNoteMaxLength = 300
+    static let companionUserNicknameMaxLength = 20
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
@@ -618,6 +621,8 @@ enum Constants {
         static let companionBriefingHour = "companion.briefingHour"
         static let companionBriefingMinute = "companion.briefingMinute"
         static let companionBriefingLastDeliveredAt = "companion.briefingLastDeliveredAt"
+        static let companionUserNickname = "companion.userNickname"
+        static let companionUserNote = "companion.userNote"
     }
 
     // MARK: - 메뉴바 표시 형식

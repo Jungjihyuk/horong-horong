@@ -15,6 +15,10 @@ struct CompanionPage: View {
     private var briefingHour: Int = Constants.defaultCompanionBriefingHour
     @AppStorage(Constants.AppStorageKey.companionBriefingMinute)
     private var briefingMinute: Int = Constants.defaultCompanionBriefingMinute
+    @AppStorage(Constants.AppStorageKey.companionUserNickname)
+    private var userNickname: String = ""
+    @AppStorage(Constants.AppStorageKey.companionUserNote)
+    private var userNote: String = ""
 
     var body: some View {
         SettingsPageScroll {
@@ -111,6 +115,55 @@ struct CompanionPage: View {
                 }
             }
 
+            SettingsGroupCard("호로롱이 알아둘 것") {
+                SettingsRow(
+                    "부를 이름",
+                    subtitle: "대화와 브리핑에서 이렇게 불러줍니다. 비워두면 부르지 않습니다."
+                ) {
+                    TextField("", text: $userNickname, prompt: Text("예: 지혁님"))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                        .disabled(!isEnabled)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("알아줬으면 하는 것")
+                        .font(.callout)
+                    Text("자유롭게 적어주세요. 대화할 때 참고합니다. 예: \"야근이 잦아요\", \"아침엔 말 걸지 마세요\"")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    TextEditor(text: $userNote)
+                        .font(.system(size: 12))
+                        .frame(height: 64)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(0.06))
+                        )
+                        .disabled(!isEnabled)
+
+                    HStack {
+                        Text("할일·집중 기록은 앱이 이미 알고 있어 여기에 적지 않아도 됩니다.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer(minLength: 8)
+                        Text("\(userNote.count)/\(Constants.companionUserNoteMaxLength)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(
+                                userNote.count > Constants.companionUserNoteMaxLength
+                                    ? AnyShapeStyle(Color.red)
+                                    : AnyShapeStyle(.tertiary)
+                            )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            }
+
             SettingsGroupCard("AI 대화") {
                 SettingsRow(
                     "대화 공급자",
@@ -175,5 +228,9 @@ struct CompanionPage: View {
     private func normalizeValues() {
         briefingHour = CompanionBriefingSchedule.normalizedHour(briefingHour)
         briefingMinute = CompanionBriefingSchedule.normalizedMinute(briefingMinute)
+
+        let profile = CompanionUserProfile.normalized(nickname: userNickname, note: userNote)
+        if profile.nickname != userNickname { userNickname = profile.nickname }
+        if profile.note != userNote { userNote = profile.note }
     }
 }

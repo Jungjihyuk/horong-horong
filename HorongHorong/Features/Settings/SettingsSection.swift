@@ -138,7 +138,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
     var tabs: [SettingsTab] {
         switch self {
         case .preferences: return [.general, .appearance, .hotkey]
-        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .companion, .achievement]
+        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .achievement, .companion]
         case .advanced:    return [.data, .about]
         }
     }

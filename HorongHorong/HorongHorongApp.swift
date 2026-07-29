@@ -351,7 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.quickMemoPanel.toggle(modelContext: context)
         }
 
-        companionController.start(modelContext: context)
+        companionController.start(modelContainer: modelContainer)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
