@@ -10,7 +10,7 @@ final class CompanionOverlayPanel {
     private var panel: CompanionPanel?
     private let state: CompanionPresentationState
     private var spriteOrigin: CGPoint = .zero
-    private var isChatting = false
+    private var isExpanded = false
 
     init(state: CompanionPresentationState) {
         self.state = state
@@ -19,7 +19,7 @@ final class CompanionOverlayPanel {
     var isVisible: Bool { panel?.isVisible == true }
 
     private var currentSize: CGSize {
-        isChatting ? Constants.companionChatOverlaySize : Constants.companionOverlaySize
+        isExpanded ? Constants.companionChatOverlaySize : Constants.companionOverlaySize
     }
 
     func show() {
@@ -51,8 +51,25 @@ final class CompanionOverlayPanel {
         panel.onCancel = { [weak self] in
             self?.state.onCloseChat()
         }
+        // 오른쪽 클릭은 뷰가 아니라 창에서 받는다.
+        // 캐릭터 위(하단 중앙 스프라이트 영역)를 눌렀을 때만 메뉴를 연다.
+        panel.onRightClick = { [weak self] pointInPanel in
+            guard let self else { return }
+            let size = self.currentSize
+            let spriteRect = NSRect(
+                x: (size.width - Constants.companionSpriteSize.width) / 2,
+                y: 0,
+                width: Constants.companionSpriteSize.width,
+                height: Constants.companionSpriteSize.height
+            )
+            guard spriteRect.contains(pointInPanel) else { return }
+            self.state.onRequestMenu()
+        }
 
         let hostingView = NSHostingView(rootView: CompanionView(state: state))
+        // 콘텐츠 크기로 창을 되돌리지 않게 막는다.
+        // 그대로 두면 말풍선이 나타날 때마다 창 크기가 이 뷰와 `applyFrame()` 사이에서 튄다.
+        hostingView.sizingOptions = []
         hostingView.frame = NSRect(origin: .zero, size: currentSize)
         panel.contentView = hostingView
 
@@ -64,19 +81,25 @@ final class CompanionOverlayPanel {
     func hide() {
         panel?.orderOut(nil)
         panel = nil
-        isChatting = false
+        isExpanded = false
     }
 
-    /// 대화 모드 전환. 창은 위쪽으로만 늘어나므로 캐릭터는 제자리에 남는다.
-    func setChatting(_ chatting: Bool) {
-        guard isChatting != chatting else { return }
-        isChatting = chatting
-        guard let panel else { return }
+    /// 창 크기와 입력 수용 여부를 함께 정한다.
+    /// 창은 위쪽으로만 늘어나므로 캐릭터는 제자리에 남는다.
+    /// 브리핑은 넓게 띄우되 입력은 받지 않아 사용자의 타이핑을 가로채지 않는다.
+    func setPresentation(expanded: Bool, acceptsInput: Bool) {
+        guard let panel else {
+            isExpanded = expanded
+            return
+        }
+        let sizeChanged = isExpanded != expanded
+        isExpanded = expanded
+        if sizeChanged { applyFrame() }
 
-        panel.isChatMode = chatting
-        applyFrame()
+        guard panel.isChatMode != acceptsInput else { return }
+        panel.isChatMode = acceptsInput
 
-        if chatting {
+        if acceptsInput {
             // 텍스트 입력을 받으려면 키 윈도우가 되어야 한다.
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
@@ -114,6 +137,11 @@ private final class CompanionPanel: NSPanel {
     /// 대화 중일 때만 입력을 받는다. 평소엔 눌러도 호롱호롱이 앞으로 나오지 않는다.
     var isChatMode = false
     var onCancel: (() -> Void)?
+    var onRightClick: ((NSPoint) -> Void)?
+
+    override func rightMouseDown(with event: NSEvent) {
+        onRightClick?(convertPoint(fromScreen: NSEvent.mouseLocation))
+    }
 
     override var canBecomeKey: Bool { isChatMode }
     override var canBecomeMain: Bool { false }
