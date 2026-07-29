@@ -1,0 +1,92 @@
+import Foundation
+
+/// 대화 한 세션. 이전 turn 의 문맥을 유지한다.
+@MainActor
+protocol CompanionChatSession: AnyObject {
+    /// 답을 만든다. 부분 응답이 들어올 때마다 `onPartial` 이 누적 텍스트로 불린다.
+    func reply(to message: String, onPartial: @escaping (String) -> Void) async -> String
+}
+
+/// 대화 공급자. 로컬 모델을 쓸 수 있으면 그쪽이, 아니면 고정 응답이 선택된다.
+@MainActor
+protocol CompanionChatProvider {
+    /// 설정 화면에 보여줄 이름.
+    var displayName: String { get }
+    /// 지금 이 기기에서 실제로 답을 만들 수 있는지.
+    var isAvailable: Bool { get }
+    func makeSession(for character: CompanionCharacter) -> CompanionChatSession
+}
+
+enum CompanionChatProviderFactory {
+    /// 로컬 모델을 쓸 수 있으면 그것을, 아니면 고정 응답 공급자를 돌려준다.
+    /// 대화·추론은 전부 기기 안에서 끝나며 어떤 경우에도 네트워크로 나가지 않는다.
+    @MainActor
+    static func make() -> CompanionChatProvider {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) {
+            let provider = FoundationModelsCompanionChatProvider()
+            if provider.isAvailable { return provider }
+        }
+        #endif
+        return ScriptedCompanionChatProvider()
+    }
+}
+
+/// 로컬 모델을 쓸 수 없는 기기에서의 대체 응답.
+@MainActor
+final class ScriptedCompanionChatProvider: CompanionChatProvider {
+    var displayName: String { "고정 응답" }
+    var isAvailable: Bool { true }
+
+    func makeSession(for character: CompanionCharacter) -> CompanionChatSession {
+        ScriptedCompanionChatSession()
+    }
+}
+
+@MainActor
+private final class ScriptedCompanionChatSession: CompanionChatSession {
+    func reply(to message: String, onPartial: @escaping (String) -> Void) async -> String {
+        try? await Task.sleep(for: .milliseconds(400))
+        return "이 기기에서는 아직 로컬 AI 모델을 쓸 수 없어요. "
+            + "그래도 얘기는 잘 들었어요 — 필요한 게 있으면 설정에서 확인해 보세요."
+    }
+}
+
+/// 컴패니언 대화용 프롬프트. 성취 기능과 같은 규약(`Resources/Prompts/*.md` + `{{key}}`)을 쓴다.
+enum CompanionPromptTemplate {
+    static func instructions(for character: CompanionCharacter) -> String {
+        render(
+            fileName: "companion_chat",
+            fallback: fallbackInstructions,
+            values: [
+                "characterName": character.displayName,
+                "tagline": character.tagline,
+            ]
+        )
+    }
+
+    private static func render(
+        fileName: String,
+        fallback: String,
+        values: [String: String]
+    ) -> String {
+        var result = load(fileName: fileName) ?? fallback
+        for (key, value) in values {
+            result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
+        }
+        return result
+    }
+
+    private static func load(fileName: String) -> String? {
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: "md") else {
+            return nil
+        }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    private static let fallbackInstructions = """
+    너는 macOS 생산성 앱 "호롱호롱"의 화면 위에 사는 컴패니언 "{{characterName}}"이야.
+    한국어로 부드러운 존댓말을 쓰고, 말풍선이 좁으니 2~3문장 안에서 끝내.
+    모르는 건 모른다고 말하고, 사용자의 일정·할일 내용을 지어내지 마.
+    """
+}

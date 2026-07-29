@@ -111,10 +111,32 @@ struct CompanionPage: View {
                 }
             }
 
+            SettingsGroupCard("AI 대화") {
+                SettingsRow(
+                    "대화 공급자",
+                    subtitle: isLocalModelReady
+                        ? "캐릭터를 클릭하면 이 모델과 대화합니다."
+                        : "이 기기에서는 온디바이스 모델을 쓸 수 없어 고정 응답으로 답합니다. "
+                            + "Apple Intelligence를 지원하는 기기와 macOS 26 이상이 필요합니다."
+                ) {
+                    Text(chatProviderName)
+                        .font(.callout)
+                        .foregroundStyle(isLocalModelReady ? .primary : .secondary)
+                }
+
+                SettingsRow(
+                    "개인정보",
+                    subtitle: "대화 내용과 추론은 이 기기 안에서만 처리되며 외부로 전송되지 않습니다."
+                ) {
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             SettingsGroupCard("준비 중") {
                 SettingsRow(
-                    "로컬 AI 대화",
-                    subtitle: "쉬는 시간 '대화하기' 와 음성 입출력은 로컬 모델 연동과 함께 제공될 예정입니다.",
+                    "음성 입력·출력",
+                    subtitle: "말로 걸고 목소리로 답하는 기능은 이후에 제공될 예정입니다.",
                     comingSoon: true
                 )
             }
@@ -124,6 +146,17 @@ struct CompanionPage: View {
 
     private var roamingRegion: CGRect? {
         CompanionRoamingRegion.rect(fromStorageValue: roamingRegionRaw)
+    }
+
+    private var chatProvider: CompanionChatProvider {
+        CompanionChatProviderFactory.make()
+    }
+
+    private var chatProviderName: String { chatProvider.displayName }
+
+    /// 고정 응답 공급자로 떨어졌는지 여부. 안내 문구를 바꾸는 데 쓴다.
+    private var isLocalModelReady: Bool {
+        !(chatProvider is ScriptedCompanionChatProvider)
     }
 
     private var briefingTime: Date {
