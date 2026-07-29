@@ -68,20 +68,43 @@ private final class FoundationModelsCompanionChatSession: CompanionChatSession {
     ) async -> CompanionChatReply {
         let options = GenerationOptions(temperature: 0.8, maximumResponseTokens: 220)
 
-        do {
-            return try await stream(message, options: options, onPartial: onPartial)
-        } catch {
-            // 문맥이 넘치면 대화를 새로 열고 한 번만 다시 시도한다.
-            session = Self.makeSession(context)
-            do {
-                return try await stream(message, options: options, onPartial: onPartial)
-            } catch {
-                return CompanionChatReply(
-                    text: "지금은 생각이 잘 안 나요. 잠시 뒤에 다시 말 걸어 주세요.",
-                    mood: .concerned
-                )
-            }
+        // 1) 감정까지 함께 받는 정상 경로.
+        if let reply = try? await stream(message, options: options, onPartial: onPartial) {
+            return reply
         }
+
+        // 2) 구조화 출력은 안전 필터에 오탐으로 걸리는 일이 있다.
+        //    그럴 때도 대화가 끊기지 않도록 감정 없이 평문으로 한 번 더 시도한다.
+        if let reply = try? await streamPlainText(message, options: options, onPartial: onPartial) {
+            return reply
+        }
+
+        // 3) 문맥이 넘쳤을 수 있으니 대화를 새로 열고 마지막으로 시도한다.
+        session = Self.makeSession(context)
+        if let reply = try? await streamPlainText(message, options: options, onPartial: onPartial) {
+            return reply
+        }
+
+        return CompanionChatReply(
+            text: "지금은 생각이 잘 안 나요. 잠시 뒤에 다시 말 걸어 주세요.",
+            mood: .concerned
+        )
+    }
+
+    /// 감정 없이 말만 받는 경로. 구조화 출력이 막혔을 때 쓴다.
+    private func streamPlainText(
+        _ message: String,
+        options: GenerationOptions,
+        onPartial: @escaping (CompanionChatReply) -> Void
+    ) async throws -> CompanionChatReply {
+        var latest = ""
+        for try await partial in session.streamResponse(to: message, options: options) {
+            latest = partial.content
+            onPartial(CompanionChatReply(text: latest, mood: nil))
+        }
+        let trimmed = latest.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw CancellationError() }
+        return CompanionChatReply(text: trimmed, mood: nil)
     }
 
     /// 말은 흘러나오고 감정은 마지막에 확정된다.

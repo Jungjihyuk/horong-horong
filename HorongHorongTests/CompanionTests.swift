@@ -566,14 +566,25 @@ final class CompanionUserProfileTests: XCTestCase {
         let profile = CompanionUserProfile.normalized(nickname: "지혁님", note: "")
 
         XCTAssertTrue(profile.promptSection.contains("지혁님"))
-        XCTAssertTrue(profile.promptSection.contains("부릅니다"))
-        XCTAssertFalse(profile.promptSection.contains("알아줬으면"))
+        XCTAssertFalse(profile.promptSection.contains("참고 사항"))
     }
 
     func testNoteAloneIsCarriedIntoThePrompt() {
         let profile = CompanionUserProfile.normalized(nickname: "", note: "야근이 잦아요")
 
         XCTAssertTrue(profile.promptSection.contains("야근이 잦아요"))
+    }
+
+    /// 호칭을 따옴표로 감싸 "이렇게 부르라"고 지시하면 안전 필터가 역할 조작으로 오탐해
+    /// 응답 자체가 막힌다. 사실을 나열하는 형태를 유지해야 한다.
+    func testPromptSectionAvoidsQuotedNamingInstruction() {
+        let section = CompanionUserProfile
+            .normalized(nickname: "지혁", note: "야근이 잦아요")
+            .promptSection
+
+        XCTAssertFalse(section.contains("\""), "호칭을 따옴표로 감싸면 안 된다")
+        XCTAssertFalse(section.contains("부릅니다"), "호칭을 지시문으로 쓰면 안 된다")
+        XCTAssertTrue(section.contains("사용자 호칭: 지혁"))
     }
 
     func testWhitespaceOnlyInputIsTreatedAsEmpty() {

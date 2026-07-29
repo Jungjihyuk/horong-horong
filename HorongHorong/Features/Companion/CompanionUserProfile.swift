@@ -28,16 +28,18 @@ struct CompanionUserProfile: Equatable, Sendable {
 
     /// 시스템 프롬프트에 덧붙일 문단. 비어 있으면 아무것도 더하지 않는다.
     var promptSection: String {
-        // 지시문의 말투를 모델이 그대로 따라하므로, 이 문단도 존댓말로 맞춘다.
+        // 문구가 중요하다. `사용자를 "이름" 이라고 부릅니다` 처럼 호칭을 따옴표로 지시하면
+        // 안전 필터가 역할 조작으로 오탐해 응답 자체를 막아버린다(실측 12/12 차단).
+        // 사실을 나열하는 `키: 값` 형태는 통과한다.
         var lines: [String] = []
         if !nickname.isEmpty {
-            lines.append("사용자를 \"\(nickname)\" 이라고 부릅니다.")
+            lines.append("사용자 호칭: \(nickname)")
         }
         if !note.isEmpty {
-            lines.append("사용자가 알아줬으면 하는 것: \(note)")
+            lines.append("참고 사항: \(note)")
         }
         guard !lines.isEmpty else { return "" }
-        return "\n\n사용자에 대해 알아둘 것:\n" + lines.map { "- \($0)" }.joined(separator: "\n")
+        return "\n\n" + lines.joined(separator: "\n")
     }
 
     static func load(from defaults: UserDefaults = .standard) -> CompanionUserProfile {
