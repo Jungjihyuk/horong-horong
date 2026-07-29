@@ -71,6 +71,15 @@ struct CompanionRoamingEngine {
         position = Self.clamp(position, to: bounds)
     }
 
+    /// 사용자가 캐릭터를 끌어 옮겼을 때. 활동 영역 안으로 붙잡고, 가던 목표는 버린다.
+    mutating func reposition(to point: CGPoint) {
+        position = Self.clamp(point, to: bounds)
+        target = nil
+        motion = .resting
+        // 놓자마자 다시 걸어가버리지 않도록 잠깐 멈춰 세운다.
+        restRemainingSeconds = 0.8
+    }
+
     private mutating func chooseTarget(using generator: inout some RandomNumberGenerator) {
         let nextX = bounds.width > 0
             ? CGFloat.random(in: bounds.minX...bounds.maxX, using: &generator)

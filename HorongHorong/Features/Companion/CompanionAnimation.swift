@@ -46,6 +46,7 @@ final class CompanionSpriteLoader {
     static let shared = CompanionSpriteLoader()
 
     private var cache: [String: [NSImage]] = [:]
+    private var maskCache: [String: CompanionSpriteMask] = [:]
 
     private init() {}
 
@@ -55,6 +56,40 @@ final class CompanionSpriteLoader {
         let frames = loadFrames(at: key)
         cache[key] = frames
         return frames
+    }
+
+    /// 실제로 그려진 부분만 나타내는 격자 마스크. 클릭·호버 판정에 쓰며 한 번 계산해 캐시한다.
+    func hitMask(for character: CompanionCharacter, animation: CompanionAnimation) -> CompanionSpriteMask {
+        let key = "\(character.spriteRoot)/\(animation.directoryName)"
+        if let cached = maskCache[key] { return cached }
+
+        let masks = frames(for: character, animation: animation).compactMap(Self.mask(of:))
+        let mask = CompanionSpriteMetrics.union(masks)
+        maskCache[key] = mask
+        return mask
+    }
+
+    private static func mask(of image: NSImage) -> CompanionSpriteMask? {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.bitmapData,
+              rep.hasAlpha,
+              rep.bitsPerSample == 8,
+              rep.samplesPerPixel >= 4 else {
+            return nil
+        }
+
+        let samplesPerPixel = rep.samplesPerPixel
+        let bytesPerRow = rep.bytesPerRow
+        // 알파 10% 미만은 사실상 안 보이므로 클릭 영역에서 뺀다.
+        let threshold: UInt8 = 25
+
+        return CompanionSpriteMetrics.mask(
+            width: rep.pixelsWide,
+            height: rep.pixelsHigh
+        ) { x, y in
+            data[y * bytesPerRow + x * samplesPerPixel + 3] > threshold
+        }
     }
 
     private func loadFrames(at relativePath: String) -> [NSImage] {

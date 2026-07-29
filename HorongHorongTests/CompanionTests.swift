@@ -249,6 +249,122 @@ final class CompanionRoamingEngineTests: XCTestCase {
     }
 }
 
+final class CompanionSpriteMetricsTests: XCTestCase {
+    /// 캐릭터가 없는 칸은 클릭 영역에서 빠져야 한다.
+    func testMaskMarksOnlyDrawnCells() {
+        // 8x8 이미지를 4x4 격자로. 왼쪽 위 사분면만 그려져 있다.
+        let mask = CompanionSpriteMetrics.mask(width: 8, height: 8, columns: 4, rows: 4) { x, y in
+            x < 4 && y < 4
+        }
+
+        XCTAssertTrue(mask.isFilled(column: 0, row: 0))
+        XCTAssertTrue(mask.isFilled(column: 1, row: 1))
+        XCTAssertFalse(mask.isFilled(column: 2, row: 0))
+        XCTAssertFalse(mask.isFilled(column: 0, row: 2))
+        XCTAssertEqual(mask.filledCellCount, 4)
+    }
+
+    /// 실루엣 사이의 빈 공간(예: 몸통과 등불 사이)도 뚫려야 한다.
+    func testMaskLeavesHolesInsideTheSilhouette() {
+        let mask = CompanionSpriteMetrics.mask(width: 8, height: 8, columns: 4, rows: 4) { x, y in
+            !(x >= 2 && x < 4 && y >= 2 && y < 4)
+        }
+
+        XCTAssertFalse(mask.isFilled(column: 1, row: 1))
+        XCTAssertTrue(mask.isFilled(column: 0, row: 0))
+        XCTAssertEqual(mask.filledCellCount, 15)
+    }
+
+    /// 전부 투명하면 클릭 영역이 사라지므로 전체를 덮는다.
+    func testFullyTransparentImageFallsBackToFullMask() {
+        let mask = CompanionSpriteMetrics.mask(width: 8, height: 8, columns: 4, rows: 4) { _, _ in false }
+
+        XCTAssertEqual(mask.filledCellCount, 16)
+    }
+
+    func testZeroSizedImageFallsBackToFullMask() {
+        let mask = CompanionSpriteMetrics.mask(width: 0, height: 0, columns: 4, rows: 4) { _, _ in true }
+
+        XCTAssertEqual(mask.filledCellCount, 16)
+    }
+
+    func testOutOfRangeCellIsNotFilled() {
+        let mask = CompanionSpriteMetrics.mask(width: 8, height: 8, columns: 4, rows: 4) { _, _ in true }
+
+        XCTAssertFalse(mask.isFilled(column: -1, row: 0))
+        XCTAssertFalse(mask.isFilled(column: 4, row: 0))
+        XCTAssertFalse(mask.isFilled(column: 0, row: 9))
+    }
+
+    /// 프레임마다 판정 영역이 흔들리지 않도록 애니메이션 전체의 합집합을 쓴다.
+    func testUnionCoversEveryFrame() {
+        let left = CompanionSpriteMetrics.mask(width: 4, height: 4, columns: 2, rows: 2) { x, _ in x < 2 }
+        let bottom = CompanionSpriteMetrics.mask(width: 4, height: 4, columns: 2, rows: 2) { _, y in y >= 2 }
+
+        let union = CompanionSpriteMetrics.union([left, bottom])
+
+        XCTAssertTrue(union.isFilled(column: 0, row: 0))
+        XCTAssertTrue(union.isFilled(column: 1, row: 1))
+        XCTAssertFalse(union.isFilled(column: 1, row: 0))
+    }
+
+    func testUnionOfNothingIsFullMask() {
+        let mask = CompanionSpriteMetrics.union([])
+
+        XCTAssertEqual(
+            mask.filledCellCount,
+            CompanionSpriteMetrics.maskColumns * CompanionSpriteMetrics.maskRows
+        )
+    }
+
+    /// 격자 크기가 다른 마스크를 합치려 하면 원본을 그대로 둔다.
+    func testUnionIgnoresMismatchedGrid() {
+        let small = CompanionSpriteMetrics.mask(width: 4, height: 4, columns: 2, rows: 2) { _, _ in true }
+        let large = CompanionSpriteMetrics.mask(width: 8, height: 8, columns: 4, rows: 4) { _, _ in true }
+
+        XCTAssertEqual(small.union(large), small)
+    }
+}
+
+final class CompanionDragTests: XCTestCase {
+    private let bounds = CGRect(x: 100, y: 200, width: 600, height: 400)
+
+    func testRepositionMovesCompanionAndStopsIt() {
+        var engine = CompanionRoamingEngine(bounds: bounds, start: CGPoint(x: 150, y: 250), speed: 200)
+        var generator = SeededGenerator(seed: 1)
+        // 먼저 걷게 만든다
+        while engine.motion == .resting {
+            engine.advance(by: 0.05, using: &generator)
+        }
+
+        engine.reposition(to: CGPoint(x: 500, y: 500))
+
+        XCTAssertEqual(engine.position, CGPoint(x: 500, y: 500))
+        XCTAssertEqual(engine.motion, .resting)
+    }
+
+    /// 활동 영역 밖으로 끌어도 영역 안에 붙잡혀야 한다.
+    func testRepositionClampsToBounds() {
+        var engine = CompanionRoamingEngine(bounds: bounds, start: CGPoint(x: 200, y: 300))
+
+        engine.reposition(to: CGPoint(x: -9_999, y: 9_999))
+
+        XCTAssertEqual(engine.position, CGPoint(x: bounds.minX, y: bounds.maxY))
+    }
+
+    /// 놓자마자 다시 걸어가버리면 배치가 튄다. 잠깐 멈춰 있어야 한다.
+    func testCompanionPausesBrieflyAfterBeingDropped() {
+        var engine = CompanionRoamingEngine(bounds: bounds, start: CGPoint(x: 200, y: 300), speed: 200)
+        var generator = SeededGenerator(seed: 2)
+
+        engine.reposition(to: CGPoint(x: 400, y: 400))
+        engine.advance(by: 0.3, using: &generator)
+
+        XCTAssertEqual(engine.position, CGPoint(x: 400, y: 400))
+        XCTAssertEqual(engine.motion, .resting)
+    }
+}
+
 final class CompanionBriefingTests: XCTestCase {
     private var calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)

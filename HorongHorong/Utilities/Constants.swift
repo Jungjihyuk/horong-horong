@@ -557,6 +557,8 @@ enum Constants {
     static let companionSpriteSize = CGSize(width: 96, height: 104)
     /// 말풍선까지 담는 오버레이 창 크기. 스프라이트는 하단 중앙에 놓인다.
     static let companionOverlaySize = CGSize(width: 300, height: 216)
+    /// 대화 모드에서 위로 늘어난 오버레이 창 크기. 스프라이트 위치는 그대로 두고 위쪽만 커진다.
+    static let companionChatOverlaySize = CGSize(width: 340, height: 440)
     /// 마우스로 지정할 수 있는 활동 영역의 최소 크기. 이보다 작게 그리면 취소로 본다.
     static let companionMinimumRegionSize = CGSize(width: 160, height: 120)
     /// 걷는 속도(pt/초).
