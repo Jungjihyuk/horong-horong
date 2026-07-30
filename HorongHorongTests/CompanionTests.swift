@@ -622,6 +622,58 @@ final class CompanionOnboardingScriptTests: XCTestCase {
         XCTAssertEqual(scenarios.first?.steps.first?.title, "대사 있는 단계")
     }
 
+    func testHighlightIsParsed() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        <!-- screen: popover.timer -->
+        <!-- highlight: timer.startFocus -->
+        > 눌러보세요.
+        """).first?.steps
+
+        XCTAssertEqual(steps?.first?.highlight, "timer.startFocus")
+    }
+
+    func testActionIsParsed() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        <!-- screen: popover.timer -->
+        <!-- action: timer.openTaskPicker -->
+        > 펼쳐볼게요.
+        """).first?.steps
+
+        XCTAssertEqual(steps?.first?.action, "timer.openTaskPicker")
+    }
+
+    func testStepWithoutActionHasNone() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        > 안녕하세요.
+        """).first?.steps
+
+        XCTAssertNil(steps?.first?.action)
+    }
+
+    func testStepWithoutHighlightHasNone() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        > 눌러보세요.
+        """).first?.steps
+
+        XCTAssertNil(steps?.first?.highlight)
+    }
+
     func testUnknownScreenIsIgnored() {
         let steps = CompanionOnboardingScript.parse("""
         ## 시나리오
@@ -637,6 +689,29 @@ final class CompanionOnboardingScriptTests: XCTestCase {
 
     func testEmptyDocumentProducesNoScenarios() {
         XCTAssertTrue(CompanionOnboardingScript.parse("").isEmpty)
+    }
+}
+
+final class CompanionMarkdownTests: XCTestCase {
+    /// 대본의 별표가 화면에 그대로 보이면 안 된다.
+    func testAsterisksAreNotShown() {
+        let styled = CompanionMarkdown.styled("**집중 시작**을 누르세요.")
+
+        XCTAssertEqual(String(styled.characters), "집중 시작을 누르세요.")
+    }
+
+    func testEmphasisGetsTheAccentColor() {
+        let styled = CompanionMarkdown.styled("**집중 시작**을 누르세요.")
+        let tinted = styled.runs.contains { $0.foregroundColor == CompanionHighlightStyle.tint }
+
+        XCTAssertTrue(tinted)
+    }
+
+    func testPlainTextIsUnchanged() {
+        XCTAssertEqual(
+            String(CompanionMarkdown.styled("그냥 문장이에요.").characters),
+            "그냥 문장이에요."
+        )
     }
 }
 
@@ -669,6 +744,220 @@ final class CompanionOnboardingTriggerTests: XCTestCase {
             CompanionOnboardingTrigger.shouldStartAutomatically(
                 hasSeenOnboarding: false, memoCount: 0, focusSessionCount: 1
             )
+        )
+    }
+}
+
+final class CompanionAppFactsTests: XCTestCase {
+    /// 나열형 사실은 코드에서 만들어야 기능이 바뀌어도 답이 틀리지 않는다.
+    func testThemeFactMatchesTheActualThemes() {
+        let line = CompanionAppFacts.matching("무슨 테마가 있는데?")
+
+        XCTAssertNotNil(line)
+        for theme in Constants.PopoverTheme.allCases {
+            XCTAssertTrue(line!.contains(theme.label), theme.label)
+        }
+    }
+
+    func testTabFactListsEveryPopoverTab() {
+        let line = CompanionAppFacts.matching("무슨 탭이 있어?")
+
+        XCTAssertNotNil(line)
+        for tab in PopoverTab.allCases {
+            XCTAssertTrue(line!.contains(tab.rawValue), tab.rawValue)
+        }
+    }
+
+    /// 경로가 있으면 근거에 함께 실려 모델이 그대로 말하게 된다.
+    func testPathIsIncludedInEvidence() {
+        let line = CompanionAppFacts.matching("테마 어떻게 바꿔?")
+
+        XCTAssertNotNil(line)
+        XCTAssertTrue(line!.contains("설정 → 외관 → 테마"))
+    }
+
+    func testDestinationIsResolvedForTheme() {
+        let destination = CompanionAppFacts.destination(for: "테마 어떻게 바꿔?")
+
+        XCTAssertEqual(destination?.tab, .appearance)
+        XCTAssertEqual(destination?.highlight, "settings.theme")
+    }
+
+    func testNoDestinationForQuestionsWithoutOne() {
+        XCTAssertNil(CompanionAppFacts.destination(for: "메모 아이콘 뭐 있어?"))
+    }
+
+    func testUnrelatedQuestionHasNoFacts() {
+        XCTAssertNil(CompanionAppFacts.matching("오늘 기분이 어때?"))
+    }
+
+    /// 여러 주제가 걸리면 모두 넣는다.
+    func testMultipleFactsAreJoined() {
+        let line = CompanionAppFacts.matching("테마랑 탭 알려줘")
+
+        XCTAssertNotNil(line)
+        XCTAssertTrue(line!.contains("테마"))
+        XCTAssertTrue(line!.contains("탭"))
+    }
+
+    func testMatchingIsCaseInsensitive() {
+        XCTAssertNotNil(CompanionAppFacts.matching("AGENT 뭐 쓸 수 있어?"))
+    }
+}
+
+final class CompanionGuideTests: XCTestCase {
+    private let sample = """
+    # 사용법
+
+    ## 4. 타이머 탭
+
+    기본 프리셋은 포모도로입니다.
+
+    ## 5. 메모 탭
+
+    퀵 메모 단축키는 ⌘⇧N 입니다.
+    """
+
+    func testSectionsAreSplitByHeading() {
+        let sections = CompanionGuide.sections(from: sample)
+
+        XCTAssertEqual(sections.map(\.title), ["4. 타이머 탭", "5. 메모 탭"])
+    }
+
+    func testEmptySectionIsDropped() {
+        let sections = CompanionGuide.sections(from: "## 빈 섹션\n\n## 내용 있음\n본문")
+
+        XCTAssertEqual(sections.map(\.title), ["내용 있음"])
+    }
+
+    func testBestMatchPrefersTitleHit() {
+        let sections = CompanionGuide.sections(from: sample)
+        let match = CompanionGuide.bestMatch(for: "메모 탭이 뭐야?", in: sections)
+
+        XCTAssertEqual(match?.title, "5. 메모 탭")
+    }
+
+    /// 조사가 붙어도 걸려야 한다.
+    func testKoreanParticlesAreStripped() {
+        let tokens = CompanionGuide.searchTokens(in: "테마를 바꾸려면?")
+
+        XCTAssertTrue(tokens.contains("테마"))
+    }
+
+    /// 근거가 없으면 아무것도 주지 않아 모델이 지어내지 않게 한다.
+    func testNoMatchReturnsNil() {
+        let sections = CompanionGuide.sections(from: sample)
+
+        XCTAssertNil(CompanionGuide.bestMatch(for: "김치찌개 끓이는 법", in: sections))
+    }
+
+    func testLongSectionIsClipped() {
+        let clipped = CompanionGuide.clipped(String(repeating: "가", count: 900), limit: 100)
+
+        XCTAssertTrue(clipped.count < 200)
+        XCTAssertTrue(clipped.hasSuffix("(이하 생략)"))
+    }
+
+    func testUsageQuestionsAreDetected() {
+        for message in ["테마 어떻게 바꿔?", "단축키 뭐가 있어?", "통계 어디서 봐?"] {
+            XCTAssertTrue(CompanionGuideQuestion.matches(message), message)
+        }
+    }
+
+    func testSmallTalkIsNotAUsageQuestion() {
+        XCTAssertFalse(CompanionGuideQuestion.matches("오늘 날씨 좋네"))
+    }
+}
+
+final class CompanionEvidencePromptTests: XCTestCase {
+    /// 근거를 넣으면 "이 안에서만 답하라" 는 지시가 함께 들어가야 한다.
+    func testEvidencePromptForbidsInvention() {
+        let input = CompanionChatComposer.modelInput(
+            userMessage: "무슨 테마가 있어?",
+            appFacts: "팝오버 테마: 따뜻한 등불"
+        )
+
+        XCTAssertTrue(input.contains("따뜻한 등불"))
+        XCTAssertTrue(input.contains("절대 말하지 마"))
+    }
+
+    func testFactsAndGuideAreBothIncluded() {
+        let input = CompanionChatComposer.modelInput(
+            userMessage: "테마 바꾸는 법",
+            appFacts: "팝오버 테마: 게임 픽셀",
+            guideSection: "7. 설정 창\n외관에서 바꿉니다."
+        )
+
+        XCTAssertTrue(input.contains("게임 픽셀"))
+        XCTAssertTrue(input.contains("외관에서 바꿉니다"))
+    }
+
+    /// 근거가 없으면 사용자 말을 그대로 보낸다.
+    func testNoEvidenceLeavesMessageUntouched() {
+        XCTAssertEqual(
+            CompanionChatComposer.modelInput(userMessage: "안녕"),
+            "안녕"
+        )
+    }
+
+    /// 할일 질문은 기존 경로를 그대로 쓴다.
+    func testTaskDigestTakesPrecedence() {
+        let input = CompanionChatComposer.modelInput(
+            userMessage: "오늘 할일 뭐야?",
+            taskDigest: "오늘 등록된 할일: 없음",
+            appFacts: "팝오버 테마: 게임 픽셀"
+        )
+
+        XCTAssertTrue(input.contains("오늘 등록된 할일"))
+        XCTAssertFalse(input.contains("게임 픽셀"))
+    }
+}
+
+final class CompanionSettingsIndexTests: XCTestCase {
+    /// 주제마다 규칙을 손으로 쓰지 않고, 앱이 이미 가진 검색 색인으로 찾아야 한다.
+    func testFindsPageFromRowKeyword() {
+        XCTAssertEqual(
+            CompanionSettingsIndex.bestMatch(for: "미리알림 연동할 수 있어?")?.tab,
+            .memo
+        )
+    }
+
+    func testFindsPageFromPageName() {
+        XCTAssertEqual(
+            CompanionSettingsIndex.bestMatch(for: "단축키 어디서 바꿔?")?.tab,
+            .hotkey
+        )
+    }
+
+    func testUnrelatedQuestionFindsNothing() {
+        XCTAssertNil(CompanionSettingsIndex.bestMatch(for: "김치찌개 끓이는 법"))
+    }
+
+    /// 근거는 실제 경로를 담되 짧아야 한다.
+    /// 길게 늘어놓으면 그 안의 다른 이름을 골라 엉뚱한 경로를 만든다(실측).
+    func testEvidenceIsShortAndCarriesRealPath() {
+        let evidence = CompanionSettingsIndex.bestMatch(for: "미리알림 연동")?.evidence
+
+        XCTAssertNotNil(evidence)
+        XCTAssertTrue(evidence!.contains("설정 → 메모"))
+        XCTAssertLessThan(evidence!.count, 60)
+    }
+}
+
+/// 색인이 낡으면 앱 검색과 호로롱 답변이 함께 틀린다.
+final class SettingsSearchIndexTests: XCTestCase {
+    func testAppearanceKeywordsMatchActualThemes() {
+        for theme in Constants.PopoverTheme.allCases {
+            XCTAssertTrue(
+                SettingsTab.appearance.searchKeywords.contains(theme.label),
+                "테마 \(theme.label) 가 검색 색인에 없다"
+            )
+        }
+    }
+
+    func testMemoKeywordsCoverRemindersImport() {
+        XCTAssertTrue(
+            SettingsTab.memo.searchKeywords.contains { $0.contains("미리알림") }
         )
     }
 }

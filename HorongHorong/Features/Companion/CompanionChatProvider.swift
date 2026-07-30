@@ -13,8 +13,10 @@ struct CompanionChatContext {
 @MainActor
 protocol CompanionChatSession: AnyObject {
     /// 답을 만든다. 부분 응답이 들어올 때마다 `onPartial` 이 누적 결과로 불린다.
+    /// `precise` 는 근거를 함께 넘겼다는 뜻. 그럴 때는 낮은 온도로 답한다.
     func reply(
         to message: String,
+        precise: Bool,
         onPartial: @escaping (CompanionChatReply) -> Void
     ) async -> CompanionChatReply
 }
@@ -57,8 +59,10 @@ final class ScriptedCompanionChatProvider: CompanionChatProvider {
 
 @MainActor
 private final class ScriptedCompanionChatSession: CompanionChatSession {
+    /// `precise` 는 근거를 함께 넘겼다는 뜻. 그럴 때는 낮은 온도로 답한다.
     func reply(
         to message: String,
+        precise: Bool,
         onPartial: @escaping (CompanionChatReply) -> Void
     ) async -> CompanionChatReply {
         try? await Task.sleep(for: .milliseconds(400))

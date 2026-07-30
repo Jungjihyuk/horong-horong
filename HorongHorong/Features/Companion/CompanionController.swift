@@ -113,6 +113,7 @@ final class CompanionController {
         moodResetTask = nil
         briefingTimer?.invalidate()
         briefingTimer = nil
+        CompanionSpotlight.shared.hide()
         for observer in systemTimeObservers {
             NotificationCenter.default.removeObserver(observer)
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
@@ -436,6 +437,13 @@ final class CompanionController {
 
     /// 아직 본 적 없고 쓴 흔적도 없을 때만 저절로 시작한다.
     private func startOnboardingIfNeeded() {
+        if ProcessInfo.processInfo.environment["HORONG_FORCE_ONBOARDING"] == "1" {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(1.5))
+                self?.startOnboarding()
+            }
+            return
+        }
         guard CompanionOnboardingTrigger.shouldStartAutomatically(
             hasSeenOnboarding: UserDefaults.standard.bool(
                 forKey: Constants.AppStorageKey.companionOnboardingSeen
@@ -472,6 +480,7 @@ final class CompanionController {
         hideMenu()
         onboardingSteps = steps
         onboardingIndex = 0
+        CompanionSpotlight.shared.show()
         presentCurrentOnboardingStep()
     }
 
@@ -486,20 +495,62 @@ final class CompanionController {
         if let screen = step.screen {
             CompanionOnboardingPresenter.show(screen)
         }
+        if let action = step.action {
+            // 화면이 뜬 뒤에 눌러야 한다.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                CompanionOnboardingPresenter.perform(action)
+            }
+        }
+        // 화면이 그려진 뒤에 강조해야 테두리가 제자리에 붙는다.
+        let highlight = step.highlight ?? step.screen.flatMap(Self.defaultHighlight)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            CompanionHighlightCenter.shared.highlight(highlight)
+        }
 
+        let isFirst = onboardingIndex == 0
         let isLast = onboardingIndex == onboardingSteps.count - 1
+        var actions: [CompanionBubbleAction] = []
+        if !isFirst {
+            actions.append(
+                CompanionBubbleAction(title: "이전") { [weak self] in
+                    self?.rewindOnboarding()
+                }
+            )
+        }
+        actions.append(
+            CompanionBubbleAction(title: isLast ? "다 봤어요" : "다음") { [weak self] in
+                self?.advanceOnboarding()
+            }
+        )
+
+        // 앞서 걸린 자동 삭제 예약(인사 말풍선 등)이 온보딩 말풍선을 지우지 않게 끊는다.
+        bubbleDismissTask?.cancel()
+        bubbleDismissTask = nil
         state.bubble = CompanionBubble(
             headline: "\(onboardingIndex + 1)/\(onboardingSteps.count) · \(step.title)",
             message: step.line,
             isDismissible: true,
-            actions: [
-                CompanionBubbleAction(title: isLast ? "다 봤어요" : "다음") { [weak self] in
-                    self?.advanceOnboarding()
-                },
-            ]
+            actions: actions
         )
         overlay.setPresentation(expanded: false, acceptsInput: false)
         setAnimation(onboardingIndex == 0 ? .waving : .review)
+    }
+
+    /// 화면만 지정하고 강조 대상을 안 적었으면 그 화면의 대표 요소를 가리킨다.
+    private static func defaultHighlight(for screen: CompanionOnboardingScreen) -> String? {
+        switch screen {
+        case .popoverTimer: return "tab.timer"
+        case .popoverMemo: return "tab.memo"
+        case .popoverStats: return "tab.stats"
+        case .popoverAchievement: return "tab.achievement"
+        case .windowStats, .settingsCompanion: return nil
+        }
+    }
+
+    private func rewindOnboarding() {
+        guard isOnboarding, onboardingIndex > 0 else { return }
+        onboardingIndex -= 1
+        presentCurrentOnboardingStep()
     }
 
     private func advanceOnboarding() {
@@ -514,7 +565,9 @@ final class CompanionController {
         onboardingSteps = []
         onboardingIndex = 0
         UserDefaults.standard.set(true, forKey: Constants.AppStorageKey.companionOnboardingSeen)
-        CompanionOnboardingPresenter.closePopover()
+        CompanionHighlightCenter.shared.highlight(nil)
+        CompanionSpotlight.shared.hide()
+        CompanionOnboardingPresenter.closeAll()
         state.bubble = nil
         overlay.setPresentation(expanded: false, acceptsInput: false)
         setAnimation(.idle)
@@ -533,8 +586,7 @@ final class CompanionController {
             width: mouse.x - engine.position.x,
             height: mouse.y - engine.position.y
         )
-        bubbleDismissTask?.cancel()
-        state.bubble = nil
+        // 말풍선은 그대로 둔다. 옮기려고 잡았을 뿐인데 보던 설명이 사라지면 안 된다.
         setAnimation(.waiting)
     }
 
@@ -549,7 +601,8 @@ final class CompanionController {
 
     private func endDrag() {
         dragGrabOffset = nil
-        setAnimation(.idle)
+        // 설명 중이면 그 자세를 유지한다.
+        setAnimation(state.bubble == nil ? .idle : .waiting)
     }
 
     private func turnOff() {
@@ -560,12 +613,13 @@ final class CompanionController {
 
     // MARK: - 대화
 
+    /// 캐릭터를 눌렀을 때.
+    ///
+    /// 진행 중인 것을 클릭 한 번으로 날려버리지 않는다.
+    /// 온보딩과 대화는 닫기(✕)·esc·메뉴처럼 분명한 수단으로만 끝낸다.
     private func toggleChat() {
-        if state.isChatting {
-            endChat()
-        } else {
-            beginChat()
-        }
+        guard !isOnboarding, !state.isChatting else { return }
+        beginChat()
     }
 
     private func beginChat() {
@@ -624,11 +678,17 @@ final class CompanionController {
         let session = chatSessionForCurrentCharacter()
         let isTaskQuestion = CompanionTaskQuestion.matches(message)
         let items = isTaskQuestion ? todayBriefingItems() : []
+        let evidence = isTaskQuestion ? nil : appEvidence(for: message)
+        let guide = isTaskQuestion ? nil : guideSection(for: message)
+        // 근거가 있으면 창의성이 필요 없다. 낮은 온도가 지어내는 걸 줄인다.
+        let hasEvidence = evidence != nil || guide != nil
         let modelInput = CompanionChatComposer.modelInput(
             userMessage: message,
             taskDigest: isTaskQuestion
                 ? CompanionTaskDigest.format(items: items, now: Date())
-                : nil
+                : nil,
+            appFacts: evidence,
+            guideSection: guide
         )
         // 일정은 모델의 문장이 아니라 저장된 데이터로 그린다.
         pendingSchedule = isTaskQuestion
@@ -638,7 +698,7 @@ final class CompanionController {
         chatReplyTask?.cancel()
         chatReplyTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let reply = await session.reply(to: modelInput) { [weak self] partial in
+            let reply = await session.reply(to: modelInput, precise: hasEvidence) { [weak self] partial in
                 self?.applyStreamedReply(partial.text)
             }
             guard !Task.isCancelled, self.state.isChatting else { return }
@@ -647,11 +707,54 @@ final class CompanionController {
             self.state.isAwaitingReply = false
             self.streamingMessageID = nil
             self.reactWithMood(reply.mood)
+            self.showAnswerDestinationIfAny(for: message)
         }
+    }
+
+    /// 코드에서 만든 사실 + 설정 색인을 합쳐 근거로 준다.
+    /// 설정 페이지 목록을 함께 넣어 없는 페이지 이름을 지어내지 못하게 한다.
+    private func appEvidence(for message: String) -> String? {
+        var parts: [String] = []
+        if let facts = CompanionAppFacts.matching(message) { parts.append(facts) }
+        if CompanionGuideQuestion.matches(message),
+           let match = CompanionSettingsIndex.bestMatch(for: message) {
+            parts.append(match.evidence)
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: "\n")
+    }
+
+    /// 답한 내용을 화면으로도 보여준다. 설정 경로를 말했으면 그 자리를 열어 잠깐 강조한다.
+    private func showAnswerDestinationIfAny(for message: String) {
+        guard CompanionGuideQuestion.matches(message) else { return }
+        if let destination = CompanionAppFacts.destination(for: message) {
+            CompanionOnboardingPresenter.openSettings(
+                tab: destination.tab,
+                highlight: destination.highlight
+            )
+            return
+        }
+        // 손으로 지정한 목적지가 없어도 색인이 찾아준 페이지를 열어준다.
+        if let match = CompanionSettingsIndex.bestMatch(for: message) {
+            CompanionOnboardingPresenter.openSettings(tab: match.tab, highlight: nil)
+        }
+    }
+
+    /// 사용법 질문이면 설명서에서 근거가 될 섹션 하나를 찾아 준다.
+    private func guideSection(for message: String) -> String? {
+        guard CompanionGuideQuestion.matches(message) else { return nil }
+        if guideSections.isEmpty {
+            guideSections = CompanionGuide.loadFromBundle()
+        }
+        guard let section = CompanionGuide.bestMatch(for: message, in: guideSections) else {
+            return nil
+        }
+        return CompanionGuide.clipped(section.injectedText)
     }
 
     /// 답변에 붙일 일정. 스트리밍이 끝난 뒤 마지막 말풍선에 실린다.
     private var pendingSchedule: [CompanionScheduleEntry] = []
+    private var guideSections: [CompanionGuideSection] = []
 
     private func attachPendingSchedule() {
         defer { pendingSchedule = [] }
@@ -832,6 +935,8 @@ final class CompanionController {
         bubbleDismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard let self, !Task.isCancelled else { return }
+            // 사이에 온보딩이 시작됐다면 그쪽 말풍선을 건드리지 않는다.
+            if self.isOnboarding { return }
             if thenRestoreBreakMenu, self.mode == .breakTime {
                 self.presentBreakMenu()
             } else if self.mode != .hidden {

@@ -48,6 +48,8 @@ struct CompanionPage: View {
                     .disabled(!isEnabled)
                 }
             }
+            .companionHighlight("settings.companionBasics")
+
 
             SettingsGroupCard("활동") {
                 SettingsRow(
@@ -84,6 +86,8 @@ struct CompanionPage: View {
                         .disabled(!isEnabled)
                 }
             }
+            .companionHighlight("settings.activity")
+
 
             SettingsGroupCard("일정 브리핑") {
                 SettingsRow(
@@ -114,6 +118,7 @@ struct CompanionPage: View {
                     .disabled(!isEnabled || !isBriefingEnabled)
                 }
             }
+            .companionHighlight("settings.briefing")
 
             SettingsGroupCard("호로롱이 알아둘 것") {
                 SettingsRow(
@@ -129,7 +134,8 @@ struct CompanionPage: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("알아줬으면 하는 것")
                         .font(.callout)
-                    Text("자유롭게 적어주세요. 대화할 때 참고합니다. 예: \"야근이 잦아요\", \"아침엔 말 걸지 마세요\"")
+                    Text("대화할 때 참고할 배경을 적어주세요. 예: \"AI 엔지니어 취업 준비 중\", \"야근이 잦아요\"\n"
+                        + "\"~할 때 ~라고 해줘\" 같은 조건부 지시는 아직 지켜지지 않습니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -163,6 +169,8 @@ struct CompanionPage: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             }
+            .companionHighlight("settings.profile")
+
 
             SettingsGroupCard("AI 대화") {
                 SettingsRow(
@@ -185,6 +193,8 @@ struct CompanionPage: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .companionHighlight("settings.chat")
+
 
             SettingsGroupCard("준비 중") {
                 SettingsRow(

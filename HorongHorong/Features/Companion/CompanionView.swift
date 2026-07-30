@@ -204,7 +204,7 @@ struct CompanionView: View {
                 }
             }
 
-            Text(bubble.message)
+            Text(CompanionMarkdown.styled(bubble.message))
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -224,6 +224,7 @@ struct CompanionView: View {
 
             if !bubble.actions.isEmpty {
                 HStack(spacing: 6) {
+                    Spacer(minLength: 0)
                     ForEach(bubble.actions) { action in
                         Button(action.title) { action.handler() }
                             .buttonStyle(.borderless)
@@ -232,7 +233,8 @@ struct CompanionView: View {
                             .help(action.hint ?? "")
                     }
                 }
-                .padding(.top, 2)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.top, 4)
             }
         }
         .padding(.horizontal, 12)
@@ -525,7 +527,11 @@ private struct CompanionMenuCard: View {
                 },
                 Item(id: "chat", icon: "bubble.left.and.bubble.right", title: state.isChatting ? "대화 닫기" : "말 걸기") {
                     state.onDismissMenu()
-                    state.onCharacterTap()
+                    if state.isChatting {
+                        state.onCloseChat()
+                    } else {
+                        state.onCharacterTap()
+                    }
                 },
             ],
             [

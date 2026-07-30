@@ -85,7 +85,8 @@ struct AppearancePage: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
             }
-        }
+        }        .companionHighlight("settings.appearanceMode")
+
     }
 
     // MARK: - 테마 카드 (팝오버 UI 스타일)
@@ -98,7 +99,8 @@ struct AppearancePage: View {
             ) {
                 popoverThemeMenu
             }
-        }
+        }        .companionHighlight("settings.theme")
+
     }
 
     private var popoverThemeMenu: some View {
@@ -172,7 +174,8 @@ struct AppearancePage: View {
             ) {
                 Toggle("", isOn: $menubarAnim).labelsHidden()
             }
-        }
+        }        .companionHighlight("settings.appIcon")
+
     }
 
     private var selectedMenubarIcon: Constants.MenubarIconStyle {

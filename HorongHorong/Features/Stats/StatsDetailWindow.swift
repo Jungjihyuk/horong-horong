@@ -311,6 +311,14 @@ struct StatsDetailWindow: View {
             .controlSize(.small)
             .fixedSize()
             .help(contentMode == .focus ? "기간 통계로 돌아갑니다" : "이 기간의 몰입 세션을 자세히 봅니다")
+            .companionHighlight("stats.focusToggle")
+            .onReceive(
+                NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+            ) { notification in
+                // 온보딩이 대신 눌러 몰입 화면을 보여준다.
+                guard notification.object as? String == "stats.showFocus" else { return }
+                withAnimation(.easeInOut(duration: 0.15)) { contentMode = .focus }
+            }
 
             Button {
                 showEditor = true

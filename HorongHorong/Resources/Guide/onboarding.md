@@ -22,6 +22,29 @@
 | `settings.companion` | 설정 · 루미롱 |
 | (없음) | 화면 전환 없이 말풍선만 |
 
+`<!-- highlight: ... -->` 를 함께 쓰면 그 요소에 주황색 테두리가 그려집니다.
+쓰지 않으면 `screen` 에 맞는 탭이 저절로 강조됩니다.
+
+| 값 | 강조하는 곳 |
+|---|---|
+| `tab.timer` `tab.memo` `tab.stats` `tab.achievement` | 팝오버 탭 |
+| `timer.preset` | 타이머 탭의 **프리셋** |
+| `timer.selectTask` | 타이머 탭의 **할 일 선택** |
+| `timer.startFocus` | 타이머 탭의 **집중 시작** |
+| `memo.new` | 메모 탭의 **새 메모** |
+| `stats.detail` | 통계 탭의 **상세 보기** |
+| `stats.focusToggle` | 통계 상세 창의 **몰입** |
+| `settings.companionBasics` | 설정 · 루미롱의 **루미롱** 카드 |
+| `settings.briefing` | 설정 · 루미롱의 **일정 브리핑** |
+
+`<!-- action: ... -->` 를 쓰면 호로롱이 대신 눌러서 보여줍니다.
+
+| 값 | 하는 일 |
+|---|---|
+| `timer.openTaskPicker` | 할 일 목록을 펼침 |
+| `stats.openDetail` | 통계 상세 창을 엶 |
+| `stats.showFocus` | 상세 창에서 몰입 화면으로 전환 |
+
 ---
 
 ## 시나리오 0. 안녕하세요, 호로롱이에요
@@ -32,6 +55,7 @@
 
 ### 부르는 법
 <!-- screen: settings.companion -->
+<!-- highlight: settings.companionBasics -->
 > 저를 클릭하면 말을 걸 수 있고, 오른쪽 클릭하면 오늘 일정도 바로 볼 수 있어요. 여기 설정에서 저를 재우거나 다시 부를 수도 있어요.
 
 ---
@@ -47,10 +71,12 @@
 
 ### 2) 집중 길이를 고른다
 <!-- screen: popover.timer -->
+<!-- highlight: timer.preset -->
 > **프리셋**에서 집중할 시간을 골라요. 처음이라면 기본값 그대로도 충분해요.
 
 ### 3) 집중을 시작한다
 <!-- screen: popover.timer -->
+<!-- highlight: timer.startFocus -->
 > **집중 시작**을 누르면 바로 시작이에요. 저는 이때 조용히 숨어 있다가, 쉬는 시간이 되면 다시 나올게요.
 
 ### 4) 끝나면 돌아본다
@@ -63,19 +89,31 @@
 
 *예: 개발 공부를 하려는데, 무엇을 할지는 이미 메모에 적어뒀을 때.*
 
-### 1) 할 일을 메모에 적는다
+### 1) 메모 탭을 연다
 <!-- screen: popover.memo -->
-> 먼저 메모 탭에서 **새 메모**로 할 일을 적어요. 오늘 할 일로 표시해두면 타이머에서 바로 고를 수 있어요.
+<!-- highlight: tab.memo -->
+> 할 일은 메모 탭에 모여요. 여기 적어둔 것이 타이머의 할 일 후보가 돼요.
 
-### 2) 타이머에서 할 일을 고른다
-<!-- screen: popover.timer -->
-> 타이머 탭에서 **할 일 선택**을 누르면 `오늘 시작할 일`과 `목표에 연결된 할 일`이 나와요. 지금 할 걸 하나 고르세요.
+### 2) 새 메모를 만든다
+<!-- screen: popover.memo -->
+<!-- highlight: memo.new -->
+> **새 메모**로 할 일을 적어요. 오늘 할 일로 표시해두면 타이머에서 바로 고를 수 있어요.
 
-### 3) 집중을 시작한다
+### 3) 더 빠르게 적는 법
+> 급할 땐 **단축키**로 어디서든 퀵 메모를 띄울 수 있어요. 설정의 단축키에서 확인하고 바꿀 수 있어요.
+
+### 4) 타이머에서 할 일을 고른다
 <!-- screen: popover.timer -->
+<!-- highlight: timer.selectTask -->
+<!-- action: timer.openTaskPicker -->
+> 타이머 탭에서 **할 일 선택**을 누르면 이렇게 펼쳐져요. `오늘 시작할 일`과 `목표에 연결된 할 일`이 나와요.
+
+### 5) 집중을 시작한다
+<!-- screen: popover.timer -->
+<!-- highlight: timer.startFocus -->
 > **집중 시작**을 누르면 이 할 일에 쓴 시간이 따로 기록돼요. 나중에 "이 일에 얼마나 썼지?" 를 볼 수 있어요.
 
-### 4) 이어서 더 한다
+### 6) 이어서 더 한다
 <!-- screen: popover.timer -->
 > 한 번으로 안 끝났다면 **같은 작업 계속**을 눌러요. 할 일을 다시 고르지 않아도 이어집니다.
 
@@ -92,10 +130,12 @@
 
 ### 2) 상세 보기로 들어간다
 <!-- screen: window.stats -->
-> **상세 보기**를 누르면 큰 창이 열려요. 하루·주·달 단위로 바꿔 볼 수 있어요.
+<!-- highlight: stats.detail -->
+> **상세 보기**를 누르면 이렇게 큰 창이 열려요. 하루·주·달 단위로 바꿔 볼 수 있어요.
 
 ### 3) 몰입 기록을 본다
-<!-- screen: window.stats -->
+<!-- highlight: stats.focusToggle -->
+<!-- action: stats.showFocus -->
 > 오른쪽 위 **몰입**을 누르면 집중이 어땠는지 모아서 보여줘요. 다시 누르면 **통계로** 돌아가요.
 
 ### 4) 패턴을 읽는다
@@ -108,6 +148,7 @@
 
 ### 1) 브리핑 시간을 정한다
 <!-- screen: settings.companion -->
+<!-- highlight: settings.briefing -->
 > 설정에서 **오늘 일정 브리핑**을 켜고 시간을 정해두면, 그 시각에 제가 찾아가서 오늘 할 일을 알려드려요.
 
 ### 2) 아무 때나 다시 본다

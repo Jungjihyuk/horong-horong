@@ -15,6 +15,10 @@ struct CompanionOnboardingStep: Equatable, Sendable {
     /// 호로롱이 말할 문장.
     let line: String
     let screen: CompanionOnboardingScreen?
+    /// 이 단계에서 화면상 강조할 요소. 대본의 `<!-- highlight: ... -->` 값.
+    let highlight: String?
+    /// 이 단계에서 호로롱이 대신 눌러줄 동작. 대본의 `<!-- action: ... -->` 값.
+    let action: String?
 }
 
 struct CompanionOnboardingScenario: Equatable, Sendable, Identifiable {
@@ -41,12 +45,16 @@ enum CompanionOnboardingScript {
 
         var stepTitle: String?
         var stepScreen: CompanionOnboardingScreen?
+        var stepHighlight: String?
+        var stepAction: String?
         var stepLines: [String] = []
 
         func flushStep() {
             defer {
                 stepTitle = nil
                 stepScreen = nil
+                stepHighlight = nil
+                stepAction = nil
                 stepLines = []
             }
             guard let stepTitle, !stepLines.isEmpty else { return }
@@ -54,7 +62,9 @@ enum CompanionOnboardingScript {
                 CompanionOnboardingStep(
                     title: stepTitle,
                     line: stepLines.joined(separator: " "),
-                    screen: stepScreen
+                    screen: stepScreen,
+                    highlight: stepHighlight,
+                    action: stepAction
                 )
             )
         }
@@ -95,6 +105,16 @@ enum CompanionOnboardingScript {
 
             if let value = comment(named: "screen", in: line) {
                 stepScreen = CompanionOnboardingScreen(rawValue: value)
+                continue
+            }
+
+            if let value = comment(named: "highlight", in: line) {
+                stepHighlight = value
+                continue
+            }
+
+            if let value = comment(named: "action", in: line) {
+                stepAction = value
                 continue
             }
 

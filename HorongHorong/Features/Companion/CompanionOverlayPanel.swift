@@ -101,7 +101,8 @@ final class CompanionOverlayPanel {
 
         if acceptsInput {
             // 텍스트 입력을 받으려면 키 윈도우가 되어야 한다.
-            NSApp.activate(ignoringOtherApps: true)
+            // 다만 앱 전체를 활성화하지는 않는다. 그러면 쓰던 창이 뒤로 밀린다.
+            // nonactivatingPanel 은 앱을 앞으로 끌어내지 않고도 키 윈도우가 될 수 있다.
             panel.makeKeyAndOrderFront(nil)
         } else {
             panel.resignKey()

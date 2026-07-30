@@ -58,6 +58,8 @@ targets:
         buildPhase: resources
       - path: HorongHorong/Resources/Guide
         buildPhase: resources
+      - path: USER_GUIDE.md
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: HorongHorong/Info.plist
@@ -110,6 +112,8 @@ targets:
         type: folder
         buildPhase: resources
       - path: HorongHorong/Resources/Guide
+        buildPhase: resources
+      - path: USER_GUIDE.md
         buildPhase: resources
     settings:
       base:
