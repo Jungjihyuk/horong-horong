@@ -55,6 +55,20 @@ enum CompanionChatProviderFactory {
             return provider
         }
 
+        #if canImport(MLXLLM)
+        if selected == Constants.CompanionChatProviderKind.mlx.rawValue {
+            let provider = MLXCompanionChatProvider(
+                model: UserDefaults.standard.string(
+                    forKey: Constants.AppStorageKey.companionMLXModel
+                ) ?? Constants.defaultCompanionMLXModel
+            )
+            if provider.isAvailable {
+                NSLog("[PROVIDER] MLX 공급자 반환 model=\(provider.displayName)")
+                return provider
+            }
+        }
+        #endif
+
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             let provider = FoundationModelsCompanionChatProvider()

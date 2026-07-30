@@ -1,3 +1,28 @@
+# App build
+#
+# mlx-swift 의 CudaBuild 플러그인과 mlx-swift-lm 의 매크로는 Xcode.app 에서는 한 번
+# 신뢰하면 끝이지만, CLI 빌드에는 신뢰 기록이 없어 매번 검증에서 멈춘다.
+# 플래그를 여기 묶어두면 `make build` 한 번으로 끝난다.
+XCODEBUILD_FLAGS = -project HorongHorong.xcodeproj \
+	-destination 'platform=macOS' \
+	-skipPackagePluginValidation \
+	-skipMacroValidation
+
+generate:
+	xcodegen generate
+
+build: generate
+	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorong -configuration Debug build
+
+build-release: generate
+	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorong -configuration Release build
+
+build-appstore: generate
+	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorongAppStore -configuration Release build
+
+app-test: generate
+	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorong -configuration Debug test
+
 # Test
 unit:
 	cd Agents/news_report && uv run pytest -m unit test -q

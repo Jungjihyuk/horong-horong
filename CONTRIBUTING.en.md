@@ -236,7 +236,7 @@ Manual writing is also fine. Please review the final content yourself before sub
 - [ ] **Did an issue agreement come first?** — PRs without a corresponding issue may be closed.
 - [ ] **One PR = one change** — separate refactors from feature work.
 - [ ] **Does the branch use the `feature/#issue-number-short-description` format?**
-- [ ] **Does the build pass?** — `xcodegen generate && xcodebuild -scheme HorongHorong build`
+- [ ] **Does the build pass?** — `make build` (runs `xcodegen generate` for you)
 - [ ] **Are new features isolated under `HorongHorong/Features/<Feature>`?**
 - [ ] **If you changed SwiftData models, did you include a migration?**
 - [ ] **For UI changes, did you attach at least one screenshot?**

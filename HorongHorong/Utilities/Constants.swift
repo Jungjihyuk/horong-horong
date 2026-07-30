@@ -562,6 +562,7 @@ enum Constants {
     /// 대화에 쓸 모델 공급자.
     enum CompanionChatProviderKind: String, CaseIterable, Identifiable {
         case appleFoundation
+        case mlx
         case ollama
 
         var id: String { rawValue }
@@ -569,6 +570,7 @@ enum Constants {
         var label: String {
             switch self {
             case .appleFoundation: return "Apple 온디바이스"
+            case .mlx:             return "MLX (앱 내장)"
             case .ollama:          return "Ollama"
             }
         }
@@ -577,10 +579,56 @@ enum Constants {
             switch self {
             case .appleFoundation:
                 return "설치가 필요 없지만 모델이 작아 긴 지시를 잘 못 지킵니다."
+            case .mlx:
+                return "따로 설치할 프로그램이 없습니다. 모델을 한 번만 받아두면 앱이 직접 돌립니다. Apple Silicon 맥 전용."
             case .ollama:
                 return "Ollama 를 설치하고 모델을 받아야 합니다. 더 큰 모델을 쓸 수 있습니다."
             }
         }
+    }
+
+    /// 앱이 직접 돌리는 MLX 모델 후보. `name` 은 내려받을 HuggingFace 저장소 id 다.
+    struct CompanionMLXModelOption: Identifiable, Hashable {
+        var id: String { name }
+        let name: String
+        let label: String
+        let detail: String
+        let minimumMemoryGB: Int
+    }
+
+    /// 모델 가중치가 앱 프로세스 안에 그대로 올라오므로, 항상 떠 있는 컴패니언에는
+    /// Ollama 기본값(`gemma4:e4b`)보다 한 단계 가벼운 쪽을 기본으로 둔다.
+    static let defaultCompanionMLXModel = "mlx-community/gemma-4-e2b-it-4bit"
+
+    static let availableCompanionMLXModelOptions: [CompanionMLXModelOption] = [
+        CompanionMLXModelOption(
+            name: "mlx-community/Qwen3-1.7B-4bit",
+            label: "Qwen3 1.7B",
+            detail: "가장 가볍고 빠릅니다. 메모리가 빠듯하거나 먼저 시험해 볼 때 좋습니다.",
+            minimumMemoryGB: 8
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/gemma-4-e2b-it-4bit",
+            label: "Gemma 4 E2B",
+            detail: "가벼우면서 한국어 대화가 자연스럽습니다. 늘 켜 두는 컴패니언에 알맞습니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Qwen3-4B-4bit",
+            label: "Qwen3 4B",
+            detail: "긴 지시를 더 잘 따릅니다. 대신 메모리를 조금 더 씁니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/gemma-4-e4b-it-4bit",
+            label: "Gemma 4 E4B",
+            detail: "이 중 답이 가장 좋습니다. 메모리가 넉넉한 맥에서 쓰세요.",
+            minimumMemoryGB: 24
+        ),
+    ]
+
+    static func companionMLXModelLabel(for name: String) -> String {
+        availableCompanionMLXModelOptions.first { $0.name == name }?.label ?? name
     }
 
     static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
@@ -654,6 +702,9 @@ enum Constants {
         static let companionOnboardingSeen = "companion.onboardingSeen"
         static let companionChatProvider = "companion.chatProvider"
         static let companionOllamaModel = "companion.ollamaModel"
+        static let companionMLXModel = "companion.mlxModel"
+        /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
+        static let companionMLXPreparedModels = "companion.mlxPreparedModels"
     }
 
     // MARK: - 메뉴바 표시 형식
