@@ -30,6 +30,14 @@ struct SettingsGroupCard<Content: View>: View {
                     .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
             )
         }
+        // 호로롱이 답한 내용에 해당하는 카드가 스스로 강조된다.
+        // 카드마다 식별자를 손으로 달지 않아도 되도록 여기 한 곳에서 처리한다.
+        .companionHighlight(CompanionHighlightCenter.cardID(title ?? ""))
+        .onAppear {
+            if let title {
+                CompanionHighlightCenter.shared.registerCard(title)
+            }
+        }
     }
 }
 

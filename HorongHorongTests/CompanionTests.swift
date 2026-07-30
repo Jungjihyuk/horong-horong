@@ -962,6 +962,59 @@ final class SettingsSearchIndexTests: XCTestCase {
     }
 }
 
+@MainActor
+final class CompanionCardHighlightTests: XCTestCase {
+    /// 카드마다 식별자를 손으로 달지 않고, 제목이 가장 잘 맞는 카드가 스스로 강조돼야 한다.
+    func testBestMatchingCardWins() {
+        let center = CompanionHighlightCenter.shared
+        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "휴가 때 기록 안 남기려면?"))
+
+        center.registerCard("타임라인 표시")
+        center.registerCard("보관")
+        center.registerCard("휴가 기간")
+
+        XCTAssertTrue(center.isHighlighted(CompanionHighlightCenter.cardID("휴가 기간")))
+        center.endCardSearch()
+        center.highlight(nil)
+    }
+
+    /// 등록 순서와 무관하게 같은 카드가 뽑혀야 한다.
+    func testOrderDoesNotChangeTheWinner() {
+        let center = CompanionHighlightCenter.shared
+        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "미리알림 연동"))
+
+        center.registerCard("미리알림 가져오기")
+        center.registerCard("퀵 메모")
+
+        XCTAssertTrue(center.isHighlighted(CompanionHighlightCenter.cardID("미리알림 가져오기")))
+        center.endCardSearch()
+        center.highlight(nil)
+    }
+
+    /// 맞는 카드가 없으면 아무것도 강조하지 않는다.
+    func testNoMatchLeavesNothingHighlighted() {
+        let center = CompanionHighlightCenter.shared
+        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "김치찌개 끓이는 법"))
+
+        center.registerCard("타임라인 표시")
+        center.registerCard("보관")
+
+        XCTAssertNil(center.target)
+        center.endCardSearch()
+    }
+
+    /// 검색을 시작하지 않았으면 카드 등록이 아무 영향도 주면 안 된다.
+    func testRegisteringWithoutSearchDoesNothing() {
+        let center = CompanionHighlightCenter.shared
+        center.endCardSearch()
+        center.highlight(nil)
+
+        center.registerCard("휴가 기간")
+
+        XCTAssertNil(center.target)
+    }
+}
+
 final class CompanionUserProfileTests: XCTestCase {
     func testEmptyProfileAddsNothingToThePrompt() {
         XCTAssertTrue(CompanionUserProfile.empty.promptSection.isEmpty)

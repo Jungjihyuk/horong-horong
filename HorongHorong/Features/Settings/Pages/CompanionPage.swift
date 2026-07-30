@@ -19,6 +19,14 @@ struct CompanionPage: View {
     private var userNickname: String = ""
     @AppStorage(Constants.AppStorageKey.companionUserNote)
     private var userNote: String = ""
+    @AppStorage(Constants.AppStorageKey.companionChatProvider)
+    private var chatProviderKind: String = Constants.defaultCompanionChatProvider
+    @AppStorage(Constants.AppStorageKey.companionOllamaModel)
+    private var ollamaModel: String = Constants.defaultCompanionOllamaModel
+    @AppStorage(Constants.NewsStorageKey.ollamaEndpoint)
+    private var ollamaEndpoint: String = Constants.defaultNewsOllamaEndpoint
+
+    @State private var isOllamaReachable = false
 
     var body: some View {
         SettingsPageScroll {
@@ -174,7 +182,46 @@ struct CompanionPage: View {
 
             SettingsGroupCard("AI 대화") {
                 SettingsRow(
-                    "대화 공급자",
+                    "모델",
+                    subtitle: Constants.CompanionChatProviderKind(rawValue: chatProviderKind)?.detail ?? ""
+                ) {
+                    Picker("", selection: $chatProviderKind) {
+                        ForEach(Constants.CompanionChatProviderKind.allCases) { kind in
+                            Text(kind.label).tag(kind.rawValue)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!isEnabled)
+                }
+
+                if chatProviderKind == Constants.CompanionChatProviderKind.ollama.rawValue {
+                    SettingsRow(
+                        "Ollama 모델",
+                        subtitle: isOllamaReachable
+                            ? "설치된 모델은 체크 표시, 미설치 로컬 모델은 다운로드 버튼으로 표시합니다."
+                            : "Ollama 서버에 연결하지 못했습니다. 터미널에서 ollama serve 로 켜주세요."
+                    ) {
+                        if isOllamaReachable {
+                            OllamaModelPicker(
+                                model: $ollamaModel,
+                                endpoint: normalizedOllamaEndpoint,
+                                dataBasePath: Constants.defaultNewsDataBasePath
+                            )
+                        } else {
+                            Text("연결 안 됨")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                            Button("새로고침") {
+                                Task { await refreshOllama() }
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
+                SettingsRow(
+                    "현재 공급자",
                     subtitle: isLocalModelReady
                         ? "캐릭터를 클릭하면 이 모델과 대화합니다."
                         : "이 기기에서는 온디바이스 모델을 쓸 수 없어 고정 응답으로 답합니다. "
@@ -204,7 +251,35 @@ struct CompanionPage: View {
                 )
             }
         }
-        .onAppear(perform: normalizeValues)
+        .onAppear {
+            normalizeValues()
+            Task { await refreshOllama() }
+        }
+        .onChange(of: chatProviderKind) { oldValue, newValue in
+            Task { await refreshOllama() }
+            if oldValue == Constants.CompanionChatProviderKind.ollama.rawValue,
+               newValue != oldValue {
+                Task { await unloadOllamaModel(ollamaModel) }
+            } else if newValue == Constants.CompanionChatProviderKind.ollama.rawValue,
+                      newValue != oldValue, !ollamaModel.isEmpty {
+                Task { await OllamaChatClient.preload(endpoint: normalizedOllamaEndpoint, model: ollamaModel) }
+            }
+        }
+        .onChange(of: ollamaModel) { oldValue, newValue in
+            guard chatProviderKind == Constants.CompanionChatProviderKind.ollama.rawValue,
+                  oldValue != newValue else { return }
+            if !oldValue.isEmpty {
+                Task { await unloadOllamaModel(oldValue) }
+            }
+            if !newValue.isEmpty {
+                Task { await OllamaChatClient.preload(endpoint: normalizedOllamaEndpoint, model: newValue) }
+            }
+        }
+    }
+
+    private func unloadOllamaModel(_ model: String) async {
+        guard !model.isEmpty else { return }
+        await OllamaChatClient.unload(endpoint: normalizedOllamaEndpoint, model: model)
     }
 
     private var roamingRegion: CGRect? {
@@ -212,7 +287,21 @@ struct CompanionPage: View {
     }
 
     private var chatProvider: CompanionChatProvider {
-        CompanionChatProviderFactory.make()
+        CompanionChatProviderFactory.make(ollamaReachable: isOllamaReachable)
+    }
+
+    /// 서버가 살아 있는지 확인한다. 설치된 모델 목록은 OllamaModelPicker 가 직접 확인한다.
+    private func refreshOllama() async {
+        guard chatProviderKind == Constants.CompanionChatProviderKind.ollama.rawValue else {
+            isOllamaReachable = false
+            return
+        }
+        isOllamaReachable = await OllamaChatClient.isReachable(endpoint: ollamaEndpoint)
+    }
+
+    private var normalizedOllamaEndpoint: String {
+        let trimmed = ollamaEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultNewsOllamaEndpoint : trimmed
     }
 
     private var chatProviderName: String { chatProvider.displayName }

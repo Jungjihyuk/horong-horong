@@ -103,11 +103,12 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .news:
             return ["소스", "YouTube", "Google News", "Hacker News", "RSS", "YOZM IT",
                     "관심 키워드", "관심사", "파이프라인",
-                    "자동 수집 스케줄", "요약 에이전트", "일일 리포트 저장 위치", "LLM"]
+                    "자동 수집 스케줄", "요약 에이전트", "일일 리포트 저장 위치", "LLM",
+                    "리포트", "레포트", "생성"]
         case .agent:
             return ["실행 환경", "실험 루트 폴더", "기본 Agent",
                     "계획 일수", "관심사", "터미널 명령 실행 전 확인",
-                    "Codex", "Claude", "Gemini"]
+                    "Codex", "Claude", "Gemini", "생성"]
         case .companion:
             return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
                     "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",

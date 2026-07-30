@@ -35,7 +35,26 @@ enum CompanionChatProviderFactory {
     /// 로컬 모델을 쓸 수 있으면 그것을, 아니면 고정 응답 공급자를 돌려준다.
     /// 대화·추론은 전부 기기 안에서 끝나며 어떤 경우에도 네트워크로 나가지 않는다.
     @MainActor
-    static func make() -> CompanionChatProvider {
+    static func make(ollamaReachable: Bool = false) -> CompanionChatProvider {
+        let selected = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionChatProvider
+        ) ?? Constants.defaultCompanionChatProvider
+
+        NSLog("[PROVIDER] selected=\(selected) ollamaReachable=\(ollamaReachable)")
+        if selected == Constants.CompanionChatProviderKind.ollama.rawValue {
+            let provider = OllamaCompanionChatProvider(
+                endpoint: UserDefaults.standard.string(
+                    forKey: Constants.NewsStorageKey.ollamaEndpoint
+                ) ?? Constants.defaultNewsOllamaEndpoint,
+                model: UserDefaults.standard.string(
+                    forKey: Constants.AppStorageKey.companionOllamaModel
+                ) ?? Constants.defaultCompanionOllamaModel,
+                reachable: ollamaReachable
+            )
+            NSLog("[PROVIDER] Ollama 공급자 반환 model=\(provider.displayName)")
+            return provider
+        }
+
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             let provider = FoundationModelsCompanionChatProvider()
