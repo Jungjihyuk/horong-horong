@@ -64,9 +64,16 @@ private final class FoundationModelsCompanionChatSession: CompanionChatSession {
 
     func reply(
         to message: String,
+        precise: Bool,
         onPartial: @escaping (CompanionChatReply) -> Void
     ) async -> CompanionChatReply {
-        let options = GenerationOptions(temperature: 0.8, maximumResponseTokens: 220)
+        // 온도가 높으면 이 크기의 모델은 배경 정보를 엉뚱한 자리에 끌어다 쓴다.
+        // (인사에 대고 사용자 메모를 읊는 현상: 0.8 에서 3/5, 0.4 에서 0/5)
+        // 근거를 넘긴 답변은 창의성이 필요 없어 더 낮춘다.
+        let options = GenerationOptions(
+            temperature: precise ? 0.2 : 0.4,
+            maximumResponseTokens: 220
+        )
 
         // 1) 감정까지 함께 받는 정상 경로.
         if let reply = try? await stream(message, options: options, onPartial: onPartial) {

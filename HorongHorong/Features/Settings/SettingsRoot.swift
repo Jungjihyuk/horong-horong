@@ -50,6 +50,16 @@ struct SettingsRoot: View {
         .onChange(of: columnVisibility) { _, _ in
             configureWindowChrome(hostWindow)
         }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+        ) { notification in
+            // 온보딩이 설명하는 페이지로 옮겨준다.
+            guard let action = notification.object as? String,
+                  action.hasPrefix("settings.show:"),
+                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count)))
+            else { return }
+            selection = tab
+        }
         .alert("기본값으로 복원하시겠어요?", isPresented: $showResetConfirm) {
             Button("취소", role: .cancel) {}
             Button("복원", role: .destructive) {

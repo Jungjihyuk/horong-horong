@@ -441,6 +441,7 @@ struct TimerView: View {
                     Label("집중 시작", systemImage: "play.fill")
                 }
                 .buttonStyle(TimerGradientButtonStyle())
+                .companionHighlight("timer.startFocus")
 
             case .focusing:
                 Button {
@@ -582,6 +583,7 @@ struct TimerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     presetChips
+                        .companionHighlight("timer.preset")
 
                     HStack(spacing: 8) {
                         Text("카테고리")
@@ -680,6 +682,16 @@ struct TimerView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .companionHighlight("timer.selectTask")
+                .onReceive(
+                    NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+                ) { notification in
+                    // 온보딩이 "직접 눌러 보여주기" 를 요청하면 목록을 펼친다.
+                    guard notification.object as? String == "timer.openTaskPicker" else { return }
+                    taskSearchText = ""
+                    hoveredTaskID = nil
+                    showsTaskPicker = true
+                }
                 .popover(isPresented: $showsTaskPicker, arrowEdge: .bottom) {
                     pomodoroTaskPicker
                 }

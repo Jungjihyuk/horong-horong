@@ -19,15 +19,38 @@ enum CompanionTaskQuestion {
 /// 모델에게 실제로 보낼 입력을 만든다.
 /// 화면에 보이는 사용자 메시지는 그대로 두고, 모델 입력에만 참고 정보를 덧붙인다.
 enum CompanionChatComposer {
-    static func modelInput(userMessage: String, taskDigest: String?) -> String {
-        guard let taskDigest, !taskDigest.isEmpty else { return userMessage }
-        // 목록은 화면에 타임라인으로 따로 그리므로, 모델에게는 나열하지 말라고 못 박는다.
+    static func modelInput(
+        userMessage: String,
+        taskDigest: String? = nil,
+        appFacts: String? = nil,
+        guideSection: String? = nil
+    ) -> String {
+        if let taskDigest, !taskDigest.isEmpty {
+            // 목록은 화면에 타임라인으로 따로 그리므로, 모델에게는 나열하지 말라고 못 박는다.
+            return """
+            \(taskDigest)
+
+            사용자: \(userMessage)
+
+            (목록은 화면에 이미 표시된다. 항목을 나열하지 말고 한 문장으로만 코멘트해.)
+            """
+        }
+
+        var evidence: [String] = []
+        if let appFacts, !appFacts.isEmpty { evidence.append(appFacts) }
+        if let guideSection, !guideSection.isEmpty { evidence.append(guideSection) }
+        guard !evidence.isEmpty else { return userMessage }
+
+        // 근거 밖의 이야기를 지어내지 않도록, 넣어준 내용만 쓰라고 못 박는다.
         return """
-        \(taskDigest)
+        [호롱호롱 사용법 — 아래 내용만 사실이다]
+        \(evidence.joined(separator: "\n\n"))
 
         사용자: \(userMessage)
 
-        (목록은 화면에 이미 표시된다. 항목을 나열하지 말고 한 문장으로만 코멘트해.)
+        (위에 없는 기능이나 이름은 절대 말하지 마. 모르면 모른다고 답해.
+        무엇이 있는지 물으면 목록을 그대로 알려줘.
+        어떻게 바꾸는지 물으면 "바꾸는 곳" 경로를 그대로 한 줄로 알려줘. 길게 풀어 쓰지 마.)
         """
     }
 }

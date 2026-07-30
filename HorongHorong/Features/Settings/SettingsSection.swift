@@ -81,7 +81,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .appearance:
             return ["모드", "화면 모드", "라이트", "다크", "시스템",
                     "강조 색", "정보 밀도", "앱 아이콘", "메뉴바 아이콘 애니메이션",
-                    "테마", "팝오버 테마", "따뜻한 등불", "편안한 풀", "게임 픽셀"]
+                    "테마", "팝오버 테마", "따뜻한 등불", "와인 랜턴", "게임 픽셀"]
         case .timer:
             return ["프리셋", "포모도로", "긴 집중", "커스텀",
                     "프리셋 시간 편집", "집중 완료 시 자동으로 휴식 시작", "종료 알림 사운드",
@@ -113,7 +113,8 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",
                     "대화 공급자", "AI 대화", "온디바이스", "개인정보", "음성"]
         case .memo:
-            return ["퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기"]
+            return ["퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
+                    "미리알림 가져오기", "미리알림 앱 연동", "미리 알림", "Reminders", "캘린더"]
         case .data:
             return ["데이터 위치", "iCloud 동기화", "자동 백업", "지금 백업하기", "내보내기"]
         case .about:

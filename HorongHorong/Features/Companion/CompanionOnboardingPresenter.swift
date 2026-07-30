@@ -7,6 +7,11 @@ extension Notification.Name {
         "companion.onboarding.start"
     )
 
+    /// 온보딩이 화면 안에서 무언가를 눌러 보여달라고 요청한다(object: 동작 이름).
+    static let companionOnboardingPerform = Notification.Name(
+        "companion.onboarding.perform"
+    )
+
     /// 온보딩이 특정 팝오버 탭을 보여달라고 요청한다.
     static let companionOnboardingSelectTab = Notification.Name(
         "companion.onboarding.selectTab"
@@ -23,8 +28,32 @@ extension Notification.Name {
 @MainActor
 enum CompanionOnboardingPresenter {
     private static var isPopoverOpen = false
+    /// 온보딩이 직접 연 통계 상세 창만 닫는다. 사용자가 미리 열어둔 창은 건드리지 않는다.
+    private static var didOpenStatsWindow = false
+    /// 딤 위로 끌어올린 창과 원래 레벨. 온보딩이 끝나면 되돌린다.
+    private static var raisedWindows: [(window: NSWindow, level: NSWindow.Level)] = []
+
+    /// 설명 중인 창은 어두워지면 안 된다. 딤(`.floating - 2`) 위로 올린다.
+    /// 다만 캐릭터(`.floating`) 보다는 아래에 둬야 말풍선이 가려지지 않는다.
+    private static func raiseAboveDim(_ window: NSWindow) {
+        guard !raisedWindows.contains(where: { $0.window === window }) else { return }
+        raisedWindows.append((window, window.level))
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
+    }
+
+    private static func restoreRaisedWindows() {
+        for entry in raisedWindows {
+            entry.window.level = entry.level
+        }
+        raisedWindows.removeAll()
+    }
 
     static func show(_ screen: CompanionOnboardingScreen) {
+        // 통계 이야기를 벗어나면 열어줬던 상세 창을 정리한다.
+        if screen != .windowStats {
+            closeStatsDetailWindow()
+        }
+
         switch screen {
         case .popoverTimer:
             openPopover(tab: .timer)
@@ -35,12 +64,25 @@ enum CompanionOnboardingPresenter {
         case .popoverAchievement:
             openPopover(tab: .achievement)
         case .windowStats:
-            // 사용자가 팝오버의 "상세 보기" 를 직접 누르도록 둔다.
-            break
+            openStatsDetailWindow()
         case .settingsCompanion:
-            closePopover()
             openSettings()
         }
+    }
+
+    /// 온보딩이 열었던 창을 모두 정리한다.
+    static func closeAll() {
+        restoreRaisedWindows()
+        closeStatsDetailWindow()
+        closePopover()
+    }
+
+    static func closeStatsDetailWindow() {
+        guard didOpenStatsWindow else { return }
+        didOpenStatsWindow = false
+        NSApp.windows.first {
+            $0.identifier?.rawValue == "stats-detail" || $0.title == "호롱호롱 통계"
+        }?.close()
     }
 
     /// 온보딩이 끝나면 열어둔 팝오버를 닫아 원래 상태로 돌려놓는다.
@@ -84,8 +126,79 @@ enum CompanionOnboardingPresenter {
         return nil
     }
 
-    private static func openSettings() {
+    /// 온보딩이 대신 눌러주는 동작. 각 화면이 알림을 받아 자기 상태를 바꾼다.
+    static func perform(_ action: String) {
+        NotificationCenter.default.post(name: .companionOnboardingPerform, object: action)
+    }
+
+    /// 통계 상세 창을 띄운다. "상세 보기" 버튼이 하는 일과 같은 방식이다.
+    private static func openStatsDetailWindow() {
+        closePopover()
+        didOpenStatsWindow = true
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        perform("stats.openDetail")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if let window = NSApp.windows.first(where: {
+                $0.identifier?.rawValue == "stats-detail" || $0.title == "호롱호롱 통계"
+            }) {
+                window.collectionBehavior.insert(.moveToActiveSpace)
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+                raiseAboveDim(window)
+            }
+        }
+    }
+
+    /// 설정 창을 열고 원하는 페이지로 이동한다. 대화 답변에서도 쓴다.
+    static func openSettings(tab: SettingsTab, highlight: String?, seconds: Double = 4) {
+        if !isPopoverOpen, let button = statusItemButton() {
+            button.performClick(nil)
+            isPopoverOpen = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            perform("settings.open")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                perform("settings.show:\(tab.rawValue)")
+                closePopover()
+                if let window = NSApp.windows.first(where: {
+                    ($0.identifier?.rawValue ?? "").contains("com_apple_SwiftUI_Settings")
+                        || $0.title.localizedCaseInsensitiveContains("설정")
+                }) {
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
+                }
+                guard let highlight else { return }
+                CompanionHighlightCenter.shared.highlight(highlight)
+                // 잠깐 비추고 원래대로 돌린다. 대화 중엔 계속 강조할 이유가 없다.
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                    if CompanionHighlightCenter.shared.isHighlighted(highlight) {
+                        CompanionHighlightCenter.shared.highlight(nil)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 설정 창은 팝오버를 통해서만 열 수 있다.
+    /// `Settings` 씬은 열리기 전까지 알림을 받을 뷰가 없어서, 살아 있는 팝오버에 대신 부탁한다.
+    private static func openSettings() {
+        if !isPopoverOpen, let button = statusItemButton() {
+            button.performClick(nil)
+            isPopoverOpen = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            perform("settings.open")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                perform("settings.show:companion")
+                closePopover()
+                // 설정 창도 딤 위로 올려 설명 중인 부분이 보이게 한다.
+                if let window = NSApp.windows.first(where: {
+                    ($0.identifier?.rawValue ?? "").contains("com_apple_SwiftUI_Settings")
+                        || $0.title.localizedCaseInsensitiveContains("설정")
+                }) {
+                    raiseAboveDim(window)
+                }
+            }
+        }
     }
 }
