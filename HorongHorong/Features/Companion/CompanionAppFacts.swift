@@ -113,6 +113,12 @@ enum CompanionAppFacts {
                 line: "기본 퀵 메모 단축키: ⌘⇧N",
                 path: "설정 → 단축키 → 퀵 메모 띄우기"
             ),
+            Fact(
+                keywords: ["리포트", "레포트"],
+                line: "리포트는 뉴스 탭에서 생성하며, 어떤 자료를 가져올지는 뉴스 설정의 소스 목록을 따른다.",
+                path: "설정 → 뉴스 → 소스",
+                destination: Destination(tab: .news, highlight: "card:소스")
+            ),
         ]
     }
 

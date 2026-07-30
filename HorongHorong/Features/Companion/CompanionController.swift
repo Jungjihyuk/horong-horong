@@ -27,9 +27,11 @@ final class CompanionController {
     private var timerStateObservationTask: Task<Void, Never>?
     private var bubbleDismissTask: Task<Void, Never>?
 
-    private lazy var chatProvider: CompanionChatProvider = CompanionChatProviderFactory.make()
+    private var chatProviderCache: CompanionChatProvider?
+    private var isOllamaReachable = false
     private var chatSession: CompanionChatSession?
     private var appliedUserProfile: CompanionUserProfile?
+    private var appliedChatProvider: String?
     private var chatReplyTask: Task<Void, Never>?
     private var streamingMessageID: UUID?
     private var moodResetTask: Task<Void, Never>?
@@ -182,6 +184,26 @@ final class CompanionController {
 
     private func applySettings() {
         updateBriefingSchedule()
+
+        let selectedProvider = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionChatProvider
+        ) ?? Constants.defaultCompanionChatProvider
+        if selectedProvider != appliedChatProvider {
+            appliedChatProvider = selectedProvider
+            chatProviderCache = nil
+            chatSession = nil
+            if selectedProvider == Constants.CompanionChatProviderKind.ollama.rawValue {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.isOllamaReachable = await OllamaChatClient.isReachable(
+                        endpoint: UserDefaults.standard.string(
+                            forKey: Constants.NewsStorageKey.ollamaEndpoint
+                        ) ?? Constants.defaultNewsOllamaEndpoint
+                    )
+                    self.chatProviderCache = nil
+                }
+            }
+        }
 
         let character = CompanionRegistry.character(for: Self.selectedIdentifier)
         if character != state.character {
@@ -651,13 +673,21 @@ final class CompanionController {
         setAnimation(.idle)
     }
 
+    /// 설정에서 고른 공급자. 공급자나 프로필이 바뀌면 세션을 새로 연다.
+    private func currentChatProvider() -> CompanionChatProvider {
+        if let chatProviderCache { return chatProviderCache }
+        let provider = CompanionChatProviderFactory.make(ollamaReachable: isOllamaReachable)
+        chatProviderCache = provider
+        return provider
+    }
+
     /// 대화 문맥은 세션에 남는다. 창을 닫았다 열어도 앞의 대화를 이어서 기억한다.
     /// 사용자 정보가 바뀌면 시스템 프롬프트가 달라지므로 세션을 새로 연다.
     private func chatSessionForCurrentCharacter() -> CompanionChatSession {
         let profile = CompanionUserProfile.load()
         if let chatSession, profile == appliedUserProfile { return chatSession }
 
-        let session = chatProvider.makeSession(
+        let session = currentChatProvider().makeSession(
             CompanionChatContext(
                 character: state.character,
                 profile: profile,
@@ -734,9 +764,14 @@ final class CompanionController {
             )
             return
         }
-        // 손으로 지정한 목적지가 없어도 색인이 찾아준 페이지를 열어준다.
+        // 손으로 지정한 목적지가 없어도 색인이 페이지를 찾아주고,
+        // 그 페이지에서 제목이 가장 잘 맞는 카드가 스스로 강조된다.
         if let match = CompanionSettingsIndex.bestMatch(for: message) {
-            CompanionOnboardingPresenter.openSettings(tab: match.tab, highlight: nil)
+            CompanionOnboardingPresenter.openSettings(
+                tab: match.tab,
+                highlight: nil,
+                questionTokens: CompanionGuide.searchTokens(in: message)
+            )
         }
     }
 

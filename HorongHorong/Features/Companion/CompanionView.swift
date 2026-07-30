@@ -354,11 +354,34 @@ private struct CompanionChatPanel: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .onChange(of: state.chatMessages.count) { _, _ in
-                if let last = state.chatMessages.last {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
+            // 답변은 같은 말풍선의 글자가 늘어나는 방식이라 메시지 개수가 그대로다.
+            // 개수만 보면 스트리밍 도중에 따라가지 못하므로 마지막 글자 수도 함께 본다.
+            .onChange(of: scrollAnchor) { _, _ in
+                scrollToBottom(proxy)
             }
+            .onAppear { scrollToBottom(proxy, animated: false) }
+        }
+    }
+
+    /// 스크롤을 다시 내려야 하는지 판단하는 값.
+    private var scrollAnchor: String {
+        "\(state.chatMessages.count)-\(state.chatMessages.last?.text.count ?? 0)-\(state.isAwaitingReply)"
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        guard let last = state.chatMessages.last else { return }
+        let target = state.isAwaitingReply ? "typing" : last.id.uuidString
+        let scroll = {
+            if state.isAwaitingReply {
+                proxy.scrollTo(target, anchor: .bottom)
+            } else {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.15)) { scroll() }
+        } else {
+            scroll()
         }
     }
 

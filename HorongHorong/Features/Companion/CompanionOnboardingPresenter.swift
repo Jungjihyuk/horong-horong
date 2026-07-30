@@ -150,7 +150,16 @@ enum CompanionOnboardingPresenter {
     }
 
     /// 설정 창을 열고 원하는 페이지로 이동한다. 대화 답변에서도 쓴다.
-    static func openSettings(tab: SettingsTab, highlight: String?, seconds: Double = 4) {
+    /// `questionTokens` 를 주면 그 페이지에서 제목이 가장 잘 맞는 카드가 스스로 강조된다.
+    static func openSettings(
+        tab: SettingsTab,
+        highlight: String?,
+        questionTokens: [String] = [],
+        seconds: Double = 4
+    ) {
+        if !questionTokens.isEmpty {
+            CompanionHighlightCenter.shared.beginCardSearch(tokens: questionTokens)
+        }
         if !isPopoverOpen, let button = statusItemButton() {
             button.performClick(nil)
             isPopoverOpen = true
@@ -167,13 +176,13 @@ enum CompanionOnboardingPresenter {
                     window.makeKeyAndOrderFront(nil)
                     window.orderFrontRegardless()
                 }
-                guard let highlight else { return }
-                CompanionHighlightCenter.shared.highlight(highlight)
+                if let highlight {
+                    CompanionHighlightCenter.shared.highlight(highlight)
+                }
                 // 잠깐 비추고 원래대로 돌린다. 대화 중엔 계속 강조할 이유가 없다.
                 DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-                    if CompanionHighlightCenter.shared.isHighlighted(highlight) {
-                        CompanionHighlightCenter.shared.highlight(nil)
-                    }
+                    CompanionHighlightCenter.shared.endCardSearch()
+                    CompanionHighlightCenter.shared.highlight(nil)
                 }
             }
         }

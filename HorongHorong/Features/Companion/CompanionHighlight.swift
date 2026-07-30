@@ -18,6 +18,48 @@ final class CompanionHighlightCenter: ObservableObject {
         self.target = target
     }
 
+    // MARK: - 설정 카드 자동 찾기
+    //
+    // 카드마다 강조 id 를 손으로 달지 않는다.
+    // 질문에서 뽑은 낱말을 놓아두면 화면에 그려진 카드들이 스스로 등록하고,
+    // 그중 제목이 가장 잘 맞는 하나만 강조된다.
+
+    private var questionTokens: [String] = []
+    private var registeredCards: [String] = []
+
+    static func cardID(_ title: String) -> String { "card:\(title)" }
+
+    /// 답변에 맞는 카드를 찾기 시작한다. 페이지가 그려지기 전에 불러도 된다.
+    func beginCardSearch(tokens: [String]) {
+        questionTokens = tokens
+        registeredCards = []
+        target = nil
+    }
+
+    func endCardSearch() {
+        questionTokens = []
+        registeredCards = []
+    }
+
+    /// 화면에 나타난 카드가 자기 제목을 알린다.
+    func registerCard(_ title: String) {
+        guard !questionTokens.isEmpty else { return }
+        guard !registeredCards.contains(title) else { return }
+        registeredCards.append(title)
+
+        guard let best = registeredCards.max(by: { score(for: $0) < score(for: $1) }),
+              score(for: best) > 0 else {
+            return
+        }
+        target = Self.cardID(best)
+    }
+
+    /// 제목이 질문 낱말을 얼마나 담고 있는지.
+    private func score(for title: String) -> Int {
+        let lowered = title.lowercased()
+        return questionTokens.reduce(0) { $0 + (lowered.contains($1) ? $1.count : 0) }
+    }
+
     func isHighlighted(_ id: String) -> Bool { target == id }
 
     /// 강조가 켜져 있는데 이 요소가 대상이 아니면 뒤로 물러나야 한다.

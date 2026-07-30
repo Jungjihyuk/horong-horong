@@ -559,6 +559,34 @@ enum Constants {
     static let companionOverlaySize = CGSize(width: 300, height: 216)
     /// 대화 모드에서 위로 늘어난 오버레이 창 크기. 스프라이트 위치는 그대로 두고 위쪽만 커진다.
     static let companionChatOverlaySize = CGSize(width: 340, height: 440)
+    /// 대화에 쓸 모델 공급자.
+    enum CompanionChatProviderKind: String, CaseIterable, Identifiable {
+        case appleFoundation
+        case ollama
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .appleFoundation: return "Apple 온디바이스"
+            case .ollama:          return "Ollama"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .appleFoundation:
+                return "설치가 필요 없지만 모델이 작아 긴 지시를 잘 못 지킵니다."
+            case .ollama:
+                return "Ollama 를 설치하고 모델을 받아야 합니다. 더 큰 모델을 쓸 수 있습니다."
+            }
+        }
+    }
+
+    static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
+    /// 뉴스 기능과 같은 엔드포인트를 쓴다.
+    static let defaultCompanionOllamaModel = "gemma4:e4b"
+
     /// 마우스로 지정할 수 있는 활동 영역의 최소 크기. 이보다 작게 그리면 취소로 본다.
     static let companionMinimumRegionSize = CGSize(width: 160, height: 120)
     /// 걷는 속도(pt/초).
@@ -624,6 +652,8 @@ enum Constants {
         static let companionUserNickname = "companion.userNickname"
         static let companionUserNote = "companion.userNote"
         static let companionOnboardingSeen = "companion.onboardingSeen"
+        static let companionChatProvider = "companion.chatProvider"
+        static let companionOllamaModel = "companion.ollamaModel"
     }
 
     // MARK: - 메뉴바 표시 형식
