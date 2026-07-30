@@ -58,6 +58,9 @@ final class CompanionPresentationState: ObservableObject {
     var onShowSchedule: @MainActor () -> Void = {}
     var onRequestMenu: @MainActor () -> Void = {}
     var onDismissMenu: @MainActor () -> Void = {}
+    var onAdvanceOnboarding: @MainActor () -> Void = {}
+    var onFinishOnboarding: @MainActor () -> Void = {}
+    var onStartOnboarding: @MainActor () -> Void = {}
 
     /// 캐릭터를 오른쪽 클릭했을 때 뜨는 자체 메뉴.
     @Published var isMenuVisible = false
@@ -511,20 +514,32 @@ private struct CompanionMenuCard: View {
         let action: @MainActor () -> Void
     }
 
-    private var items: [Item] {
+    /// 성격이 다른 항목을 구분선으로 나눈다.
+    /// 지금 할 일 / 배우기 / 끄기 — 재우기는 파괴적 동작이라 맨 아래에 둔다.
+    private var sections: [[Item]] {
         [
-            Item(id: "schedule", icon: "list.bullet.rectangle", title: "오늘 일정 보기") {
-                state.onDismissMenu()
-                state.onShowSchedule()
-            },
-            Item(id: "chat", icon: "bubble.left.and.bubble.right", title: state.isChatting ? "대화 닫기" : "말 걸기") {
-                state.onDismissMenu()
-                state.onCharacterTap()
-            },
-            Item(id: "off", icon: "moon.zzz", title: "재우기", isDestructive: true) {
-                state.onDismissMenu()
-                state.onTurnOff()
-            },
+            [
+                Item(id: "schedule", icon: "list.bullet.rectangle", title: "오늘 일정 보기") {
+                    state.onDismissMenu()
+                    state.onShowSchedule()
+                },
+                Item(id: "chat", icon: "bubble.left.and.bubble.right", title: state.isChatting ? "대화 닫기" : "말 걸기") {
+                    state.onDismissMenu()
+                    state.onCharacterTap()
+                },
+            ],
+            [
+                Item(id: "guide", icon: "questionmark.circle", title: "사용법 안내") {
+                    state.onDismissMenu()
+                    state.onStartOnboarding()
+                },
+            ],
+            [
+                Item(id: "off", icon: "moon.zzz", title: "재우기", isDestructive: true) {
+                    state.onDismissMenu()
+                    state.onTurnOff()
+                },
+            ],
         ]
     }
 
@@ -550,8 +565,15 @@ private struct CompanionMenuCard: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            ForEach(items) { item in
-                row(item)
+            ForEach(Array(sections.enumerated()), id: \.offset) { index, items in
+                if index > 0 {
+                    Divider()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                }
+                ForEach(items) { item in
+                    row(item)
+                }
             }
         }
         .padding(.bottom, 6)

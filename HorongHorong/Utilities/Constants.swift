@@ -623,6 +623,7 @@ enum Constants {
         static let companionBriefingLastDeliveredAt = "companion.briefingLastDeliveredAt"
         static let companionUserNickname = "companion.userNickname"
         static let companionUserNote = "companion.userNote"
+        static let companionOnboardingSeen = "companion.onboardingSeen"
     }
 
     // MARK: - 메뉴바 표시 형식
