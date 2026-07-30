@@ -46,6 +46,14 @@ struct MenuBarPopover: View {
                 tabBar
                 tabContent
                     .id(selectedTab)
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: .companionOnboardingSelectTab)
+                    ) { notification in
+                        // 온보딩이 단계에 맞는 탭을 보여달라고 요청한다.
+                        if let tab = notification.object as? PopoverTab {
+                            selectedTab = tab
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, 18)
                     .padding(.top, 16)

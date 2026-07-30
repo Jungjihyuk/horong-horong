@@ -556,6 +556,123 @@ final class CompanionMoodTests: XCTestCase {
     }
 }
 
+final class CompanionOnboardingScriptTests: XCTestCase {
+    private let sample = """
+    # 대본
+
+    ## 이 파일을 고치는 법
+    안내문이라 id 가 없다.
+    > 이 줄은 대사가 아니다.
+
+    ## 시나리오 1. 집중하기
+    <!-- id: focus -->
+
+    ### 1) 타이머를 연다
+    <!-- screen: popover.timer -->
+    > 타이머 탭이에요.
+    > 여기서 시작해요.
+
+    ### 2) 돌아본다
+    > 끝나면 돌아봐요.
+
+    ## 시나리오 2. 통계 보기
+    <!-- id: stats -->
+
+    ### 1) 통계 탭
+    <!-- screen: popover.stats -->
+    > 통계 탭이에요.
+    """
+
+    /// id 가 없는 안내문 문단은 시나리오로 잡히면 안 된다.
+    func testSectionsWithoutIDAreNotScenarios() {
+        let scenarios = CompanionOnboardingScript.parse(sample)
+
+        XCTAssertEqual(scenarios.map(\.id), ["focus", "stats"])
+    }
+
+    func testStepsKeepOrderAndScreen() {
+        let scenarios = CompanionOnboardingScript.parse(sample)
+        let steps = scenarios[0].steps
+
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps[0].screen, .popoverTimer)
+        XCTAssertNil(steps[1].screen)
+    }
+
+    /// 여러 줄로 쓴 대사는 한 문장으로 합쳐진다.
+    func testMultiLineQuoteBecomesOneLine() {
+        let steps = CompanionOnboardingScript.parse(sample)[0].steps
+
+        XCTAssertEqual(steps[0].line, "타이머 탭이에요. 여기서 시작해요.")
+    }
+
+    func testStepWithoutLineIsSkipped() {
+        let scenarios = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 대사 없는 단계
+        <!-- screen: popover.memo -->
+
+        ### 대사 있는 단계
+        > 안녕하세요.
+        """)
+
+        XCTAssertEqual(scenarios.first?.steps.count, 1)
+        XCTAssertEqual(scenarios.first?.steps.first?.title, "대사 있는 단계")
+    }
+
+    func testUnknownScreenIsIgnored() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        <!-- screen: popover.nowhere -->
+        > 안녕하세요.
+        """).first?.steps
+
+        XCTAssertNil(steps?.first?.screen)
+    }
+
+    func testEmptyDocumentProducesNoScenarios() {
+        XCTAssertTrue(CompanionOnboardingScript.parse("").isEmpty)
+    }
+}
+
+final class CompanionOnboardingTriggerTests: XCTestCase {
+    /// 처음 설치해 기록이 전혀 없을 때만 저절로 시작한다.
+    func testStartsOnlyWhenUnseenAndEmpty() {
+        XCTAssertTrue(
+            CompanionOnboardingTrigger.shouldStartAutomatically(
+                hasSeenOnboarding: false, memoCount: 0, focusSessionCount: 0
+            )
+        )
+    }
+
+    func testDoesNotStartWhenAlreadySeen() {
+        XCTAssertFalse(
+            CompanionOnboardingTrigger.shouldStartAutomatically(
+                hasSeenOnboarding: true, memoCount: 0, focusSessionCount: 0
+            )
+        )
+    }
+
+    /// 기록이 있으면 기존 사용자이므로 방해하지 않는다.
+    func testDoesNotStartWhenAnyDataExists() {
+        XCTAssertFalse(
+            CompanionOnboardingTrigger.shouldStartAutomatically(
+                hasSeenOnboarding: false, memoCount: 1, focusSessionCount: 0
+            )
+        )
+        XCTAssertFalse(
+            CompanionOnboardingTrigger.shouldStartAutomatically(
+                hasSeenOnboarding: false, memoCount: 0, focusSessionCount: 1
+            )
+        )
+    }
+}
+
 final class CompanionUserProfileTests: XCTestCase {
     func testEmptyProfileAddsNothingToThePrompt() {
         XCTAssertTrue(CompanionUserProfile.empty.promptSection.isEmpty)

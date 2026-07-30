@@ -22,6 +22,7 @@ final class CompanionController {
     private var tickTimer: Timer?
     private var briefingTimer: Timer?
     private var systemTimeObservers: [NSObjectProtocol] = []
+    private var onboardingRequestObserver: NSObjectProtocol?
     private var defaultsObserver: NSObjectProtocol?
     private var timerStateObservationTask: Task<Void, Never>?
     private var bubbleDismissTask: Task<Void, Never>?
@@ -32,6 +33,8 @@ final class CompanionController {
     private var chatReplyTask: Task<Void, Never>?
     private var streamingMessageID: UUID?
     private var moodResetTask: Task<Void, Never>?
+    private var onboardingSteps: [CompanionOnboardingStep] = []
+    private var onboardingIndex = 0
 
     /// 감정 동작을 보여줄 시간. 이후에는 듣는 자세로 돌아온다.
     private static let moodReactionSeconds: Double = 2.5
@@ -63,6 +66,9 @@ final class CompanionController {
         state.onShowSchedule = { [weak self] in self?.showScheduleOnDemand() }
         state.onRequestMenu = { [weak self] in self?.toggleMenu() }
         state.onDismissMenu = { [weak self] in self?.hideMenu() }
+        state.onAdvanceOnboarding = { [weak self] in self?.advanceOnboarding() }
+        state.onFinishOnboarding = { [weak self] in self?.finishOnboarding() }
+        state.onStartOnboarding = { [weak self] in self?.startOnboarding() }
     }
 
     func start(modelContainer: ModelContainer) {
@@ -78,9 +84,18 @@ final class CompanionController {
             }
         }
 
+        onboardingRequestObserver = NotificationCenter.default.addObserver(
+            forName: .companionStartOnboarding,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.startOnboarding() }
+        }
+
         observeTimerState()
         observeSystemTimeChanges()
         applySettings()
+        startOnboardingIfNeeded()
     }
 
     func stop() {
@@ -103,6 +118,10 @@ final class CompanionController {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
         systemTimeObservers.removeAll()
+        if let onboardingRequestObserver {
+            NotificationCenter.default.removeObserver(onboardingRequestObserver)
+        }
+        onboardingRequestObserver = nil
         stopTicking()
         overlay.hide()
         mode = .hidden
@@ -413,6 +432,94 @@ final class CompanionController {
         )
     }
 
+    // MARK: - 온보딩
+
+    /// 아직 본 적 없고 쓴 흔적도 없을 때만 저절로 시작한다.
+    private func startOnboardingIfNeeded() {
+        guard CompanionOnboardingTrigger.shouldStartAutomatically(
+            hasSeenOnboarding: UserDefaults.standard.bool(
+                forKey: Constants.AppStorageKey.companionOnboardingSeen
+            ),
+            memoCount: storedCount(of: Memo.self),
+            focusSessionCount: storedCount(of: FocusSession.self)
+        ) else { return }
+
+        // 앱이 막 뜬 직후라 팝오버가 준비될 시간을 준다.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            self?.startOnboarding()
+        }
+    }
+
+    private func storedCount<T: PersistentModel>(of type: T.Type) -> Int {
+        guard let modelContainer else { return 0 }
+        return (try? modelContainer.mainContext.fetchCount(FetchDescriptor<T>())) ?? 0
+    }
+
+    /// 설정에서 직접 시작할 때도 이 경로를 쓴다.
+    func startOnboarding() {
+        let scenarios = CompanionOnboardingScript.loadFromBundle()
+        let steps = scenarios.flatMap(\.steps)
+        guard !steps.isEmpty else { return }
+
+        // 컴패니언이 꺼져 있으면 켜야 호로롱이 설명할 수 있다.
+        if !Self.isEnabled {
+            UserDefaults.standard.set(true, forKey: Constants.AppStorageKey.companionEnabled)
+            applySettings()
+        }
+
+        endChat()
+        hideMenu()
+        onboardingSteps = steps
+        onboardingIndex = 0
+        presentCurrentOnboardingStep()
+    }
+
+    private var isOnboarding: Bool { !onboardingSteps.isEmpty }
+
+    private func presentCurrentOnboardingStep() {
+        guard onboardingIndex < onboardingSteps.count else {
+            finishOnboarding()
+            return
+        }
+        let step = onboardingSteps[onboardingIndex]
+        if let screen = step.screen {
+            CompanionOnboardingPresenter.show(screen)
+        }
+
+        let isLast = onboardingIndex == onboardingSteps.count - 1
+        state.bubble = CompanionBubble(
+            headline: "\(onboardingIndex + 1)/\(onboardingSteps.count) · \(step.title)",
+            message: step.line,
+            isDismissible: true,
+            actions: [
+                CompanionBubbleAction(title: isLast ? "다 봤어요" : "다음") { [weak self] in
+                    self?.advanceOnboarding()
+                },
+            ]
+        )
+        overlay.setPresentation(expanded: false, acceptsInput: false)
+        setAnimation(onboardingIndex == 0 ? .waving : .review)
+    }
+
+    private func advanceOnboarding() {
+        guard isOnboarding else { return }
+        onboardingIndex += 1
+        presentCurrentOnboardingStep()
+    }
+
+    /// 끝까지 봤든 중간에 닫았든, 다시 자동으로 뜨지는 않게 표시해 둔다.
+    private func finishOnboarding() {
+        guard isOnboarding else { return }
+        onboardingSteps = []
+        onboardingIndex = 0
+        UserDefaults.standard.set(true, forKey: Constants.AppStorageKey.companionOnboardingSeen)
+        CompanionOnboardingPresenter.closePopover()
+        state.bubble = nil
+        overlay.setPresentation(expanded: false, acceptsInput: false)
+        setAnimation(.idle)
+    }
+
     // MARK: - 끌어서 옮기기 / 끄기
 
     private var dragGrabOffset: CGSize?
@@ -696,6 +803,10 @@ final class CompanionController {
 
     /// 사용자가 직접 닫을 때까지 말풍선을 유지한다.
     private func dismissBubble() {
+        if isOnboarding {
+            finishOnboarding()
+            return
+        }
         bubbleDismissTask?.cancel()
         bubbleDismissTask = nil
         state.bubble = nil
