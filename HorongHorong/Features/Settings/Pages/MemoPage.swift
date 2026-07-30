@@ -301,8 +301,9 @@ struct MemoPage: View {
 
                 for item in items where !item.isCompleted && !existingReminderIDs.contains(item.id) {
                     let memo = Memo(content: memoContent(from: item), icon: MemoIcon.defaultIcon)
-                    memo.startDate = item.startDate
-                    memo.deadline = item.dueDate
+                    let schedule = Self.schedule(for: item, history: allMemos)
+                    memo.startDate = schedule.start
+                    memo.deadline = schedule.deadline
                     memo.reminderIdentifier = item.id
                     memo.reminderCalendarIdentifier = item.calendarIdentifier
                     memo.isLinkedToRemindersValue = true
@@ -319,6 +320,25 @@ struct MemoPage: View {
             }
             isImportingReminders = false
         }
+    }
+
+    /// 미리알림의 시각을 메모의 시작일·마감으로 나눈다.
+    ///
+    /// 미리알림 앱에서 정하는 날짜/시간은 **시작 시각**으로 본다. 거기에는 "얼마나 걸리는지"가
+    /// 없으므로 마감은 지난 메모에서 미루어 붙인다. 다른 앱이 시작·마감을 둘 다 넣어둔
+    /// 미리알림이라면 그건 그대로 존중한다.
+    private static func schedule(
+        for item: ReminderListItem,
+        history: [Memo]
+    ) -> (start: Date?, deadline: Date?) {
+        if let start = item.startDate, let due = item.dueDate, due > start {
+            return (start, due)
+        }
+        guard let anchor = item.dueDate ?? item.startDate else {
+            return (nil, nil)
+        }
+        let duration = MemoDurationEstimator.estimate(title: item.title, history: history)
+        return (anchor, anchor.addingTimeInterval(duration))
     }
 
     private func revertUncheckedReminderMemos() {
