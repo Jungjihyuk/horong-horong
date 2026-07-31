@@ -13,6 +13,10 @@ enum MemoDurationEstimator {
     /// 사람이 실제로 그렇게 쓸 법한 범위. 이 밖의 값은 잘못 입력된 것으로 보고 이력에서 뺀다.
     private static let plausible: ClosedRange<TimeInterval> = 60...(12 * 60 * 60)
 
+    /// 개인화를 시작하기 전에 필요한 최소 이력. 이보다 적으면 몇 건 안 되는 기록이
+    /// 전체 성향인 양 굳어져서, 사용자가 예측할 수 없는 값이 나온다.
+    private static let minimumHistory = 5
+
     /// 같은 일을 전에도 했다면 그때 걸린 만큼, 아니면 평소 걸리던 만큼, 그것도 없으면 기본값.
     ///
     /// - Parameters:
@@ -20,7 +24,8 @@ enum MemoDurationEstimator {
     ///   - history: 이력으로 볼 기존 메모들.
     static func estimate(title: String, history: [Memo]) -> TimeInterval {
         let samples = self.samples(from: history)
-        guard !samples.isEmpty else { return fallback }
+        // 이력이 얼마 없을 때는 넘겨짚지 않고 기본값을 쓴다.
+        guard samples.count >= minimumHistory else { return fallback }
 
         // 같은 할일이 되풀이된 적이 있으면 그쪽을 우선한다. 한 번뿐인 기록은 우연일 수 있어 2개부터 믿는다.
         let key = normalize(title)
@@ -30,8 +35,7 @@ enum MemoDurationEstimator {
         }
 
         // 되풀이 이력이 없으면 이 사람의 평소 소요 시간으로 대신한다.
-        let all = samples.map(\.duration)
-        return all.count >= 3 ? median(all) : fallback
+        return median(samples.map(\.duration))
     }
 
     /// 제목에서 회차·날짜·기호를 걷어내 "같은 할일"로 알아보게 만든다.
