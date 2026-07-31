@@ -80,7 +80,12 @@ targets:
         EXECUTABLE_NAME: HorongHorong
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGNING_ALLOWED: "YES"
-        CODE_SIGN_IDENTITY: "-"
+        # ad-hoc("-") 서명은 안정적인 신원이 없어 macOS 의 권한 장부(TCC)가 허용을 기억하지
+        # 못한다. 그래서 미리알림 권한을 날짜 바꿀 때마다 다시 묻는다. 개발 인증서로 서명하면
+        # 신원이 고정되어 한 번 허용한 것이 유지된다.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: WSG3ZHK35V
         ENABLE_APP_SANDBOX: "NO"
         OTHER_SWIFT_FLAGS: "$(inherited) -DDIRECT_DISTRIBUTION"
         SWIFT_STRICT_CONCURRENCY: minimal
