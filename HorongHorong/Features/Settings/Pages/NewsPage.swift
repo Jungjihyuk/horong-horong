@@ -30,14 +30,6 @@ struct NewsPage: View {
 
     @State private var showAddSource: Bool = false
     @State private var detailKind: SourceDetailKind?
-    @State private var installedOllamaModels: Set<String> = []
-    @State private var isLoadingOllamaModels = false
-    @State private var installingOllamaModel: String?
-    @State private var installingOllamaStatus: String?
-    @State private var installingOllamaProgress: Double?
-    @State private var ollamaModelPage = 0
-
-    private let ollamaModelsPerPage = 5
 
     private var pipelineService: NewsPipelineService {
         appState.newsPipelineService
@@ -57,17 +49,6 @@ struct NewsPage: View {
             }
             migrateLegacyKeywordsIfNeeded()
             applyRecommendedOllamaModelIfNeeded()
-            if selectedProvider == "ollama" {
-                Task { await refreshInstalledOllamaModels() }
-            }
-        }
-        .onChange(of: selectedProvider) { _, newValue in
-            guard newValue == "ollama" else { return }
-            Task { await refreshInstalledOllamaModels() }
-        }
-        .onChange(of: ollamaEndpoint) { _, _ in
-            guard selectedProvider == "ollama" else { return }
-            Task { await refreshInstalledOllamaModels() }
         }
         .sheet(isPresented: $showAddSource) {
             AddSourceSheet()
@@ -349,7 +330,11 @@ struct NewsPage: View {
             "모델 후보",
             subtitle: "설치된 모델은 체크 표시, 미설치 로컬 모델은 다운로드 버튼으로 표시합니다."
         ) {
-            ollamaModelCandidateList
+            OllamaModelPicker(
+                model: $ollamaModel,
+                endpoint: normalizedOllamaEndpoint,
+                dataBasePath: normalizedDataBasePath
+            )
         }
         SettingsRow(
             "Ollama Endpoint",
@@ -373,308 +358,11 @@ struct NewsPage: View {
         }
     }
 
-    private var ollamaModelCandidateList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text(isLoadingOllamaModels ? "설치 목록 확인 중..." : "사용 가능 후보")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("M칩 통합 메모리 \(Constants.newsHardwareMemoryGB)GB 기준")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                Spacer()
-                Button {
-                    Task { await refreshInstalledOllamaModels() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .disabled(isLoadingOllamaModels || installingOllamaModel != nil)
-                .help("설치 상태 새로고침")
-            }
-
-            VStack(spacing: 6) {
-                ForEach(pagedOllamaModelOptions) { option in
-                    ollamaModelOptionRow(option)
-                }
-            }
-
-            if ollamaModelPageCount > 1 {
-                ollamaModelPagination
-            }
-
-            if let installingOllamaModel {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(installingOllamaModel) 준비 중")
-                        .font(.caption.weight(.medium))
-                    if let installingOllamaProgress {
-                        ProgressView(value: installingOllamaProgress, total: 1.0)
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    if let installingOllamaStatus {
-                        Text(installingOllamaStatus)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                .padding(.top, 2)
-            } else if let installingOllamaStatus {
-                Text(installingOllamaStatus)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .frame(width: 390, alignment: .leading)
-    }
-
-    private var pagedOllamaModelOptions: [Constants.NewsOllamaModelOption] {
-        let start = ollamaModelPage * ollamaModelsPerPage
-        guard start < Constants.availableNewsOllamaModelOptions.count else {
-            return Array(Constants.availableNewsOllamaModelOptions.prefix(ollamaModelsPerPage))
-        }
-        let end = min(start + ollamaModelsPerPage, Constants.availableNewsOllamaModelOptions.count)
-        return Array(Constants.availableNewsOllamaModelOptions[start..<end])
-    }
-
-    private var ollamaModelPageCount: Int {
-        max(1, (Constants.availableNewsOllamaModelOptions.count + ollamaModelsPerPage - 1) / ollamaModelsPerPage)
-    }
-
-    private var ollamaModelPagination: some View {
-        HStack(spacing: 6) {
-            Text("\(ollamaModelPage + 1) / \(ollamaModelPageCount)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 42, alignment: .leading)
-
-            ForEach(0..<ollamaModelPageCount, id: \.self) { page in
-                Button {
-                    ollamaModelPage = page
-                } label: {
-                    Text("\(page + 1)")
-                        .font(.caption2.weight(.semibold))
-                        .frame(width: 22, height: 22)
-                        .background(
-                            Circle()
-                                .fill(page == ollamaModelPage ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(page == ollamaModelPage ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.10), lineWidth: 0.5)
-                        )
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(page == ollamaModelPage ? Color.accentColor : Color.secondary)
-                .help("\(page + 1)번째 모델 후보 페이지")
-            }
-
-            Spacer()
-        }
-        .padding(.top, 2)
-    }
-
-    private func ollamaModelOptionRow(_ option: Constants.NewsOllamaModelOption) -> some View {
-        let isSelected = ollamaModel == option.name
-        let recommendationKind = Constants.newsOllamaRecommendationKinds()[option.name]
-        let isUnsupported = recommendationKind == .unsupported
-        let isCloud = option.availability == .cloud
-        let isInstalled = isCloud || installedOllamaModels.contains(option.name)
-        let isInstalling = installingOllamaModel == option.name
-
-        return HStack(spacing: 8) {
-            Button {
-                guard !isUnsupported else {
-                    installingOllamaStatus = "\(option.name)은 현재 RAM \(Constants.newsHardwareMemoryGB)GB 기준으로 로컬 실행을 권장하지 않습니다."
-                    return
-                }
-                ollamaModel = option.name
-                if isCloud {
-                    installingOllamaStatus = "클라우드 모델은 로컬 다운로드 없이 선택됩니다. Ollama 계정/클라우드 사용 가능 여부를 확인해주세요."
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Text(option.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(option.name)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
-                        if let recommendationKind {
-                            Text(recommendationKind.rawValue)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(recommendationForegroundColor(for: recommendationKind))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(
-                                    recommendationBackgroundColor(for: recommendationKind),
-                                    in: RoundedRectangle(cornerRadius: 4)
-                                )
-                        }
-                    }
-                    Text(option.detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.accentColor)
-                    .help("현재 선택된 모델")
-            }
-
-            if isCloud {
-                Image(systemName: "cloud")
-                    .foregroundStyle(.secondary)
-                    .help("Ollama 클라우드 모델")
-            } else if isInstalled {
-                Image(systemName: "checkmark.circle")
-                    .foregroundStyle(.green)
-                    .help("설치됨")
-            } else {
-                Button {
-                    Task { await installOllamaModel(option) }
-                } label: {
-                    if isInstalling {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.down.circle")
-                    }
-                }
-                .buttonStyle(.borderless)
-                .disabled(installingOllamaModel != nil || isUnsupported)
-                .help(isUnsupported ? "현재 PC 사양에서는 권장하지 않음" : "\(option.name) 다운로드")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .opacity(isUnsupported ? 0.62 : 1)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 0.5)
-        )
-    }
-
-    private func recommendationForegroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
-        switch kind {
-        case .primary:
-            return .white
-        case .lightweight, .quality, .caution:
-            return recommendationAccentColor(for: kind)
-        case .unsupported:
-            return .red
-        }
-    }
-
-    private func recommendationBackgroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
-        switch kind {
-        case .primary:
-            return recommendationAccentColor(for: kind)
-        case .lightweight, .quality, .caution:
-            return recommendationAccentColor(for: kind).opacity(0.12)
-        case .unsupported:
-            return Color.red.opacity(0.12)
-        }
-    }
-
-    private func recommendationAccentColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
-        switch kind {
-        case .primary:
-            return Color.accentColor
-        case .lightweight:
-            return .green
-        case .quality:
-            return .purple
-        case .caution:
-            return .orange
-        case .unsupported:
-            return .red
-        }
-    }
-
     private func applyRecommendedOllamaModelIfNeeded() {
         let storedModel = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaModel)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if storedModel == nil || storedModel?.isEmpty == true {
             ollamaModel = Constants.defaultNewsOllamaModel
-        }
-        moveOllamaModelPage(to: ollamaModel)
-    }
-
-    private func moveOllamaModelPage(to model: String) {
-        guard let index = Constants.availableNewsOllamaModelOptions.firstIndex(where: { $0.name == model }) else {
-            return
-        }
-        ollamaModelPage = index / ollamaModelsPerPage
-    }
-
-    @MainActor
-    private func refreshInstalledOllamaModels() async {
-        isLoadingOllamaModels = true
-        defer { isLoadingOllamaModels = false }
-
-        do {
-            installedOllamaModels = try await pipelineService.installedOllamaModelNames(endpoint: normalizedOllamaEndpoint)
-            if installingOllamaModel == nil {
-                installingOllamaStatus = nil
-            }
-        } catch {
-            installedOllamaModels = []
-            installingOllamaStatus = "Ollama 설치 목록을 불러오지 못했습니다. Ollama 앱 또는 서버 실행 상태를 확인해주세요."
-        }
-    }
-
-    @MainActor
-    private func installOllamaModel(_ option: Constants.NewsOllamaModelOption) async {
-        if Constants.newsOllamaRecommendationKinds()[option.name] == .unsupported {
-            ollamaModel = Constants.defaultNewsOllamaModel
-            installingOllamaStatus = "\(option.name)은 현재 RAM \(Constants.newsHardwareMemoryGB)GB 기준으로 로컬 실행을 권장하지 않습니다."
-            return
-        }
-
-        guard option.availability == .local else {
-            ollamaModel = option.name
-            installingOllamaStatus = "클라우드 모델은 로컬 다운로드 없이 선택됩니다."
-            return
-        }
-
-        ollamaModel = option.name
-        installingOllamaModel = option.name
-        installingOllamaStatus = "다운로드 준비 중..."
-        installingOllamaProgress = nil
-        defer {
-            installingOllamaModel = nil
-            installingOllamaProgress = nil
-        }
-
-        do {
-            try await pipelineService.installOllamaModel(
-                model: option.name,
-                dataBasePath: normalizedDataBasePath,
-                progress: { progress in
-                    installingOllamaStatus = progress.message
-                    installingOllamaProgress = progress.fraction
-                }
-            )
-            installedOllamaModels.insert(option.name)
-            installingOllamaStatus = "\(option.name) 설치가 완료되었습니다."
-        } catch {
-            installingOllamaStatus = error.localizedDescription
         }
     }
 

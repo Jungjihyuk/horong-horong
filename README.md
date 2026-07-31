@@ -262,6 +262,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 - UI 언어: 한국어
 - 데이터 저장: SwiftData (로컬)
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
+- Metal 툴체인 — `xcodebuild -downloadComponent MetalToolchain` *(컴패니언 MLX 대화가 Metal 커널을 컴파일합니다)*
 - [`uv`](https://github.com/astral-sh/uv) — *(뉴스 기능 사용 시)* `brew install uv`
 - Python 3 — *(뉴스 기능 사용 시)*
 - LLM CLI 중 하나 이상
@@ -276,8 +277,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 ```bash
 git clone https://github.com/Jungjihyuk/horong-horong.git
 cd horong-horong
-xcodegen generate
-xcodebuild -scheme HorongHorong -configuration Debug build
+make build
 open ~/Library/Developer/Xcode/DerivedData/HorongHorong-*/Build/Products/Debug/호롱호롱.app
 ```
 
@@ -291,7 +291,7 @@ uv sync
 #### 테스트
 
 ```bash
-xcodebuild -scheme HorongHorong -configuration Debug test
+make app-test
 ```
 
 ---

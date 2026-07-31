@@ -50,6 +50,16 @@ struct SettingsRoot: View {
         .onChange(of: columnVisibility) { _, _ in
             configureWindowChrome(hostWindow)
         }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+        ) { notification in
+            // 온보딩이 설명하는 페이지로 옮겨준다.
+            guard let action = notification.object as? String,
+                  action.hasPrefix("settings.show:"),
+                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count)))
+            else { return }
+            selection = tab
+        }
         .alert("기본값으로 복원하시겠어요?", isPresented: $showResetConfirm) {
             Button("취소", role: .cancel) {}
             Button("복원", role: .destructive) {
@@ -117,6 +127,7 @@ struct SettingsRoot: View {
         case .achievement: AchievementPage()
         case .news:       NewsPage()
         case .agent:      AgentPage()
+        case .companion:  CompanionPage()
         case .memo:       MemoPage()
         case .data:       DataPage()
         case .about:      AboutPage()
@@ -178,6 +189,14 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.selectedAgentType)
             defaults.removeObject(forKey: Constants.AppStorageKey.planDayCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.interestKeywords)
+        case .companion:
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionEnabled)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionSelectedIdentifier)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionRoamingRegion)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionHideDuringFocus)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingEnabled)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingHour)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingMinute)
         case .memo:
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportEnabled)
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
