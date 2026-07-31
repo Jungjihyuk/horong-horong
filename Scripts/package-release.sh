@@ -69,12 +69,16 @@ require_clean_tree() {
 }
 
 build_release_app() {
+  # mlx-swift 의 CudaBuild 플러그인과 mlx-swift-lm 의 매크로는 Xcode.app 에서는 한 번
+  # 신뢰하면 끝나지만, CLI 빌드에는 신뢰 기록이 없어 매번 검증에서 멈춘다.
   xcodebuild \
     -project "$PROJECT_ROOT/HorongHorong.xcodeproj" \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination 'platform=macOS' \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    -skipPackagePluginValidation \
+    -skipMacroValidation \
     CODE_SIGNING_ALLOWED=YES \
     CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     build

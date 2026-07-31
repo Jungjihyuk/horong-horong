@@ -115,8 +115,12 @@ final class MemoReminderLinkService {
             reminder.startDateComponents = nil
         }
 
-        if let deadline = memo.deadline {
-            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: deadline)
+        // 미리알림 앱은 마감(due)만 화면에 보여준다. 여기에 메모의 마감을 넣으면 미리알림에서
+        // 가져온 항목이 동기화할 때마다 뒤로 밀린다(10시 할일 → 시작 10시·마감 11시 → 11시 할일).
+        // 그래서 미리알림에 보이는 시각은 언제나 "시작 시각"으로 맞춘다. 시작일이 없는 메모만
+        // 마감을 대신 쓴다.
+        if let visible = memo.startDate ?? memo.deadline {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: visible)
         } else {
             reminder.dueDateComponents = nil
         }

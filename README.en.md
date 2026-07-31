@@ -200,6 +200,7 @@ Use this path when you want to build the app directly or contribute to the codeb
 - UI language: Korean
 - Data storage: SwiftData (local)
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
+- Metal toolchain — `xcodebuild -downloadComponent MetalToolchain` *(the companion's MLX chat compiles Metal kernels)*
 - [`uv`](https://github.com/astral-sh/uv) — *(required for the news feature)* `brew install uv`
 - Python 3 — *(required for the news feature)*
 - At least one LLM CLI
@@ -213,8 +214,7 @@ Use this path when you want to build the app directly or contribute to the codeb
 ```bash
 git clone https://github.com/Jungjihyuk/horong-horong.git
 cd horong-horong
-xcodegen generate
-xcodebuild -scheme HorongHorong -configuration Debug build
+make build
 open ~/Library/Developer/Xcode/DerivedData/HorongHorong-*/Build/Products/Debug/호롱호롱.app
 ```
 
@@ -228,7 +228,7 @@ uv sync
 #### Tests
 
 ```bash
-xcodebuild -scheme HorongHorong -configuration Debug test
+make app-test
 ```
 
 ---
