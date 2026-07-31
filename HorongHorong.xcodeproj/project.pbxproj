@@ -21,6 +21,7 @@
 		0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */; };
 		0C9BD0C654A4E26439111DD6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B31DB4E51995E349060A4BF /* AppState.swift */; };
 		0DA902D388B24F3F3018AE26 /* AppUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */; };
+		0F922F270875249444EAB113 /* MLXGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */; };
 		0FC36B5C3A021D78F935965F /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214CF0D4CCCD0DC041B81763 /* CompanionView.swift */; };
 		104BBE41D8FD7AB21B2995D7 /* CompanionPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40E30C422CA267221E628FB /* CompanionPage.swift */; };
 		1227FA9CD956D82EC098B2AB /* onboarding.md in Resources */ = {isa = PBXBuildFile; fileRef = 53453D33973DFCC4304BDE46 /* onboarding.md */; };
@@ -159,6 +160,7 @@
 		9F0B18E539402D63B19BD36F /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */; };
 		9F55842DD05F8F8E6E795066 /* CompanionSettingsIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BB308E439FE79B8DE5E1A4 /* CompanionSettingsIndex.swift */; };
 		9F9262B9085424148D94A6C3 /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 5A5B4DD416BE177C1373010B /* Tokenizers */; };
+		A2F05E50922514EAD713165E /* MLXGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */; };
 		A350A5EAE13EA123D76BFB02 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
 		A388D280BCC9EB6032282ECD /* TelemetryConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7295A6537FEB7087333AD889 /* TelemetryConfig.swift */; };
 		A45F7D2C6746DEFBA03BBD15 /* companion_chat.md in Resources */ = {isa = PBXBuildFile; fileRef = 4B437AE498E52F90B40CEBC8 /* companion_chat.md */; };
@@ -339,6 +341,7 @@
 		9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		93C3B4093C76333C488BBFBF /* DataPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPage.swift; sourceTree = "<group>"; };
 		97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorongAppStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXGoalSuggestionProvider.swift; sourceTree = "<group>"; };
 		99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyTimelineView.swift; sourceTree = "<group>"; };
 		9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdlePromptPanel.swift; sourceTree = "<group>"; };
 		9F73EF78F2F5A2264DB659E4 /* MemoPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoPage.swift; sourceTree = "<group>"; };
@@ -729,6 +732,7 @@
 			isa = PBXGroup;
 			children = (
 				0424CD9D3311EDFEC29D3EC7 /* AchievementViews.swift */,
+				990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */,
 			);
 			path = Achievement;
 			sourceTree = "<group>";
@@ -1021,6 +1025,7 @@
 				00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */,
 				583A85EF2009295F14DB2637 /* MLXChat.swift in Sources */,
 				A6E4C72F56B42CCEA76A68EB /* MLXCompanionChat.swift in Sources */,
+				A2F05E50922514EAD713165E /* MLXGoalSuggestionProvider.swift in Sources */,
 				5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */,
 				5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */,
 				693264CD9F0555C27CD695F7 /* MemoBrowserWindow.swift in Sources */,
@@ -1133,6 +1138,7 @@
 				CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */,
 				E537A11FA58D6194B688341A /* MLXChat.swift in Sources */,
 				CE8BBB10CF43B3C8E7D998BD /* MLXCompanionChat.swift in Sources */,
+				0F922F270875249444EAB113 /* MLXGoalSuggestionProvider.swift in Sources */,
 				FA4C0EC8BCBD4E91B2FBD41A /* ManualSegmentEditorView.swift in Sources */,
 				A80C053F7415CA29695F7B8A /* Memo.swift in Sources */,
 				3CBF43D40623337B5738D178 /* MemoBrowserWindow.swift in Sources */,
