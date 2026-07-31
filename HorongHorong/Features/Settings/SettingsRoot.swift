@@ -180,6 +180,8 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementDismissedSuggestionKeys)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyMaxFlagCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyFlagSelections)
         case .news:
             defaults.removeObject(forKey: Constants.NewsStorageKey.interestKeywords)
@@ -225,10 +227,44 @@ private struct AchievementPage: View {
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionProvider)
+    private var suggestionProvider: String = Constants.defaultAchievementSuggestionProvider
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionMLXModel)
+    private var suggestionMLXModel: String = Constants.defaultAchievementSuggestionMLXModel
 
     var body: some View {
         SettingsPageScroll {
             SettingsPageHeader(title: SettingsTab.achievement.label, subtitle: SettingsTab.achievement.subtitle)
+
+            SettingsGroupCard("추천 모델") {
+                SettingsRow(
+                    "추천 엔진",
+                    subtitle: "Apple 모델은 빠르고 준비가 필요 없습니다. MLX는 더 많은 할일을 한 번에 보고 묶음을 더 잘 찾지만 느리고 메모리를 씁니다."
+                ) {
+                    Picker("", selection: $suggestionProvider) {
+                        Text("Apple 모델").tag(Constants.AchievementSuggestionProviderKind.appleFoundation.rawValue)
+                        Text("MLX").tag(Constants.AchievementSuggestionProviderKind.mlx.rawValue)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                }
+
+                if suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue {
+                    SettingsRow(
+                        "MLX 모델",
+                        subtitle: "컴패니언 설정에서 미리 내려받은 모델만 쓸 수 있습니다. 준비되지 않았으면 Apple 모델로 대신 답합니다."
+                    ) {
+                        Picker("", selection: $suggestionMLXModel) {
+                            ForEach(Constants.availableAchievementMLXModelOptions) { option in
+                                Text("\(option.label) · \(option.minimumMemoryGB)GB+").tag(option.name)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 220)
+                    }
+                }
+            }
 
             SettingsGroupCard("목표 추천") {
                 SettingsRow(

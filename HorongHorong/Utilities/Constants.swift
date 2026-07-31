@@ -711,6 +711,20 @@ enum Constants {
     /// 컴패니언 기본값(가벼운 gemma-e2b)과 달리 지시 준수가 중요해 Qwen3 4B를 기본으로 둔다.
     static let defaultAchievementSuggestionMLXModel = "mlx-community/Qwen3-4B-4bit"
 
+    /// 목표 추천은 버튼을 눌렀을 때만 도는 **온디맨드** 작업이라, 늘 떠 있는 컴패니언과 달리
+    /// 큰 모델을 감당할 수 있다. 그래서 목록을 따로 둔다.
+    static let availableAchievementMLXModelOptions: [CompanionMLXModelOption] =
+        availableCompanionMLXModelOptions + [
+            // gemma-4-26b-a4b(MoE)는 넣지 않는다. mlx-swift-lm 의 Gemma4 구현이 dense 전용이라
+            // MoE 가중치(experts/router)를 만나면 unhandledKeys 로 로딩이 실패한다. (2026-08-01 확인)
+            CompanionMLXModelOption(
+                name: "mlx-community/gemma-4-31b-it-4bit",
+                label: "Gemma 4 31B",
+                detail: "품질이 가장 높지만 가장 느리고 메모리를 많이 씁니다.",
+                minimumMemoryGB: 32
+            ),
+        ]
+
     /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
     /// AFM 값은 실측(3,424자 통과 / 5,203자 실패)에 여유를 둔 것이다.
     static func achievementPromptCharacterBudget(
