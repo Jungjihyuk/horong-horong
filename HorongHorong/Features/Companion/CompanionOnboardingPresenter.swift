@@ -85,6 +85,11 @@ enum CompanionOnboardingPresenter {
         }?.close()
     }
 
+    /// 대화에서 저장한 메모를 곧바로 확인할 수 있게 팝오버의 메모 탭을 연다.
+    static func showMemoTab() {
+        openPopover(tab: .memo)
+    }
+
     /// 온보딩이 끝나면 열어둔 팝오버를 닫아 원래 상태로 돌려놓는다.
     static func closePopover() {
         guard isPopoverOpen, let button = statusItemButton() else {
