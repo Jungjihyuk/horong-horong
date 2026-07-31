@@ -1161,7 +1161,7 @@ struct FoundationModelsGoalSuggestionProvider {
 
     /// 프롬프트가 문자 예산을 넘지 않는 선까지만 메모를 담는다.
     /// 메모 길이는 사용자마다 제각각이라 "개수" 상한만으로는 크기를 보장할 수 없다.
-    private func memosWithinPromptBudget(
+    func memosWithinPromptBudget(
         _ memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
@@ -1181,7 +1181,7 @@ struct FoundationModelsGoalSuggestionProvider {
         return selected
     }
 
-    private func prompt(
+    func prompt(
         for memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
@@ -1238,7 +1238,7 @@ struct FoundationModelsGoalSuggestionProvider {
         )
     }
 
-    private func parse(
+    func parse(
         _ text: String,
         allowedIDs: Set<UUID>,
         suggestionCount: Int,
@@ -1339,7 +1339,7 @@ struct FoundationModelsGoalSuggestionProvider {
         .map { $0 }
     }
 
-    private func extractJSONObject(from text: String) -> String {
+    func extractJSONObject(from text: String) -> String {
         guard let start = text.firstIndex(of: "{"),
               let end = text.lastIndex(of: "}") else {
             return text
