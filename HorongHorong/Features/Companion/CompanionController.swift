@@ -32,9 +32,10 @@ final class CompanionController {
     private var chatSession: CompanionChatSession?
     private var appliedUserProfile: CompanionUserProfile?
     private var appliedChatProvider: String?
+    private var appliedBubbleSize: String?
     private var chatReplyTask: Task<Void, Never>?
-    private var streamingMessageID: UUID?
     private var moodResetTask: Task<Void, Never>?
+    private let memoStore = CompanionMemoStore()
     private var onboardingSteps: [CompanionOnboardingStep] = []
     private var onboardingIndex = 0
 
@@ -60,6 +61,16 @@ final class CompanionController {
         state.onCharacterTap = { [weak self] in self?.toggleChat() }
         state.onCloseChat = { [weak self] in self?.endChat() }
         state.onSendMessage = { [weak self] message in self?.send(message) }
+        state.onSaveMessageAsMemo = { [weak self] messageID, icon, isTodayTask in
+            self?.saveChatMessageAsMemo(
+                messageID: messageID,
+                icon: icon,
+                isTodayTask: isTodayTask
+            )
+        }
+        state.onOpenMemoTab = {
+            CompanionOnboardingPresenter.showMemoTab()
+        }
         state.onDragBegan = { [weak self] in self?.beginDrag() }
         state.onDragChanged = { [weak self] in self?.updateDrag() }
         state.onDragEnded = { [weak self] in self?.endDrag() }
@@ -184,6 +195,15 @@ final class CompanionController {
 
     private func applySettings() {
         updateBriefingSchedule()
+
+        // 말풍선 크기를 바꾸면 창도 같이 커져야 늘어난 내용이 잘리지 않는다.
+        let bubbleSize = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionBubbleSize
+        ) ?? Constants.defaultCompanionBubbleSize
+        if bubbleSize != appliedBubbleSize {
+            appliedBubbleSize = bubbleSize
+            overlay.refreshSize()
+        }
 
         let selectedProvider = UserDefaults.standard.string(
             forKey: Constants.AppStorageKey.companionChatProvider
@@ -666,7 +686,7 @@ final class CompanionController {
         chatReplyTask = nil
         moodResetTask?.cancel()
         moodResetTask = nil
-        streamingMessageID = nil
+        state.streamingMessageID = nil
         state.isAwaitingReply = false
         state.isChatting = false
         overlay.setPresentation(expanded: false, acceptsInput: false)
@@ -700,9 +720,14 @@ final class CompanionController {
     }
 
     private func send(_ message: String) {
+        if let memoIntent = CompanionMemoIntent.parse(message) {
+            handleMemoIntent(memoIntent, userMessage: message)
+            return
+        }
+
         state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
         state.isAwaitingReply = true
-        streamingMessageID = nil
+        state.streamingMessageID = nil
         setAnimation(.review)
 
         let session = chatSessionForCurrentCharacter()
@@ -735,10 +760,129 @@ final class CompanionController {
             self.applyStreamedReply(reply.text)
             self.attachPendingSchedule()
             self.state.isAwaitingReply = false
-            self.streamingMessageID = nil
+            self.state.streamingMessageID = nil
             self.reactWithMood(reply.mood)
             self.showAnswerDestinationIfAny(for: message)
         }
+    }
+
+    /// 저장 지시는 모델에 보내지 않고 사용자 입력 또는 직전 말풍선의 원문을 바로 저장한다.
+    private func handleMemoIntent(_ intent: CompanionMemoIntent, userMessage: String) {
+        let previousMessage = state.chatMessages.last {
+            $0.allowsMemoSave
+                && !$0.text.isEmpty
+                && $0.id != state.streamingMessageID
+        }
+        let commandMessage = CompanionChatMessage(
+            role: .user,
+            text: userMessage,
+            allowsMemoSave: false
+        )
+        state.chatMessages.append(commandMessage)
+
+        switch intent.target {
+        case .previousMessage:
+            guard let previousMessage else {
+                appendMemoStatusMessage("아직 메모로 저장할 대화가 없어요.")
+                return
+            }
+            persistMemo(
+                messageID: previousMessage.id,
+                content: previousMessage.text,
+                icon: MemoIcon.defaultIcon,
+                isTodayTask: false
+            )
+        case .text(let content):
+            // "내일 … 14시 30분으로" 같은 말은 본문에서 떼어내 시작·마감으로 옮긴다.
+            let schedule = CompanionMemoSchedule.parse(content)
+            persistMemo(
+                messageID: commandMessage.id,
+                content: schedule.title,
+                icon: MemoIcon.defaultIcon,
+                isTodayTask: false,
+                schedule: schedule
+            )
+        }
+    }
+
+    private func saveChatMessageAsMemo(
+        messageID: UUID,
+        icon: String,
+        isTodayTask: Bool
+    ) {
+        guard let message = state.chatMessages.first(where: { $0.id == messageID }),
+              message.allowsMemoSave,
+              !message.text.isEmpty,
+              message.id != state.streamingMessageID else {
+            return
+        }
+        persistMemo(
+            messageID: message.id,
+            content: message.text,
+            icon: icon,
+            isTodayTask: isTodayTask
+        )
+    }
+
+    private func persistMemo(
+        messageID: UUID,
+        content: String,
+        icon: String,
+        isTodayTask: Bool,
+        schedule: CompanionMemoSchedule? = nil
+    ) {
+        guard let modelContext = modelContainer?.mainContext else {
+            appendMemoStatusMessage("메모를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")
+            return
+        }
+
+        do {
+            let result = try memoStore.save(
+                CompanionMemoSaveRequest(
+                    messageID: messageID,
+                    content: content,
+                    icon: icon,
+                    isTodayTask: isTodayTask,
+                    startDate: schedule?.startDate,
+                    deadline: schedule?.deadline
+                ),
+                in: modelContext
+            )
+
+            let memoID: UUID
+            let message: String
+            switch result {
+            case .saved(let savedMemoID):
+                memoID = savedMemoID
+                if let summary = schedule?.summary() {
+                    message = "\(summary) 일정으로 메모에 저장했어요."
+                } else {
+                    message = isTodayTask ? "오늘 할 일로 저장했어요." : "메모에 저장했어요."
+                }
+            case .duplicate(let savedMemoID):
+                memoID = savedMemoID
+                message = "이 말은 이미 메모에 저장되어 있어요."
+            }
+
+            if let index = state.chatMessages.firstIndex(where: { $0.id == messageID }) {
+                state.chatMessages[index].savedMemoID = memoID
+            }
+            appendMemoStatusMessage(message, memoID: memoID)
+        } catch {
+            appendMemoStatusMessage("메모를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")
+        }
+    }
+
+    private func appendMemoStatusMessage(_ message: String, memoID: UUID? = nil) {
+        state.chatMessages.append(
+            CompanionChatMessage(
+                role: .companion,
+                text: message,
+                memoDestinationID: memoID,
+                allowsMemoSave: false
+            )
+        )
+        setAnimation(.waiting)
     }
 
     /// 코드에서 만든 사실 + 설정 색인을 합쳐 근거로 준다.
@@ -795,7 +939,7 @@ final class CompanionController {
         defer { pendingSchedule = [] }
         guard !pendingSchedule.isEmpty else { return }
 
-        if let id = streamingMessageID,
+        if let id = state.streamingMessageID,
            let index = state.chatMessages.firstIndex(where: { $0.id == id }) {
             state.chatMessages[index].schedule = pendingSchedule
         } else {
@@ -827,14 +971,14 @@ final class CompanionController {
         guard !text.isEmpty else { return }
         state.isAwaitingReply = false
 
-        if let id = streamingMessageID,
+        if let id = state.streamingMessageID,
            let index = state.chatMessages.firstIndex(where: { $0.id == id }) {
             state.chatMessages[index].text = text
             return
         }
 
         let message = CompanionChatMessage(role: .companion, text: text)
-        streamingMessageID = message.id
+        state.streamingMessageID = message.id
         state.chatMessages.append(message)
     }
 
