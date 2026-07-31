@@ -191,3 +191,7 @@ docs/*
 !docs/updates/
 docs/updates/*
 !docs/updates/appcast.xml
+
+# 골든셋 실행 마커 / 결과 (로컬 산출물)
+Evals/.run-golden
+Evals/results/
