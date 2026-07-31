@@ -323,18 +323,19 @@ private enum AchievementVisionOrderStore {
     }
 }
 
-private enum AchievementGoalSuggestionSource: String, Sendable {
+// 평가 하네스(HorongHorongTests)에서 @testable 로 접근하기 위해 internal 유지
+enum AchievementGoalSuggestionSource: String, Sendable {
     case rule = "룰 기반"
     case foundationModel = "Apple 모델"
 }
 
-private let achievementSuggestionLog = Logger(
+let achievementSuggestionLog = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "HorongHorong",
     category: "goal-suggestion"
 )
 
 /// 모델 추천이 후보를 내지 못한 이유. 전부 빈 배열로 끝나므로 구분해 두지 않으면 원인을 알 수 없다.
-private enum AchievementSuggestionModelFailure: String, Sendable {
+enum AchievementSuggestionModelFailure: String, Sendable {
     case modelUnavailable
     case inferenceFailed
     case parsedEmpty
@@ -342,7 +343,7 @@ private enum AchievementSuggestionModelFailure: String, Sendable {
 
 /// 추론 실패 원인을 로그에 남길 문자열.
 /// 릴리스에서는 타입 이름만 남겨 프롬프트 내용이 새지 않게 하고, 디버그에서는 전문을 남긴다.
-private func achievementModelErrorDescription(_ error: Error) -> String {
+func achievementModelErrorDescription(_ error: Error) -> String {
     #if DEBUG
     return String(describing: error)
     #else
@@ -353,17 +354,17 @@ private func achievementModelErrorDescription(_ error: Error) -> String {
 /// AFM이 한 번에 받아들이는 프롬프트 상한. 이 이상은 추론 자체가 거부된다.
 /// 측정값: 3,424자 통과 / 5,203자 실패. 실패 하한과 1,200자 여유를 둔 값이다.
 /// 이 중 약 1,671자는 지시문 템플릿이 고정으로 쓰므로 메모에 남는 공간은 그만큼 적다.
-private let achievementPromptCharacterBudget = 4_000
+let achievementPromptCharacterBudget = 4_000
 
 /// 필터 단계에서 후보가 탈락한 이유
-private enum AchievementSuggestionRejection {
+enum AchievementSuggestionRejection {
     case shortTitle
     case toolNameTitle
     case insufficientIDs
 }
 
 /// `mergeSuggestions` 한 번의 단계별 탈락/통과 개수. 어디서 후보를 잃는지 추적한다.
-private struct AchievementSuggestionFilterStats {
+struct AchievementSuggestionFilterStats {
     var shortTitle = 0
     var toolNameTitle = 0
     var insufficientIDs = 0
@@ -381,7 +382,7 @@ private struct AchievementSuggestionFilterStats {
 
 /// 추천 후보의 목표 타입. 주간 목표 초안인지 월간 목표 초안인지를 구분한다.
 /// 모델이 정하는 값이 아니라 응답을 파싱하는 코드가 직접 붙인다.
-private enum AchievementGoalCadence: String, Sendable {
+enum AchievementGoalCadence: String, Sendable {
     case weekly = "주간목표"
     case monthly = "월간목표"
 
@@ -401,7 +402,7 @@ private enum AchievementGoalCadence: String, Sendable {
     }
 }
 
-private struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
+struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let content: String
     let icon: String?
@@ -411,7 +412,7 @@ private struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
     let isCompleted: Bool
 }
 
-private struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
+struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
     let emoji: String
@@ -424,7 +425,7 @@ private struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
     let monthGoal: String?
 }
 
-private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
+struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
     let reason: String
@@ -465,7 +466,7 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     }
 }
 
-private enum AchievementGoalSuggestionBuilder {
+enum AchievementGoalSuggestionBuilder {
     static func ruleBasedSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
@@ -502,7 +503,8 @@ private enum AchievementGoalSuggestionBuilder {
         }
     }
 
-    static func snapshots(from goals: [AchievementGoal]) -> [AchievementGoalSnapshot] {
+    // 앱 전용 SwiftData 브리지. 평가 하네스는 골든셋 JSON에서 스냅샷을 직접 만든다.
+    fileprivate static func snapshots(from goals: [AchievementGoal]) -> [AchievementGoalSnapshot] {
         goals.map { goal in
             AchievementGoalSnapshot(
                 id: goal.id,
@@ -902,7 +904,7 @@ private struct AchievementFoundationSuggestionPayload: Codable {
     }
 }
 
-private enum AchievementFoundationGoalSuggestionProvider {
+enum AchievementFoundationGoalSuggestionProvider {
     static func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
@@ -936,7 +938,7 @@ private enum AchievementFoundationGoalSuggestionProvider {
     }
 }
 
-private enum AchievementPromptTemplate {
+enum AchievementPromptTemplate {
     static func weeklyGoalSuggestion(
         suggestionCount: Int,
         maxMemoCount: Int,
@@ -1040,7 +1042,7 @@ private enum AchievementPromptTemplate {
 
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
-private struct FoundationModelsGoalSuggestionProvider {
+struct FoundationModelsGoalSuggestionProvider {
     func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
