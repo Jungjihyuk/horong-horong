@@ -6,15 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { score } from './score.mjs';
 
-const casesDir = path.resolve(import.meta.dirname, 'golden/cases');
+const caseDirs = ['golden/cases', 'golden/drafts'].map((d) => path.resolve(import.meta.dirname, d));
 
 let goldenByName = null;
 function golden(caseName) {
   if (goldenByName === null) {
     goldenByName = {};
-    for (const f of fs.readdirSync(casesDir).filter((x) => x.endsWith('.json'))) {
-      const c = JSON.parse(fs.readFileSync(path.join(casesDir, f), 'utf8'));
-      goldenByName[c.caseName] = c;
+    for (const dir of caseDirs.filter((d) => fs.existsSync(d))) {
+      for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+        const c = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+        goldenByName[c.caseName] = c;
+      }
     }
   }
   return goldenByName[caseName];

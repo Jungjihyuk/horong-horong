@@ -6,13 +6,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const casesDir = path.join(root, 'Evals/golden/cases');
+// drafts/ 도 포함한다. 각색 전이라 커밋은 못 하지만 로컬 채점은 가능해야 한다.
+const caseDirs = ['Evals/golden/cases', 'Evals/golden/drafts'].map((d) => path.join(root, d));
 
-const cases = fs
-  .readdirSync(casesDir)
-  .filter((f) => f.endsWith('.json'))
-  .sort()
-  .map((f) => JSON.parse(fs.readFileSync(path.join(casesDir, f), 'utf8')));
+const cases = caseDirs
+  .filter((d) => fs.existsSync(d))
+  .flatMap((d) => fs.readdirSync(d).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(d, f)))
+  .map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
 
 const config = {
   description: '성취탭 주간 목표 추천 — 골든셋 평가',
