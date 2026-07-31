@@ -236,7 +236,7 @@ Claude를 사용하는 경우 다음 스킬로 이슈, 커밋, PR 문안을 프�
 - [ ] **이슈로 먼저 합의했는가** — 이슈 없는 PR은 닫힐 수 있습니다.
 - [ ] **한 PR = 한 변경** — 리팩토링과 기능 추가는 분리합니다.
 - [ ] **브랜치가 `feature/#이슈번호-짧은-설명` 형식인가**
-- [ ] **빌드가 통과하는가** — `xcodegen generate && xcodebuild -scheme HorongHorong build`
+- [ ] **빌드가 통과하는가** — `make build` (안에서 `xcodegen generate` 까지 함께 돕니다)
 - [ ] **새 기능은 `HorongHorong/Features/<Feature>` 하위에 격리되어 있는가**
 - [ ] **SwiftData 모델을 변경했다면 마이그레이션을 포함했는가**
 - [ ] **UI 변경 시 스크린샷 1장 첨부했는가**

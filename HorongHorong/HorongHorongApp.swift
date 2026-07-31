@@ -259,6 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var timerManager: TimerManager!
     private let appTracker = AppTracker()
     private let quickMemoPanel = QuickMemoPanel()
+    private var companionController: CompanionController!
     private var screenshotWindow: NSWindow?
 
     private(set) var modelContainer: ModelContainer!
@@ -266,6 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         timerManager = TimerManager(appState: appState)
+        companionController = CompanionController(appState: appState)
 
         let schema = Schema([
             Memo.self,
@@ -348,10 +350,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.quickMemoPanel.toggle(modelContext: context)
         }
+
+        companionController.start(modelContainer: modelContainer)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         TodayPlanningReminderCoordinator.shared.stop()
+        companionController.stop()
         NotificationCenter.default.removeObserver(self)
     }
 

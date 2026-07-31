@@ -12,6 +12,18 @@ enum PopoverTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 온보딩 강조 대상 식별자에 쓰는 영문 키. rawValue 는 한글이라 따로 둔다.
+    var highlightKey: String {
+        switch self {
+        case .timer: return "timer"
+        case .memo: return "memo"
+        case .stats: return "stats"
+        case .news: return "news"
+        case .agent: return "agent"
+        case .achievement: return "achievement"
+        }
+    }
+
     var icon: String {
         switch self {
         case .timer: return "timer"
@@ -46,6 +58,34 @@ struct MenuBarPopover: View {
                 tabBar
                 tabContent
                     .id(selectedTab)
+                    .companionDimUnlessTargeting(["timer.", "memo.", "stats.", "achievement.", "news.", "agent."])
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+                    ) { notification in
+                        // 온보딩은 팝오버를 통해서만 설정을 열 수 있다.
+                        // (Settings 씬은 열리기 전까지 알림을 받을 뷰가 없다)
+                        guard notification.object as? String == "settings.open" else { return }
+                        NSApp.activate(ignoringOtherApps: true)
+                        openSettings()
+                        DispatchQueue.main.async {
+                            for window in NSApp.windows {
+                                let id = window.identifier?.rawValue ?? ""
+                                if id.contains("com_apple_SwiftUI_Settings")
+                                    || window.title.localizedCaseInsensitiveContains("설정") {
+                                    window.makeKeyAndOrderFront(nil)
+                                    window.orderFrontRegardless()
+                                }
+                            }
+                        }
+                    }
+                    .onReceive(
+                        NotificationCenter.default.publisher(for: .companionOnboardingSelectTab)
+                    ) { notification in
+                        // 온보딩이 단계에 맞는 탭을 보여달라고 요청한다.
+                        if let tab = notification.object as? PopoverTab {
+                            selectedTab = tab
+                        }
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, 18)
                     .padding(.top, 16)
@@ -283,6 +323,7 @@ struct MenuBarPopover: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .companionHighlight("tab.\(tab.highlightKey)")
             }
         }
         .padding(.horizontal, 10)
