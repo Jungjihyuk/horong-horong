@@ -695,6 +695,33 @@ enum Constants {
         availableCompanionMLXModelOptions.first { $0.name == name }?.label ?? name
     }
 
+    // MARK: - 성취탭 목표 추천 공급자
+
+    /// 목표 추천에 쓸 모델. 컴패니언과 나누는 이유는 요구하는 능력이 다르기 때문이다.
+    /// 대화는 유창함이, 추천은 JSON 스키마 준수와 의미 군집화가 중요하다.
+    enum AchievementSuggestionProviderKind: String, CaseIterable {
+        /// Apple Foundation Model. 빠르지만 컨텍스트가 약 4k로 좁다.
+        case appleFoundation
+        /// 앱 안에서 도는 MLX 모델. 느린 대신 컨텍스트가 넓어 할 일을 더 많이 넣을 수 있다.
+        case mlx
+    }
+
+    static let defaultAchievementSuggestionProvider = AchievementSuggestionProviderKind.appleFoundation.rawValue
+
+    /// 컴패니언 기본값(가벼운 gemma-e2b)과 달리 지시 준수가 중요해 Qwen3 4B를 기본으로 둔다.
+    static let defaultAchievementSuggestionMLXModel = "mlx-community/Qwen3-4B-4bit"
+
+    /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
+    /// AFM 값은 실측(3,424자 통과 / 5,203자 실패)에 여유를 둔 것이다.
+    static func achievementPromptCharacterBudget(
+        for provider: AchievementSuggestionProviderKind
+    ) -> Int {
+        switch provider {
+        case .appleFoundation: return 4_000
+        case .mlx: return 16_000
+        }
+    }
+
     static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
     /// 뉴스 기능과 같은 엔드포인트를 쓴다.
     static let defaultCompanionOllamaModel = "gemma4:e4b"
@@ -739,6 +766,8 @@ enum Constants {
         static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
+        static let achievementSuggestionProvider = "achievement.suggestionProvider"
+        static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"

@@ -327,6 +327,7 @@ private enum AchievementVisionOrderStore {
 enum AchievementGoalSuggestionSource: String, Sendable {
     case rule = "룰 기반"
     case foundationModel = "Apple 모델"
+    case mlx = "MLX"
 }
 
 let achievementSuggestionLog = Logger(
@@ -354,7 +355,7 @@ func achievementModelErrorDescription(_ error: Error) -> String {
 /// AFM이 한 번에 받아들이는 프롬프트 상한. 이 이상은 추론 자체가 거부된다.
 /// 측정값: 3,424자 통과 / 5,203자 실패. 실패 하한과 1,200자 여유를 둔 값이다.
 /// 이 중 약 1,671자는 지시문 템플릿이 고정으로 쓰므로 메모에 남는 공간은 그만큼 적다.
-let achievementPromptCharacterBudget = 4_000
+let achievementPromptCharacterBudget = Constants.achievementPromptCharacterBudget(for: .appleFoundation)
 
 /// 필터 단계에서 후보가 탈락한 이유
 enum AchievementSuggestionRejection {
@@ -463,6 +464,24 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         self.emoji = emoji
         self.cadence = cadence
         self.source = source
+    }
+
+    /// 파서를 AFM 경로와 공유하므로 MLX 결과도 `.foundationModel` 로 붙는다.
+    /// 폴백 비율 집계가 어긋나지 않도록 실제 공급자로 다시 태깅한다.
+    func retagged(as source: AchievementGoalSuggestionSource) -> AchievementGoalSuggestion {
+        AchievementGoalSuggestion(
+            id: id,
+            title: title,
+            reason: reason,
+            memoIDs: memoIDs,
+            childGoalIDs: childGoalIDs,
+            scheduleText: scheduleText,
+            criterion: criterion,
+            targetValueText: targetValueText,
+            emoji: emoji,
+            cadence: cadence,
+            source: source
+        )
     }
 }
 
@@ -905,7 +924,60 @@ private struct AchievementFoundationSuggestionPayload: Codable {
 }
 
 enum AchievementFoundationGoalSuggestionProvider {
+    /// 설정에서 고른 공급자로 추천을 만든다. 실패하면 다음 단계로 내려간다.
+    ///
+    ///     MLX → AFM → (호출부의) 룰 기반
+    ///
+    /// MLX가 실패하는 경우는 대체로 모델 미준비이거나 Intel 맥이다. 둘 다 사용자가
+    /// 당장 손쓸 수 없으므로 조용히 AFM으로 내려가는 편이 낫다.
     static func suggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        if selectedProvider == .mlx {
+            let fromMLX = await mlxSuggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+            if !fromMLX.isEmpty { return fromMLX }
+            achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
+        }
+        return await appleFoundationSuggestions(
+            from: memos,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+    }
+
+    static var selectedProvider: Constants.AchievementSuggestionProviderKind {
+        let raw = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+            ?? Constants.defaultAchievementSuggestionProvider
+        return Constants.AchievementSuggestionProviderKind(rawValue: raw) ?? .appleFoundation
+    }
+
+    private static func mlxSuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        #if canImport(MLXLLM)
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+                ?? Constants.defaultAchievementSuggestionMLXModel
+            return await MLXGoalSuggestionProvider(model: model).suggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+        }
+        #endif
+        achievementSuggestionLog.error("weekly mlx failure=unavailable")
+        return []
+    }
+
+    private static func appleFoundationSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
@@ -1164,7 +1236,8 @@ struct FoundationModelsGoalSuggestionProvider {
     func memosWithinPromptBudget(
         _ memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        budget: Int = achievementPromptCharacterBudget
     ) -> [AchievementMemoSnapshot] {
         // 묶으려면 최소 2개는 있어야 하므로 예산을 넘더라도 2개는 유지한다.
         let minimumCount = min(2, memos.count)
@@ -1175,7 +1248,7 @@ struct FoundationModelsGoalSuggestionProvider {
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount
             ).count
-            if size <= achievementPromptCharacterBudget { break }
+            if size <= budget { break }
             selected.removeLast()
         }
         return selected

@@ -109,6 +109,13 @@ final class GoalSuggestionEvalTests: XCTestCase {
             )
         }
 
+        // EVAL_PROVIDER=mlx 로 공급자를 바꿔 같은 골든셋을 두 모델에 돌린다.
+        let requested = ProcessInfo.processInfo.environment["EVAL_PROVIDER"]
+            ?? (try? String(contentsOf: Self.repositoryRoot().appendingPathComponent("Evals/.provider"), encoding: .utf8))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            ?? Constants.defaultAchievementSuggestionProvider
+        UserDefaults.standard.set(requested, forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+
         let suggestions = await AchievementFoundationGoalSuggestionProvider.suggestions(
             from: snapshots,
             suggestionCount: Constants.defaultAchievementSuggestionCount,
