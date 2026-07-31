@@ -89,8 +89,27 @@ actor MLXModelStore {
 
     /// 한 번이라도 끝까지 준비된 적 있는 모델인지. 그렇다면 가중치가 디스크에 있다는 뜻이라
     /// 대화 중 자동으로 올려도 새로 내려받지 않는다.
+    ///
+    /// UserDefaults 기록만 믿으면, 앱 밖에서(다른 도구·이전 설치) 받아 둔 가중치를 못 본다.
+    /// 기록이 없을 때는 HuggingFace 캐시를 직접 확인한다.
     static func isKnownPrepared(_ model: String) -> Bool {
-        preparedModels().contains(model)
+        preparedModels().contains(model) || hasCachedWeights(model)
+    }
+
+    /// HuggingFace 캐시에 실제 가중치(.safetensors)가 있는지 본다.
+    /// 설정 파일만 있고 가중치가 없는 "받다 만" 상태를 준비됨으로 오해하지 않기 위해 확장자까지 확인한다.
+    private static func hasCachedWeights(_ model: String) -> Bool {
+        let repository = model.replacingOccurrences(of: "/", with: "--")
+        let snapshots = FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub/models--\(repository)/snapshots")
+        guard let revisions = try? FileManager.default.contentsOfDirectory(
+            at: snapshots, includingPropertiesForKeys: nil
+        ) else { return false }
+        return revisions.contains { revision in
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: revision.path)) ?? []
+            return files.contains { $0.hasSuffix(".safetensors") }
+        }
     }
 
     private static func preparedModels() -> [String] {

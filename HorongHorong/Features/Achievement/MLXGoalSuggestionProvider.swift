@@ -67,7 +67,7 @@ struct MLXGoalSuggestionProvider {
             achievementSuggestionLog.error(
                 """
                 weekly mlx failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
-                error=\(achievementModelErrorDescription(error), privacy: .public)
+                error=\(String(describing: error).prefix(300), privacy: .public)
                 """
             )
             return []
