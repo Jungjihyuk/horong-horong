@@ -196,3 +196,4 @@ docs/updates/*
 Evals/.run-golden
 Evals/results/
 promptfooconfig.json
+Evals/golden/drafts/
