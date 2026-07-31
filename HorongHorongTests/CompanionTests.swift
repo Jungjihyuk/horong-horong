@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import 호롱호롱
 
 /// 테스트를 재현 가능하게 만들기 위한 결정적 난수 생성기.
@@ -378,6 +379,18 @@ final class CompanionChatComposerTests: XCTestCase {
         }
     }
 
+    /// 시키는 말에는 오늘 일정 목록을 붙이지 않는다.
+    func testSaveRequestsAreNotTreatedAsTaskQuestions() {
+        let messages = [
+            "내일 수진이랑 데이트 일정 있는데 메모에 추가해줘",
+            "내일 일정 등록해 주세요",
+            "회의 준비 메모해줘",
+        ]
+        for message in messages {
+            XCTAssertFalse(CompanionTaskQuestion.matches(message), message)
+        }
+    }
+
     /// 할일 질문이 아니면 프롬프트를 건드리지 않아 짧은 컨텍스트를 아낀다.
     func testModelInputIsUntouchedWithoutADigest() {
         XCTAssertEqual(
@@ -399,6 +412,334 @@ final class CompanionChatComposerTests: XCTestCase {
         XCTAssertTrue(input.hasPrefix("오늘 등록된 할일:"))
         XCTAssertTrue(input.contains("사용자: 오늘 할일 뭐 있어?"))
         XCTAssertTrue(input.contains("나열하지 말고"))
+    }
+}
+
+final class CompanionMemoIntentTests: XCTestCase {
+    func testStandaloneSaveCommandsTargetPreviousMessage() {
+        for message in ["메모해줘", "메모해 줘!", "적어둬", "기록해 주세요."] {
+            XCTAssertEqual(
+                CompanionMemoIntent.parse(message),
+                CompanionMemoIntent(target: .previousMessage),
+                message
+            )
+        }
+    }
+
+    func testReferenceSaveCommandsTargetPreviousMessage() {
+        for message in ["이거 메모해줘", "방금 답변 적어 둬", "메모해줘: 그 내용"] {
+            XCTAssertEqual(
+                CompanionMemoIntent.parse(message),
+                CompanionMemoIntent(target: .previousMessage),
+                message
+            )
+        }
+    }
+
+    func testTrailingSaveCommandKeepsUserTextUnchanged() {
+        XCTAssertEqual(
+            CompanionMemoIntent.parse("내일 우유 2개 사기! 메모해줘"),
+            CompanionMemoIntent(target: .text("내일 우유 2개 사기!"))
+        )
+    }
+
+    func testLeadingSaveCommandKeepsUserTextUnchanged() {
+        XCTAssertEqual(
+            CompanionMemoIntent.parse("적어둬: 회의에서 API 이름 다시 정하기."),
+            CompanionMemoIntent(target: .text("회의에서 API 이름 다시 정하기."))
+        )
+    }
+
+    func testSimilarSmallTalkIsNotTreatedAsSaveIntent() {
+        for message in ["메모해줘서 고마워", "적어둔 내용 보여줘", "메모는 나중에 할게"] {
+            XCTAssertNil(CompanionMemoIntent.parse(message), message)
+        }
+    }
+
+    /// 지시 뒤에 시각을 덧붙이는 말투가 흔하다. 앞뒤 말을 모두 메모 내용으로 살린다.
+    func testSaveCommandInTheMiddleKeepsBothSides() {
+        XCTAssertEqual(
+            CompanionMemoIntent.parse("내일 수진이랑 데이트 일정 메모로 남겨줘. 14시 30분으로"),
+            CompanionMemoIntent(target: .text("내일 수진이랑 데이트 일정 14시 30분으로"))
+        )
+    }
+
+    /// 대상 + 동사 조합이면 말투가 달라도 저장 지시로 읽는다.
+    func testTransferPhrasesAreRecognized() {
+        let messages = [
+            "내일 수진이랑 데이트 일정 있는데 메모에 추가해줘",
+            "회의 준비 메모로 저장해 주세요",
+            "장보기 일정에 등록해줘",
+        ]
+        for message in messages {
+            XCTAssertNotNil(CompanionMemoIntent.parse(message), message)
+        }
+    }
+}
+
+final class CompanionMemoScheduleTests: XCTestCase {
+    private var calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    /// 2026-07-31 10:00
+    private let now = Date(timeIntervalSince1970: 1_785_492_000)
+
+    private func date(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(
+            from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute)
+        )!
+    }
+
+    func testSingleTimeUsesSameStartAndDeadline() {
+        let schedule = CompanionMemoSchedule.parse(
+            "내일 수진이랑 데이트 일정 14시 30분으로",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.title, "수진이랑 데이트")
+        XCTAssertEqual(schedule.startDate, date(8, 1, 14, 30))
+        XCTAssertEqual(schedule.deadline, date(8, 1, 14, 30))
+    }
+
+    func testRangeSplitsStartAndDeadline() {
+        let schedule = CompanionMemoSchedule.parse(
+            "오늘 팀 회고 13:30 ~ 14:30",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.title, "팀 회고")
+        XCTAssertEqual(schedule.startDate, date(7, 31, 13, 30))
+        XCTAssertEqual(schedule.deadline, date(7, 31, 14, 30))
+    }
+
+    /// 뒤 시각에 오전·오후가 없으면 앞 시각을 따라간다.
+    func testSpokenRangeFollowsTheLeadingMeridiem() {
+        let schedule = CompanionMemoSchedule.parse(
+            "모레 워크숍 오후 2시부터 4시까지",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.title, "워크숍")
+        XCTAssertEqual(schedule.startDate, date(8, 2, 14))
+        XCTAssertEqual(schedule.deadline, date(8, 2, 16))
+    }
+
+    func testDurationBecomesDeadline() {
+        let schedule = CompanionMemoSchedule.parse(
+            "내일 집중 작업 13시 30분에 3시간",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.title, "집중 작업")
+        XCTAssertEqual(schedule.startDate, date(8, 1, 13, 30))
+        XCTAssertEqual(schedule.deadline, date(8, 1, 16, 30))
+    }
+
+    func testDateOnlyKeepsTheDayWithoutDeadline() {
+        let schedule = CompanionMemoSchedule.parse("모레 우유 사기", now: now, calendar: calendar)
+
+        XCTAssertEqual(schedule.title, "우유 사기")
+        XCTAssertEqual(schedule.startDate, date(8, 2, 0))
+        XCTAssertNil(schedule.deadline)
+    }
+
+    /// 낮에 쓴 메모의 "3시"는 오후로 읽는다.
+    func testBareAfternoonHoursShiftWhenWrittenDuringTheDay() {
+        let schedule = CompanionMemoSchedule.parse(
+            "내일 미팅 3시에",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.startDate, date(8, 1, 15))
+        XCTAssertEqual(schedule.deadline, date(8, 1, 15))
+    }
+
+    /// 저녁·밤에 쓴 메모는 새벽 일정을 말하는 경우가 많아 말한 그대로 둔다.
+    func testBareHoursStayLiteralWhenWrittenAtNight() {
+        let night = date(7, 31, 20)
+
+        let schedule = CompanionMemoSchedule.parse("내일 미팅 3시에", now: night, calendar: calendar)
+
+        XCTAssertEqual(schedule.startDate, date(8, 1, 3))
+    }
+
+    /// 오전·오후를 말했으면 쓴 시각과 상관없이 그 말을 따른다.
+    func testSpokenMeridiemWinsOverTheWritingTime() {
+        let schedule = CompanionMemoSchedule.parse("내일 새벽 3시에 출발", now: now, calendar: calendar)
+
+        XCTAssertEqual(schedule.startDate, date(8, 1, 3))
+    }
+
+    /// 7시부터는 헷갈릴 일이 적어 옮기지 않는다.
+    func testHoursOutsideTheAmbiguousRangeAreKept() {
+        let schedule = CompanionMemoSchedule.parse("내일 조깅 7시에", now: now, calendar: calendar)
+
+        XCTAssertEqual(schedule.startDate, date(8, 1, 7))
+    }
+
+    /// "2시부터 그 다음날 오후 12시까지" 처럼 구간이 하루를 넘어가는 경우.
+    func testRangeCanSpanIntoTheNextDay() {
+        let schedule = CompanionMemoSchedule.parse(
+            "수진이랑 데이트 일정 있는데 2시부터 그 다음날 오후 12시까지",
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(schedule.title, "수진이랑 데이트")
+        XCTAssertEqual(schedule.startDate, date(7, 31, 14))
+        XCTAssertEqual(schedule.deadline, date(8, 1, 12))
+    }
+
+    /// 말한 문장을 그대로 두지 않고 제목처럼 다듬는다.
+    func testTitleIsTrimmedIntoANounPhrase() {
+        let cases = [
+            "수진이랑 데이트 일정 있는데": "수진이랑 데이트",
+            "팀 회의 잡혔어": "팀 회의",
+            "장 보러 가야 해": "장 보러",
+            "운동 하려고": "운동",
+        ]
+        for (input, expected) in cases {
+            let schedule = CompanionMemoSchedule.parse(input, now: now, calendar: calendar)
+            XCTAssertEqual(schedule.title, expected, input)
+        }
+    }
+
+    /// 낱말 일부를 자르면 안 된다. 남는 말이 너무 짧으면 손대지 않는다.
+    func testShortWordsAreNotCutApart() {
+        for input in ["맛있어", "일정", "회의 있음"] {
+            let schedule = CompanionMemoSchedule.parse(input, now: now, calendar: calendar)
+            XCTAssertEqual(schedule.title, input == "회의 있음" ? "회의" : input, input)
+        }
+    }
+
+    func testSummaryReadsBackWhatWasSaved() {
+        let single = CompanionMemoSchedule.parse("내일 데이트 14시 30분", now: now, calendar: calendar)
+        let range = CompanionMemoSchedule.parse("오늘 회고 13:30 ~ 14:30", now: now, calendar: calendar)
+        let dateOnly = CompanionMemoSchedule.parse("모레 우유 사기", now: now, calendar: calendar)
+
+        XCTAssertEqual(single.summary(now: now, calendar: calendar), "내일 14:30")
+        XCTAssertEqual(range.summary(now: now, calendar: calendar), "오늘 13:30 ~ 14:30")
+        XCTAssertEqual(dateOnly.summary(now: now, calendar: calendar), "모레")
+    }
+
+    func testPlainMemoKeepsTextAndHasNoDates() {
+        let schedule = CompanionMemoSchedule.parse("우유 2개 사기", now: now, calendar: calendar)
+
+        XCTAssertEqual(schedule.title, "우유 2개 사기")
+        XCTAssertNil(schedule.startDate)
+        XCTAssertNil(schedule.deadline)
+    }
+}
+
+final class CompanionMemoStoreTests: XCTestCase {
+    @MainActor
+    func testSaveKeepsOriginalTextAndSelectedOptions() throws {
+        let schema = Schema([Memo.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let store = CompanionMemoStore()
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        let original = "첫 줄 그대로\n둘째 줄도 **그대로**"
+
+        _ = try store.save(
+            CompanionMemoSaveRequest(
+                messageID: UUID(),
+                content: original,
+                icon: "💡",
+                isTodayTask: true
+            ),
+            in: context,
+            now: now
+        )
+
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        XCTAssertEqual(memo.content, original)
+        XCTAssertEqual(memo.icon, "💡")
+        XCTAssertEqual(memo.startDate, now)
+    }
+
+    @MainActor
+    func testRegularMemoDoesNotReceiveStartDate() throws {
+        let schema = Schema([Memo.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let store = CompanionMemoStore()
+
+        _ = try store.save(
+            CompanionMemoSaveRequest(
+                messageID: UUID(),
+                content: "일반 메모",
+                icon: MemoIcon.defaultIcon,
+                isTodayTask: false
+            ),
+            in: context
+        )
+
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        XCTAssertNil(memo.startDate)
+    }
+
+    /// 말로 정해준 때는 메모의 시작·마감으로 그대로 들어간다.
+    @MainActor
+    func testSpokenScheduleIsStoredOnTheMemo() throws {
+        let schema = Schema([Memo.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let store = CompanionMemoStore()
+        let start = Date(timeIntervalSince1970: 1_785_578_400)
+        let end = start.addingTimeInterval(3600)
+
+        _ = try store.save(
+            CompanionMemoSaveRequest(
+                messageID: UUID(),
+                content: "수진이랑 데이트 일정",
+                icon: MemoIcon.defaultIcon,
+                isTodayTask: false,
+                startDate: start,
+                deadline: end
+            ),
+            in: context
+        )
+
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        XCTAssertEqual(memo.startDate, start)
+        XCTAssertEqual(memo.deadline, end)
+    }
+
+    @MainActor
+    func testSameMessageIsSavedOnlyOnce() throws {
+        let schema = Schema([Memo.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let store = CompanionMemoStore()
+        let messageID = UUID()
+        let request = CompanionMemoSaveRequest(
+            messageID: messageID,
+            content: "한 번만 저장",
+            icon: MemoIcon.defaultIcon,
+            isTodayTask: false
+        )
+
+        let first = try store.save(request, in: context)
+        let second = try store.save(request, in: context)
+
+        guard case .saved(let firstID) = first else {
+            return XCTFail("첫 저장은 saved 여야 합니다.")
+        }
+        XCTAssertEqual(second, .duplicate(firstID))
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Memo>()), 1)
     }
 }
 
@@ -509,6 +850,28 @@ final class CompanionScheduleBuilderTests: XCTestCase {
 
         XCTAssertEqual(entries.count, 1)
         XCTAssertTrue(entries[0].isCompleted)
+    }
+
+    /// 메모 본문이 여러 줄이어도 타임라인 행은 한 줄이어야 간격이 균등하다.
+    func testMultilineTitlesAreCollapsedToTheirFirstLine() {
+        let items = [
+            CompanionBriefingItem(
+                title: "데일리 로그\n",
+                isCompleted: false,
+                startDate: nil,
+                deadline: date(29, 9, 30)
+            ),
+            CompanionBriefingItem(
+                title: "  회고 쓰기  \n1. 무엇을 배웠나\n2. 다음 주 계획",
+                isCompleted: false,
+                startDate: nil,
+                deadline: date(29, 10)
+            ),
+        ]
+
+        let entries = CompanionScheduleBuilder.entries(from: items, now: date(29, 9), calendar: calendar)
+
+        XCTAssertEqual(entries.map(\.title), ["데일리 로그", "회고 쓰기"])
     }
 
     func testItemsFromOtherDaysAreExcluded() {
