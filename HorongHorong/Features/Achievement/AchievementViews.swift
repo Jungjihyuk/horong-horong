@@ -351,8 +351,9 @@ private func achievementModelErrorDescription(_ error: Error) -> String {
 }
 
 /// AFM이 한 번에 받아들이는 프롬프트 상한. 이 이상은 추론 자체가 거부된다.
-/// 측정값(3,424자 통과 / 5,203자 실패)에 여유를 둔 값이다.
-private let achievementPromptCharacterBudget = 3_000
+/// 측정값: 3,424자 통과 / 5,203자 실패. 실패 하한과 1,200자 여유를 둔 값이다.
+/// 이 중 약 1,671자는 지시문 템플릿이 고정으로 쓰므로 메모에 남는 공간은 그만큼 적다.
+private let achievementPromptCharacterBudget = 4_000
 
 /// 필터 단계에서 후보가 탈락한 이유
 private enum AchievementSuggestionRejection {
@@ -1071,6 +1072,10 @@ private struct FoundationModelsGoalSuggestionProvider {
             maxMemoCount: maxMemoCount
         )
 
+        achievementSuggestionLog.info(
+            "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
+        )
+
         do {
             let response = try await session.respond(
                 to: prompt,
@@ -1179,19 +1184,26 @@ private struct FoundationModelsGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> String {
+        // 프롬프트 크기가 추론 성패를 가르므로(인시던트 2026-07-31) 값이 없는 필드는 생략한다.
+        // "없음"으로 채우면 메모당 30자 이상을 정보 없이 소비한다.
         let lines = memos.map { memo in
-            let startText = dateText(memo.startDate)
-            let deadlineText = dateText(memo.deadline)
-            let representativeDateText = dateText(memo.date)
-            return [
+            var fields = [
                 "- id: \(memo.id.uuidString)",
                 "  text: \(memo.content)",
                 "  icon: \(memo.icon ?? MemoIcon.defaultIcon)",
-                "  date: \(representativeDateText)",
-                "  startDate: \(startText)",
-                "  deadline: \(deadlineText)",
-                "  completed: \(memo.isCompleted ? "true" : "false")",
-            ].joined(separator: "\n")
+                "  date: \(dateText(memo.date))",
+            ]
+            if memo.startDate != nil {
+                fields.append("  startDate: \(dateText(memo.startDate))")
+            }
+            if memo.deadline != nil {
+                fields.append("  deadline: \(dateText(memo.deadline))")
+            }
+            // 미완료 할일만 입력으로 들어오므로 기본값일 때는 생략한다.
+            if memo.isCompleted {
+                fields.append("  completed: true")
+            }
+            return fields.joined(separator: "\n")
         }.joined(separator: "\n")
 
         return AchievementPromptTemplate.weeklyGoalSuggestion(
@@ -1234,15 +1246,30 @@ private struct FoundationModelsGoalSuggestionProvider {
         let jsonText = extractJSONObject(from: trimmed)
         guard let data = jsonText.data(using: .utf8),
               let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
+            achievementSuggestionLog.error("weekly parse failure=decode chars=\(trimmed.count, privacy: .public)")
             return []
         }
 
+        // 모델이 낸 개수와 파서가 살린 개수를 구분해야 "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
+        var badID = 0
+        var alreadyUsed = 0
+        var overMaxMemo = 0
+        var tooFewIDs = 0
+        var requestedIDs = 0
         var used = Set<UUID>()
-        return payload.suggestions.compactMap { item in
-            let ids = (item.memoIDs ?? []).compactMap(UUID.init(uuidString:))
-                .filter { allowedIDs.contains($0) && !used.contains($0) }
-                .prefix(maxMemoCount)
-            guard ids.count >= 2 else { return nil }
+        let result = payload.suggestions.compactMap { item -> AchievementGoalSuggestion? in
+            let raw = item.memoIDs ?? []
+            requestedIDs += raw.count
+            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
+            badID += raw.count - parsedIDs.count
+            let unused = parsedIDs.filter { !used.contains($0) }
+            alreadyUsed += parsedIDs.count - unused.count
+            let ids = unused.prefix(maxMemoCount)
+            overMaxMemo += unused.count - ids.count
+            guard ids.count >= 2 else {
+                tooFewIDs += 1
+                return nil
+            }
             used.formUnion(ids)
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1257,8 +1284,15 @@ private struct FoundationModelsGoalSuggestionProvider {
                 source: .foundationModel
             )
         }
-        .prefix(suggestionCount)
-        .map { $0 }
+        achievementSuggestionLog.info(
+            """
+            weekly parse modelReturned=\(payload.suggestions.count, privacy: .public) \
+            kept=\(result.count, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
+            badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
+            overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
+            """
+        )
+        return Array(result.prefix(suggestionCount))
     }
 
     private func parseMonthly(
