@@ -547,7 +547,7 @@ enum Constants {
     }
 
     // MARK: - 루미롱 컴패니언
-    static let defaultCompanionEnabled = false
+    static let defaultCompanionEnabled = true
     static let defaultCompanionIdentifier = "hororong"
     static let defaultCompanionHideDuringFocus = true
     static let defaultCompanionBriefingEnabled = true
@@ -559,6 +559,70 @@ enum Constants {
     static let companionOverlaySize = CGSize(width: 300, height: 216)
     /// 대화 모드에서 위로 늘어난 오버레이 창 크기. 스프라이트 위치는 그대로 두고 위쪽만 커진다.
     static let companionChatOverlaySize = CGSize(width: 340, height: 440)
+
+    /// 말풍선 크기. 할일이 많은 날에는 기본 크기로 다 안 보여서 사용자가 골라 키울 수 있게 한다.
+    enum CompanionBubbleSize: String, CaseIterable, Identifiable {
+        case compact
+        case regular
+        case large
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .compact: return "작게"
+            case .regular: return "보통"
+            case .large:   return "크게"
+            }
+        }
+
+        /// 스프라이트 위로 말풍선이 쓸 수 있는 최대 높이.
+        var bubbleMaxHeight: CGFloat {
+            switch self {
+            case .compact: return 150
+            case .regular: return 260
+            case .large:   return 420
+            }
+        }
+
+        /// 말풍선이 커진 만큼 오버레이 창도 같이 커져야 잘리지 않는다.
+        /// 스프라이트와 여백을 더한 값이다.
+        var overlaySize: CGSize {
+            CGSize(
+                width: self == .large ? 380 : 300,
+                height: bubbleMaxHeight + companionSpriteSize.height + 24
+            )
+        }
+
+        var detail: String {
+            switch self {
+            case .compact: return "화면을 적게 가립니다. 할일이 많으면 스크롤해서 봅니다."
+            case .regular: return "기본값입니다."
+            case .large:   return "할일이 많은 날에도 한눈에 보입니다. 화면을 더 가립니다."
+            }
+        }
+    }
+
+    static let defaultCompanionBubbleSize = CompanionBubbleSize.regular.rawValue
+
+    static var resolvedCompanionBubbleSize: CompanionBubbleSize {
+        CompanionBubbleSize(
+            rawValue: UserDefaults.standard.string(forKey: AppStorageKey.companionBubbleSize) ?? ""
+        ) ?? .regular
+    }
+
+    /// 위쪽 공간이 필요할 때 쓰는 오버레이 창 크기.
+    ///
+    /// 대화창은 고정 크기(`companionChatOverlaySize`)를 그대로 써야 레이아웃이 유지되므로,
+    /// 말풍선이 그보다 커질 때만 창을 키운다. 창은 투명하고 그려진 곳만 클릭을 받으므로
+    /// 필요보다 큰 창이어도 화면을 가리지 않는다.
+    static var companionExpandedOverlaySize: CGSize {
+        let bubble = resolvedCompanionBubbleSize.overlaySize
+        return CGSize(
+            width: max(companionChatOverlaySize.width, bubble.width),
+            height: max(companionChatOverlaySize.height, bubble.height)
+        )
+    }
     /// 대화에 쓸 모델 공급자.
     enum CompanionChatProviderKind: String, CaseIterable, Identifiable {
         case appleFoundation
@@ -705,6 +769,7 @@ enum Constants {
         static let companionMLXModel = "companion.mlxModel"
         /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
         static let companionMLXPreparedModels = "companion.mlxPreparedModels"
+        static let companionBubbleSize = "companion.bubbleSize"
     }
 
     // MARK: - 메뉴바 표시 형식

@@ -128,7 +128,7 @@ enum CompanionScheduleBuilder {
                 let isToday = item.deadline.map { calendar.isDate($0, inSameDayAs: now) } ?? false
                 return CompanionScheduleEntry(
                     time: isToday ? item.deadline : nil,
-                    title: item.title,
+                    title: firstLine(of: item.title),
                     isCompleted: item.isCompleted
                 )
             }
@@ -140,6 +140,16 @@ enum CompanionScheduleBuilder {
                 case (nil, nil): return lhs.title < rhs.title
                 }
             }
+    }
+
+    /// 메모 본문은 여러 줄이라 그대로 그리면 행 높이가 제각각이 되고 타임라인 간격이 어긋난다.
+    /// 타임라인은 한 줄짜리 칸이므로 첫 줄만 쓴다.
+    private static func firstLine(of title: String) -> String {
+        title
+            .split(whereSeparator: \.isNewline)
+            .first
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            ?? ""
     }
 }
 

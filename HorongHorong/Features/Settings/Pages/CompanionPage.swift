@@ -27,6 +27,8 @@ struct CompanionPage: View {
     private var ollamaEndpoint: String = Constants.defaultNewsOllamaEndpoint
     @AppStorage(Constants.AppStorageKey.companionMLXModel)
     private var mlxModel: String = Constants.defaultCompanionMLXModel
+    @AppStorage(Constants.AppStorageKey.companionBubbleSize)
+    private var bubbleSize: String = Constants.defaultCompanionBubbleSize
 
     @State private var isOllamaReachable = false
     @State private var mlxState = MLXModelState()
@@ -52,6 +54,20 @@ struct CompanionPage: View {
                     Picker("", selection: $selectedIdentifier) {
                         ForEach(CompanionRegistry.all) { character in
                             Text(character.displayName).tag(character.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!isEnabled)
+                }
+
+                SettingsRow(
+                    "말풍선 크기",
+                    subtitle: Constants.CompanionBubbleSize(rawValue: bubbleSize)?.detail ?? ""
+                ) {
+                    Picker("", selection: $bubbleSize) {
+                        ForEach(Constants.CompanionBubbleSize.allCases) { size in
+                            Text(size.label).tag(size.rawValue)
                         }
                     }
                     .labelsHidden()

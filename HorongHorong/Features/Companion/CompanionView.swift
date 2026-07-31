@@ -32,6 +32,11 @@ struct CompanionChatMessage: Identifiable {
     /// 일정 질문에 대한 답이면 저장된 데이터를 그대로 담는다.
     /// 모델이 만든 문장이 아니라 이 값으로 타임라인을 그린다.
     var schedule: [CompanionScheduleEntry] = []
+    /// 이 말풍선으로 만든 메모. 값이 있으면 다시 저장할 수 없다.
+    var savedMemoID: UUID?
+    /// 값이 있으면 메모 저장 완료 말풍선이며 메모 탭으로 가는 버튼을 보여준다.
+    var memoDestinationID: UUID?
+    var allowsMemoSave = true
 }
 
 /// 오버레이 창이 그리는 내용. 컨트롤러가 값을 밀어 넣고 뷰는 표시·입력 전달만 한다.
@@ -45,10 +50,13 @@ final class CompanionPresentationState: ObservableObject {
     @Published var isChatting = false
     @Published var chatMessages: [CompanionChatMessage] = []
     @Published var isAwaitingReply = false
+    @Published var streamingMessageID: UUID?
 
     /// 뷰 → 컨트롤러 방향의 사용자 조작.
     var onCharacterTap: @MainActor () -> Void = {}
     var onSendMessage: @MainActor (String) -> Void = { _ in }
+    var onSaveMessageAsMemo: @MainActor (UUID, String, Bool) -> Void = { _, _, _ in }
+    var onOpenMemoTab: @MainActor () -> Void = {}
     var onCloseChat: @MainActor () -> Void = {}
     var onDragBegan: @MainActor () -> Void = {}
     var onDragChanged: @MainActor () -> Void = {}
@@ -76,6 +84,15 @@ struct CompanionView: View {
     @ObservedObject var state: CompanionPresentationState
     @State private var isDragging = false
     @State private var maxDragDistance: CGFloat = 0
+    @AppStorage(Constants.AppStorageKey.companionBubbleSize)
+    private var bubbleSizeRaw: String = Constants.defaultCompanionBubbleSize
+
+    private var bubbleSize: Constants.CompanionBubbleSize {
+        Constants.CompanionBubbleSize(rawValue: bubbleSizeRaw) ?? .regular
+    }
+
+    /// 말풍선이 쓸 수 있는 최대 높이. 이보다 길어지면 잘리지 않고 스크롤된다.
+    private var bubbleMaxHeight: CGFloat { bubbleSize.bubbleMaxHeight }
 
     /// 대화·메뉴·일정 카드처럼 위쪽 공간이 필요할 때는 창이 늘어난다.
     /// 창 크기(`CompanionOverlayPanel`)와 반드시 같은 조건을 써야 내용이 잘리지 않는다.
@@ -83,7 +100,7 @@ struct CompanionView: View {
         let needsRoom = state.isChatting
             || state.isMenuVisible
             || !(state.bubble?.schedule.isEmpty ?? true)
-        return needsRoom ? Constants.companionChatOverlaySize : Constants.companionOverlaySize
+        return needsRoom ? Constants.companionExpandedOverlaySize : Constants.companionOverlaySize
     }
 
     var body: some View {
@@ -95,7 +112,15 @@ struct CompanionView: View {
             } else if state.isChatting {
                 CompanionChatPanel(state: state)
             } else if let bubble = state.bubble {
-                bubbleView(bubble)
+                // 할일이 많으면 말풍선이 창 높이를 넘어 위가 잘렸다. 넘칠 때만 스크롤로 넘긴다.
+                // (`.scrollBounceBehavior` 를 꺼서 짧을 때 헛도는 느낌이 없게 한다.)
+                ScrollView(.vertical) {
+                    bubbleView(bubble)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.never)
+                .frame(maxHeight: bubbleMaxHeight)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             sprite
@@ -386,42 +411,14 @@ private struct CompanionChatPanel: View {
     }
 
     private func messageRow(_ message: CompanionChatMessage) -> some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if message.role == .user { Spacer(minLength: 32) }
-
-            VStack(alignment: .leading, spacing: 6) {
-                if !message.text.isEmpty {
-                    Text(message.text)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(message.role == .user ? .white : .primary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(bubbleBackground(for: message.role))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if !message.schedule.isEmpty {
-                    CompanionScheduleCard(entries: message.schedule)
-                }
-            }
-
-            if message.role == .companion { Spacer(minLength: 32) }
-        }
-    }
-
-    @ViewBuilder
-    private func bubbleBackground(for role: CompanionChatMessage.Role) -> some View {
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 13,
-            bottomLeadingRadius: role == .user ? 13 : 4,
-            bottomTrailingRadius: role == .user ? 4 : 13,
-            topTrailingRadius: 13,
-            style: .continuous
+        CompanionChatMessageRow(
+            message: message,
+            isStreaming: state.streamingMessageID == message.id,
+            onSave: { icon, isTodayTask in
+                state.onSaveMessageAsMemo(message.id, icon, isTodayTask)
+            },
+            onOpenMemoTab: state.onOpenMemoTab
         )
-        if role == .user {
-            shape.fill(Color.accentColor)
-        } else {
-            shape.fill(Color.primary.opacity(0.07))
-        }
     }
 
     private var composer: some View {
@@ -455,6 +452,179 @@ private struct CompanionChatPanel: View {
     }
 }
 
+private struct CompanionChatMessageRow: View {
+    let message: CompanionChatMessage
+    let isStreaming: Bool
+    let onSave: (String, Bool) -> Void
+    let onOpenMemoTab: () -> Void
+
+    @State private var isHovering = false
+    @State private var isShowingMemoOptions = false
+    @State private var selectedIcon = MemoIcon.defaultIcon
+    @State private var isTodayTask = false
+    @State private var hoverDismissTask: Task<Void, Never>?
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            if message.role == .user {
+                Spacer(minLength: 32)
+                memoActionButton
+            }
+
+            messageContent
+
+            if message.role == .companion {
+                memoActionButton
+                Spacer(minLength: 32)
+            }
+        }
+        // 말풍선과 메모 버튼 사이의 투명한 간격도 같은 hover 영역으로 취급한다.
+        .contentShape(Rectangle())
+        .onHover(perform: updateHover)
+        .onDisappear {
+            hoverDismissTask?.cancel()
+        }
+    }
+
+    @ViewBuilder
+    private var memoActionButton: some View {
+        if message.allowsMemoSave, !message.text.isEmpty {
+            Button {
+                guard message.savedMemoID == nil, !isStreaming else { return }
+                isShowingMemoOptions = true
+            } label: {
+                Image(systemName: message.savedMemoID == nil ? "note.text.badge.plus" : "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(message.savedMemoID == nil ? .secondary : Color.accentColor)
+                    .frame(width: 22, height: 22)
+                    .background(Color.primary.opacity(0.06), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(message.savedMemoID != nil || isStreaming)
+            .opacity(isHovering || isShowingMemoOptions ? 1 : 0)
+            .onHover(perform: updateHover)
+            .help(message.savedMemoID == nil ? "메모로 저장" : "이미 메모로 저장됨")
+            .popover(isPresented: $isShowingMemoOptions, arrowEdge: .bottom) {
+                memoOptions
+            }
+        }
+    }
+
+    private func updateHover(_ isInside: Bool) {
+        hoverDismissTask?.cancel()
+
+        if isInside {
+            isHovering = true
+            return
+        }
+
+        // macOS가 말풍선과 인접 버튼 사이에서 짧은 이탈 이벤트를 보내도
+        // 버튼에 진입할 시간을 주고, 다시 들어오면 위에서 숨김을 취소한다.
+        hoverDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            isHovering = false
+        }
+    }
+
+    private var messageContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !message.text.isEmpty {
+                Text(message.text)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(message.role == .user ? .white : .primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(bubbleBackground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !message.schedule.isEmpty {
+                CompanionScheduleCard(entries: message.schedule)
+            }
+            if message.memoDestinationID != nil {
+                Button {
+                    onOpenMemoTab()
+                } label: {
+                    Label("메모 탭 보기", systemImage: "arrow.up.right")
+                        .font(.system(size: 10.5, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bubbleBackground: some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 13,
+            bottomLeadingRadius: message.role == .user ? 13 : 4,
+            bottomTrailingRadius: message.role == .user ? 4 : 13,
+            topTrailingRadius: 13,
+            style: .continuous
+        )
+        if message.role == .user {
+            shape.fill(Color.accentColor)
+        } else {
+            shape.fill(Color.primary.opacity(0.07))
+        }
+    }
+
+    private var memoOptions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("메모로 저장")
+                .font(.system(size: 12, weight: .bold))
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(28), spacing: 5), count: 5),
+                spacing: 5
+            ) {
+                ForEach(MemoIcon.options, id: \.self) { icon in
+                    Button {
+                        selectedIcon = icon
+                    } label: {
+                        Text(icon)
+                            .font(.system(size: 16))
+                            .frame(width: 26, height: 26)
+                            .background(
+                                selectedIcon == icon
+                                    ? Color.accentColor.opacity(0.18)
+                                    : Color.primary.opacity(0.05),
+                                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(
+                                        selectedIcon == icon ? Color.accentColor : .clear,
+                                        lineWidth: 1
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(MemoIcon.label(for: icon))
+                }
+            }
+
+            Toggle("오늘 할 일로 표시", isOn: $isTodayTask)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.system(size: 11.5))
+
+            Button {
+                onSave(selectedIcon, isTodayTask)
+                isShowingMemoOptions = false
+            } label: {
+                Text("저장")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(width: 190)
+    }
+}
+
 /// 일정 답변에 붙는 타임라인 카드.
 /// 모델이 만든 문장이 아니라 저장된 데이터를 그대로 그린다.
 struct CompanionScheduleCard: View {
@@ -474,8 +644,10 @@ struct CompanionScheduleCard: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 8)
 
-            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                row(entry, isFirst: index == 0, isLast: index == entries.count - 1)
+            VStack(alignment: .leading, spacing: Self.rowGap) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    row(entry, isFirst: index == 0, isLast: index == entries.count - 1)
+                }
             }
         }
         .padding(.horizontal, 11)
@@ -490,37 +662,53 @@ struct CompanionScheduleCard: View {
         )
     }
 
+    /// 행 사이 간격. 모든 행에 똑같이 준다.
+    private static let rowGap: CGFloat = 9
+    private static let timeWidth: CGFloat = 36
+    private static let dotWidth: CGFloat = 6
+    private static let columnSpacing: CGFloat = 8
+
+    /// 행은 시각·제목 한 줄로만 이뤄져 높이가 늘 같다.
+    /// 점과 세로선은 레이아웃에 참여하지 않는 겹쳐 그리기라 행 높이를 바꾸지 못한다.
     private func row(_ entry: CompanionScheduleEntry, isFirst: Bool, isLast: Bool) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(spacing: Self.columnSpacing) {
             Text(entry.time.map { Self.timeFormatter.string(from: $0) } ?? "––:––")
                 .font(.system(size: 10.5, weight: .medium).monospacedDigit())
                 .foregroundStyle(entry.isCompleted ? .tertiary : .secondary)
-                .frame(width: 36, alignment: .trailing)
-                .padding(.top, 1)
-
-            // 점과 이어지는 세로선으로 타임라인을 만든다.
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.primary.opacity(isFirst ? 0 : 0.12))
-                    .frame(width: 1, height: 4)
-                Circle()
-                    .fill(entry.isCompleted ? Color.secondary.opacity(0.4) : Color.accentColor)
-                    .frame(width: 6, height: 6)
-                Rectangle()
-                    .fill(Color.primary.opacity(isLast ? 0 : 0.12))
-                    .frame(width: 1)
-                    .frame(maxHeight: .infinity)
-            }
-            .frame(width: 6)
+                .frame(width: Self.timeWidth, alignment: .trailing)
 
             Text(entry.title)
                 .font(.system(size: 11.5))
                 .foregroundStyle(entry.isCompleted ? .secondary : .primary)
                 .strikethrough(entry.isCompleted, color: .secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, isLast ? 0 : 9)
+                .padding(.leading, Self.dotWidth + Self.columnSpacing)
         }
+        .overlay(alignment: .topLeading) {
+            connector(entry, isFirst: isFirst, isLast: isLast)
+                .padding(.leading, Self.timeWidth + Self.columnSpacing)
+        }
+    }
+
+    /// 위 꼬리 · 점 · 아래 꼬리로 이어지는 타임라인 선.
+    /// 아래 꼬리는 음수 여백으로 행 사이 간격까지 내려가 선이 끊기지 않게 한다.
+    private func connector(_ entry: CompanionScheduleEntry, isFirst: Bool, isLast: Bool) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.primary.opacity(isFirst ? 0 : 0.12))
+                .frame(width: 1, height: 4)
+            Circle()
+                .fill(entry.isCompleted ? Color.secondary.opacity(0.4) : Color.accentColor)
+                .frame(width: Self.dotWidth, height: Self.dotWidth)
+            Rectangle()
+                .fill(Color.primary.opacity(isLast ? 0 : 0.12))
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
+        }
+        .frame(width: Self.dotWidth)
+        .padding(.bottom, -Self.rowGap)
     }
 }
 

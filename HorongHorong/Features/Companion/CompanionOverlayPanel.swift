@@ -19,7 +19,13 @@ final class CompanionOverlayPanel {
     var isVisible: Bool { panel?.isVisible == true }
 
     private var currentSize: CGSize {
-        isExpanded ? Constants.companionChatOverlaySize : Constants.companionOverlaySize
+        isExpanded ? Constants.companionExpandedOverlaySize : Constants.companionOverlaySize
+    }
+
+    /// 설정에서 말풍선 크기를 바꿨을 때 창을 다시 맞춘다.
+    func refreshSize() {
+        guard panel != nil, isExpanded else { return }
+        applyFrame()
     }
 
     func show() {
