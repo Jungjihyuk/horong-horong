@@ -259,6 +259,15 @@ struct CompanionPage: View {
                                 ProgressView(value: total > 0 ? Double(received) / Double(total) : 0)
                                     .progressViewStyle(.linear)
                                     .frame(width: 120)
+                                Button("중지") {
+                                    Task { await cancelMLXDownload() }
+                                }
+                                .controlSize(.small)
+                            case .paused:
+                                Button("이어받기") {
+                                    Task { await prepareMLX(mlxModel) }
+                                }
+                                .controlSize(.small)
                             case .ready:
                                 Label("준비됨", systemImage: "checkmark.circle.fill")
                                     .font(.callout)
@@ -376,10 +385,20 @@ struct CompanionPage: View {
             }
             state.finish(token, phase: .ready)
         } catch is CancellationError {
-            state.finish(token, phase: .idle)   // 사용자가 바꾼 것이지 실패가 아니다
+            state.pause(token)   // 사용자가 멈춘 것이지 실패가 아니다
+        } catch let error as URLError where error.code == .cancelled {
+            // URLSession 은 취소를 CancellationError 가 아니라 이 코드로 알린다.
+            state.pause(token)
         } catch {
             state.finish(token, phase: .failed(error.localizedDescription))
         }
+        #endif
+    }
+
+    /// 받는 중인 다운로드만 멈춘다. 받은 만큼은 남아 있어 «이어받기» 로 되돌아온다.
+    private func cancelMLXDownload() async {
+        #if canImport(MLXLLM)
+        await MLXModelStore.shared.cancelLoading()
         #endif
     }
 
@@ -459,6 +478,9 @@ struct CompanionPage: View {
                 }
             }
             return text + ". 받는 동안 다른 작업을 해도 됩니다."
+        case .paused(let received, let total):
+            return "\(Self.byteText(received, of: total)) 에서 멈췄습니다. "
+                + "받은 만큼은 남아 있어 이어받기를 누르면 그 지점부터 계속됩니다."
         case .ready:
             return "모델이 메모리에 올라와 있어 바로 답할 수 있습니다. 다른 공급자로 바꾸면 자동으로 내려갑니다."
         case .idle:
@@ -534,6 +556,8 @@ final class MLXModelState {
     enum Phase: Equatable {
         case idle
         case preparing(received: Int64, total: Int64)
+        /// 사용자가 멈춘 상태. 받은 만큼은 디스크에 남아 있어 다시 시작하면 이어받는다.
+        case paused(received: Int64, total: Int64)
         case ready
         case failed(String)
     }
@@ -578,6 +602,14 @@ final class MLXModelState {
     func finish(_ token: Int, phase newPhase: Phase) {
         guard token == sequence else { return }
         phase = newPhase
+        bytesPerSecond = nil
+        sample = nil
+    }
+
+    /// 받던 자리를 기억한 채 멈춘다. 어디까지 왔는지 보여줘야 다시 누르기가 덜 불안하다.
+    func pause(_ token: Int) {
+        guard token == sequence, case .preparing(let received, let total) = phase else { return }
+        phase = .paused(received: received, total: total)
         bytesPerSecond = nil
         sample = nil
     }

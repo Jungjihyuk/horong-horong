@@ -104,6 +104,16 @@ actor MLXModelStore {
         UserDefaults.standard.set(models, forKey: Constants.AppStorageKey.companionMLXPreparedModels)
     }
 
+    /// 받는 중인 것만 멈춘다. 이미 올라와 있는 모델은 그대로 둔다.
+    ///
+    /// 받다 만 가중치는 버려지지 않는다 — HuggingFace 쪽이 `.incomplete` 파일과 Range 요청으로
+    /// 이어받기 때문에, 다시 시작하면 멈춘 지점부터 이어진다.
+    func cancelLoading() {
+        loading?.cancel()
+        loading = nil
+        if container == nil { loadedModel = nil }
+    }
+
     /// 모델을 메모리에서 내린다. 컨테이너 참조를 놓기만 하면 MLX 가 잡아둔 버퍼가 남으므로
     /// 캐시까지 비운다.
     func unload() {
