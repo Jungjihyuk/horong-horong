@@ -341,6 +341,7 @@ struct MemoListView: View {
                 .background(PopoverChrome.surfaceAlt.opacity(0.9), in: Circle())
         }
         .buttonStyle(.plain)
+        .companionHighlight("memo.new")
         .help("아이콘 선택")
     }
 }

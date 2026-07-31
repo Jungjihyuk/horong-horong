@@ -461,6 +461,13 @@ struct StatsSummaryView: View {
             .foregroundStyle(PopoverChrome.inkSecondary)
         }
         .buttonStyle(.plain)
+        .companionHighlight("stats.detail")
+        .onReceive(
+            NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+        ) { notification in
+            guard notification.object as? String == "stats.openDetail" else { return }
+            openWindow(id: "stats-detail")
+        }
     }
 
     private var topCategoryUsages: [CategoryUsage] {
