@@ -56,14 +56,17 @@ final class GoalSuggestionEvalTests: XCTestCase {
             FileManager.default.fileExists(atPath: marker.path),
             "Evals/.run-golden 없음 — 골든셋 실행을 건너뜁니다. (추론이 느려 기본 테스트에서는 제외)"
         )
-        let casesDirectory = repositoryRoot
-            .appendingPathComponent("Evals/golden/cases", isDirectory: true)
-        let caseFiles = try FileManager.default
-            .contentsOfDirectory(at: casesDirectory, includingPropertiesForKeys: nil)
+        // drafts/ 도 함께 읽는다. 각색 전이라 커밋은 못 하지만 로컬 측정은 가능해야 한다.
+        let directories = ["Evals/golden/cases", "Evals/golden/drafts"]
+            .map { repositoryRoot.appendingPathComponent($0, isDirectory: true) }
+        let caseFiles = directories
+            .flatMap { directory in
+                (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            }
             .filter { $0.pathExtension == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        XCTAssertFalse(caseFiles.isEmpty, "골든셋 케이스가 없습니다: \(casesDirectory.path)")
+        XCTAssertFalse(caseFiles.isEmpty, "골든셋 케이스가 없습니다.")
 
         var lines: [String] = []
         for file in caseFiles {
