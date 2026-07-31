@@ -327,11 +327,14 @@ private enum AchievementGoalSuggestionSource: String, Sendable {
     case foundationModel = "Apple 모델"
 }
 
-private enum AchievementGoalSuggestionTarget: String, Sendable {
+/// 추천 후보의 목표 타입. 주간 목표 초안인지 월간 목표 초안인지를 구분한다.
+/// 모델이 정하는 값이 아니라 응답을 파싱하는 코드가 직접 붙인다.
+private enum AchievementGoalCadence: String, Sendable {
     case weekly = "주간목표"
     case monthly = "월간목표"
 
-    var cadence: String {
+    /// 저장 모델 `AchievementGoalRecord.cadence`에 들어가는 값
+    var levelName: String {
         switch self {
         case .weekly: return "주간"
         case .monthly: return "월간"
@@ -379,7 +382,8 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     let criterion: String
     let targetValueText: String
     let emoji: String
-    let target: AchievementGoalSuggestionTarget
+    /// 목표 타입 (주간 목표 / 월간 목표)
+    let cadence: AchievementGoalCadence
     let source: AchievementGoalSuggestionSource
 
     init(
@@ -392,7 +396,7 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         criterion: String,
         targetValueText: String,
         emoji: String,
-        target: AchievementGoalSuggestionTarget = .weekly,
+        cadence: AchievementGoalCadence = .weekly,
         source: AchievementGoalSuggestionSource
     ) {
         self.id = id
@@ -404,7 +408,7 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         self.criterion = criterion
         self.targetValueText = targetValueText
         self.emoji = emoji
-        self.target = target
+        self.cadence = cadence
         self.source = source
     }
 }
@@ -789,7 +793,7 @@ private enum AchievementGoalSuggestionBuilder {
             criterion: "연결한 주간 목표 \(count)개 달성",
             targetValueText: "\(count)개",
             emoji: emoji,
-            target: .monthly,
+            cadence: .monthly,
             source: source
         )
     }
@@ -1174,7 +1178,7 @@ private struct FoundationModelsGoalSuggestionProvider {
                 criterion: criterion.isEmpty ? "연결한 주간 목표 \(ids.count)개 달성" : criterion,
                 targetValueText: "\(ids.count)개",
                 emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅",
-                target: .monthly,
+                cadence: .monthly,
                 source: .foundationModel
             )
         }
@@ -6878,13 +6882,13 @@ private struct AchievementGoalComposerSheet: View {
                             .font(.system(size: 13.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.ink)
                             .lineLimit(2)
-                        Text(suggestion.target.rawValue)
+                        Text(suggestion.cadence.rawValue)
                             .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(suggestion.target == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
+                            .foregroundStyle(suggestion.cadence == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(
-                                (suggestion.target == .monthly ? PopoverChrome.accentSoft : PopoverChrome.surfaceAlt).opacity(0.76),
+                                (suggestion.cadence == .monthly ? PopoverChrome.accentSoft : PopoverChrome.surfaceAlt).opacity(0.76),
                                 in: Capsule()
                             )
                     }
@@ -6909,7 +6913,7 @@ private struct AchievementGoalComposerSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                if suggestion.target == .monthly {
+                if suggestion.cadence == .monthly {
                     ForEach(visibleChildGoalIDs(for: suggestion), id: \.self) { id in
                         if let goal = goal(for: id) {
                             HStack(spacing: 6) {
@@ -7548,19 +7552,19 @@ private struct AchievementGoalComposerSheet: View {
             await MainActor.run {
                 let weeklyModel = mergeSuggestions(
                     weeklyModelValues,
-                    target: .weekly,
-                    limit: suggestionCount
+                    cadence: .weekly,
+                    displayLimit: suggestionCount
                 )
                 let monthlyModel = mergeSuggestions(
                     monthlyModelValues,
-                    target: .monthly,
-                    limit: monthlySuggestionCount
+                    cadence: .monthly,
+                    displayLimit: monthlySuggestionCount
                 )
                 let weekly = weeklyModel.isEmpty
-                    ? mergeSuggestions(ruleSuggestions, target: .weekly, limit: suggestionCount)
+                    ? mergeSuggestions(ruleSuggestions, cadence: .weekly, displayLimit: suggestionCount)
                     : weeklyModel
                 let monthly = monthlyModel.isEmpty
-                    ? mergeSuggestions(monthlyRuleSuggestions, target: .monthly, limit: monthlySuggestionCount)
+                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionCount)
                     : monthlyModel
                 suggestions = weekly + monthly
                 isLoadingSuggestions = false
@@ -7591,28 +7595,27 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func mergeSuggestions(_ values: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
-        let weekly = mergeSuggestions(values, target: .weekly, limit: clampedSuggestionCount)
-        let monthly = mergeSuggestions(values, target: .monthly, limit: clampedMonthlySuggestionCount)
+        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedSuggestionCount)
+        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionCount)
         return weekly + monthly
     }
 
     private func mergeSuggestions(
         _ values: [AchievementGoalSuggestion],
-        target: AchievementGoalSuggestionTarget,
-        limit: Int
+        cadence: AchievementGoalCadence,
+        displayLimit: Int
     ) -> [AchievementGoalSuggestion] {
         var seen = Set<Set<UUID>>()
         var result: [AchievementGoalSuggestion] = []
-        for suggestion in values where suggestion.target == target {
+        for suggestion in values where suggestion.cadence == cadence {
             guard isAcceptableSuggestion(suggestion) else { continue }
-            let keyIDs = target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
-            guard keyIDs.count >= 2 else { continue }
+            let keyIDs = cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
             guard !dismissedSuggestionKeys.contains(suggestionKey(for: suggestion)) else { continue }
             let key = Set(keyIDs)
             guard seen.insert(key).inserted else { continue }
             result.append(suggestion)
         }
-        return Array(result.prefix(limit))
+        return Array(result.prefix(displayLimit))
     }
 
     private func dismissSuggestion(_ suggestion: AchievementGoalSuggestion) {
@@ -7660,48 +7663,49 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func suggestionKey(for suggestion: AchievementGoalSuggestion) -> String {
-        let ids = (suggestion.target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs)
+        let ids = (suggestion.cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs)
             .map(\.uuidString)
             .sorted()
             .joined(separator: ",")
-        return "\(suggestion.target.rawValue):\(ids)"
+        return "\(suggestion.cadence.rawValue):\(ids)"
     }
 
     private func isAcceptableSuggestion(_ suggestion: AchievementGoalSuggestion) -> Bool {
         let title = suggestion.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.count >= 4 else { return false }
 
+        // 이루려는 상태가 아니라 도구·형식 이름을 그대로 제목으로 삼은 추천은 목표로 쓸 수 없다.
         let lowercasedTitle = title.lowercased()
-        let blockedTitles = [
+        let toolNameTitles = [
             "markdown 목표",
             "kakaotalk 목표",
             "obsidian 목표",
             "링크 정리 목표",
         ]
-        if blockedTitles.contains(where: { lowercasedTitle.contains($0) }) {
+        if toolNameTitles.contains(where: { lowercasedTitle.contains($0) }) {
             return false
         }
 
-        let keyIDs = suggestion.target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
+        let keyIDs = suggestion.cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
         return Set(keyIDs).count >= 2
     }
 
     private func applySuggestion(_ suggestion: AchievementGoalSuggestion) {
         selectedInputMode = "직접 입력"
-        selectedTargetLevel = suggestion.target.cadence
+        selectedTargetLevel = suggestion.cadence.levelName
         selectedEmoji = suggestion.emoji
         title = suggestion.title
-        selectedMemoIDs = suggestion.target == .weekly ? Set(suggestion.memoIDs) : []
-        selectedChildGoalIDs = suggestion.target == .monthly ? Set(suggestion.childGoalIDs) : []
+        selectedMemoIDs = suggestion.cadence == .weekly ? Set(suggestion.memoIDs) : []
+        selectedChildGoalIDs = suggestion.cadence == .monthly ? Set(suggestion.childGoalIDs) : []
         applyCommonHierarchy(from: suggestion)
         targetValueText = suggestion.targetValueText
-        periodText = suggestion.target.periodText
+        periodText = suggestion.cadence.periodText
         criterion = suggestion.criterion
         validationMessage = nil
     }
 
     private func applyCommonHierarchy(from suggestion: AchievementGoalSuggestion) {
-        guard suggestion.target == .monthly else { return }
+        guard suggestion.cadence == .monthly else { return }
         let childGoals = existingGoals.filter { suggestion.childGoalIDs.contains($0.id) }
         if let roleName = commonNonEmpty(childGoals.map(\.roleName)) {
             selectedPersonaTitle = roleName
