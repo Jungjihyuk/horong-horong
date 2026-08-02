@@ -30,12 +30,22 @@ app-test: generate
 # docs/5. 운영/프로젝트 운영/12. 기술 문서/Build/release-checklist-and-automation-design.md 참고.
 #
 #   make release VERSION=0.2.3 SIGN_IDENTITY="Apple Development: ..."
+#   make release-draft VERSION=0.2.3   ← 확인하며 끊어 갈 때 (권장)
 release:
 	VERSION=$(VERSION) Scripts/release.sh
 
 # 빌드·서명·패키징까지만 확인한다. 커밋·태그·푸시·배포는 하지 않는다.
 release-dry-run:
 	VERSION=$(VERSION) DRY_RUN=1 Scripts/release.sh
+
+# GitHub Release 를 «초안» 으로 만들고 멈춘다. appcast 는 배포하지 않으므로
+# 사용자에게는 아직 아무것도 노출되지 않는다.
+release-draft:
+	VERSION=$(VERSION) DRAFT=1 Scripts/release.sh
+
+# 초안을 확인한 뒤 마무리한다 — 초안 공개 → appcast 배포 → main→dev 백머지.
+release-publish:
+	VERSION=$(VERSION) PUBLISH_ONLY=1 Scripts/release.sh
 
 # Test
 unit:
