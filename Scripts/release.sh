@@ -282,7 +282,11 @@ main() {
     info "여기까지 성공했습니다. 커밋·태그·배포는 하지 않았습니다."
     info "zip: $ZIP_PATH"
     info "edSignature: $ED_SIGNATURE"
-    info "되돌리려면: git checkout project.yml HorongHorong.xcodeproj"
+
+    # 버전 변경을 남겨두면 다음 실행이 «클린 트리» 검사에서 막힌다. 직접 되돌린다.
+    git checkout --quiet -- project.yml HorongHorong.xcodeproj
+    info "project.yml 과 xcodeproj 는 원래대로 되돌렸습니다."
+    info "실제 릴리즈: make release VERSION=$VERSION SIGN_IDENTITY=\"$SIGN_IDENTITY\""
     return
   fi
 
