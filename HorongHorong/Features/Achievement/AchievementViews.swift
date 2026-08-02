@@ -1463,7 +1463,7 @@ struct FoundationModelsGoalSuggestionProvider {
 
 private enum AchievementDataBuilder {
     static func weekStart(for date: Date, calendar: Calendar = .current) -> Date {
-        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        Constants.mondayWeekStart(for: date, calendar: calendar)
     }
 
     /// 목표가 화면에 노출되는 주 구간.
@@ -1620,11 +1620,9 @@ private enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goal: AchievementGoal, memos: [Memo], referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(for goal: AchievementGoal, memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
         let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: referenceDate)
-        let weekdayOffsetFromMonday = (calendar.component(.weekday, from: todayStart) + 5) % 7
-        let start = calendar.date(byAdding: .day, value: -weekdayOffsetFromMonday, to: todayStart) ?? todayStart
+        let start = calendar.startOfDay(for: weekStart)
         let linked = memos.filter { goal.sourceMemoIDs.contains($0.id) }
         let completedCount = linked.filter(\.isCompletedValue).count
         let lastCompletedDate = linked.filter(\.isCompletedValue).compactMap(timelineDate).max()
@@ -1672,11 +1670,11 @@ private enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goals: [AchievementGoal], memos: [Memo], referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(for goals: [AchievementGoal], memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
         guard !goals.isEmpty else { return [] }
 
         let timelines = goals.map { goal in
-            (goal: goal, items: timeline(for: goal, memos: memos, referenceDate: referenceDate))
+            (goal: goal, items: timeline(for: goal, memos: memos, weekStarting: weekStart, referenceDate: referenceDate))
         }
 
         return (0..<7).map { index in
@@ -2536,7 +2534,7 @@ struct AchievementDetailWindow: View {
                 if !visibleWeeklyGoals.isEmpty {
                     overdueMemosBanner
                     AchievementGoalTimelineView(
-                        items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos),
+                        items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos, weekStarting: displayedWeekStart),
                         onMoveTodo: moveTimelineMemo
                     )
                 } else {
