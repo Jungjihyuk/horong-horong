@@ -180,6 +180,9 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementDismissedSuggestionKeys)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyMaxFlagCount)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyFlagSelections)
         case .news:
             defaults.removeObject(forKey: Constants.NewsStorageKey.interestKeywords)
@@ -225,10 +228,61 @@ private struct AchievementPage: View {
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionProvider)
+    private var suggestionProvider: String = Constants.defaultAchievementSuggestionProvider
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionMLXModel)
+    private var suggestionMLXModel: String = Constants.defaultAchievementSuggestionMLXModel
+    @AppStorage(Constants.AppStorageKey.achievementSuggestionOllamaModel)
+    private var suggestionOllamaModel: String = Constants.defaultAchievementSuggestionOllamaModel
+    @AppStorage(Constants.NewsStorageKey.ollamaEndpoint)
+    private var ollamaEndpoint: String = Constants.defaultNewsOllamaEndpoint
 
     var body: some View {
         SettingsPageScroll {
             SettingsPageHeader(title: SettingsTab.achievement.label, subtitle: SettingsTab.achievement.subtitle)
+
+            SettingsGroupCard("추천 모델") {
+                SettingsRow(
+                    "추천 엔진",
+                    subtitle: "Apple 모델은 빠르고 준비가 필요 없습니다. MLX는 더 많은 할일을 한 번에 보고 묶음을 더 잘 찾지만 느리고 메모리를 씁니다."
+                ) {
+                    Picker("", selection: $suggestionProvider) {
+                        Text("Apple 모델").tag(Constants.AchievementSuggestionProviderKind.appleFoundation.rawValue)
+                        Text("MLX").tag(Constants.AchievementSuggestionProviderKind.mlx.rawValue)
+                        Text("Ollama").tag(Constants.AchievementSuggestionProviderKind.ollama.rawValue)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
+                }
+
+                // 모델 피커는 카드 목록이라 SettingsRow 의 오른쪽 슬롯에 넣으면 잘린다.
+                // 행 밖에서 전체 폭을 쓰도록 둔다.
+                if suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue {
+                    pickerBlock(
+                        title: "MLX 모델",
+                        subtitle: "가중치가 앱 메모리에 올라갑니다. 받지 않은 모델은 오른쪽 내려받기 버튼으로 먼저 받아 주세요. 받지 않은 채로 고르면 Apple 모델로 대신 답합니다."
+                    ) {
+                        MLXModelPicker(
+                            model: $suggestionMLXModel,
+                            options: Constants.availableAchievementMLXModelOptions
+                        )
+                    }
+                }
+
+                if suggestionProvider == Constants.AchievementSuggestionProviderKind.ollama.rawValue {
+                    pickerBlock(
+                        title: "Ollama 모델",
+                        subtitle: "가중치가 Ollama 프로세스에 올라가 앱 메모리를 쓰지 않습니다. 앱 안에서는 못 올리는 큰 모델도 쓸 수 있습니다."
+                    ) {
+                        OllamaModelPicker(
+                            model: $suggestionOllamaModel,
+                            endpoint: ollamaEndpoint,
+                            dataBasePath: Constants.defaultNewsDataBasePath
+                        )
+                    }
+                }
+            }
 
             SettingsGroupCard("목표 추천") {
                 SettingsRow(
@@ -378,6 +432,29 @@ private struct AchievementPage: View {
         .onChange(of: monthlySuggestionCount) { _, _ in normalizeValues() }
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
+    }
+
+    /// 전체 폭이 필요한 컨트롤용 블록. `SettingsRow` 는 컨트롤을 오른쪽 좁은 슬롯에 두므로
+    /// 카드 목록 같은 넓은 컴포넌트는 여기에 담는다.
+    @ViewBuilder
+    private func pickerBlock<Content: View>(
+        title: String,
+        subtitle: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private var clampedSuggestionCount: Int {

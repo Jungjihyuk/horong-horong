@@ -689,10 +689,68 @@ enum Constants {
             detail: "이 중 답이 가장 좋습니다. 메모리가 넉넉한 맥에서 쓰세요.",
             minimumMemoryGB: 24
         ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Qwen3-8B-4bit",
+            label: "Qwen3 8B",
+            detail: "긴 지시를 가장 잘 지킵니다. 가중치가 4.6GB라 늘 켜 두면 그만큼 메모리를 계속 씁니다.",
+            minimumMemoryGB: 24
+        ),
     ]
 
     static func companionMLXModelLabel(for name: String) -> String {
         availableCompanionMLXModelOptions.first { $0.name == name }?.label ?? name
+    }
+
+    // MARK: - 성취탭 목표 추천 공급자
+
+    /// 목표 추천에 쓸 모델. 컴패니언과 나누는 이유는 요구하는 능력이 다르기 때문이다.
+    /// 대화는 유창함이, 추천은 JSON 스키마 준수와 의미 군집화가 중요하다.
+    enum AchievementSuggestionProviderKind: String, CaseIterable {
+        /// Apple Foundation Model. 빠르지만 컨텍스트가 약 4k로 좁다.
+        case appleFoundation
+        /// 앱 안에서 도는 MLX 모델. 느린 대신 컨텍스트가 넓어 할 일을 더 많이 넣을 수 있다.
+        case mlx
+        /// Ollama 서버. 가중치가 다른 프로세스에 올라가 앱 메모리를 쓰지 않으므로
+        /// 앱 안에서는 못 올리는 큰 모델도 쓸 수 있다.
+        case ollama
+    }
+
+    static let defaultAchievementSuggestionProvider = AchievementSuggestionProviderKind.appleFoundation.rawValue
+
+    /// 컴패니언 기본값(가벼운 gemma-e2b)과 달리 지시 준수가 중요해 Qwen3 4B를 기본으로 둔다.
+    static let defaultAchievementSuggestionMLXModel = "mlx-community/Qwen3-4B-4bit"
+
+    /// 뉴스·컴패니언과 같은 Ollama 서버를 쓴다. 설치된 모델은 OllamaModelPicker 가 직접 조회한다.
+    static let defaultAchievementSuggestionOllamaModel = "qwen3:14b"
+
+    /// 목표 추천은 버튼을 눌렀을 때만 도는 **온디맨드** 작업이라, 늘 떠 있는 컴패니언과 달리
+    /// 큰 모델을 감당할 수 있다. 그래서 목록을 따로 둔다.
+    static let availableAchievementMLXModelOptions: [CompanionMLXModelOption] =
+        availableCompanionMLXModelOptions + [
+            // Ollama 라인업(qwen3:14b)에 대응하는 MLX 빌드.
+            // MLX 는 같은 모델을 더 빠르고 메모리 효율적으로 돌리므로 앱 안에서 쓸 값이 있다.
+            // 처음 고르면 가중치를 새로 내려받아야 한다.
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3-14B-4bit",
+                label: "Qwen3 14B",
+                detail: "이 목록에서 지시 준수가 가장 좋습니다. 대신 느리고 메모리를 많이 씁니다.",
+                minimumMemoryGB: 32
+            ),
+            // gemma-4-26b-a4b(MoE)와 gemma-4-31b 는 넣지 않는다.
+            // 전자는 mlx-swift-lm 의 Gemma4 구현이 dense 전용이라 MoE 가중치(experts/router)에서
+            // unhandledKeys 로 실패하고, 후자는 24GB 맥에서 올리지 못한다. (2026-08-01 확인)
+        ]
+
+    /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
+    /// AFM 값은 실측(3,424자 통과 / 5,203자 실패)에 여유를 둔 것이다.
+    static func achievementPromptCharacterBudget(
+        for provider: AchievementSuggestionProviderKind
+    ) -> Int {
+        switch provider {
+        case .appleFoundation: return 4_000
+        case .mlx: return 16_000
+        case .ollama: return 16_000
+        }
     }
 
     static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
@@ -739,6 +797,9 @@ enum Constants {
         static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
+        static let achievementSuggestionProvider = "achievement.suggestionProvider"
+        static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
+        static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"

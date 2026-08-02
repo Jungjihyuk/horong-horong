@@ -66,7 +66,7 @@ private final class MLXCompanionChatSession: CompanionChatSession {
             return CompanionChatReply(text: trimmed, mood: nil)
         } catch is MLXChatError {
             return CompanionChatReply(
-                text: "아직 모델이 준비되지 않았어요. 설정 → 컴패니언 → AI 대화에서 «내려받기»를 눌러 주세요.",
+                text: "아직 모델이 준비되지 않았어요. 설정 → 컴패니언 → AI 대화의 모델 목록에서 내려받기 아이콘을 눌러 주세요.",
                 mood: .concerned
             )
         } catch {
