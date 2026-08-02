@@ -689,6 +689,12 @@ enum Constants {
             detail: "이 중 답이 가장 좋습니다. 메모리가 넉넉한 맥에서 쓰세요.",
             minimumMemoryGB: 24
         ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Qwen3-8B-4bit",
+            label: "Qwen3 8B",
+            detail: "긴 지시를 가장 잘 지킵니다. 가중치가 4.6GB라 늘 켜 두면 그만큼 메모리를 계속 씁니다.",
+            minimumMemoryGB: 24
+        ),
     ]
 
     static func companionMLXModelLabel(for name: String) -> String {
@@ -721,15 +727,9 @@ enum Constants {
     /// 큰 모델을 감당할 수 있다. 그래서 목록을 따로 둔다.
     static let availableAchievementMLXModelOptions: [CompanionMLXModelOption] =
         availableCompanionMLXModelOptions + [
-            // Ollama 라인업(qwen3:8b / qwen3:14b)에 대응하는 MLX 빌드.
+            // Ollama 라인업(qwen3:14b)에 대응하는 MLX 빌드.
             // MLX 는 같은 모델을 더 빠르고 메모리 효율적으로 돌리므로 앱 안에서 쓸 값이 있다.
             // 처음 고르면 가중치를 새로 내려받아야 한다.
-            CompanionMLXModelOption(
-                name: "mlx-community/Qwen3-8B-4bit",
-                label: "Qwen3 8B",
-                detail: "4B보다 긴 지시를 잘 지킵니다. 목표 추천처럼 가끔 도는 작업에 알맞습니다.",
-                minimumMemoryGB: 24
-            ),
             CompanionMLXModelOption(
                 name: "mlx-community/Qwen3-14B-4bit",
                 label: "Qwen3 14B",

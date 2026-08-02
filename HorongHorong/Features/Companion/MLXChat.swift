@@ -90,19 +90,38 @@ actor MLXModelStore {
     /// 한 번이라도 끝까지 준비된 적 있는 모델인지. 그렇다면 가중치가 디스크에 있다는 뜻이라
     /// 대화 중 자동으로 올려도 새로 내려받지 않는다.
     ///
-    /// UserDefaults 기록만 믿으면, 앱 밖에서(다른 도구·이전 설치) 받아 둔 가중치를 못 본다.
-    /// 기록이 없을 때는 HuggingFace 캐시를 직접 확인한다.
+    /// 기준은 언제나 디스크다. UserDefaults 기록은 캐시를 뒤지는 수고를 아끼는 힌트일 뿐이라,
+    /// 파일이 사라졌는데 기록만 남아 있으면 그 기록을 걷어낸다. 기록을 그대로 믿으면
+    /// «받음» 으로 보이는 모델이 실제로는 없어서, 답할 때가 되어서야 조용히 몇 GB 를 다시 받게 된다.
     static func isKnownPrepared(_ model: String) -> Bool {
-        preparedModels().contains(model) || hasCachedWeights(model)
+        if hasCachedWeights(model) { return true }
+        forgetPrepared(model)
+        return false
+    }
+
+    /// HuggingFace 캐시 위치. 사용자가 환경변수로 옮겨 둔 경우까지 따라간다.
+    private static var cacheRoot: URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let hubCache = environment["HF_HUB_CACHE"], !hubCache.isEmpty {
+            return URL(fileURLWithPath: hubCache)
+        }
+        if let home = environment["HF_HOME"], !home.isEmpty {
+            return URL(fileURLWithPath: home).appendingPathComponent("hub")
+        }
+        return FileManager.default
+            .homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub")
+    }
+
+    /// 이 모델의 가중치가 담긴 캐시 폴더.
+    static func cacheDirectory(for model: String) -> URL {
+        cacheRoot.appendingPathComponent("models--" + model.replacingOccurrences(of: "/", with: "--"))
     }
 
     /// HuggingFace 캐시에 실제 가중치(.safetensors)가 있는지 본다.
     /// 설정 파일만 있고 가중치가 없는 "받다 만" 상태를 준비됨으로 오해하지 않기 위해 확장자까지 확인한다.
     private static func hasCachedWeights(_ model: String) -> Bool {
-        let repository = model.replacingOccurrences(of: "/", with: "--")
-        let snapshots = FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/huggingface/hub/models--\(repository)/snapshots")
+        let snapshots = cacheDirectory(for: model).appendingPathComponent("snapshots")
         guard let revisions = try? FileManager.default.contentsOfDirectory(
             at: snapshots, includingPropertiesForKeys: nil
         ) else { return false }
@@ -110,6 +129,31 @@ actor MLXModelStore {
             let files = (try? FileManager.default.contentsOfDirectory(atPath: revision.path)) ?? []
             return files.contains { $0.hasSuffix(".safetensors") }
         }
+    }
+
+    /// 받아 둔 가중치가 차지하는 크기. 지우기 전에 얼마나 비는지 보여주는 데 쓴다.
+    ///
+    /// `snapshots` 는 `blobs` 를 가리키는 심볼릭 링크라 따라가면 같은 파일을 두 번 센다. 실체인 `blobs` 만 잰다.
+    static func cachedWeightsSize(for model: String) -> Int64? {
+        let blobs = cacheDirectory(for: model).appendingPathComponent("blobs")
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: blobs, includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return nil }
+        let total = files.reduce(Int64(0)) { partial, file in
+            partial + Int64((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        }
+        return total > 0 ? total : nil
+    }
+
+    /// 받아 둔 가중치를 지운다. 메모리에 올라와 있으면 먼저 내린다 —
+    /// 쓰고 있는 파일을 밑에서 걷어내면 다음 응답이 어떻게 될지 알 수 없다.
+    func removeCachedWeights(for model: String) throws {
+        if loadedModel == model { unload() }
+        let directory = Self.cacheDirectory(for: model)
+        if FileManager.default.fileExists(atPath: directory.path) {
+            try FileManager.default.removeItem(at: directory)
+        }
+        Self.forgetPrepared(model)
     }
 
     private static func preparedModels() -> [String] {
@@ -120,6 +164,13 @@ actor MLXModelStore {
         var models = preparedModels()
         guard !models.contains(model) else { return }
         models.append(model)
+        UserDefaults.standard.set(models, forKey: Constants.AppStorageKey.companionMLXPreparedModels)
+    }
+
+    private static func forgetPrepared(_ model: String) {
+        var models = preparedModels()
+        guard let index = models.firstIndex(of: model) else { return }
+        models.remove(at: index)
         UserDefaults.standard.set(models, forKey: Constants.AppStorageKey.companionMLXPreparedModels)
     }
 
