@@ -21,6 +21,11 @@ cd "$PROJECT_ROOT"
 
 VERSION="${VERSION:-}"
 DRY_RUN="${DRY_RUN:-0}"
+# 1 이면 GitHub Release 를 초안으로 만들고 거기서 멈춘다. appcast 는 배포하지 않는다 —
+# 초안의 에셋 URL 은 아직 열려 있지 않아서, 먼저 올리면 사용자가 404 를 받는다.
+DRAFT="${DRAFT:-0}"
+# 초안을 확인한 뒤 마무리(공개 + appcast + 백머지)만 실행하는 모드.
+PUBLISH_ONLY="${PUBLISH_ONLY:-0}"
 SKIP_NOTARIZE="${SKIP_NOTARIZE:-1}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_ROOT/dist}"
@@ -142,11 +147,13 @@ build_and_package() {
   local extra=()
   [[ "$DRY_RUN" -eq 1 ]] && extra+=(--skip-clean-check)
 
+  # macOS 기본 bash 는 3.2 라, `set -u` 에서 빈 배열을 `"${extra[@]}"` 로 펼치면
+  # "unbound variable" 로 죽는다. 아래 형태는 배열이 비어 있으면 아무 인자도 만들지 않는다.
   SIGN_IDENTITY="$SIGN_IDENTITY" \
   VERSION="$VERSION" \
   BUILD_NUMBER="$BUILD_NUMBER" \
   OUTPUT_DIR="$OUTPUT_DIR" \
-    Scripts/package-release.sh "${extra[@]}"
+    Scripts/package-release.sh "${extra[@]+"${extra[@]}"}"
 
   ZIP_PATH="$OUTPUT_DIR/HorongHorong-$VERSION.zip"
   DMG_PATH="$OUTPUT_DIR/HorongHorong-$VERSION.dmg"
@@ -224,9 +231,13 @@ publish_release() {
   notes="$(mktemp)"
   changelog_block "$VERSION" | sed '1d' > "$notes"
 
+  local draft=()
+  [[ "$DRAFT" -eq 1 ]] && draft+=(--draft)
+
   gh release create "v$VERSION" "$ZIP_PATH" "$DMG_PATH" \
     --title "v$VERSION" \
-    --notes-file "$notes"
+    --notes-file "$notes" \
+    "${draft[@]+"${draft[@]}"}"
 
   rm -f "$notes"
   info "$REPO_URL/releases/tag/v$VERSION"
@@ -280,9 +291,45 @@ backmerge() {
   info "dev 동기화 완료"
 }
 
+# ─────────────────────────────────────────────── 마무리 전용 모드
+
+# DRAFT=1 로 만들어 둔 초안을 확인한 뒤 실행한다.
+# 초안 공개 → appcast 배포 → 백머지 순서를 지킨다. 에셋이 공개된 뒤에야 appcast 를 올려야
+# 사용자가 404 를 받지 않는다.
+publish_finish() {
+  step "마무리: 초안 공개 · appcast · 백머지"
+
+  [[ -n "$VERSION" ]] || die "VERSION 이 필요합니다."
+  [[ "$(git branch --show-current)" == "main" ]] || die "main 에서 실행하세요."
+  [[ -z "$(git status --short)" ]] || die "커밋되지 않은 변경이 있습니다."
+  git rev-parse "v$VERSION" >/dev/null 2>&1 || die "태그 v$VERSION 이 없습니다. 먼저 릴리즈를 만드세요."
+
+  ZIP_PATH="$OUTPUT_DIR/HorongHorong-$VERSION.zip"
+  [[ -f "$ZIP_PATH" ]] || die "zip 이 없습니다: $ZIP_PATH
+    appcast 의 서명값은 배포한 그 파일에서 뽑아야 합니다. 릴리즈를 만든 산출물을 그대로 두세요."
+
+  BUILD_NUMBER="$(project_value CURRENT_PROJECT_VERSION)"
+  compute_signature
+
+  step "초안 공개"
+  gh release edit "v$VERSION" --draft=false
+  info "$REPO_URL/releases/tag/v$VERSION"
+
+  update_appcast
+  backmerge
+
+  step "릴리즈 v$VERSION 완료"
+  info "이전 버전 앱에서 «업데이트 확인»이 새 버전을 잡는지 한 번 확인하세요."
+}
+
 # ─────────────────────────────────────────────── 실행
 
 main() {
+  if [[ "$PUBLISH_ONLY" -eq 1 ]]; then
+    publish_finish
+    return
+  fi
+
   preflight
   bump_version
   build_and_package
@@ -303,6 +350,19 @@ main() {
   finalize_changelog
   commit_and_tag
   publish_release
+
+  if [[ "$DRAFT" -eq 1 ]]; then
+    step "초안까지 완료 — 여기서 멈춥니다"
+    info "릴리즈 페이지를 열어 에셋과 노트를 확인하세요."
+    info "$REPO_URL/releases/tag/v$VERSION"
+    info ""
+    info "appcast 는 아직 배포하지 않았습니다. 초안의 에셋 URL 이 열려 있지 않아,"
+    info "먼저 올리면 사용자가 내려받다 404 를 받습니다."
+    info ""
+    info "확인이 끝나면: make release-publish VERSION=$VERSION"
+    return
+  fi
+
   update_appcast
   backmerge
 
