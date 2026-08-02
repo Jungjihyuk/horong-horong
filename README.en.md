@@ -172,6 +172,20 @@ Goal suggestions can run on **Apple's on-device model, MLX, or Ollama**. MLX and
 <sub>Recommendation model management</sub>
 </td>
 </tr>
+
+<tr>
+<td width="45%" valign="middle">
+
+### 🪔 Lumirong (AI Companion)
+Talk to the companion wandering across your screen to decide what to work on next. The chat model can be **Apple's on-device model, MLX, or Ollama**, and MLX/Ollama models are downloaded and deleted right from Settings. Conversations and inference stay on this machine and never leave it. Once past a set time, the companion briefs today's schedule the first time it appears, and any reply you like can be saved straight to a memo. You can confine it to a rectangular roaming area, or hide it automatically during Pomodoro focus.
+
+</td>
+<td width="55%" align="center">
+<img src="./assets/features/companion-chat.png" alt="Chatting with Lumirong" width="240" />
+<br />
+<sub>Chatting with Lumirong</sub>
+</td>
+</tr>
 </table>
 
 ---
