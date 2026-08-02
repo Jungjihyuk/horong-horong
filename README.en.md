@@ -57,7 +57,7 @@ The app is currently developed with a Korean UI. Memos, usage records, statistic
 <table>
 <tr>
 <td align="center" width="60%">
-<img src="./assets/features/timer.png" alt="HorongHorong popover from the menu bar" width="380" />
+<img src="./assets/overview/menubar.png" alt="HorongHorong popover from the menu bar" width="380" />
 <br />
 <sub>Click the menu bar icon to open timer, memo, statistics, news, Agent, and settings in one place.</sub>
 </td>
@@ -80,7 +80,7 @@ Manage focus and break cycles with presets: 50/5, 100/10, and custom. Choose a f
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/timer.png" alt="Timer" width="420" />
+<img src="./assets/features/popover-timer.png" alt="Timer" width="420" />
 </td>
 </tr>
 
@@ -92,7 +92,7 @@ Open a floating input panel from anywhere with a global shortcut. The shortcut i
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/quick-memo.png" alt="Quick memo" width="420" />
+<img src="./assets/features/popover-memo.png" alt="Quick memo" width="420" />
 </td>
 </tr>
 
@@ -107,24 +107,24 @@ Track the active app in the background and automatically aggregate time by categ
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/stats-summary.png" alt="Summary statistics" width="190" />
+<img src="./assets/features/popover-stats.png" alt="Summary statistics" width="190" />
 <sub>Summary</sub>
 <br />
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/daily_statistic.png" alt="Daily statistics" width="190" />
+<img src="./assets/features/stats-detail-daily.png" alt="Daily statistics" width="190" />
 <br />
 <sub>Daily</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/weekly_statistic.png" alt="Weekly statistics" width="190" />
+<img src="./assets/features/stats-detail-weekly.png" alt="Weekly statistics" width="190" />
 <br />
 <sub>Weekly</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/monthly_statistic.png" alt="Monthly statistics" width="190" />
+<img src="./assets/features/stats-detail-monthly.png" alt="Monthly statistics" width="190" />
 <br />
 <sub>Monthly</sub>
 </td>
@@ -141,7 +141,7 @@ Collect data from channels you frequently use, such as YouTube channels/playlist
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/news.png" alt="News" width="420" />
+<img src="./assets/features/popover-news.png" alt="News" width="420" />
 </td>
 </tr>
 
@@ -153,7 +153,7 @@ Call Codex / Claude / Antigravity / Opencode / Gemini CLI to generate an N-day e
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/agent.png" alt="Agent" width="420" />
+<img src="./assets/features/popover-agent.png" alt="Agent" width="420" />
 </td>
 </tr>
 
@@ -170,6 +170,43 @@ Goal suggestions can run on **Apple's on-device model, MLX, or Ollama**. MLX and
 <img src="./assets/features/settings-achievement.png" alt="Achievement suggestion models" width="420" />
 <br />
 <sub>Recommendation model management</sub>
+</td>
+</tr>
+
+<tr>
+<td width="45%" valign="middle">
+
+### 🎯 Achievement Goals
+Group scattered memos and todos into weekly goals, then connect those to monthly goals, personas, and a vision. Goals can be drafted by AI suggestions or written by hand. The achievement timeline lays out linked todos by weekday and lets you drag them to another day. The Journey tab places personas, visions, and monthly goal flags on one canvas so you can see where each goal leads, and the Records tab collects completed weekly and monthly goals, newest first.
+
+</td>
+<td width="55%" align="center">
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="./assets/features/popover-achievement.png" alt="Achievement summary" width="190" />
+<br />
+<sub>Summary</sub>
+</td>
+<td align="center" width="50%">
+<img src="./assets/features/achievement-detail-timeline-all.png" alt="Achievement timeline" width="190" />
+<br />
+<sub>Timeline</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<img src="./assets/features/achievement-detail-journey.png" alt="Journey" width="190" />
+<br />
+<sub>Journey</sub>
+</td>
+<td align="center" width="50%">
+<img src="./assets/features/achievement-detail-records.png" alt="Records" width="190" />
+<br />
+<sub>Records</sub>
+</td>
+</tr>
+</table>
 </td>
 </tr>
 
