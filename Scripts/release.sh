@@ -113,11 +113,14 @@ changelog_block() {
 
 # ─────────────────────────────────────────────── 1~2. 버전 갱신
 
-# 버전을 올린 뒤 어디서 죽든 원래대로 돌려놓는다.
-# 실패한 자리에 버전 변경이 남으면 다음 실행이 «클린 트리» 검사에서 막힌다.
+# 릴리즈 도중 고친 파일을 어디서 죽든 원래대로 돌려놓는다.
+# 남겨두면 다음 실행이 «클린 트리» 검사에서 막힌다.
 # 실제 릴리즈가 10단계까지 갔다면 이미 커밋된 상태라 이 복원은 아무 일도 하지 않는다.
+#
+# 대상은 스크립트가 고치는 파일 전부다 — 1단계의 project.yml, 2단계의 .xcodeproj,
+# 9단계의 CHANGELOG.md.
 restore_version() {
-  git checkout --quiet -- project.yml HorongHorong.xcodeproj 2>/dev/null || true
+  git checkout --quiet -- project.yml HorongHorong.xcodeproj "$CHANGELOG" 2>/dev/null || true
 }
 
 bump_version() {
