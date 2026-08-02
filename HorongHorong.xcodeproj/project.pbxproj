@@ -12,6 +12,7 @@
 		00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */; };
 		016363067D14320E1F8074D5 /* AppUsageSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */; };
 		016E96AD2C6ADB5D6C64AA16 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = DFD68E389F5A22E0AE617BC5 /* HuggingFace */; };
+		043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF7167773C553C08A59165D /* MLXModelPicker.swift */; };
 		05DC5734A43326DF0D03A03D /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
 		09619039881101584971BCB1 /* FocusNudgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6D5BA5101B147375D58C23 /* FocusNudgeCatalog.swift */; };
 		09A0D81D790A874E6630F035 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
@@ -198,6 +199,7 @@
 		BE19B235EAEDD1E8FF375381 /* OllamaChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1E8087D2D1EE690CC383E3 /* OllamaChat.swift */; };
 		BEC7D7006ED670128D51CF37 /* CompanionRegionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F8304E7734BEF0D16FEAE2 /* CompanionRegionPicker.swift */; };
 		BF961B03DAE6A4A1A631482A /* CompanionSpotlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C7E110FFAEB81D9F03EC3F /* CompanionSpotlight.swift */; };
+		BFEE920D46CEE6C0DF9B490E /* OllamaGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFABC8ABB718792899346EAF /* OllamaGoalSuggestionProvider.swift */; };
 		C01F8CD99337F59D80BD2EFF /* MemoReminderLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */; };
 		C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */; };
 		C188D409EA4A7C34F06ADB97 /* ToastPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28560EC4AA259D92267C28F5 /* ToastPanel.swift */; };
@@ -206,6 +208,7 @@
 		C78A6683548FD6B079DBE7AB /* QuickMemoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A030D0949903C9FA062FB4D1 /* QuickMemoPanel.swift */; };
 		C9152C92297F1D3166835ECD /* MemoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B92287537E68101A2064BE /* MemoListView.swift */; };
 		CABF233D11DAB7DA3F24B7A7 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = CC0BB0B5B9A3665B4712C82E /* MLXLLM */; };
+		CBC2870A5ECA2D2DC5BDCF45 /* MLXModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF7167773C553C08A59165D /* MLXModelPicker.swift */; };
 		CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
 		CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
 		CE8BBB10CF43B3C8E7D998BD /* MLXCompanionChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */; };
@@ -227,6 +230,7 @@
 		D86AE09E168B67F6030C8D75 /* TelemetryClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */; };
 		D970B9677149142EE4607A66 /* CompanionSpotlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C7E110FFAEB81D9F03EC3F /* CompanionSpotlight.swift */; };
 		D9DEC366DACB63491DEC3196 /* CompanionAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28C94D6AB63EB00A9FD9480 /* CompanionAnimation.swift */; };
+		DB6B78FC7B50B1FE4A93F0CD /* OllamaGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFABC8ABB718792899346EAF /* OllamaGoalSuggestionProvider.swift */; };
 		DC75971C572F7C2271E87F3C /* AttentionThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0327985821E5D309FC544549 /* AttentionThresholdStore.swift */; };
 		DE77B8B431013949F4432E0C /* DailyAttentionReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881B92C8DB05873BF8307228 /* DailyAttentionReport.swift */; };
 		E0E8E2D315CAAD284FAA4995 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
@@ -384,11 +388,13 @@
 		D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryClient.swift; sourceTree = "<group>"; };
 		D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryMappingPage.swift; sourceTree = "<group>"; };
 		DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionBriefing.swift; sourceTree = "<group>"; };
+		DCF7167773C553C08A59165D /* MLXModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXModelPicker.swift; sourceTree = "<group>"; };
 		DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualSegmentEditorView.swift; sourceTree = "<group>"; };
 		E8310F1C93CF6B64106DEBF0 /* CompanionGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionGuide.swift; sourceTree = "<group>"; };
 		EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXCompanionChat.swift; sourceTree = "<group>"; };
 		EDE1DBB9705778C054D58377 /* StatsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPage.swift; sourceTree = "<group>"; };
 		EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickMemoView.swift; sourceTree = "<group>"; };
+		EFABC8ABB718792899346EAF /* OllamaGoalSuggestionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaGoalSuggestionProvider.swift; sourceTree = "<group>"; };
 		F0BE61B97897A531F7A58A68 /* SettingsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCard.swift; sourceTree = "<group>"; };
 		F16A0CA6233EC48B6C11499D /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 		F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUsageSegment.swift; sourceTree = "<group>"; };
@@ -495,6 +501,7 @@
 			children = (
 				B7A6B136440DF771D0649296 /* Chips.swift */,
 				30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */,
+				DCF7167773C553C08A59165D /* MLXModelPicker.swift */,
 				84208C64E5FF8177FE973E1A /* OllamaModelPicker.swift */,
 				F0BE61B97897A531F7A58A68 /* SettingsCard.swift */,
 				A7F7CEFF27A23967523929A0 /* SettingsRow.swift */,
@@ -733,6 +740,7 @@
 			children = (
 				0424CD9D3311EDFEC29D3EC7 /* AchievementViews.swift */,
 				990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */,
+				EFABC8ABB718792899346EAF /* OllamaGoalSuggestionProvider.swift */,
 			);
 			path = Achievement;
 			sourceTree = "<group>";
@@ -1026,6 +1034,7 @@
 				583A85EF2009295F14DB2637 /* MLXChat.swift in Sources */,
 				A6E4C72F56B42CCEA76A68EB /* MLXCompanionChat.swift in Sources */,
 				A2F05E50922514EAD713165E /* MLXGoalSuggestionProvider.swift in Sources */,
+				043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */,
 				5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */,
 				5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */,
 				693264CD9F0555C27CD695F7 /* MemoBrowserWindow.swift in Sources */,
@@ -1045,6 +1054,7 @@
 				87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */,
 				BE19B235EAEDD1E8FF375381 /* OllamaChat.swift in Sources */,
 				C3FAD103B95E5F7DD6B32DAB /* OllamaCompanionChat.swift in Sources */,
+				BFEE920D46CEE6C0DF9B490E /* OllamaGoalSuggestionProvider.swift in Sources */,
 				2A9C3273A02EB346AF57DCCD /* OllamaModelPicker.swift in Sources */,
 				9223F1ACB039B0BD67F6B69A /* PomodoroReflectionEditSheet.swift in Sources */,
 				A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */,
@@ -1139,6 +1149,7 @@
 				E537A11FA58D6194B688341A /* MLXChat.swift in Sources */,
 				CE8BBB10CF43B3C8E7D998BD /* MLXCompanionChat.swift in Sources */,
 				0F922F270875249444EAB113 /* MLXGoalSuggestionProvider.swift in Sources */,
+				CBC2870A5ECA2D2DC5BDCF45 /* MLXModelPicker.swift in Sources */,
 				FA4C0EC8BCBD4E91B2FBD41A /* ManualSegmentEditorView.swift in Sources */,
 				A80C053F7415CA29695F7B8A /* Memo.swift in Sources */,
 				3CBF43D40623337B5738D178 /* MemoBrowserWindow.swift in Sources */,
@@ -1158,6 +1169,7 @@
 				315AFD0EDCF1F229F02DEC9F /* NumberField.swift in Sources */,
 				B3AF3A2264966171248624F3 /* OllamaChat.swift in Sources */,
 				F65724EF23C872A0AD26B343 /* OllamaCompanionChat.swift in Sources */,
+				DB6B78FC7B50B1FE4A93F0CD /* OllamaGoalSuggestionProvider.swift in Sources */,
 				E15AFF18394A732618E4691D /* OllamaModelPicker.swift in Sources */,
 				87514069E0442B45EE871778 /* PomodoroReflectionEditSheet.swift in Sources */,
 				46C549D84D10731ECFB7623D /* PomodoroReflectionPanel.swift in Sources */,

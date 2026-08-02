@@ -328,6 +328,7 @@ enum AchievementGoalSuggestionSource: String, Sendable {
     case rule = "룰 기반"
     case foundationModel = "Apple 모델"
     case mlx = "MLX"
+    case ollama = "Ollama"
 }
 
 let achievementSuggestionLog = Logger(
@@ -935,7 +936,8 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int
     ) async -> [AchievementGoalSuggestion] {
-        if selectedProvider == .mlx {
+        switch selectedProvider {
+        case .mlx:
             let fromMLX = await mlxSuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
@@ -943,6 +945,16 @@ enum AchievementFoundationGoalSuggestionProvider {
             )
             if !fromMLX.isEmpty { return fromMLX }
             achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
+        case .ollama:
+            let fromOllama = await ollamaSuggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+            if !fromOllama.isEmpty { return fromOllama }
+            achievementSuggestionLog.info("weekly provider fallback=ollama→afm")
+        case .appleFoundation:
+            break
         }
         return await appleFoundationSuggestions(
             from: memos,
@@ -974,6 +986,25 @@ enum AchievementFoundationGoalSuggestionProvider {
         }
         #endif
         achievementSuggestionLog.error("weekly mlx failure=unavailable")
+        return []
+    }
+
+    private static func ollamaSuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+                ?? Constants.defaultAchievementSuggestionOllamaModel
+            let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
+                ?? Constants.defaultNewsOllamaEndpoint
+            return await OllamaGoalSuggestionProvider(model: model, endpoint: endpoint).suggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+        }
         return []
     }
 
