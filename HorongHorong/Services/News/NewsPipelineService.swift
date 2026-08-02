@@ -53,6 +53,8 @@ struct OllamaTagsResponse: Decodable {
 struct OllamaModelTag: Decodable {
     var name: String
     var model: String?
+    /// 디스크에서 차지하는 크기. 지우기 전에 얼마나 비는지 보여주는 데 쓴다.
+    var size: Int64?
 }
 
 struct OllamaModelInstallProgress: Sendable {
@@ -525,6 +527,11 @@ final class NewsPipelineService: @unchecked Sendable {
     }
 
     func installedOllamaModelNames(endpoint: String) async throws -> Set<String> {
+        Set(try await installedOllamaModelSizes(endpoint: endpoint).keys)
+    }
+
+    /// 설치된 모델 이름과 그 크기. 같은 모델이 `name` 과 `model` 두 이름으로 불려서 둘 다 담는다.
+    func installedOllamaModelSizes(endpoint: String) async throws -> [String: Int64] {
         let tagsURL = try ollamaURL(endpoint: endpoint, path: "/api/tags")
         let (data, response) = try await URLSession.shared.data(from: tagsURL)
         guard let httpResponse = response as? HTTPURLResponse,
@@ -533,9 +540,11 @@ final class NewsPipelineService: @unchecked Sendable {
         }
 
         let tags = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
-        return Set(tags.models.flatMap { tag in
-            [tag.name, tag.model].compactMap { $0 }
-        })
+        return tags.models.reduce(into: [String: Int64]()) { sizes, tag in
+            for name in [tag.name, tag.model].compactMap({ $0 }) {
+                sizes[name] = tag.size ?? 0
+            }
+        }
     }
 
     func installOllamaModel(
@@ -553,6 +562,29 @@ final class NewsPipelineService: @unchecked Sendable {
         }
 
         try await runCommand(["ollama", "pull", model], environment: environment, progress: progress)
+    }
+
+    /// 설치된 모델을 지운다. 받을 때와 달리 `ollama` 실행 파일을 찾지 않고 서버에 바로 요청한다 —
+    /// 설치 목록을 읽을 때 이미 쓰는 길이라, CLI 가 PATH 에 없어도 지우기는 된다.
+    func deleteOllamaModel(model: String, endpoint: String) async throws {
+        let deleteURL = try ollamaURL(endpoint: endpoint, path: "/api/delete")
+        var request = URLRequest(url: deleteURL)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // 예전 서버는 `name`, 요즘 서버는 `model` 을 읽는다. 둘 다 실어 버전을 가리지 않는다.
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "name": model])
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OllamaModelError.serverUnavailable
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw OllamaModelError.deleteFailed(
+                httpResponse.statusCode == 404
+                    ? "\(model) 을(를) Ollama 에서 찾지 못했습니다."
+                    : "Ollama 서버가 \(httpResponse.statusCode) 를 응답했습니다."
+            )
+        }
     }
 
     // MARK: - Private
@@ -807,6 +839,7 @@ enum OllamaModelError: LocalizedError {
     case serverUnavailable
     case commandUnavailable(String)
     case pullFailed(String)
+    case deleteFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -818,6 +851,8 @@ enum OllamaModelError: LocalizedError {
             return message
         case .pullFailed(let message):
             return "Ollama 모델 다운로드에 실패했습니다. \(message)"
+        case .deleteFailed(let message):
+            return "Ollama 모델을 지우지 못했습니다. \(message)"
         }
     }
 }

@@ -6,11 +6,14 @@ struct OllamaModelPicker: View {
     let endpoint: String
     let dataBasePath: String
 
-    @State private var installedModels: Set<String> = []
+    /// 설치된 모델과 그 크기. 지우기 전에 얼마나 비는지 보여주려고 크기까지 들고 있는다.
+    @State private var installedModels: [String: Int64] = [:]
     @State private var isLoading = false
     @State private var installingModel: String?
     @State private var installingStatus: String?
     @State private var installingProgress: Double?
+    /// 지우기 확인을 기다리는 모델. 수 GB 를 되돌릴 수 없이 지우므로 한 번 물어본다.
+    @State private var deletionTarget: Constants.NewsOllamaModelOption?
     @State private var page = 0
 
     private let modelsPerPage = 5
@@ -80,6 +83,23 @@ struct OllamaModelPicker: View {
         .onChange(of: endpoint) { _, _ in
             Task { await refresh() }
         }
+        .confirmationDialog(
+            "설치된 모델을 지울까요?",
+            isPresented: Binding(
+                get: { deletionTarget != nil },
+                set: { isPresented in
+                    if !isPresented { deletionTarget = nil }
+                }
+            ),
+            presenting: deletionTarget
+        ) { option in
+            Button("지우기", role: .destructive) {
+                Task { await delete(option) }
+            }
+            Button("취소", role: .cancel) {}
+        } message: { option in
+            Text(deletionMessage(for: option))
+        }
     }
 
     private var pagedOptions: [Constants.NewsOllamaModelOption] {
@@ -133,7 +153,7 @@ struct OllamaModelPicker: View {
         let recommendationKind = Constants.newsOllamaRecommendationKinds()[option.name]
         let isUnsupported = recommendationKind == .unsupported
         let isCloud = option.availability == .cloud
-        let isInstalled = isCloud || installedModels.contains(option.name)
+        let isInstalled = isCloud || installedModels[option.name] != nil
         let isInstalling = installingModel == option.name
 
         return HStack(spacing: 8) {
@@ -191,6 +211,15 @@ struct OllamaModelPicker: View {
                 Image(systemName: "checkmark.circle")
                     .foregroundStyle(.green)
                     .help("설치됨")
+                Button {
+                    deletionTarget = option
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .disabled(installingModel != nil)
+                .help("\(option.name) 지우기")
             } else {
                 Button {
                     Task { await install(option) }
@@ -270,13 +299,34 @@ struct OllamaModelPicker: View {
         defer { isLoading = false }
 
         do {
-            installedModels = try await pipelineService.installedOllamaModelNames(endpoint: endpoint)
+            installedModels = try await pipelineService.installedOllamaModelSizes(endpoint: endpoint)
             if installingModel == nil {
                 installingStatus = nil
             }
         } catch {
-            installedModels = []
+            installedModels = [:]
             installingStatus = "Ollama 설치 목록을 불러오지 못했습니다. Ollama 앱 또는 서버 실행 상태를 확인해주세요."
+        }
+    }
+
+    private func deletionMessage(for option: Constants.NewsOllamaModelOption) -> String {
+        let size = installedModels[option.name] ?? 0
+        let sizeText = size > 0
+            ? " (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)))"
+            : ""
+        return "\(option.name)\(sizeText)를 Ollama 에서 지웁니다. 다시 쓰려면 내려받아야 합니다."
+    }
+
+    /// Ollama 서버에서 모델을 지운다. 지우고 나면 같은 자리에 내려받기 버튼이 다시 나온다.
+    @MainActor
+    private func delete(_ option: Constants.NewsOllamaModelOption) async {
+        deletionTarget = nil
+        do {
+            try await pipelineService.deleteOllamaModel(model: option.name, endpoint: endpoint)
+            installedModels.removeValue(forKey: option.name)
+            installingStatus = "\(option.name) 을(를) 지웠습니다."
+        } catch {
+            installingStatus = error.localizedDescription
         }
     }
 
@@ -312,7 +362,7 @@ struct OllamaModelPicker: View {
                     installingProgress = progress.fraction
                 }
             )
-            installedModels.insert(option.name)
+            await refresh()   // 크기까지 실제 값으로 다시 읽는다
             installingStatus = "\(option.name) 설치가 완료되었습니다."
         } catch {
             installingStatus = error.localizedDescription
