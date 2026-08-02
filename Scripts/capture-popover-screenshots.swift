@@ -5,7 +5,7 @@ import Foundation
 import AppKit
 
 private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achievement"]
-private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "news", "agent", "memo", "data", "about"]
+private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "achievement", "news", "agent", "companion", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
 private let achievementDetailModes = ["progress", "timeline-all", "journey", "records"]
 private let popoverThemes: [PopoverThemeOption] = [
@@ -454,6 +454,10 @@ do {
                 "-configuration", "Debug",
                 "-destination", "platform=macOS",
                 "-derivedDataPath", options.derivedDataPath.path,
+                // mlx-swift 의 CudaBuild 플러그인과 mlx-swift-lm 의 매크로는 Xcode.app 에서 한 번
+                // 신뢰하면 끝이지만, CLI 빌드에는 신뢰 기록이 없어 매번 검증에서 멈춘다.
+                "-skipPackagePluginValidation",
+                "-skipMacroValidation",
             ],
             currentDirectory: repoRoot
         )
