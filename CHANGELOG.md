@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-03
+
 ### 추가
 
 - 성취 목표 추천에 MLX 공급자 추가. 앱 안에서 직접 추론하며 Apple 모델보다 넓은 컨텍스트를 씁니다.
@@ -87,7 +89,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.3
 [0.2.2]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.2
 [0.2.0]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.0
 [0.1.3]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.1.3
