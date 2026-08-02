@@ -163,14 +163,26 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <td width="45%" valign="middle">
 
 ### ⚙️ 설정 창 / 카테고리 매핑
-별도 설정 창에서 일반, 외관, 타이머, 단축키, 카테고리 매핑, 통계, 뉴스, AI Agent, 메모, 데이터, 성취, 정보 페이지를 관리합니다. 설정 검색, 페이지별 기본값 복원, 라이트/다크 외관 모드, 팝오버 테마(따뜻한 등불 / 와인 랜턴 / 게임 픽셀), 앱별 카테고리 규칙, 자리 비움 임계값, 같이 쓰는 카테고리 쌍, 뉴스 소스와 관심사 키워드, 성취 추천 조건, 여정 깃발 개수, 데이터 경로를 조정할 수 있습니다.
+별도 설정 창에서 일반, 외관, 타이머, 단축키, 카테고리 매핑, 통계, 뉴스, AI Agent, 성취, 루미롱, 메모, 데이터, 정보 페이지를 관리합니다. 설정 검색, 페이지별 기본값 복원, 라이트/다크 외관 모드, 팝오버 테마(따뜻한 등불 / 와인 랜턴 / 게임 픽셀), 앱별 카테고리 규칙, 자리 비움 임계값, 같이 쓰는 카테고리 쌍, 뉴스 소스와 관심사 키워드, 성취 추천 조건, 여정 깃발 개수, 데이터 경로를 조정할 수 있습니다.
+
+성취 목표 추천은 **Apple 모델 / MLX / Ollama** 중에서 고를 수 있습니다. MLX와 Ollama 모델은 설정 화면에서 바로 내려받고 지울 수 있으며, 받는 동안 진행률과 남은 시간이 표시됩니다. 기기 메모리에 비해 큰 모델은 «메모리 부족»으로 표시해 미리 걸러줍니다.
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/settings-general.png" alt="설정" width="420" />
+<table>
+<tr>
+<td align="center" width="50%">
+<img src="./assets/features/settings-general.png" alt="설정" width="200" />
 <br />
 <sub>설정</sub>
+</td>
+<td align="center" width="50%">
+<img src="./assets/features/settings-achievement.png" alt="성취 추천 모델" width="200" />
 <br />
+<sub>추천 모델 관리</sub>
+</td>
+</tr>
+</table>
 <br />
 <table>
 <tr>
