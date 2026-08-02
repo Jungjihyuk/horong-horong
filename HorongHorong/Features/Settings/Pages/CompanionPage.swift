@@ -31,7 +31,6 @@ struct CompanionPage: View {
     private var bubbleSize: String = Constants.defaultCompanionBubbleSize
 
     @State private var isOllamaReachable = false
-    @State private var mlxState = MLXModelState()
 
     var body: some View {
         SettingsPageScroll {
@@ -274,41 +273,15 @@ struct CompanionPage: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
-                    SettingsRow("모델 준비", subtitle: mlxPreparationSubtitle) {
-                        if !isMLXSupported {
+                    // 내려받기는 모델 목록의 각 행이 맡는다. 여기서는 아예 못 쓰는 맥에만 그 사실을 알린다.
+                    if !isMLXSupported {
+                        SettingsRow(
+                            "모델 준비",
+                            subtitle: "이 맥에는 MLX 를 돌릴 Apple Silicon 칩이 없습니다. 다른 공급자를 골라 주세요."
+                        ) {
                             Text("사용 불가")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
-                        } else {
-                            switch mlxState.phase {
-                            case .preparing(let received, let total):
-                                ProgressView(value: total > 0 ? Double(received) / Double(total) : 0)
-                                    .progressViewStyle(.linear)
-                                    .frame(width: 120)
-                                Button("중지") {
-                                    Task { await cancelMLXDownload() }
-                                }
-                                .controlSize(.small)
-                            case .paused:
-                                Button("이어받기") {
-                                    Task { await prepareMLX(mlxModel) }
-                                }
-                                .controlSize(.small)
-                            case .ready:
-                                Label("준비됨", systemImage: "checkmark.circle.fill")
-                                    .font(.callout)
-                                    .foregroundStyle(.green)
-                            case .idle:
-                                Button("내려받기") {
-                                    Task { await prepareMLX(mlxModel) }
-                                }
-                                .controlSize(.small)
-                            case .failed:
-                                Button("다시 시도") {
-                                    Task { await prepareMLX(mlxModel) }
-                                }
-                                .controlSize(.small)
-                            }
                         }
                     }
                 }
@@ -347,7 +320,6 @@ struct CompanionPage: View {
         .onAppear {
             normalizeValues()
             Task { await refreshOllama() }
-            Task { await refreshMLXResidency() }
         }
         .onChange(of: chatProviderKind) { oldValue, newValue in
             Task { await refreshOllama() }
@@ -363,8 +335,6 @@ struct CompanionPage: View {
             // 화면을 둘러본 결과가 아니라 사용자가 누른 결과여야 한다.
             if oldValue == Constants.CompanionChatProviderKind.mlx.rawValue {
                 Task { await unloadMLX() }
-            } else if newValue == Constants.CompanionChatProviderKind.mlx.rawValue {
-                Task { await refreshMLXResidency() }
             }
         }
         .onChange(of: ollamaModel) { oldValue, newValue in
@@ -377,17 +347,6 @@ struct CompanionPage: View {
                 Task { await OllamaChatClient.preload(endpoint: normalizedOllamaEndpoint, model: newValue) }
             }
         }
-        // 모델을 고르는 것은 고르는 것일 뿐이다. 내려받기는 사용자가 버튼을 눌러야 시작한다.
-        // (예전에는 여기서 바로 받기 시작해서, 둘러보기만 해도 다운로드가 걸리고
-        //  이전 다운로드와 경합해 진행률이 엉뚱한 모델 것을 그리는 문제가 있었다.)
-        .onChange(of: mlxModel) { oldValue, newValue in
-            guard oldValue != newValue else { return }
-            mlxState.reset()
-            Task { await refreshMLXResidency() }
-        }
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
-            mlxState.tick()
-        }
     }
 
     private func unloadOllamaModel(_ model: String) async {
@@ -395,54 +354,9 @@ struct CompanionPage: View {
         await OllamaChatClient.unload(endpoint: normalizedOllamaEndpoint, model: model)
     }
 
-    /// 이전 모델을 내리고 고른 모델을 메모리에 올린다. 처음 쓰는 모델이면 여기서 내려받는다.
-    private func prepareMLX(_ model: String) async {
-        #if canImport(MLXLLM)
-        guard !model.isEmpty, MLXModelStore.isSupported else { return }
-        let state = mlxState
-        // 이 표를 들고 있는 동안만 상태를 쓴다. 도중에 모델이 바뀌면 표가 무효가 되어
-        // 취소된 다운로드의 뒤늦은 콜백이 화면을 덮어쓰지 못한다.
-        let token = state.begin()
-        do {
-            _ = try await MLXModelStore.shared.container(for: model) { progress in
-                Task { @MainActor in
-                    state.advance(token, received: progress.received, total: progress.total)
-                }
-            }
-            state.finish(token, phase: .ready)
-        } catch is CancellationError {
-            state.pause(token)   // 사용자가 멈춘 것이지 실패가 아니다
-        } catch let error as URLError where error.code == .cancelled {
-            // URLSession 은 취소를 CancellationError 가 아니라 이 코드로 알린다.
-            state.pause(token)
-        } catch {
-            state.finish(token, phase: .failed(error.localizedDescription))
-        }
-        #endif
-    }
-
-    /// 받는 중인 다운로드만 멈춘다. 받은 만큼은 남아 있어 «이어받기» 로 되돌아온다.
-    private func cancelMLXDownload() async {
-        #if canImport(MLXLLM)
-        await MLXModelStore.shared.cancelLoading()
-        #endif
-    }
-
     private func unloadMLX() async {
         #if canImport(MLXLLM)
         await MLXModelStore.shared.unload()
-        mlxState.reset()
-        #endif
-    }
-
-    /// 화면을 다시 열었을 때 실제로 메모리에 올라와 있는 모델과 표시를 맞춘다.
-    private func refreshMLXResidency() async {
-        #if canImport(MLXLLM)
-        guard case .preparing = mlxState.phase else {
-            let resident = await MLXModelStore.shared.residentModel
-            mlxState.reset(to: resident == mlxModel ? .ready : .idle)
-            return
-        }
         #endif
     }
 
@@ -478,58 +392,6 @@ struct CompanionPage: View {
         #else
         return false
         #endif
-    }
-
-    private var mlxPreparationSubtitle: String {
-        guard isMLXSupported else {
-            return "이 맥에는 MLX 를 돌릴 Apple Silicon 칩이 없습니다. 다른 모델을 골라 주세요."
-        }
-        switch mlxState.phase {
-        case .failed(let message):
-            return "모델을 준비하지 못했습니다: \(message) — 다시 시도해도 받은 만큼은 이어받습니다."
-        case .preparing(let received, let total):
-            if mlxState.isStalled {
-                return "\(Self.byteText(received, of: total)) 에서 멈춘 것 같습니다. "
-                    + "네트워크를 확인해 주세요. 받은 만큼은 남아 있어 다시 시도하면 이어받습니다."
-            }
-            var text = "내려받는 중 — \(Self.byteText(received, of: total))"
-            if let speed = mlxState.bytesPerSecond, speed > 0 {
-                text += " · \(Self.speedText(speed))"
-                if total > received {
-                    text += " · 약 \(Self.remainingText(seconds: Double(total - received) / speed)) 남음"
-                }
-            }
-            return text + ". 받는 동안 다른 작업을 해도 됩니다."
-        case .paused(let received, let total):
-            return "\(Self.byteText(received, of: total)) 에서 멈췄습니다. "
-                + "받은 만큼은 남아 있어 이어받기를 누르면 그 지점부터 계속됩니다."
-        case .ready:
-            return "모델이 메모리에 올라와 있어 바로 답할 수 있습니다. 다른 공급자로 바꾸면 자동으로 내려갑니다."
-        case .idle:
-            return "아직 준비되지 않았습니다. 내려받기를 누르면 시작합니다. "
-                + "이미 받아둔 모델이면 내려받지 않고 바로 준비됩니다."
-        }
-    }
-
-    private static func byteText(_ received: Int64, of total: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        let receivedText = formatter.string(fromByteCount: received)
-        guard total > 0 else { return receivedText }
-        let percent = Int((Double(received) / Double(total) * 100).rounded())
-        return "\(receivedText) / \(formatter.string(fromByteCount: total)) (\(percent)%)"
-    }
-
-    private static func speedText(_ bytesPerSecond: Double) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(bytesPerSecond)) + "/s"
-    }
-
-    private static func remainingText(seconds: Double) -> String {
-        seconds < 90
-            ? "\(Int(seconds.rounded()))초"
-            : "\(Int((seconds / 60).rounded()))분"
     }
 
     private var normalizedOllamaEndpoint: String {

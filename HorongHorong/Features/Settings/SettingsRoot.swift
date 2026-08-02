@@ -261,7 +261,7 @@ private struct AchievementPage: View {
                 if suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue {
                     pickerBlock(
                         title: "MLX 모델",
-                        subtitle: "가중치가 앱 메모리에 올라갑니다. 받지 않은 모델을 고르면 Apple 모델로 대신 답합니다."
+                        subtitle: "가중치가 앱 메모리에 올라갑니다. 받지 않은 모델은 오른쪽 내려받기 버튼으로 먼저 받아 주세요. 받지 않은 채로 고르면 Apple 모델로 대신 답합니다."
                     ) {
                         MLXModelPicker(
                             model: $suggestionMLXModel,
