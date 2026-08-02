@@ -57,10 +57,13 @@ preflight() {
   [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
     || die "로컬 main 이 origin/main 과 다릅니다. 먼저 동기화하세요."
 
-  # 백머지가 빠지면 다음 릴리즈에서 dev 가 옛 버전을 들고 시작한다.
-  local dev_behind
-  dev_behind="$(git rev-list --count origin/dev..origin/main)"
-  [[ "$dev_behind" -eq 0 ]] || die "origin/dev 가 main 보다 $dev_behind 커밋 뒤처져 있습니다. 먼저 백머지하세요."
+  # dev 가 main 보다 «뒤처진» 것은 정상이다 — dev→main PR 을 머지하면 그 머지 커밋만큼 항상 뒤처지고,
+  # 마지막 백머지 단계가 정리한다. 막아야 하는 것은 반대로 dev 에만 있는 커밋이다.
+  # 그런 게 남아 있으면 13단계의 `merge --ff-only` 가 실패해 백머지가 또 밀린다.
+  local dev_ahead
+  dev_ahead="$(git rev-list --count origin/main..origin/dev)"
+  [[ "$dev_ahead" -eq 0 ]] || die "origin/dev 에 main 으로 안 넘어온 커밋이 $dev_ahead 개 있습니다.
+    먼저 dev → main PR 을 머지하세요. 그대로 두면 릴리즈 후 백머지가 실패합니다."
 
   git rev-parse "v$VERSION" >/dev/null 2>&1 && die "태그 v$VERSION 이 이미 있습니다."
 
