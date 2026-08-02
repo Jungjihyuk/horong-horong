@@ -16,11 +16,12 @@ ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$PROJECT_ROOT/HorongHorong/HorongHorong.
 SKIP_SIGN=0
 SKIP_BUILD=0
 SKIP_MAIN_CHECK=0
+SKIP_CLEAN_CHECK=0
 
 usage() {
   cat <<'EOF'
 Usage:
-  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>] [--skip-build] [--skip-main-check] [--skip-sign]
+  Scripts/package-release.sh [--app <path>] [--version <version>] [--output <dir>] [--skip-build] [--skip-main-check] [--skip-clean-check] [--skip-sign]
 
 Defaults:
   --app      build Release/호롱호롱.app from the current main branch checkout
@@ -151,6 +152,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_MAIN_CHECK=1
       shift
       ;;
+    --skip-clean-check)
+      SKIP_CLEAN_CHECK=1
+      shift
+      ;;
     --skip-sign)
       SKIP_SIGN=1
       shift
@@ -184,7 +189,9 @@ if [[ -z "$APP_PATH" ]]; then
   if [[ "$SKIP_MAIN_CHECK" -eq 0 ]]; then
     require_main_checkout
   fi
-  require_clean_tree
+  if [[ "$SKIP_CLEAN_CHECK" -eq 0 ]]; then
+    require_clean_tree
+  fi
   if [[ "$SKIP_BUILD" -eq 0 ]]; then
     build_release_app
   else
