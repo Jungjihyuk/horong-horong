@@ -1,0 +1,99 @@
+name: Release Check
+
+# 릴리즈 산출물이 서로 어긋나는 것을 PR 단계에서 잡는다.
+# 서명·빌드는 하지 않으므로 secrets 가 필요 없고 몇 초 만에 끝난다.
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  appcast:
+    name: appcast 유효성과 버전 일치
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: xmllint 준비
+        run: |
+          command -v xmllint >/dev/null 2>&1 && exit 0
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxml2-utils
+
+      - name: appcast XML 유효성
+        run: |
+          # 손편집으로 태그가 깨지면 Sparkle 이 피드를 아예 읽지 못한다.
+          xmllint --noout docs/updates/appcast.xml
+
+      - name: project.yml 과 appcast 버전 일치
+        run: |
+          set -euo pipefail
+
+          project_value() {
+            awk -F'"' -v key="$1" '$0 ~ key ":" { print $2; exit }' project.yml
+          }
+
+          # local-name() 을 쓰면 sparkle 네임스페이스를 따로 매기지 않아도 된다.
+          appcast_value() {
+            xmllint --xpath "string(//item[1]/*[local-name()='$1'])" docs/updates/appcast.xml
+          }
+
+          marketing="$(project_value MARKETING_VERSION)"
+          build="$(project_value CURRENT_PROJECT_VERSION)"
+          appcast_short="$(appcast_value shortVersionString)"
+          appcast_build="$(appcast_value version)"
+
+          echo "project.yml : $marketing (build $build)"
+          echo "appcast     : $appcast_short (build $appcast_build)"
+
+          failed=0
+          if [ "$marketing" != "$appcast_short" ]; then
+            echo "::error file=docs/updates/appcast.xml::MARKETING_VERSION($marketing) 과 appcast shortVersionString($appcast_short) 이 다릅니다."
+            failed=1
+          fi
+          if [ "$build" != "$appcast_build" ]; then
+            echo "::error file=docs/updates/appcast.xml::CURRENT_PROJECT_VERSION($build) 과 appcast sparkle:version($appcast_build) 이 다릅니다. Sparkle 은 이 값으로 새 버전을 판정합니다."
+            failed=1
+          fi
+          exit "$failed"
+
+  docs:
+    name: 문서 동기화
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: README 양쪽 수정 여부와 CHANGELOG 갱신 확인
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          git fetch --quiet origin "$BASE_REF"
+          changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+
+          changed_ko=0
+          changed_en=0
+          changed_swift=0
+          changed_changelog=0
+          echo "$changed" | grep -qx "README.md"        && changed_ko=1
+          echo "$changed" | grep -qx "README.en.md"     && changed_en=1
+          echo "$changed" | grep -q  "\.swift$"         && changed_swift=1
+          echo "$changed" | grep -qx "CHANGELOG.md"     && changed_changelog=1
+
+          # 한쪽만 고치면 영어 사용자에게는 없는 기능이 된다.
+          if [ "$changed_ko" -ne "$changed_en" ]; then
+            echo "::error::README.md 와 README.en.md 중 한쪽만 수정되었습니다. 두 문서는 같은 내용을 유지해야 합니다."
+            exit 1
+          fi
+
+          # 릴리즈 때 몰아 쓰면 결국 커밋 로그를 뒤지게 된다. 다만 리팩터링·테스트만 바뀐 PR 도 있어 경고로만 둔다.
+          if [ "$changed_swift" -eq 1 ] && [ "$changed_changelog" -eq 0 ]; then
+            echo "::warning::코드가 바뀌었는데 CHANGELOG.md 의 [Unreleased] 가 갱신되지 않았습니다. 사용자에게 보이는 변경이면 지금 적어 주세요."
+          fi
+
+          echo "확인 완료 (README ko=$changed_ko en=$changed_en, swift=$changed_swift, changelog=$changed_changelog)"
