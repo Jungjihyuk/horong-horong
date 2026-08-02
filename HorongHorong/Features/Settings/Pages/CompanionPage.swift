@@ -347,6 +347,12 @@ struct CompanionPage: View {
                 Task { await OllamaChatClient.preload(endpoint: normalizedOllamaEndpoint, model: newValue) }
             }
         }
+        // Ollama 와 같이, 모델을 바꾸면 이전 모델을 메모리에서 내리고 새 모델을 올린다.
+        .onChange(of: mlxModel) { oldValue, newValue in
+            guard chatProviderKind == Constants.CompanionChatProviderKind.mlx.rawValue,
+                  oldValue != newValue else { return }
+            Task { await switchMLXModel(to: newValue) }
+        }
     }
 
     private func unloadOllamaModel(_ model: String) async {
@@ -357,6 +363,23 @@ struct CompanionPage: View {
     private func unloadMLX() async {
         #if canImport(MLXLLM)
         await MLXModelStore.shared.unload()
+        #endif
+    }
+
+    /// 고른 모델로 메모리를 갈아 끼운다. Ollama 모델을 바꿀 때와 같은 동작이다.
+    ///
+    /// 다만 **이미 받아 둔 모델일 때만** 올린다. MLX 는 올리는 것이 곧 내려받는 것이라,
+    /// 목록을 눌러 보기만 해도 수 GB 가 받아지면 안 된다. 안 받은 모델을 고르면
+    /// 이전 모델을 내리기만 하고, 내려받기는 사용자가 ⬇ 를 누를 때 시작한다.
+    private func switchMLXModel(to model: String) async {
+        #if canImport(MLXLLM)
+        guard !model.isEmpty, MLXModelStore.isSupported else { return }
+        guard MLXModelStore.isKnownPrepared(model) else {
+            await MLXModelStore.shared.unload()
+            return
+        }
+        // 이전 모델은 여기서 자동으로 내려간다 — 보관소가 한 번에 하나만 붙잡는다.
+        _ = try? await MLXModelStore.shared.container(for: model)
         #endif
     }
 
