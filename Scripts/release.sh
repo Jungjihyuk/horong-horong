@@ -144,16 +144,13 @@ bump_version() {
 build_and_package() {
   step "3. Release 빌드 · 서명 · 패키징"
 
-  local extra=()
-  [[ "$DRY_RUN" -eq 1 ]] && extra+=(--skip-clean-check)
-
-  # macOS 기본 bash 는 3.2 라, `set -u` 에서 빈 배열을 `"${extra[@]}"` 로 펼치면
-  # "unbound variable" 로 죽는다. 아래 형태는 배열이 비어 있으면 아무 인자도 만들지 않는다.
+  # 클린 트리 검사는 0단계에서 이미 했다. 지금 트리에 있는 변경은 1~2단계가 만든
+  # 버전 갱신뿐이므로 안쪽 검사는 끈다. 켜두면 실제 릴리즈가 여기서 반드시 막힌다.
   SIGN_IDENTITY="$SIGN_IDENTITY" \
   VERSION="$VERSION" \
   BUILD_NUMBER="$BUILD_NUMBER" \
   OUTPUT_DIR="$OUTPUT_DIR" \
-    Scripts/package-release.sh "${extra[@]+"${extra[@]}"}"
+    Scripts/package-release.sh --skip-clean-check
 
   ZIP_PATH="$OUTPUT_DIR/HorongHorong-$VERSION.zip"
   DMG_PATH="$OUTPUT_DIR/HorongHorong-$VERSION.dmg"
