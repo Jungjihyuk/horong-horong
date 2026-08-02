@@ -136,8 +136,22 @@ validate_app_signature() {
     echo "앱이 ad-hoc 으로 서명되었습니다. project.yml 의 서명 설정을 확인하세요." >&2
     exit 1
   fi
-  if [[ -n "$SIGN_IDENTITY" && "$SIGN_IDENTITY" != "-" && "$authority" != "$SIGN_IDENTITY" ]]; then
-    echo "서명 신원이 기대와 다릅니다: expected \"$SIGN_IDENTITY\", got \"$authority\"" >&2
+  # SIGN_IDENTITY 는 인증서 이름과 SHA-1 지문 둘 다 받는다.
+  # 지문으로 준 경우 키체인에서 이름을 찾아 비교한다 — 앱에는 이름만 박히기 때문이다.
+  local expected="$SIGN_IDENTITY"
+  if [[ "$expected" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+    local resolved
+    resolved="$(security find-identity -v -p codesigning \
+      | sed -n "s/^ *[0-9]*) $expected \"\(.*\)\"$/\1/p" | head -1)"
+    if [[ -z "$resolved" ]]; then
+      echo "SIGN_IDENTITY 지문($expected)에 해당하는 인증서를 키체인에서 찾지 못했습니다." >&2
+      exit 1
+    fi
+    expected="$resolved"
+  fi
+
+  if [[ -n "$expected" && "$expected" != "-" && "$authority" != "$expected" ]]; then
+    echo "서명 신원이 기대와 다릅니다: expected \"$expected\", got \"$authority\"" >&2
     exit 1
   fi
   echo "Signed by: $authority"
