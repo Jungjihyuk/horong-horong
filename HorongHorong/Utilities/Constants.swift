@@ -704,6 +704,9 @@ enum Constants {
         case appleFoundation
         /// 앱 안에서 도는 MLX 모델. 느린 대신 컨텍스트가 넓어 할 일을 더 많이 넣을 수 있다.
         case mlx
+        /// Ollama 서버. 가중치가 다른 프로세스에 올라가 앱 메모리를 쓰지 않으므로
+        /// 앱 안에서는 못 올리는 큰 모델도 쓸 수 있다.
+        case ollama
     }
 
     static let defaultAchievementSuggestionProvider = AchievementSuggestionProviderKind.appleFoundation.rawValue
@@ -711,18 +714,31 @@ enum Constants {
     /// 컴패니언 기본값(가벼운 gemma-e2b)과 달리 지시 준수가 중요해 Qwen3 4B를 기본으로 둔다.
     static let defaultAchievementSuggestionMLXModel = "mlx-community/Qwen3-4B-4bit"
 
+    /// 뉴스·컴패니언과 같은 Ollama 서버를 쓴다. 설치된 모델은 OllamaModelPicker 가 직접 조회한다.
+    static let defaultAchievementSuggestionOllamaModel = "qwen3:14b"
+
     /// 목표 추천은 버튼을 눌렀을 때만 도는 **온디맨드** 작업이라, 늘 떠 있는 컴패니언과 달리
     /// 큰 모델을 감당할 수 있다. 그래서 목록을 따로 둔다.
     static let availableAchievementMLXModelOptions: [CompanionMLXModelOption] =
         availableCompanionMLXModelOptions + [
-            // gemma-4-26b-a4b(MoE)는 넣지 않는다. mlx-swift-lm 의 Gemma4 구현이 dense 전용이라
-            // MoE 가중치(experts/router)를 만나면 unhandledKeys 로 로딩이 실패한다. (2026-08-01 확인)
+            // Ollama 라인업(qwen3:8b / qwen3:14b)에 대응하는 MLX 빌드.
+            // MLX 는 같은 모델을 더 빠르고 메모리 효율적으로 돌리므로 앱 안에서 쓸 값이 있다.
+            // 처음 고르면 가중치를 새로 내려받아야 한다.
             CompanionMLXModelOption(
-                name: "mlx-community/gemma-4-31b-it-4bit",
-                label: "Gemma 4 31B",
-                detail: "품질이 가장 높지만 가장 느리고 메모리를 많이 씁니다.",
+                name: "mlx-community/Qwen3-8B-4bit",
+                label: "Qwen3 8B",
+                detail: "4B보다 긴 지시를 잘 지킵니다. 목표 추천처럼 가끔 도는 작업에 알맞습니다.",
+                minimumMemoryGB: 24
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3-14B-4bit",
+                label: "Qwen3 14B",
+                detail: "이 목록에서 지시 준수가 가장 좋습니다. 대신 느리고 메모리를 많이 씁니다.",
                 minimumMemoryGB: 32
             ),
+            // gemma-4-26b-a4b(MoE)와 gemma-4-31b 는 넣지 않는다.
+            // 전자는 mlx-swift-lm 의 Gemma4 구현이 dense 전용이라 MoE 가중치(experts/router)에서
+            // unhandledKeys 로 실패하고, 후자는 24GB 맥에서 올리지 못한다. (2026-08-01 확인)
         ]
 
     /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
@@ -733,6 +749,7 @@ enum Constants {
         switch provider {
         case .appleFoundation: return 4_000
         case .mlx: return 16_000
+        case .ollama: return 16_000
         }
     }
 
@@ -782,6 +799,7 @@ enum Constants {
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
         static let achievementSuggestionProvider = "achievement.suggestionProvider"
         static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
+        static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"

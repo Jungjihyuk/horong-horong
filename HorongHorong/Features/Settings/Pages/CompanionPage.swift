@@ -222,11 +222,7 @@ struct CompanionPage: View {
                             : "Ollama 서버에 연결하지 못했습니다. 터미널에서 ollama serve 로 켜주세요."
                     ) {
                         if isOllamaReachable {
-                            OllamaModelPicker(
-                                model: $ollamaModel,
-                                endpoint: normalizedOllamaEndpoint,
-                                dataBasePath: Constants.defaultNewsDataBasePath
-                            )
+                            EmptyView()
                         } else {
                             Text("연결 안 됨")
                                 .font(.callout)
@@ -239,6 +235,18 @@ struct CompanionPage: View {
                     }
                 }
 
+                if chatProviderKind == Constants.CompanionChatProviderKind.ollama.rawValue,
+                   isOllamaReachable {
+                    OllamaModelPicker(
+                        model: $ollamaModel,
+                        endpoint: normalizedOllamaEndpoint,
+                        dataBasePath: Constants.defaultNewsDataBasePath
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+                }
+
                 if chatProviderKind == Constants.CompanionChatProviderKind.mlx.rawValue {
                     SettingsRow(
                         "MLX 를 쓰면 좋은 점",
@@ -248,21 +256,23 @@ struct CompanionPage: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    SettingsRow(
-                        "MLX 모델",
-                        subtitle: selectedMLXOption.map {
-                            "\($0.detail) 권장 메모리: \($0.minimumMemoryGB)GB+."
-                        } ?? ""
-                    ) {
-                        Picker("", selection: $mlxModel) {
-                            ForEach(Constants.availableCompanionMLXModelOptions) { option in
-                                Text(option.label).tag(option.name)
-                            }
+                    // 카드 목록이라 SettingsRow 의 오른쪽 슬롯에 넣으면 잘린다. 전체 폭을 쓴다.
+                    VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("MLX 모델").font(.callout)
+                            Text("늘 떠 있는 컴패니언이라 가벼운 쪽을 권합니다.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .labelsHidden()
-                        .fixedSize()
-                        .disabled(!isEnabled || !isMLXSupported)
+                        MLXModelPicker(
+                            model: $mlxModel,
+                            options: Constants.availableCompanionMLXModelOptions,
+                            isEnabled: isEnabled && isMLXSupported
+                        )
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
 
                     SettingsRow("모델 준비", subtitle: mlxPreparationSubtitle) {
                         if !isMLXSupported {
@@ -468,10 +478,6 @@ struct CompanionPage: View {
         #else
         return false
         #endif
-    }
-
-    private var selectedMLXOption: Constants.CompanionMLXModelOption? {
-        Constants.availableCompanionMLXModelOptions.first { $0.name == mlxModel }
     }
 
     private var mlxPreparationSubtitle: String {
