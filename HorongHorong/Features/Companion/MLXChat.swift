@@ -64,8 +64,8 @@ actor MLXModelStore {
                 configuration: LLMRegistry.shared.configuration(id: model),
                 progressHandler: { progress in
                     onProgress(
-                        DownloadProgress(
-                            received: progress.completedUnitCount,
+                        Self.downloadProgress(
+                            credited: progress.completedUnitCount,
                             total: progress.totalUnitCount
                         )
                     )
@@ -84,6 +84,39 @@ actor MLXModelStore {
             loading = nil
             loadedModel = nil
             throw error
+        }
+    }
+
+    /// 화면에 그릴 진행률. 라이브러리가 주는 값은 **파일 하나가 끝나야** 오른다 —
+    /// 가중치가 4GB 짜리 한 덩어리면 작은 설정 파일들이 끝난 14MB 에서 몇 분씩 멈춰 있다가
+    /// 마지막에 100% 로 튄다. 받는 중인 파일 크기를 직접 재서 그 사이를 메운다.
+    private static func downloadProgress(credited: Int64, total: Int64) -> DownloadProgress {
+        let received = credited + inFlightDownloadBytes()
+        // 이 앱의 다른 다운로드(업데이트 등)가 섞여 들어와 총량을 넘어서지 않게 막는다.
+        return DownloadProgress(
+            received: total > 0 ? min(received, total) : received,
+            total: total
+        )
+    }
+
+    /// 지금 받는 중인 바이트. URLSession 은 내려받는 동안 이 프로세스의 임시 폴더에
+    /// `CFNetworkDownload_*.tmp` 로 쓰고 다 받으면 캐시로 옮기므로, **방금 손댄** 임시 파일들의
+    /// 크기 합이 곧 진행 중인 양이다. 시각으로 거르지 않으면 예전에 받다 만 찌꺼기까지 세게 된다.
+    private static func inFlightDownloadBytes() -> Int64 {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        let cutoff = Date().addingTimeInterval(-5)
+        return files.reduce(Int64(0)) { total, file in
+            guard file.lastPathComponent.hasPrefix("CFNetworkDownload_") else { return total }
+            let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+            guard let modified = values?.contentModificationDate, modified > cutoff,
+                  let size = values?.fileSize else { return total }
+            return total + Int64(size)
         }
     }
 
