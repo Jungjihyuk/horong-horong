@@ -242,6 +242,20 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 </table>
 </td>
 </tr>
+
+<tr>
+<td width="45%" valign="middle">
+
+### 🪔 루미롱 (AI 컴패니언)
+화면 위를 돌아다니는 컴패니언에게 말을 걸어 오늘 무엇부터 할지 상의할 수 있습니다. 대화 모델은 **Apple 온디바이스 / MLX / Ollama** 중에서 고르며, MLX·Ollama 모델은 설정에서 직접 받고 지울 수 있습니다. 대화와 추론은 모두 이 기기 안에서 끝나고 외부로 나가지 않습니다. 정해진 시각이 지난 뒤 처음 나타날 때 오늘 일정을 하루 한 번 브리핑하고, 대화 중 마음에 드는 답은 메모로 바로 저장할 수 있습니다. 활동 영역을 사각형으로 지정해 돌아다닐 범위를 제한하거나, 포모도로 집중 중에는 자동으로 숨길 수 있습니다.
+
+</td>
+<td width="55%" align="center">
+<img src="./assets/features/companion-chat.png" alt="루미롱과 대화" width="240" />
+<br />
+<sub>루미롱과 대화</sub>
+</td>
+</tr>
 </table>
 
 ---
