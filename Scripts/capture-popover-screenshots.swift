@@ -156,7 +156,7 @@ private struct CaptureOptions {
 
     private static func isValidTarget(_ target: String) -> Bool {
         let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return target == "achievement-detail" }
+        guard parts.count == 2 else { return target == "achievement-detail" || target == "companion" }
         switch parts[0] {
         case "popover":
             return popoverTabs.contains(parts[1])

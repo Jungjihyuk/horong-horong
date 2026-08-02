@@ -24,12 +24,14 @@ private struct ScreenshotCaptureConfiguration {
             return SettingsTheme.windowDefaultSize
         case .statsDetail, .achievementDetail(_):
             return CGSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
+        case .companion:
+            return Constants.companionExpandedOverlaySize
         }
     }
 
     var styleMask: NSWindow.StyleMask {
         switch target {
-        case .popover:
+        case .popover, .companion:
             return [.borderless]
         case .settings, .statsDetail, .achievementDetail(_):
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
@@ -115,6 +117,8 @@ private enum ScreenshotCaptureTarget {
     case settings(SettingsTab)
     case statsDetail(StatsViewMode)
     case achievementDetail(AchievementDetailScreenshotMode = .progress)
+    /// 화면 위에 뜨는 컴패니언. 대화 중인 상태를 그린다.
+    case companion
 
     var identifier: String {
         switch self {
@@ -126,6 +130,8 @@ private enum ScreenshotCaptureTarget {
             return "stats-detail-\(mode.screenshotIdentifier)"
         case .achievementDetail(let mode):
             return mode == .progress ? "achievement-detail" : "achievement-detail-\(mode.screenshotIdentifier)"
+        case .companion:
+            return "companion"
         }
     }
 
@@ -134,6 +140,10 @@ private enum ScreenshotCaptureTarget {
         guard parts.count == 2 else {
             if identifier == "achievement-detail" {
                 self = .achievementDetail()
+                return
+            }
+            if identifier == "companion" {
+                self = .companion
                 return
             }
             if let tab = PopoverTab(screenshotIdentifier: identifier) {
@@ -409,7 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.identifier = NSUserInterfaceItemIdentifier(config.windowTitle)
         window.contentView = hostingView
         switch config.target {
-        case .popover:
+        case .popover, .companion:
             window.isOpaque = false
             window.backgroundColor = .clear
         case .settings, .statsDetail, .achievementDetail(_):
@@ -472,8 +482,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         height: Constants.statsWindowHeight
                     )
             )
+        case .companion:
+            // 실제 대화는 모델이 답하므로 화면마다 내용이 달라진다.
+            // 문서용 스크린샷은 매번 같아야 해서 대화 내용을 고정해 그린다.
+            let state = CompanionPresentationState(
+                character: CompanionRegistry.character(
+                    for: UserDefaults.standard.string(
+                        forKey: Constants.AppStorageKey.companionSelectedIdentifier
+                    ) ?? Constants.defaultCompanionIdentifier
+                )
+            )
+            state.isChatting = true
+            state.chatMessages = Self.screenshotChatMessages
+            return AnyView(
+                CompanionView(state: state)
+                    .frame(
+                        width: Constants.companionExpandedOverlaySize.width,
+                        height: Constants.companionExpandedOverlaySize.height
+                    )
+            )
         }
     }
+
+    /// 컴패니언 스크린샷에 쓸 고정 대화.
+    private static let screenshotChatMessages: [CompanionChatMessage] = [
+        CompanionChatMessage(role: .user, text: "오늘 뭐부터 할까?"),
+        CompanionChatMessage(
+            role: .companion,
+            text: "오전엔 집중이 잘 되니까 «성취 추천 모델 문서화»부터 끝내는 게 좋겠어요. "
+                + "짧은 메모 정리는 오후로 미뤄도 괜찮아요."
+        ),
+    ]
 
     private func seedDefaultCategoryRules(in context: ModelContext) {
         try? DefaultAppCategoryRuleStore.reconcile(in: context)
