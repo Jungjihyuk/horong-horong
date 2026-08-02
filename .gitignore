@@ -56,6 +56,8 @@ DerivedData/
 Artifacts/Screenshots/
 HorongHorong-*.dmg
 HorongHorong-*.zip
+# 릴리즈 산출물 (Scripts/release.sh 의 기본 OUTPUT_DIR)
+dist/
 *.moved-aside
 *.hmap
 *.ipa

@@ -23,6 +23,20 @@ build-appstore: generate
 app-test: generate
 	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorong -configuration Debug test
 
+# Release
+#
+# 사람이 정하는 값은 VERSION 하나뿐이다. 빌드 번호·서명값·크기·날짜·릴리즈 노트는
+# 전부 앞 단계 산출물에서 파생된다. 절차는
+# docs/5. 운영/프로젝트 운영/12. 기술 문서/Build/release-checklist-and-automation-design.md 참고.
+#
+#   make release VERSION=0.2.3 SIGN_IDENTITY="Apple Development: ..."
+release:
+	VERSION=$(VERSION) Scripts/release.sh
+
+# 빌드·서명·패키징까지만 확인한다. 커밋·태그·푸시·배포는 하지 않는다.
+release-dry-run:
+	VERSION=$(VERSION) DRY_RUN=1 Scripts/release.sh
+
 # Test
 unit:
 	cd Agents/news_report && uv run pytest -m unit test -q
