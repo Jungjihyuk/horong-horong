@@ -108,8 +108,17 @@ changelog_block() {
 
 # ─────────────────────────────────────────────── 1~2. 버전 갱신
 
+# 버전을 올린 뒤 어디서 죽든 원래대로 돌려놓는다.
+# 실패한 자리에 버전 변경이 남으면 다음 실행이 «클린 트리» 검사에서 막힌다.
+# 실제 릴리즈가 10단계까지 갔다면 이미 커밋된 상태라 이 복원은 아무 일도 하지 않는다.
+restore_version() {
+  git checkout --quiet -- project.yml HorongHorong.xcodeproj 2>/dev/null || true
+}
+
 bump_version() {
   step "1. 버전 갱신"
+
+  trap restore_version EXIT
 
   local build
   build="$(( $(project_value CURRENT_PROJECT_VERSION) + 1 ))"
@@ -286,9 +295,7 @@ main() {
     info "zip: $ZIP_PATH"
     info "edSignature: $ED_SIGNATURE"
 
-    # 버전 변경을 남겨두면 다음 실행이 «클린 트리» 검사에서 막힌다. 직접 되돌린다.
-    git checkout --quiet -- project.yml HorongHorong.xcodeproj
-    info "project.yml 과 xcodeproj 는 원래대로 되돌렸습니다."
+    info "project.yml 과 xcodeproj 는 원래대로 되돌립니다."
     info "실제 릴리즈: make release VERSION=$VERSION SIGN_IDENTITY=\"$SIGN_IDENTITY\""
     return
   fi
