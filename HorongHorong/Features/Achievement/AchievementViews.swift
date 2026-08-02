@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -322,16 +323,73 @@ private enum AchievementVisionOrderStore {
     }
 }
 
-private enum AchievementGoalSuggestionSource: String, Sendable {
+// 평가 하네스(HorongHorongTests)에서 @testable 로 접근하기 위해 internal 유지
+enum AchievementGoalSuggestionSource: String, Sendable {
     case rule = "룰 기반"
     case foundationModel = "Apple 모델"
+    case mlx = "MLX"
+    case ollama = "Ollama"
 }
 
-private enum AchievementGoalSuggestionTarget: String, Sendable {
+let achievementSuggestionLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "HorongHorong",
+    category: "goal-suggestion"
+)
+
+/// 모델 추천이 후보를 내지 못한 이유. 전부 빈 배열로 끝나므로 구분해 두지 않으면 원인을 알 수 없다.
+enum AchievementSuggestionModelFailure: String, Sendable {
+    case modelUnavailable
+    case inferenceFailed
+    case parsedEmpty
+}
+
+/// 추론 실패 원인을 로그에 남길 문자열.
+/// 릴리스에서는 타입 이름만 남겨 프롬프트 내용이 새지 않게 하고, 디버그에서는 전문을 남긴다.
+func achievementModelErrorDescription(_ error: Error) -> String {
+    #if DEBUG
+    return String(describing: error)
+    #else
+    return String(describing: type(of: error))
+    #endif
+}
+
+/// AFM이 한 번에 받아들이는 프롬프트 상한. 이 이상은 추론 자체가 거부된다.
+/// 측정값: 3,424자 통과 / 5,203자 실패. 실패 하한과 1,200자 여유를 둔 값이다.
+/// 이 중 약 1,671자는 지시문 템플릿이 고정으로 쓰므로 메모에 남는 공간은 그만큼 적다.
+let achievementPromptCharacterBudget = Constants.achievementPromptCharacterBudget(for: .appleFoundation)
+
+/// 필터 단계에서 후보가 탈락한 이유
+enum AchievementSuggestionRejection {
+    case shortTitle
+    case toolNameTitle
+    case insufficientIDs
+}
+
+/// `mergeSuggestions` 한 번의 단계별 탈락/통과 개수. 어디서 후보를 잃는지 추적한다.
+struct AchievementSuggestionFilterStats {
+    var shortTitle = 0
+    var toolNameTitle = 0
+    var insufficientIDs = 0
+    var dismissed = 0
+    var duplicate = 0
+    /// 필터를 통과했지만 `displayLimit` 정원을 넘어 잘린 수. 탈락이 아니라 정원 컷이므로 분리한다.
+    var overflow = 0
+    var shown = 0
+
+    var summary: String {
+        "short=\(shortTitle) tool=\(toolNameTitle) singleID=\(insufficientIDs)"
+            + " dismissed=\(dismissed) dup=\(duplicate) overflow=\(overflow) shown=\(shown)"
+    }
+}
+
+/// 추천 후보의 목표 타입. 주간 목표 초안인지 월간 목표 초안인지를 구분한다.
+/// 모델이 정하는 값이 아니라 응답을 파싱하는 코드가 직접 붙인다.
+enum AchievementGoalCadence: String, Sendable {
     case weekly = "주간목표"
     case monthly = "월간목표"
 
-    var cadence: String {
+    /// 저장 모델 `AchievementGoalRecord.cadence`에 들어가는 값
+    var levelName: String {
         switch self {
         case .weekly: return "주간"
         case .monthly: return "월간"
@@ -346,7 +404,7 @@ private enum AchievementGoalSuggestionTarget: String, Sendable {
     }
 }
 
-private struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
+struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let content: String
     let icon: String?
@@ -356,7 +414,7 @@ private struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
     let isCompleted: Bool
 }
 
-private struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
+struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
     let emoji: String
@@ -369,7 +427,7 @@ private struct AchievementGoalSnapshot: Identifiable, Hashable, Sendable {
     let monthGoal: String?
 }
 
-private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
+struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     let id: UUID
     let title: String
     let reason: String
@@ -379,7 +437,8 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     let criterion: String
     let targetValueText: String
     let emoji: String
-    let target: AchievementGoalSuggestionTarget
+    /// 목표 타입 (주간 목표 / 월간 목표)
+    let cadence: AchievementGoalCadence
     let source: AchievementGoalSuggestionSource
 
     init(
@@ -392,7 +451,7 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         criterion: String,
         targetValueText: String,
         emoji: String,
-        target: AchievementGoalSuggestionTarget = .weekly,
+        cadence: AchievementGoalCadence = .weekly,
         source: AchievementGoalSuggestionSource
     ) {
         self.id = id
@@ -404,12 +463,30 @@ private struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         self.criterion = criterion
         self.targetValueText = targetValueText
         self.emoji = emoji
-        self.target = target
+        self.cadence = cadence
         self.source = source
+    }
+
+    /// 파서를 AFM 경로와 공유하므로 MLX 결과도 `.foundationModel` 로 붙는다.
+    /// 폴백 비율 집계가 어긋나지 않도록 실제 공급자로 다시 태깅한다.
+    func retagged(as source: AchievementGoalSuggestionSource) -> AchievementGoalSuggestion {
+        AchievementGoalSuggestion(
+            id: id,
+            title: title,
+            reason: reason,
+            memoIDs: memoIDs,
+            childGoalIDs: childGoalIDs,
+            scheduleText: scheduleText,
+            criterion: criterion,
+            targetValueText: targetValueText,
+            emoji: emoji,
+            cadence: cadence,
+            source: source
+        )
     }
 }
 
-private enum AchievementGoalSuggestionBuilder {
+enum AchievementGoalSuggestionBuilder {
     static func ruleBasedSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
@@ -446,7 +523,8 @@ private enum AchievementGoalSuggestionBuilder {
         }
     }
 
-    static func snapshots(from goals: [AchievementGoal]) -> [AchievementGoalSnapshot] {
+    // 앱 전용 SwiftData 브리지. 평가 하네스는 골든셋 JSON에서 스냅샷을 직접 만든다.
+    fileprivate static func snapshots(from goals: [AchievementGoal]) -> [AchievementGoalSnapshot] {
         goals.map { goal in
             AchievementGoalSnapshot(
                 id: goal.id,
@@ -789,7 +867,7 @@ private enum AchievementGoalSuggestionBuilder {
             criterion: "연결한 주간 목표 \(count)개 달성",
             targetValueText: "\(count)개",
             emoji: emoji,
-            target: .monthly,
+            cadence: .monthly,
             source: source
         )
     }
@@ -846,8 +924,91 @@ private struct AchievementFoundationSuggestionPayload: Codable {
     }
 }
 
-private enum AchievementFoundationGoalSuggestionProvider {
+enum AchievementFoundationGoalSuggestionProvider {
+    /// 설정에서 고른 공급자로 추천을 만든다. 실패하면 다음 단계로 내려간다.
+    ///
+    ///     MLX → AFM → (호출부의) 룰 기반
+    ///
+    /// MLX가 실패하는 경우는 대체로 모델 미준비이거나 Intel 맥이다. 둘 다 사용자가
+    /// 당장 손쓸 수 없으므로 조용히 AFM으로 내려가는 편이 낫다.
     static func suggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        switch selectedProvider {
+        case .mlx:
+            let fromMLX = await mlxSuggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+            if !fromMLX.isEmpty { return fromMLX }
+            achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
+        case .ollama:
+            let fromOllama = await ollamaSuggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+            if !fromOllama.isEmpty { return fromOllama }
+            achievementSuggestionLog.info("weekly provider fallback=ollama→afm")
+        case .appleFoundation:
+            break
+        }
+        return await appleFoundationSuggestions(
+            from: memos,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+    }
+
+    static var selectedProvider: Constants.AchievementSuggestionProviderKind {
+        let raw = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+            ?? Constants.defaultAchievementSuggestionProvider
+        return Constants.AchievementSuggestionProviderKind(rawValue: raw) ?? .appleFoundation
+    }
+
+    private static func mlxSuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        #if canImport(MLXLLM)
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+                ?? Constants.defaultAchievementSuggestionMLXModel
+            return await MLXGoalSuggestionProvider(model: model).suggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+        }
+        #endif
+        achievementSuggestionLog.error("weekly mlx failure=unavailable")
+        return []
+    }
+
+    private static func ollamaSuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) async -> [AchievementGoalSuggestion] {
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+                ?? Constants.defaultAchievementSuggestionOllamaModel
+            let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
+                ?? Constants.defaultNewsOllamaEndpoint
+            return await OllamaGoalSuggestionProvider(model: model, endpoint: endpoint).suggestions(
+                from: memos,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+        }
+        return []
+    }
+
+    private static func appleFoundationSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
@@ -880,7 +1041,7 @@ private enum AchievementFoundationGoalSuggestionProvider {
     }
 }
 
-private enum AchievementPromptTemplate {
+enum AchievementPromptTemplate {
     static func weeklyGoalSuggestion(
         suggestionCount: Int,
         maxMemoCount: Int,
@@ -984,24 +1145,40 @@ private enum AchievementPromptTemplate {
 
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
-private struct FoundationModelsGoalSuggestionProvider {
+struct FoundationModelsGoalSuggestionProvider {
     func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
     ) async -> [AchievementGoalSuggestion] {
         let model = SystemLanguageModel.default
-        guard model.isAvailable else { return [] }
+        guard model.isAvailable else {
+            achievementSuggestionLog.error(
+                "weekly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
+            )
+            return []
+        }
 
         let session = LanguageModelSession(
             model: model,
             instructions: "너는 사용자의 할일을 목표 지향적으로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
         )
         let inputLimit = max(8, min(40, suggestionCount * maxMemoCount * 2))
-        let prompt = prompt(
-            for: Array(memos.prefix(inputLimit)),
+        // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
+        // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
+        let selectedMemos = memosWithinPromptBudget(
+            Array(memos.prefix(inputLimit)),
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount
+        )
+        let prompt = prompt(
+            for: selectedMemos,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+
+        achievementSuggestionLog.info(
+            "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
         )
 
         do {
@@ -1009,13 +1186,28 @@ private struct FoundationModelsGoalSuggestionProvider {
                 to: prompt,
                 options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 900)
             )
-            return Array(parse(
+            let parsed = Array(parse(
                 response.content,
                 allowedIDs: Set(memos.map(\.id)),
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount
             ).prefix(suggestionCount))
+            if parsed.isEmpty {
+                achievementSuggestionLog.error(
+                    "weekly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
+                )
+            }
+            return parsed
         } catch {
+            achievementSuggestionLog.error(
+                """
+                weekly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(achievementModelErrorDescription(error), privacy: .public)
+                """
+            )
+            achievementSuggestionLog.error(
+                "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
+            )
             return []
         }
     }
@@ -1025,7 +1217,12 @@ private struct FoundationModelsGoalSuggestionProvider {
         suggestionCount: Int
     ) async -> [AchievementGoalSuggestion] {
         let model = SystemLanguageModel.default
-        guard model.isAvailable else { return [] }
+        guard model.isAvailable else {
+            achievementSuggestionLog.error(
+                "monthly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
+            )
+            return []
+        }
 
         let session = LanguageModelSession(
             model: model,
@@ -1042,35 +1239,77 @@ private struct FoundationModelsGoalSuggestionProvider {
                 to: prompt,
                 options: GenerationOptions(temperature: 0.25, maximumResponseTokens: 900)
             )
-            return Array(parseMonthly(
+            let parsed = Array(parseMonthly(
                 response.content,
                 allowedIDs: Set(goals.map(\.id)),
                 sourceGoals: goals,
                 suggestionCount: suggestionCount
             ).prefix(suggestionCount))
+            if parsed.isEmpty {
+                achievementSuggestionLog.error(
+                    "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
+                )
+            }
+            return parsed
         } catch {
+            achievementSuggestionLog.error(
+                """
+                monthly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(achievementModelErrorDescription(error), privacy: .public)
+                """
+            )
             return []
         }
     }
 
-    private func prompt(
+    /// 프롬프트가 문자 예산을 넘지 않는 선까지만 메모를 담는다.
+    /// 메모 길이는 사용자마다 제각각이라 "개수" 상한만으로는 크기를 보장할 수 없다.
+    func memosWithinPromptBudget(
+        _ memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int,
+        budget: Int = achievementPromptCharacterBudget
+    ) -> [AchievementMemoSnapshot] {
+        // 묶으려면 최소 2개는 있어야 하므로 예산을 넘더라도 2개는 유지한다.
+        let minimumCount = min(2, memos.count)
+        var selected = memos
+        while selected.count > minimumCount {
+            let size = prompt(
+                for: selected,
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            ).count
+            if size <= budget { break }
+            selected.removeLast()
+        }
+        return selected
+    }
+
+    func prompt(
         for memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> String {
+        // 프롬프트 크기가 추론 성패를 가르므로(인시던트 2026-07-31) 값이 없는 필드는 생략한다.
+        // "없음"으로 채우면 메모당 30자 이상을 정보 없이 소비한다.
         let lines = memos.map { memo in
-            let startText = dateText(memo.startDate)
-            let deadlineText = dateText(memo.deadline)
-            let representativeDateText = dateText(memo.date)
-            return [
+            var fields = [
                 "- id: \(memo.id.uuidString)",
                 "  text: \(memo.content)",
                 "  icon: \(memo.icon ?? MemoIcon.defaultIcon)",
-                "  date: \(representativeDateText)",
-                "  startDate: \(startText)",
-                "  deadline: \(deadlineText)",
-                "  completed: \(memo.isCompleted ? "true" : "false")",
-            ].joined(separator: "\n")
+                "  date: \(dateText(memo.date))",
+            ]
+            if memo.startDate != nil {
+                fields.append("  startDate: \(dateText(memo.startDate))")
+            }
+            if memo.deadline != nil {
+                fields.append("  deadline: \(dateText(memo.deadline))")
+            }
+            // 미완료 할일만 입력으로 들어오므로 기본값일 때는 생략한다.
+            if memo.isCompleted {
+                fields.append("  completed: true")
+            }
+            return fields.joined(separator: "\n")
         }.joined(separator: "\n")
 
         return AchievementPromptTemplate.weeklyGoalSuggestion(
@@ -1103,7 +1342,7 @@ private struct FoundationModelsGoalSuggestionProvider {
         )
     }
 
-    private func parse(
+    func parse(
         _ text: String,
         allowedIDs: Set<UUID>,
         suggestionCount: Int,
@@ -1113,15 +1352,30 @@ private struct FoundationModelsGoalSuggestionProvider {
         let jsonText = extractJSONObject(from: trimmed)
         guard let data = jsonText.data(using: .utf8),
               let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
+            achievementSuggestionLog.error("weekly parse failure=decode chars=\(trimmed.count, privacy: .public)")
             return []
         }
 
+        // 모델이 낸 개수와 파서가 살린 개수를 구분해야 "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
+        var badID = 0
+        var alreadyUsed = 0
+        var overMaxMemo = 0
+        var tooFewIDs = 0
+        var requestedIDs = 0
         var used = Set<UUID>()
-        return payload.suggestions.compactMap { item in
-            let ids = (item.memoIDs ?? []).compactMap(UUID.init(uuidString:))
-                .filter { allowedIDs.contains($0) && !used.contains($0) }
-                .prefix(maxMemoCount)
-            guard ids.count >= 2 else { return nil }
+        let result = payload.suggestions.compactMap { item -> AchievementGoalSuggestion? in
+            let raw = item.memoIDs ?? []
+            requestedIDs += raw.count
+            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
+            badID += raw.count - parsedIDs.count
+            let unused = parsedIDs.filter { !used.contains($0) }
+            alreadyUsed += parsedIDs.count - unused.count
+            let ids = unused.prefix(maxMemoCount)
+            overMaxMemo += unused.count - ids.count
+            guard ids.count >= 2 else {
+                tooFewIDs += 1
+                return nil
+            }
             used.formUnion(ids)
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
             let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1136,8 +1390,15 @@ private struct FoundationModelsGoalSuggestionProvider {
                 source: .foundationModel
             )
         }
-        .prefix(suggestionCount)
-        .map { $0 }
+        achievementSuggestionLog.info(
+            """
+            weekly parse modelReturned=\(payload.suggestions.count, privacy: .public) \
+            kept=\(result.count, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
+            badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
+            overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
+            """
+        )
+        return Array(result.prefix(suggestionCount))
     }
 
     private func parseMonthly(
@@ -1174,7 +1435,7 @@ private struct FoundationModelsGoalSuggestionProvider {
                 criterion: criterion.isEmpty ? "연결한 주간 목표 \(ids.count)개 달성" : criterion,
                 targetValueText: "\(ids.count)개",
                 emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅",
-                target: .monthly,
+                cadence: .monthly,
                 source: .foundationModel
             )
         }
@@ -1182,7 +1443,7 @@ private struct FoundationModelsGoalSuggestionProvider {
         .map { $0 }
     }
 
-    private func extractJSONObject(from text: String) -> String {
+    func extractJSONObject(from text: String) -> String {
         guard let start = text.firstIndex(of: "{"),
               let end = text.lastIndex(of: "}") else {
             return text
@@ -1202,7 +1463,7 @@ private struct FoundationModelsGoalSuggestionProvider {
 
 private enum AchievementDataBuilder {
     static func weekStart(for date: Date, calendar: Calendar = .current) -> Date {
-        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        Constants.mondayWeekStart(for: date, calendar: calendar)
     }
 
     /// 목표가 화면에 노출되는 주 구간.
@@ -1359,11 +1620,9 @@ private enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goal: AchievementGoal, memos: [Memo], referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(for goal: AchievementGoal, memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
         let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: referenceDate)
-        let weekdayOffsetFromMonday = (calendar.component(.weekday, from: todayStart) + 5) % 7
-        let start = calendar.date(byAdding: .day, value: -weekdayOffsetFromMonday, to: todayStart) ?? todayStart
+        let start = calendar.startOfDay(for: weekStart)
         let linked = memos.filter { goal.sourceMemoIDs.contains($0.id) }
         let completedCount = linked.filter(\.isCompletedValue).count
         let lastCompletedDate = linked.filter(\.isCompletedValue).compactMap(timelineDate).max()
@@ -1411,11 +1670,11 @@ private enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goals: [AchievementGoal], memos: [Memo], referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(for goals: [AchievementGoal], memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
         guard !goals.isEmpty else { return [] }
 
         let timelines = goals.map { goal in
-            (goal: goal, items: timeline(for: goal, memos: memos, referenceDate: referenceDate))
+            (goal: goal, items: timeline(for: goal, memos: memos, weekStarting: weekStart, referenceDate: referenceDate))
         }
 
         return (0..<7).map { index in
@@ -2275,7 +2534,7 @@ struct AchievementDetailWindow: View {
                 if !visibleWeeklyGoals.isEmpty {
                     overdueMemosBanner
                     AchievementGoalTimelineView(
-                        items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos),
+                        items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos, weekStarting: displayedWeekStart),
                         onMoveTodo: moveTimelineMemo
                     )
                 } else {
@@ -6878,15 +7137,24 @@ private struct AchievementGoalComposerSheet: View {
                             .font(.system(size: 13.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.ink)
                             .lineLimit(2)
-                        Text(suggestion.target.rawValue)
+                        Text(suggestion.cadence.rawValue)
                             .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(suggestion.target == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
+                            .foregroundStyle(suggestion.cadence == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(
-                                (suggestion.target == .monthly ? PopoverChrome.accentSoft : PopoverChrome.surfaceAlt).opacity(0.76),
+                                (suggestion.cadence == .monthly ? PopoverChrome.accentSoft : PopoverChrome.surfaceAlt).opacity(0.76),
                                 in: Capsule()
                             )
+                        #if DEBUG
+                        // 이 카드가 모델 결과인지 룰 기반 폴백인지 개발 중에 즉시 구분하기 위한 배지
+                        Text(suggestion.source.rawValue)
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkSecondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(PopoverChrome.surfaceAlt.opacity(0.6), in: Capsule())
+                        #endif
                     }
                     Text(suggestion.reason)
                         .font(.system(size: 11.5, weight: .medium, design: .rounded))
@@ -6909,7 +7177,7 @@ private struct AchievementGoalComposerSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                if suggestion.target == .monthly {
+                if suggestion.cadence == .monthly {
                     ForEach(visibleChildGoalIDs(for: suggestion), id: \.self) { id in
                         if let goal = goal(for: id) {
                             HStack(spacing: 6) {
@@ -7548,23 +7816,39 @@ private struct AchievementGoalComposerSheet: View {
             await MainActor.run {
                 let weeklyModel = mergeSuggestions(
                     weeklyModelValues,
-                    target: .weekly,
-                    limit: suggestionCount
+                    cadence: .weekly,
+                    displayLimit: suggestionCount
                 )
                 let monthlyModel = mergeSuggestions(
                     monthlyModelValues,
-                    target: .monthly,
-                    limit: monthlySuggestionCount
+                    cadence: .monthly,
+                    displayLimit: monthlySuggestionCount
                 )
-                let weekly = weeklyModel.isEmpty
-                    ? mergeSuggestions(ruleSuggestions, target: .weekly, limit: suggestionCount)
-                    : weeklyModel
-                let monthly = monthlyModel.isEmpty
-                    ? mergeSuggestions(monthlyRuleSuggestions, target: .monthly, limit: monthlySuggestionCount)
-                    : monthlyModel
+                let weekly = weeklyModel.suggestions.isEmpty
+                    ? mergeSuggestions(ruleSuggestions, cadence: .weekly, displayLimit: suggestionCount).suggestions
+                    : weeklyModel.suggestions
+                let monthly = monthlyModel.suggestions.isEmpty
+                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionCount).suggestions
+                    : monthlyModel.suggestions
+                logSuggestionFunnel(
+                    cadence: .weekly,
+                    inputCount: snapshots.count,
+                    modelParsed: weeklyModelValues.count,
+                    stats: weeklyModel.stats,
+                    shownCount: weekly.count
+                )
+                if shouldSuggestMonthly {
+                    logSuggestionFunnel(
+                        cadence: .monthly,
+                        inputCount: weeklyGoalSnapshots.count,
+                        modelParsed: monthlyModelValues.count,
+                        stats: monthlyModel.stats,
+                        shownCount: monthly.count
+                    )
+                }
                 suggestions = weekly + monthly
                 isLoadingSuggestions = false
-                if weeklyModel.isEmpty && monthlyModel.isEmpty {
+                if weeklyModel.suggestions.isEmpty && monthlyModel.suggestions.isEmpty {
                     suggestionMessage = finalRuleSuggestionMessage(
                         weeklyCount: weekly.count,
                         monthlyCount: monthly.count,
@@ -7591,28 +7875,65 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func mergeSuggestions(_ values: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
-        let weekly = mergeSuggestions(values, target: .weekly, limit: clampedSuggestionCount)
-        let monthly = mergeSuggestions(values, target: .monthly, limit: clampedMonthlySuggestionCount)
-        return weekly + monthly
+        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedSuggestionCount)
+        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionCount)
+        return weekly.suggestions + monthly.suggestions
+    }
+
+    /// 추천 한 번의 퍼널을 한 줄로 남긴다. 재료 → 모델 파싱 → 필터 → 노출 순서로 어디서 잃었는지 보인다.
+    private func logSuggestionFunnel(
+        cadence: AchievementGoalCadence,
+        inputCount: Int,
+        modelParsed: Int,
+        stats: AchievementSuggestionFilterStats,
+        shownCount: Int
+    ) {
+        // 모델 결과가 필터를 하나도 통과하지 못하면 룰 기반으로 대체된다.
+        let usedRuleFallback = stats.shown == 0
+        achievementSuggestionLog.info(
+            """
+            funnel cadence=\(cadence.levelName, privacy: .public) \
+            input=\(inputCount, privacy: .public) parsed=\(modelParsed, privacy: .public) \
+            \(stats.summary, privacy: .public) \
+            fallback=\(usedRuleFallback, privacy: .public) final=\(shownCount, privacy: .public) \
+            dismissedKeys=\(self.dismissedSuggestionKeys.count, privacy: .public)
+            """
+        )
     }
 
     private func mergeSuggestions(
         _ values: [AchievementGoalSuggestion],
-        target: AchievementGoalSuggestionTarget,
-        limit: Int
-    ) -> [AchievementGoalSuggestion] {
+        cadence: AchievementGoalCadence,
+        displayLimit: Int
+    ) -> (suggestions: [AchievementGoalSuggestion], stats: AchievementSuggestionFilterStats) {
         var seen = Set<Set<UUID>>()
         var result: [AchievementGoalSuggestion] = []
-        for suggestion in values where suggestion.target == target {
-            guard isAcceptableSuggestion(suggestion) else { continue }
-            let keyIDs = target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
-            guard keyIDs.count >= 2 else { continue }
-            guard !dismissedSuggestionKeys.contains(suggestionKey(for: suggestion)) else { continue }
+        var stats = AchievementSuggestionFilterStats()
+        for suggestion in values where suggestion.cadence == cadence {
+            if let reason = rejectionReason(for: suggestion) {
+                switch reason {
+                case .shortTitle: stats.shortTitle += 1
+                case .toolNameTitle: stats.toolNameTitle += 1
+                case .insufficientIDs: stats.insufficientIDs += 1
+                }
+                continue
+            }
+            let keyIDs = cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
+            guard !dismissedSuggestionKeys.contains(suggestionKey(for: suggestion)) else {
+                stats.dismissed += 1
+                continue
+            }
             let key = Set(keyIDs)
-            guard seen.insert(key).inserted else { continue }
+            guard seen.insert(key).inserted else {
+                stats.duplicate += 1
+                continue
+            }
             result.append(suggestion)
         }
-        return Array(result.prefix(limit))
+        stats.overflow = max(0, result.count - displayLimit)
+        let shown = Array(result.prefix(displayLimit))
+        stats.shown = shown.count
+        return (shown, stats)
     }
 
     private func dismissSuggestion(_ suggestion: AchievementGoalSuggestion) {
@@ -7660,48 +7981,49 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func suggestionKey(for suggestion: AchievementGoalSuggestion) -> String {
-        let ids = (suggestion.target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs)
+        let ids = (suggestion.cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs)
             .map(\.uuidString)
             .sorted()
             .joined(separator: ",")
-        return "\(suggestion.target.rawValue):\(ids)"
+        return "\(suggestion.cadence.rawValue):\(ids)"
     }
 
-    private func isAcceptableSuggestion(_ suggestion: AchievementGoalSuggestion) -> Bool {
+    private func rejectionReason(for suggestion: AchievementGoalSuggestion) -> AchievementSuggestionRejection? {
         let title = suggestion.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title.count >= 4 else { return false }
+        guard title.count >= 4 else { return .shortTitle }
 
+        // 이루려는 상태가 아니라 도구·형식 이름을 그대로 제목으로 삼은 추천은 목표로 쓸 수 없다.
         let lowercasedTitle = title.lowercased()
-        let blockedTitles = [
+        let toolNameTitles = [
             "markdown 목표",
             "kakaotalk 목표",
             "obsidian 목표",
             "링크 정리 목표",
         ]
-        if blockedTitles.contains(where: { lowercasedTitle.contains($0) }) {
-            return false
+        if toolNameTitles.contains(where: { lowercasedTitle.contains($0) }) {
+            return .toolNameTitle
         }
 
-        let keyIDs = suggestion.target == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
-        return Set(keyIDs).count >= 2
+        let keyIDs = suggestion.cadence == .monthly ? suggestion.childGoalIDs : suggestion.memoIDs
+        return Set(keyIDs).count >= 2 ? nil : .insufficientIDs
     }
 
     private func applySuggestion(_ suggestion: AchievementGoalSuggestion) {
         selectedInputMode = "직접 입력"
-        selectedTargetLevel = suggestion.target.cadence
+        selectedTargetLevel = suggestion.cadence.levelName
         selectedEmoji = suggestion.emoji
         title = suggestion.title
-        selectedMemoIDs = suggestion.target == .weekly ? Set(suggestion.memoIDs) : []
-        selectedChildGoalIDs = suggestion.target == .monthly ? Set(suggestion.childGoalIDs) : []
+        selectedMemoIDs = suggestion.cadence == .weekly ? Set(suggestion.memoIDs) : []
+        selectedChildGoalIDs = suggestion.cadence == .monthly ? Set(suggestion.childGoalIDs) : []
         applyCommonHierarchy(from: suggestion)
         targetValueText = suggestion.targetValueText
-        periodText = suggestion.target.periodText
+        periodText = suggestion.cadence.periodText
         criterion = suggestion.criterion
         validationMessage = nil
     }
 
     private func applyCommonHierarchy(from suggestion: AchievementGoalSuggestion) {
-        guard suggestion.target == .monthly else { return }
+        guard suggestion.cadence == .monthly else { return }
         let childGoals = existingGoals.filter { suggestion.childGoalIDs.contains($0.id) }
         if let roleName = commonNonEmpty(childGoals.map(\.roleName)) {
             selectedPersonaTitle = roleName
