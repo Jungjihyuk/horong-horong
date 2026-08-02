@@ -11,7 +11,7 @@ BUILD_NUMBER="${BUILD_NUMBER:-}"
 SCHEME="${SCHEME:-HorongHorong}"
 CONFIGURATION="${CONFIGURATION:-Release}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$PROJECT_ROOT/build/DerivedData}"
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 ENTITLEMENTS_PATH="${ENTITLEMENTS_PATH:-$PROJECT_ROOT/HorongHorong/HorongHorong.entitlements}"
 SKIP_SIGN=0
 SKIP_BUILD=0
@@ -27,7 +27,8 @@ Defaults:
   --app      build Release/호롱호롱.app from the current main branch checkout
   --version  MARKETING_VERSION from project.yml
   --output   project root
-  signing    build with ad-hoc signing and HorongHorong.entitlements before packaging
+  signing    build with project.yml signing settings, then verify the resulting identity
+             (SIGN_IDENTITY, when set, must match the built app's Authority)
 
 Environment overrides:
   APP_PATH=/path/to/호롱호롱.app VERSION=0.1.2 OUTPUT_DIR=dist Scripts/package-release.sh
@@ -70,6 +71,11 @@ require_clean_tree() {
 }
 
 build_release_app() {
+  # 서명 설정은 project.yml 이 갖고 있다(CODE_SIGN_IDENTITY / DEVELOPMENT_TEAM / CODE_SIGN_STYLE).
+  # 여기서 CODE_SIGN_IDENTITY 를 명령줄로 넘기면 그 값이 SPM 의존성 타깃 전부에 전역 적용되는데,
+  # 그 타깃들에는 DEVELOPMENT_TEAM 이 없어 "Signing for X requires a development team" 으로 빌드가 깨진다.
+  # 그래서 넘기지 않고, 빌드된 결과의 서명 신원을 validate_app_signature 에서 확인한다.
+  #
   # mlx-swift 의 CudaBuild 플러그인과 mlx-swift-lm 의 매크로는 Xcode.app 에서는 한 번
   # 신뢰하면 끝나지만, CLI 빌드에는 신뢰 기록이 없어 매번 검증에서 멈춘다.
   xcodebuild \
@@ -81,7 +87,6 @@ build_release_app() {
     -skipPackagePluginValidation \
     -skipMacroValidation \
     CODE_SIGNING_ALLOWED=YES \
-    CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     build
 
   APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/호롱호롱.app"
@@ -123,6 +128,19 @@ validate_app_signature() {
 
   echo "Validating app signature"
   codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+  # ad-hoc 으로 서명되면 Authority 줄이 아예 없다. 그대로 배포하면 사용자가 열 수 없다.
+  local authority
+  authority="$(codesign -dv --verbose=2 "$APP_PATH" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+  if [[ -z "$authority" ]]; then
+    echo "앱이 ad-hoc 으로 서명되었습니다. project.yml 의 서명 설정을 확인하세요." >&2
+    exit 1
+  fi
+  if [[ -n "$SIGN_IDENTITY" && "$SIGN_IDENTITY" != "-" && "$authority" != "$SIGN_IDENTITY" ]]; then
+    echo "서명 신원이 기대와 다릅니다: expected \"$SIGN_IDENTITY\", got \"$authority\"" >&2
+    exit 1
+  fi
+  echo "Signed by: $authority"
 
   if ! codesign -d --entitlements :- "$APP_PATH" 2>/dev/null | grep -q "com.apple.security.personal-information.calendars"; then
     echo "Signed app is missing reminders/calendar entitlement." >&2
