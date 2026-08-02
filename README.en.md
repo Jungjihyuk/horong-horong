@@ -161,11 +161,15 @@ Call Codex / Claude / Antigravity / Opencode / Gemini CLI to generate an N-day e
 <td width="45%" valign="middle">
 
 ### ⚙️ Settings Window / Category Mapping
-Manage General, Appearance, Timer, Hotkey, Category Mapping, Statistics, News, AI Agent, Memo, Data, and About pages in a separate Settings window. It includes settings search, per-page reset to defaults, light/dark appearance modes, the warm lantern theme, app-to-category rules, idle thresholds, category pairs that are ignored for context-switch counts, news sources and interest keywords, and data paths.
+Manage General, Appearance, Timer, Hotkey, Category Mapping, Statistics, News, AI Agent, Achievement, Companion, Memo, Data, and About pages in a separate Settings window. It includes settings search, per-page reset to defaults, light/dark appearance modes, the warm lantern theme, app-to-category rules, idle thresholds, category pairs that are ignored for context-switch counts, news sources and interest keywords, and data paths.
+
+Goal suggestions can run on **Apple's on-device model, MLX, or Ollama**. MLX and Ollama models are downloaded and deleted right from Settings, with progress and remaining time shown while downloading. Models too large for the machine's memory are marked so you can skip them.
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/settings.png" alt="Settings" width="420" />
+<img src="./assets/features/settings-achievement.png" alt="Achievement suggestion models" width="420" />
+<br />
+<sub>Recommendation model management</sub>
 </td>
 </tr>
 </table>
