@@ -2,6 +2,100 @@ import XCTest
 @testable import 호롱호롱
 
 final class NewsDefaultsTests: XCTestCase {
+    func testNewsReportMarkdownParserKeepsReportStructure() {
+        let markdown = """
+        # 뉴스 큐레이션 리포트 - 2026-08-03
+        생성일: 2026-08-03 20:00
+        ## AI 에이전트
+        🔑 키워드: agent, 자동화
+        ### 1. [AI 뉴스](https://example.com)
+        > 중요도: 90/100 | 관련성: 95/100 | google_news
+        **AI 에이전트 도입이 늘고 있다.**
+        - 기업 도입 사례 증가
+        1. AI 뉴스 읽기 및 정리
+        """
+
+        XCTAssertEqual(
+            NewsReportMarkdownParser.parse(markdown),
+            [
+                .title("뉴스 큐레이션 리포트 - 2026-08-03"),
+                .metadata("생성일: 2026-08-03 20:00"),
+                .heading(level: 2, text: "AI 에이전트"),
+                .insight("🔑 키워드: agent, 자동화"),
+                .heading(level: 3, text: "1. [AI 뉴스](https://example.com)"),
+                .quote("중요도: 90/100 | 관련성: 95/100 | google_news"),
+                .callout("**AI 에이전트 도입이 늘고 있다.**"),
+                .bullet("기업 도입 사례 증가"),
+                .numbered(number: "1", text: "AI 뉴스 읽기 및 정리"),
+            ]
+        )
+    }
+
+    func testNewsReportDocumentSearchesTitleFilenameKeywordsAndBody() {
+        let document = NewsReportArchiveDocument(
+            markdown: "SwiftUI 뉴스 본문",
+            interestKeywords: ["AI agent", "생산성"],
+            fileSize: 1_024,
+            errorMessage: nil
+        )
+
+        XCTAssertTrue(document.matches(query: "주간", title: "주간 리포트", filename: "report.md"))
+        XCTAssertTrue(document.matches(query: "report", title: "주간 리포트", filename: "report.md"))
+        XCTAssertTrue(document.matches(query: "agent", title: "주간 리포트", filename: "report.md"))
+        XCTAssertTrue(document.matches(query: "swiftui", title: "주간 리포트", filename: "report.md"))
+        XCTAssertFalse(document.matches(query: "없는 검색어", title: "주간 리포트", filename: "report.md"))
+    }
+
+    func testNewsReportArchiveStoreLoadsConfiguredDirectoryInsteadOfStoredAbsolutePath() throws {
+        let dataBaseURL = temporaryDirectory().appendingPathComponent("Configured Reports", isDirectory: true)
+        let reportDirectory = dataBaseURL
+            .appendingPathComponent("data", isDirectory: true)
+            .appendingPathComponent("reports", isDirectory: true)
+        let metaDirectory = dataBaseURL
+            .appendingPathComponent("data", isDirectory: true)
+            .appendingPathComponent("meta", isDirectory: true)
+        try FileManager.default.createDirectory(at: reportDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: metaDirectory, withIntermediateDirectories: true)
+
+        let reportURL = reportDirectory.appendingPathComponent("2026-07-22-0329.md")
+        let metaURL = metaDirectory.appendingPathComponent("2026-07-22-0329.meta.json")
+        try "# 설정 폴더의 뉴스 리포트\n".write(to: reportURL, atomically: true, encoding: .utf8)
+        try """
+        {
+          "jobId": "2026-07-22-032401-KST",
+          "reportDate": "2026-07-22",
+          "itemCount": 19,
+          "interestKeywords": ["AI", "개발"],
+          "topItems": [{"title": "설정 폴더의 첫 뉴스"}]
+        }
+        """.write(to: metaURL, atomically: true, encoding: .utf8)
+
+        let entries = NewsReportArchiveStore.loadEntries(dataBasePath: dataBaseURL.path)
+        let entry = try XCTUnwrap(entries.first)
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(
+            entry.reportURL.resolvingSymlinksInPath().path,
+            reportURL.resolvingSymlinksInPath().path
+        )
+        XCTAssertEqual(
+            entry.metaURL.resolvingSymlinksInPath().path,
+            metaURL.resolvingSymlinksInPath().path
+        )
+        XCTAssertEqual(entry.jobId, "2026-07-22-032401-KST")
+        XCTAssertEqual(entry.itemCount, 19)
+        XCTAssertEqual(entry.topTitle, "설정 폴더의 첫 뉴스")
+
+        let configuredURL = NewsReportArchiveStore.configuredReportURL(
+            reportPath: "/old/location/data/reports/2026-07-22-0329.md",
+            dataBasePath: dataBaseURL.path
+        )
+        XCTAssertEqual(
+            configuredURL.resolvingSymlinksInPath().path,
+            reportURL.resolvingSymlinksInPath().path
+        )
+    }
+
     func testDefaultNewsSourcesUsePublicFriendlyValues() {
         let sources = NewsSource.defaultSources
 
