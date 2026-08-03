@@ -754,13 +754,13 @@ struct MemoBrowserWindow: View {
                 Label("알림", systemImage: "bell")
                     .frame(width: 76, alignment: .leading)
                 Picker("", selection: reminderOffsetBinding(for: memo)) {
-                    ForEach(reminderOffsetOptions) { option in
+                    ForEach(availableReminderOffsetOptions(for: memo)) { option in
                         Text(option.label).tag(option.minutes)
                     }
                 }
                 .labelsHidden()
                 .tint(PopoverChrome.accent)
-                .disabled(memo.deadline == nil)
+                .disabled(memo.startDate == nil && memo.deadline == nil)
                 Spacer()
             }
 
@@ -864,7 +864,8 @@ struct MemoBrowserWindow: View {
             memo.startDate != nil
         } set: { enabled in
             memo.startDate = enabled ? (memo.startDate ?? Date()) : nil
-            persist(memo)
+            clearReminderOffsetIfUnschedulable(memo)
+            persist(memo, syncLinkedReminder: true)
         }
     }
 
@@ -873,11 +874,21 @@ struct MemoBrowserWindow: View {
             memo.deadline != nil
         } set: { enabled in
             memo.deadline = enabled ? (memo.deadline ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()) : nil
-            if !enabled {
-                memo.reminderOffsetMinutes = nil
-            }
+            clearReminderOffsetIfUnschedulable(memo)
             persist(memo, syncLinkedReminder: true)
         }
+    }
+
+    /// "마감 시간" 알림은 마감일이 있어야 기준 시각이 생긴다.
+    private func availableReminderOffsetOptions(for memo: Memo) -> [ReminderOffsetOption] {
+        guard memo.deadline == nil else { return reminderOffsetOptions }
+        return reminderOffsetOptions.filter { $0.minutes != 0 }
+    }
+
+    /// 시작일·마감을 끈 뒤 기준 시각이 사라졌으면 알림 설정도 함께 정리한다.
+    private func clearReminderOffsetIfUnschedulable(_ memo: Memo) {
+        guard memo.reminderBaseDate == nil else { return }
+        memo.reminderOffsetMinutes = nil
     }
 
     private func startDateBinding(for memo: Memo) -> Binding<Date> {
@@ -989,16 +1000,14 @@ struct MemoBrowserWindow: View {
         let identifier = localReminderIdentifier(for: memo)
         guard !memo.isCompletedValue,
               !memo.isArchivedValue,
-              let deadline = memo.deadline,
-              let offset = memo.reminderOffsetMinutes else {
+              let fireDate = memo.reminderFireDate else {
             NotificationManager.shared.cancel(identifier: identifier)
             return
         }
 
-        let fireDate = deadline.addingTimeInterval(TimeInterval(-offset * 60))
         NotificationManager.shared.scheduleMemoReminder(
             identifier: identifier,
-            title: "메모 마감 알림",
+            title: memo.reminderNotificationTitle,
             body: memoRowTitle(memo),
             at: fireDate
         )

@@ -268,11 +268,9 @@ final class MemoReminderLinkService {
 
     private func syncAlarm(for reminder: EKReminder, memo: Memo) {
         reminder.alarms?.forEach { reminder.removeAlarm($0) }
-        guard let deadline = memo.deadline,
-              let offset = memo.reminderOffsetMinutes else {
+        guard let fireDate = memo.reminderFireDate else {
             return
         }
-        let fireDate = deadline.addingTimeInterval(TimeInterval(-offset * 60))
         reminder.addAlarm(EKAlarm(absoluteDate: fireDate))
     }
 
