@@ -66,7 +66,9 @@ enum CompanionOnboardingPresenter {
         case .windowStats:
             openStatsDetailWindow()
         case .settingsCompanion:
-            openSettings()
+            openSettings(tab: .companion)
+        case .settingsMemo:
+            openSettings(tab: .memo)
         }
     }
 
@@ -165,54 +167,55 @@ enum CompanionOnboardingPresenter {
         if !questionTokens.isEmpty {
             CompanionHighlightCenter.shared.beginCardSearch(tokens: questionTokens)
         }
-        if !isPopoverOpen, let button = statusItemButton() {
-            button.performClick(nil)
-            isPopoverOpen = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            perform("settings.open")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                perform("settings.show:\(tab.rawValue)")
-                closePopover()
-                if let window = NSApp.windows.first(where: {
-                    ($0.identifier?.rawValue ?? "").contains("com_apple_SwiftUI_Settings")
-                        || $0.title.localizedCaseInsensitiveContains("설정")
-                }) {
-                    window.makeKeyAndOrderFront(nil)
-                    window.orderFrontRegardless()
-                }
-                if let highlight {
-                    CompanionHighlightCenter.shared.highlight(highlight)
-                }
-                // 잠깐 비추고 원래대로 돌린다. 대화 중엔 계속 강조할 이유가 없다.
-                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-                    CompanionHighlightCenter.shared.endCardSearch()
-                    CompanionHighlightCenter.shared.highlight(nil)
-                }
+        perform("settings.open")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            perform("settings.show:\(tab.rawValue)")
+            closePopover()
+            if let window = settingsWindow() {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
+            if let highlight {
+                CompanionHighlightCenter.shared.highlight(highlight)
+            }
+            // 잠깐 비추고 원래대로 돌린다. 대화 중엔 계속 강조할 이유가 없다.
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                CompanionHighlightCenter.shared.endCardSearch()
+                CompanionHighlightCenter.shared.highlight(nil)
             }
         }
     }
 
-    /// 설정 창은 팝오버를 통해서만 열 수 있다.
-    /// `Settings` 씬은 열리기 전까지 알림을 받을 뷰가 없어서, 살아 있는 팝오버에 대신 부탁한다.
-    private static func openSettings() {
-        if !isPopoverOpen, let button = statusItemButton() {
-            button.performClick(nil)
-            isPopoverOpen = true
+    /// 항상 살아 있는 메뉴바 라벨에 설정 창을 열어 달라고 요청한다.
+    private static func openSettings(tab: SettingsTab) {
+        // 설정에서 사용법 안내를 시작했다면 이미 열린 창을 그대로 쓴다.
+        // 팝오버를 중간 다리로 다시 열면 기본 타이머 탭이 잠깐 번쩍인다.
+        if let window = settingsWindow() {
+            perform("settings.show:\(tab.rawValue)")
+            closePopover()
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+            raiseAboveDim(window)
+            return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            perform("settings.open")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                perform("settings.show:companion")
-                closePopover()
-                // 설정 창도 딤 위로 올려 설명 중인 부분이 보이게 한다.
-                if let window = NSApp.windows.first(where: {
-                    ($0.identifier?.rawValue ?? "").contains("com_apple_SwiftUI_Settings")
-                        || $0.title.localizedCaseInsensitiveContains("설정")
-                }) {
-                    raiseAboveDim(window)
-                }
+
+        perform("settings.open")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            perform("settings.show:\(tab.rawValue)")
+            closePopover()
+            // 설정 창도 딤 위로 올려 설명 중인 부분이 보이게 한다.
+            if let window = settingsWindow() {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+                raiseAboveDim(window)
             }
+        }
+    }
+
+    private static func settingsWindow() -> NSWindow? {
+        NSApp.windows.first {
+            ($0.identifier?.rawValue ?? "").contains("com_apple_SwiftUI_Settings")
+                || $0.title.localizedCaseInsensitiveContains("설정")
         }
     }
 }
