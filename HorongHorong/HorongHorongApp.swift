@@ -769,6 +769,13 @@ struct HorongHorongApp: App {
         }
         .defaultSize(width: Constants.memoBrowserWindowWidth, height: Constants.memoBrowserWindowHeight)
 
+        Window("뉴스 리포트 보관함", id: "news-report-archive") {
+            NewsReportArchiveWindow()
+                .environment(appDelegate.appState)
+                .modelContainer(appDelegate.modelContainer)
+        }
+        .defaultSize(width: 940, height: 660)
+
         Settings {
             SettingsRoot()
                 .environment(appDelegate.appState)
