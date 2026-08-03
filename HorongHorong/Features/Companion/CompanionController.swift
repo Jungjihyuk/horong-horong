@@ -112,6 +112,7 @@ final class CompanionController {
     }
 
     func stop() {
+        CompanionOnboardingDemoStore.shared.stop()
         if let defaultsObserver {
             NotificationCenter.default.removeObserver(defaultsObserver)
         }
@@ -512,6 +513,12 @@ final class CompanionController {
         let steps = scenarios.flatMap(\.steps)
         guard !steps.isEmpty else { return }
 
+        CompanionOnboardingDemoStore.shared.startIfNeeded(
+            memoCount: storedCount(of: Memo.self),
+            focusSessionCount: storedCount(of: FocusSession.self),
+            achievementGoalCount: storedCount(of: AchievementGoalRecord.self)
+        )
+
         // 컴패니언이 꺼져 있으면 켜야 호로롱이 설명할 수 있다.
         if !Self.isEnabled {
             UserDefaults.standard.set(true, forKey: Constants.AppStorageKey.companionEnabled)
@@ -570,7 +577,9 @@ final class CompanionController {
         bubbleDismissTask = nil
         state.bubble = CompanionBubble(
             headline: "\(onboardingIndex + 1)/\(onboardingSteps.count) · \(step.title)",
-            message: step.line,
+            message: isFirst && CompanionOnboardingDemoStore.shared.isActive
+                ? step.line + " 안내 중에는 실제 기록에 저장되지 않는 예시 데이터도 보여드릴게요."
+                : step.line,
             isDismissible: true,
             actions: actions
         )
@@ -585,7 +594,7 @@ final class CompanionController {
         case .popoverMemo: return "tab.memo"
         case .popoverStats: return "tab.stats"
         case .popoverAchievement: return "tab.achievement"
-        case .windowStats, .settingsCompanion: return nil
+        case .windowStats, .settingsCompanion, .settingsMemo: return nil
         }
     }
 
@@ -607,6 +616,7 @@ final class CompanionController {
         onboardingSteps = []
         onboardingIndex = 0
         UserDefaults.standard.set(true, forKey: Constants.AppStorageKey.companionOnboardingSeen)
+        CompanionOnboardingDemoStore.shared.stop()
         CompanionHighlightCenter.shared.highlight(nil)
         CompanionSpotlight.shared.hide()
         CompanionOnboardingPresenter.closeAll()
@@ -1011,7 +1021,11 @@ final class CompanionController {
         }
         bubbleDismissTask?.cancel()
         bubbleDismissTask = nil
-        state.bubble = nil
+        // 마지막 온보딩 단계에서는 사용자가 우클릭 메뉴를 직접 열어본다.
+        // 메뉴를 닫았을 때 설명으로 돌아올 수 있도록 그동안 말풍선을 보존한다.
+        if !isOnboarding {
+            state.bubble = nil
+        }
         state.isMenuVisible = true
         // 메뉴가 캐릭터 위에 온전히 들어가도록 창을 넓힌다.
         overlay.setPresentation(expanded: true, acceptsInput: false)
