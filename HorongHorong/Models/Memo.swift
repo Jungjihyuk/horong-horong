@@ -62,4 +62,24 @@ extension Memo {
         get { isLinkedToReminders == true }
         set { isLinkedToReminders = newValue }
     }
+
+    /// 알림 기준 시각. "마감 시간"(offset 0)만 마감일을 쓰고,
+    /// 사전 알림(10분·1시간·1일 전)은 시작일을 기준으로 한다. 시작일이 없으면 마감일로 대체한다.
+    var reminderBaseDate: Date? {
+        guard let offset = reminderOffsetMinutes else { return nil }
+        return offset == 0 ? deadline : (startDate ?? deadline)
+    }
+
+    var isReminderDeadlineBased: Bool {
+        reminderOffsetMinutes == 0 || startDate == nil
+    }
+
+    var reminderFireDate: Date? {
+        guard let offset = reminderOffsetMinutes, let base = reminderBaseDate else { return nil }
+        return base.addingTimeInterval(TimeInterval(-offset * 60))
+    }
+
+    var reminderNotificationTitle: String {
+        isReminderDeadlineBased ? "메모 마감 알림" : "메모 시작 알림"
+    }
 }

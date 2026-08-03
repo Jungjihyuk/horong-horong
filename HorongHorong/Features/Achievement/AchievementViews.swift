@@ -2771,16 +2771,14 @@ struct AchievementDetailWindow: View {
         let identifier = "memo.deadline.\(memo.id.uuidString)"
         guard !memo.isCompletedValue,
               !memo.isArchivedValue,
-              let deadline = memo.deadline,
-              let offset = memo.reminderOffsetMinutes else {
+              let fireDate = memo.reminderFireDate else {
             NotificationManager.shared.cancel(identifier: identifier)
             return
         }
 
-        let fireDate = deadline.addingTimeInterval(TimeInterval(-offset * 60))
         NotificationManager.shared.scheduleMemoReminder(
             identifier: identifier,
-            title: "메모 마감 알림",
+            title: memo.reminderNotificationTitle,
             body: AchievementDataBuilder.shortText(memo.content, limit: 40),
             at: fireDate
         )
