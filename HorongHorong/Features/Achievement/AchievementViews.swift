@@ -222,7 +222,7 @@ private enum AchievementTimelineDragPayload {
     }
 }
 
-private struct AchievementMonthlyWeekProgress: Identifiable {
+struct AchievementMonthlyWeekProgress: Identifiable {
     let id = UUID()
     let week: Int
     let completed: Int
@@ -236,6 +236,85 @@ private struct AchievementMonthlyWeekProgress: Identifiable {
 
     var percentText: String {
         "\(Int(round(progress * 100)))%"
+    }
+}
+
+/// 월간 목표 통계 계산. 화면 타입과 떼어 두어 테스트에서 바로 부른다.
+enum AchievementMonthlyStats {
+    /// 통계에 필요한 목표 하나의 정보.
+    /// completions는 이룬 시점들 — 하위 주간 목표가 있으면 그 목표를 끝낸 날, 없으면 할 일을 끝낸 날이다.
+    struct Goal {
+        let total: Int
+        let completions: [Date]
+    }
+
+    static func firstDayOfMonth(for date: Date, calendar: Calendar = .current) -> Date {
+        calendar.dateInterval(of: .month, for: date)?.start ?? date
+    }
+
+    /// 목표가 그 달 화면에 보이는지.
+    /// 만든 달에서 시작해 완료한 달에 끝나고, 아직 못 끝냈으면 이번 달까지 이어진다.
+    /// 주 단위 goalWeekSpan과 같은 규칙이라, 그달에 못 끝낸 목표는 다음 달로 이월된다.
+    static func goalBelongs(
+        toMonthStarting monthStart: Date,
+        createdAt: Date,
+        completedAt: Date?,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        let start = firstDayOfMonth(for: createdAt, calendar: calendar)
+        let end = max(start, firstDayOfMonth(for: completedAt ?? now, calendar: calendar))
+        return monthStart >= start && monthStart <= end
+    }
+
+    /// 주차별 누적 달성률.
+    /// 각 주차는 그 주 끝까지 이룬 양을 그 달 월간 목표의 전체 목표량으로 나눈 값이다.
+    /// 분모가 주마다 같아 주끼리 비교할 수 있고, 활동이 없는 주는 앞 주 값을 그대로 이어받아 우상향한다.
+    static func weekProgress(
+        forMonth month: Date,
+        goals: [Goal],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [AchievementMonthlyWeekProgress] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: month),
+              let dayRange = calendar.range(of: .day, in: .month, for: month) else {
+            return []
+        }
+
+        let firstDay = monthInterval.start
+        let leadingBlankCount = (calendar.component(.weekday, from: firstDay) + 5) % 7
+        // 월간 통계는 최대 5주로 보여 준다. 달력에 여섯 번째 줄이 필요한 달은
+        // 마지막 며칠을 5주차에 포함해 별도의 6주차를 만들지 않는다.
+        let calendarRowCount = max(1, Int(ceil(Double(leadingBlankCount + dayRange.count) / 7.0)))
+        let weekCount = min(5, calendarRowCount)
+        let total = goals.reduce(0) { $0 + $1.total }
+        let isCurrentMonth = calendar.isDate(month, equalTo: now, toGranularity: .month)
+        let currentWeek = isCurrentMonth
+            ? min(weekIndex(for: now, calendar: calendar), weekCount)
+            : nil
+        let visibleWeekCount = currentWeek ?? weekCount
+
+        return (1...visibleWeekCount).map { week in
+            let weekStart = calendar.date(byAdding: .day, value: ((week - 1) * 7) - leadingBlankCount, to: firstDay) ?? firstDay
+            let rawWeekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+            let weekEnd = week == weekCount ? monthInterval.end : min(rawWeekEnd, monthInterval.end)
+            let completed = goals.reduce(0) { sum, goal in
+                sum + min(goal.total, goal.completions.filter { $0 < weekEnd }.count)
+            }
+            return AchievementMonthlyWeekProgress(
+                week: week,
+                completed: completed,
+                total: total,
+                isCurrent: week == currentWeek
+            )
+        }
+    }
+
+    /// 그 날이 그 달의 몇 주차인지. 달력 첫 줄이 1주차다.
+    static func weekIndex(for date: Date, calendar: Calendar = .current) -> Int {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: date) else { return 1 }
+        let leadingBlankCount = (calendar.component(.weekday, from: monthInterval.start) + 5) % 7
+        return ((leadingBlankCount + calendar.component(.day, from: date) - 1) / 7) + 1
     }
 }
 
@@ -2878,13 +2957,13 @@ struct AchievementDetailWindow: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                 Spacer()
-                Text("\(monthlyGoals.count)개")
+                Text("\(displayedMonthlyGoals.count)개")
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .monospacedDigit()
             }
 
-            if monthlyGoals.isEmpty {
+            if displayedMonthlyGoals.isEmpty {
                 Text("월간 목표를 추가하면 여기에 표시됩니다.")
                     .font(.system(size: 12.5, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
@@ -2893,7 +2972,7 @@ struct AchievementDetailWindow: View {
                     .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
             } else {
                 VStack(spacing: 9) {
-                    ForEach(monthlyGoals) { goal in
+                    ForEach(displayedMonthlyGoals) { goal in
                         Button {
                             manageGoal(goal)
                         } label: {
@@ -4025,32 +4104,41 @@ struct AchievementDetailWindow: View {
             Text("주차별 월간 목표 진행률")
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink)
-            HStack(alignment: .bottom, spacing: 14) {
-                ForEach(currentMonthWeekProgress) { weekProgress in
-                    VStack(spacing: 5) {
-                        GeometryReader { proxy in
-                            VStack {
-                                Spacer(minLength: 0)
-                                RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
-                                    .fill(PopoverChrome.accent)
-                                    .frame(height: proxy.size.height * weekProgress.progress)
+            if measurableMonthlyGoals.isEmpty {
+                Text("이번 달에는 진행률을 잴 수 있는 월간 목표가 없어요.")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+            } else {
+                HStack(alignment: .bottom, spacing: 14) {
+                    ForEach(currentMonthWeekProgress) { weekProgress in
+                        VStack(spacing: 5) {
+                            GeometryReader { proxy in
+                                VStack {
+                                    Spacer(minLength: 0)
+                                    RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                                        .fill(PopoverChrome.accent)
+                                        .frame(height: proxy.size.height * weekProgress.progress)
+                                }
                             }
+                            .frame(width: 30, height: 106)
+                            .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous))
+                            Text("\(weekProgress.week)주")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                            Text(weekProgress.percentText)
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.ink)
+                                .monospacedDigit()
+                            Text("\(weekProgress.completed)/\(weekProgress.total)")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(weekProgress.isCurrent ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                                .monospacedDigit()
                         }
-                        .frame(width: 30, height: 106)
-                        .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous))
-                        Text("\(weekProgress.week)주")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkSecondary)
-                        Text(weekProgress.percentText)
-                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.ink)
-                            .monospacedDigit()
-                        Text(weekProgress.isCurrent ? "진행 중" : "\(weekProgress.completed)/\(weekProgress.total)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(weekProgress.isCurrent ? PopoverChrome.accent : PopoverChrome.inkTertiary)
-                            .monospacedDigit()
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -4210,18 +4298,16 @@ struct AchievementDetailWindow: View {
         return details
     }
 
-    /// 화면에 표시 중인 달에 속한 월간 목표. 그 달에 만들었거나, 그 달의 일과 연결된 목표를 뜻한다.
+    /// 화면에 표시 중인 달에 속한 월간 목표.
+    /// 만든 달부터 완료한 달까지 표시하므로, 그달에 끝내지 못한 목표는 다음 달로 이월된다.
     private var displayedMonthlyGoals: [AchievementGoal] {
-        let calendar = Calendar.current
-        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth) else {
-            return monthlyGoals
-        }
+        let monthStart = AchievementMonthlyStats.firstDayOfMonth(for: displayedMonth)
         return monthlyGoals.filter { goal in
-            monthInterval.contains(goal.recordDate)
-                || memos.contains { memo in
-                    goal.sourceMemoIDs.contains(memo.id)
-                        && monthInterval.contains(AchievementDataBuilder.memoDate(memo))
-                }
+            AchievementMonthlyStats.goalBelongs(
+                toMonthStarting: monthStart,
+                createdAt: goal.createdAt,
+                completedAt: goal.total > 0 && goal.isComplete ? goal.recordDate : nil
+            )
         }
     }
 
@@ -4268,52 +4354,24 @@ struct AchievementDetailWindow: View {
     }
 
     private var currentMonthWeekProgress: [AchievementMonthlyWeekProgress] {
-        let calendar = Calendar.current
-        let today = Date()
-        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth),
-              let dayRange = calendar.range(of: .day, in: .month, for: displayedMonth) else {
-            return []
-        }
-
-        let firstDay = monthInterval.start
-        let leadingBlankCount = (calendar.component(.weekday, from: firstDay) + 5) % 7
-        let weekCount = Int(ceil(Double(leadingBlankCount + dayRange.count) / 7.0))
-        let currentWeek = calendar.isDate(displayedMonth, equalTo: today, toGranularity: .month)
-            ? weekIndexInCurrentMonth(for: today, calendar: calendar)
-            : nil
-
-        return (1...max(1, weekCount)).map { week in
-            let weekStart = calendar.date(byAdding: .day, value: ((week - 1) * 7) - leadingBlankCount, to: firstDay) ?? firstDay
-            let rawWeekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-            let effectiveStart = max(weekStart, monthInterval.start)
-            let effectiveEnd = min(rawWeekEnd, monthInterval.end)
-
-            let goalStates = monthlyGoals.compactMap { goal -> Bool? in
-                let weekMemos = memos
-                    .filter { goal.sourceMemoIDs.contains($0.id) }
-                    .filter { memo in
-                        let date = AchievementDataBuilder.memoDate(memo)
-                        return date >= effectiveStart && date < effectiveEnd
-                    }
-                guard !weekMemos.isEmpty else { return nil }
-                return weekMemos.allSatisfy(\.isCompletedValue)
+        AchievementMonthlyStats.weekProgress(
+            forMonth: displayedMonth,
+            goals: measurableMonthlyGoals.map { goal in
+                AchievementMonthlyStats.Goal(total: goal.total, completions: completionDates(for: goal))
             }
-
-            return AchievementMonthlyWeekProgress(
-                week: week,
-                completed: goalStates.filter { $0 }.count,
-                total: goalStates.count,
-                isCurrent: week == currentWeek
-            )
-        }
+        )
     }
 
-    private func weekIndexInCurrentMonth(for date: Date, calendar: Calendar) -> Int {
-        guard let monthInterval = calendar.dateInterval(of: .month, for: date) else { return 1 }
-        let firstDay = monthInterval.start
-        let leadingBlankCount = (calendar.component(.weekday, from: firstDay) + 5) % 7
-        let day = calendar.component(.day, from: date)
-        return ((leadingBlankCount + day - 1) / 7) + 1
+    /// 목표를 이룬 시점들. 하위 주간 목표가 있으면 그 목표를 끝낸 날, 없으면 연결한 할 일을 끝낸 날이다.
+    /// 목록에 보이는 done과 같은 단위라, 마지막 주 값이 목록 합계와 맞는다.
+    private func completionDates(for goal: AchievementGoal) -> [Date] {
+        let children = goals.filter { $0.cadence == "주간" && $0.monthGoal == goal.title }
+        guard children.isEmpty else {
+            return children.filter { $0.total > 0 && $0.isComplete }.map(\.recordDate)
+        }
+        return memos
+            .filter { goal.sourceMemoIDs.contains($0.id) && $0.isCompletedValue }
+            .map(AchievementDataBuilder.memoDate)
     }
 
     private func ensureSelection() {
