@@ -1,6 +1,20 @@
 import AppKit
 import SwiftUI
 
+enum CompanionOverlayMousePolicy {
+    static func shouldIgnoreMouseEvents(
+        at point: CGPoint,
+        spriteRect: CGRect,
+        contentRect: CGRect,
+        isMenuVisible: Bool
+    ) -> Bool {
+        // 메뉴를 연 직후에는 커서가 캐릭터와 카드 사이의 투명한 간격을 지난다.
+        // 이때 창 전체를 클릭 통과 상태로 바꾸면 메뉴 버튼까지 입력을 잃는다.
+        guard !isMenuVisible else { return false }
+        return !spriteRect.contains(point) && !contentRect.contains(point)
+    }
+}
+
 /// 컴패니언이 사는 투명 오버레이 창.
 /// 평소에는 앱을 활성화시키지 않고 메뉴바보다 아래(`.floating`)에 떠 있으며,
 /// 투명한 영역의 클릭은 아래 창으로 통과시켜 작업을 가리지 않는다.
@@ -228,10 +242,15 @@ final class CompanionOverlayPanel {
         // 드래그 도중에 창을 비키면 끌던 캐릭터를 놓치므로 버튼을 뗄 때까지 미룬다.
         guard NSEvent.pressedMouseButtons == 0 else { return }
         let point = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
-        let isOverCompanion = spriteRect.contains(point) || contentRect.contains(point)
+        let shouldIgnoreMouseEvents = CompanionOverlayMousePolicy.shouldIgnoreMouseEvents(
+            at: point,
+            spriteRect: spriteRect,
+            contentRect: contentRect,
+            isMenuVisible: state.isMenuVisible
+        )
         // 값이 같아도 대입하면 그때마다 윈도우 서버까지 다녀와 커서가 끊긴다.
-        guard panel.ignoresMouseEvents == isOverCompanion else { return }
-        panel.ignoresMouseEvents = !isOverCompanion
+        guard panel.ignoresMouseEvents != shouldIgnoreMouseEvents else { return }
+        panel.ignoresMouseEvents = shouldIgnoreMouseEvents
     }
 
     /// 커서가 캐릭터 안팎을 드나드는지 짧은 주기로 직접 확인한다.
