@@ -74,6 +74,8 @@ final class CompanionPresentationState: ObservableObject {
     @Published var isMenuVisible = false
     /// 커서가 캐릭터 위에 있는지. 이 동안에는 걸음을 멈춘다.
     @Published var isHovering = false
+    /// 말풍선을 캐릭터 아래에 그릴지. 화면 위쪽에 붙어 위에 자리가 없을 때 창이 켜준다.
+    @Published var isCardBelow = false
 
     init(character: CompanionCharacter) {
         self.character = character
@@ -82,6 +84,9 @@ final class CompanionPresentationState: ObservableObject {
 
 struct CompanionView: View {
     @ObservedObject var state: CompanionPresentationState
+    /// 말풍선·대화창·메뉴가 실제로 차지한 자리를 창에 알려준다.
+    /// 창은 이 자리와 캐릭터 위에서만 클릭을 받고 나머지는 아래 앱으로 넘긴다.
+    var onContentFrameChange: (CGRect) -> Void = { _ in }
     @State private var isDragging = false
     @State private var maxDragDistance: CGFloat = 0
     @AppStorage(Constants.AppStorageKey.companionBubbleSize)
@@ -105,30 +110,65 @@ struct CompanionView: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Spacer(minLength: 0)
-
-            if state.isMenuVisible {
-                CompanionMenuCard(state: state)
-            } else if state.isChatting {
-                CompanionChatPanel(state: state)
-            } else if let bubble = state.bubble {
-                // 할일이 많으면 말풍선이 창 높이를 넘어 위가 잘렸다. 넘칠 때만 스크롤로 넘긴다.
-                // (`.scrollBounceBehavior` 를 꺼서 짧을 때 헛도는 느낌이 없게 한다.)
-                ScrollView(.vertical) {
-                    bubbleView(bubble)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.never)
-                .frame(maxHeight: bubbleMaxHeight)
-                .fixedSize(horizontal: false, vertical: true)
+            // 화면 위쪽에 붙어 말풍선이 올라갈 자리가 없으면 캐릭터 아래에 그린다.
+            if state.isCardBelow {
+                sprite
+                card
+                    .background(contentFrameReader)
+                Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+                card
+                    .background(contentFrameReader)
+                sprite
             }
-
-            sprite
         }
-        .frame(width: overlaySize.width, height: overlaySize.height, alignment: .bottom)
-        // 배경을 두지 않아 투명한 영역의 클릭은 아래 창으로 그대로 통과한다.
-        // (캐릭터와 말풍선·대화창만 마우스를 받는다.)
+        .frame(
+            width: overlaySize.width,
+            height: overlaySize.height,
+            alignment: state.isCardBelow ? .top : .bottom
+        )
+        .coordinateSpace(.named(Self.overlaySpace))
+        // 배경을 두지 않아 투명한 영역에는 아무것도 그리지 않는다.
+        // 다만 macOS 는 투명하다고 클릭을 통과시켜 주지 않으므로,
+        // 실제 통과 처리는 창이 맡는다. (`CompanionOverlayPanel`)
     }
+
+    /// 캐릭터 위로 뜨는 카드. 셋 중 하나만 보이고, 없을 때는 자리를 차지하지 않는다.
+    @ViewBuilder
+    private var card: some View {
+        if state.isMenuVisible {
+            CompanionMenuCard(state: state)
+        } else if state.isChatting {
+            CompanionChatPanel(state: state)
+        } else if let bubble = state.bubble {
+            // 할일이 많으면 말풍선이 창 높이를 넘어 위가 잘렸다. 넘칠 때만 스크롤로 넘긴다.
+            // (`.scrollBounceBehavior` 를 꺼서 짧을 때 헛도는 느낌이 없게 한다.)
+            ScrollView(.vertical) {
+                bubbleView(bubble)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.never)
+            .frame(maxHeight: bubbleMaxHeight)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+            // 카드가 없을 때도 같은 자리를 계속 보고해야 창이 이전 크기에 머물지 않는다.
+            Color.clear.frame(width: 0, height: 0)
+        }
+    }
+
+    /// 카드가 차지한 자리를 창에 알려준다. 창은 이 밖의 투명한 영역에서 클릭을 비켜 준다.
+    private var contentFrameReader: some View {
+        GeometryReader { geometry in
+            let frame = geometry.frame(in: .named(Self.overlaySpace))
+            Color.clear
+                .onAppear { onContentFrameChange(frame) }
+                .onChange(of: frame) { _, newFrame in onContentFrameChange(newFrame) }
+        }
+    }
+
+    /// 카드 위치를 잴 기준. 창 왼쪽 위가 원점이다.
+    private static let overlaySpace = "companionOverlay"
 
     @ViewBuilder
     private var sprite: some View {
