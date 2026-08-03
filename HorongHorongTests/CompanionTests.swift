@@ -1112,6 +1112,56 @@ final class CompanionOnboardingScriptTests: XCTestCase {
         XCTAssertNil(steps?.first?.screen)
     }
 
+    func testSettingsMemoScreenIsParsed() {
+        let steps = CompanionOnboardingScript.parse("""
+        ## 시나리오
+        <!-- id: x -->
+
+        ### 단계
+        <!-- screen: settings.memo -->
+        > 단축키를 확인하세요.
+        """).first?.steps
+
+        XCTAssertEqual(steps?.first?.screen, .settingsMemo)
+    }
+
+    func testBundledGuideMatchesInteractiveOnboardingFlow() throws {
+        let steps = CompanionOnboardingScript.loadFromBundle().flatMap(\.steps)
+
+        func step(endingWith suffix: String) throws -> CompanionOnboardingStep {
+            try XCTUnwrap(steps.first { $0.title.hasSuffix(suffix) })
+        }
+
+        XCTAssertEqual(steps.count, 18)
+
+        let summon = try step(endingWith: "부르는 법")
+        XCTAssertEqual(summon.screen, .settingsCompanion)
+        XCTAssertEqual(summon.highlight, "settings.companionBasics")
+
+        let newMemo = try step(endingWith: "새 메모를 만든다")
+        XCTAssertEqual(newMemo.screen, .popoverMemo)
+        XCTAssertEqual(newMemo.highlight, "memo.new")
+
+        let quickMemo = try step(endingWith: "더 빠르게 적는 법")
+        XCTAssertEqual(quickMemo.screen, .settingsMemo)
+        XCTAssertEqual(quickMemo.highlight, "settings.memoShortcut")
+
+        let taskPickerIndex = try XCTUnwrap(
+            steps.firstIndex { $0.title.hasSuffix("등록한 할 일을 고른다") }
+        )
+        let memoTabIndex = try XCTUnwrap(
+            steps.firstIndex { $0.title.hasSuffix("메모 탭을 연다") }
+        )
+        XCTAssertLessThan(taskPickerIndex, memoTabIndex)
+
+        let statsDetail = try step(endingWith: "상세 보기로 들어간다")
+        XCTAssertEqual(statsDetail.screen, .windowStats)
+        XCTAssertEqual(statsDetail.action, "stats.showPeriod")
+
+        let finalStep = try step(endingWith: "아무 때나 다시 본다")
+        XCTAssertEqual(finalStep.highlight, "companion.menu.schedule")
+    }
+
     func testEmptyDocumentProducesNoScenarios() {
         XCTAssertTrue(CompanionOnboardingScript.parse("").isEmpty)
     }
@@ -1170,6 +1220,116 @@ final class CompanionOnboardingTriggerTests: XCTestCase {
                 hasSeenOnboarding: false, memoCount: 0, focusSessionCount: 1
             )
         )
+    }
+}
+
+final class CompanionOnboardingDemoStoreTests: XCTestCase {
+    @MainActor
+    func testDemoDataIsUsedOnlyWhenUserContentIsEmpty() {
+        XCTAssertTrue(
+            CompanionOnboardingDemoStore.shouldUseDemoData(
+                memoCount: 0,
+                focusSessionCount: 0,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertFalse(
+            CompanionOnboardingDemoStore.shouldUseDemoData(
+                memoCount: 1,
+                focusSessionCount: 0,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertFalse(
+            CompanionOnboardingDemoStore.shouldUseDemoData(
+                memoCount: 0,
+                focusSessionCount: 1,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertFalse(
+            CompanionOnboardingDemoStore.shouldUseDemoData(
+                memoCount: 0,
+                focusSessionCount: 0,
+                achievementGoalCount: 1
+            )
+        )
+    }
+
+    @MainActor
+    func testDemoDataLivesInAReplaceableInMemoryContainer() throws {
+        let store = CompanionOnboardingDemoStore()
+        let now = Date(timeIntervalSince1970: 1_786_000_000)
+
+        XCTAssertTrue(
+            store.startIfNeeded(
+                memoCount: 0,
+                focusSessionCount: 0,
+                achievementGoalCount: 0,
+                now: now
+            )
+        )
+
+        let context = try XCTUnwrap(store.modelContainer).mainContext
+        let memos = try context.fetch(FetchDescriptor<Memo>())
+        let goalRecords = try context.fetch(FetchDescriptor<AchievementGoalRecord>())
+        let sessions = try context.fetch(FetchDescriptor<FocusSession>())
+        let reflections = try context.fetch(FetchDescriptor<PomodoroReflection>())
+        let segments = try context.fetch(FetchDescriptor<AppUsageSegment>())
+        XCTAssertEqual(memos.count, 6)
+        XCTAssertEqual(sessions.count, 33)
+        XCTAssertEqual(reflections.count, 32)
+        XCTAssertEqual(goalRecords.count, 2)
+        XCTAssertEqual(goalRecords.first?.linkedMemoIDs.count, 3)
+        XCTAssertEqual(memos.filter(\.isCompletedValue).count, 1)
+        XCTAssertGreaterThan(segments.count, 60)
+        XCTAssertEqual(
+            PomodoroTaskCandidateBuilder.candidates(
+                memos: memos,
+                goalRecords: goalRecords,
+                now: now
+            ).count,
+            5
+        )
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: today))
+        let todaySessions = sessions.filter { $0.startedAt >= today && $0.startedAt < tomorrow }
+        let todaySegments = segments
+            .filter { $0.startTime < tomorrow && $0.endTime > today }
+            .sorted { $0.startTime < $1.startTime }
+        let breakdowns = PomodoroComparisonPeriodBuilder.build(
+            sessions: todaySessions,
+            segments: todaySegments,
+            periodStart: today,
+            periodEnd: tomorrow
+        )
+        let todaySessionIDs = Set(todaySessions.map(\.id))
+        let todayReflections = reflections.filter { todaySessionIDs.contains($0.focusSessionID) }
+        XCTAssertEqual(breakdowns.count, 7)
+        XCTAssertEqual(todayReflections.count, 7)
+        XCTAssertEqual(Set(todayReflections.map(\.focusExperienceRawValue)).count, 4)
+        XCTAssertTrue(breakdowns.allSatisfy { $0.observation.recordedSeconds > 0 })
+        XCTAssertGreaterThan(Set(breakdowns.map(\.observation.appSwitchCount)).count, 2)
+
+        store.stop()
+        XCTAssertFalse(store.isActive)
+        XCTAssertNil(store.modelContainer)
+    }
+
+    @MainActor
+    func testExistingContentDoesNotCreateDemoContainer() {
+        let store = CompanionOnboardingDemoStore()
+
+        XCTAssertFalse(
+            store.startIfNeeded(
+                memoCount: 1,
+                focusSessionCount: 0,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertNil(store.modelContainer)
     }
 }
 

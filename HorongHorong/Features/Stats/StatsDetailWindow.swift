@@ -315,9 +315,16 @@ struct StatsDetailWindow: View {
             .onReceive(
                 NotificationCenter.default.publisher(for: .companionOnboardingPerform)
             ) { notification in
-                // 온보딩이 대신 눌러 몰입 화면을 보여준다.
-                guard notification.object as? String == "stats.showFocus" else { return }
-                withAnimation(.easeInOut(duration: 0.15)) { contentMode = .focus }
+                guard let action = notification.object as? String else { return }
+                switch action {
+                case "stats.showPeriod":
+                    contentMode = .period
+                case "stats.showFocus":
+                    // 온보딩이 대신 눌러 몰입 화면을 보여준다.
+                    withAnimation(.easeInOut(duration: 0.15)) { contentMode = .focus }
+                default:
+                    break
+                }
             }
 
             Button {
