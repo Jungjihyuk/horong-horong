@@ -11,6 +11,12 @@ final class CompanionOverlayPanel {
     private let state: CompanionPresentationState
     private var spriteOrigin: CGPoint = .zero
     private var isExpanded = false
+    /// 뷰가 알려준 카드 자리. 창 왼쪽 위가 원점이라 쓸 때 아래 기준으로 뒤집는다.
+    private var contentFrame: CGRect = .zero
+    private var mouseMonitors: [Any] = []
+    private var clickThroughTimer: Timer?
+    /// 말풍선을 캐릭터 아래에 그리는 중인지. 화면 위쪽에 붙어 자리가 없을 때 뒤집는다.
+    private var isCardBelow = false
 
     init(state: CompanionPresentationState) {
         self.state = state
@@ -20,6 +26,30 @@ final class CompanionOverlayPanel {
 
     private var currentSize: CGSize {
         isExpanded ? Constants.companionExpandedOverlaySize : Constants.companionOverlaySize
+    }
+
+    /// 캐릭터가 실제로 그려지는 자리.
+    /// 말풍선이 위로 뜨면 캐릭터는 창 아래쪽에, 아래로 뒤집히면 창 위쪽에 있다.
+    private var spriteRect: CGRect {
+        let size = currentSize
+        let spriteSize = Constants.companionSpriteSize
+        return CGRect(
+            x: (size.width - spriteSize.width) / 2,
+            y: isCardBelow ? size.height - spriteSize.height : 0,
+            width: spriteSize.width,
+            height: spriteSize.height
+        )
+    }
+
+    /// 말풍선·대화창·메뉴가 그려진 자리를 창 좌표(아래 기준)로 바꾼 것.
+    private var contentRect: CGRect {
+        guard !contentFrame.isEmpty else { return .zero }
+        return CGRect(
+            x: contentFrame.minX,
+            y: currentSize.height - contentFrame.maxY,
+            width: contentFrame.width,
+            height: contentFrame.height
+        )
     }
 
     /// 설정에서 말풍선 크기를 바꿨을 때 창을 다시 맞춘다.
@@ -60,19 +90,18 @@ final class CompanionOverlayPanel {
         // 오른쪽 클릭은 뷰가 아니라 창에서 받는다.
         // 캐릭터 위(하단 중앙 스프라이트 영역)를 눌렀을 때만 메뉴를 연다.
         panel.onRightClick = { [weak self] pointInPanel in
-            guard let self else { return }
-            let size = self.currentSize
-            let spriteRect = NSRect(
-                x: (size.width - Constants.companionSpriteSize.width) / 2,
-                y: 0,
-                width: Constants.companionSpriteSize.width,
-                height: Constants.companionSpriteSize.height
-            )
-            guard spriteRect.contains(pointInPanel) else { return }
+            guard let self, self.spriteRect.contains(pointInPanel) else { return }
             self.state.onRequestMenu()
         }
 
-        let hostingView = NSHostingView(rootView: CompanionView(state: state))
+        let hostingView = NSHostingView(
+            rootView: CompanionView(state: state) { [weak self] frame in
+                guard let self, self.contentFrame != frame else { return }
+                self.contentFrame = frame
+                // 카드 높이를 알아야 위/아래를 정할 수 있다. 창이 열릴 때는 아직 재기 전이다.
+                self.applyFrame()
+            }
+        )
         // 콘텐츠 크기로 창을 되돌리지 않게 막는다.
         // 그대로 두면 말풍선이 나타날 때마다 창 크기가 이 뷰와 `applyFrame()` 사이에서 튄다.
         hostingView.sizingOptions = []
@@ -82,16 +111,21 @@ final class CompanionOverlayPanel {
         panel.orderFrontRegardless()
         self.panel = panel
         applyFrame()
+        startMouseTracking()
     }
 
     func hide() {
+        stopMouseTracking()
+        clickThroughTimer?.invalidate()
+        clickThroughTimer = nil
         panel?.orderOut(nil)
         panel = nil
         isExpanded = false
+        contentFrame = .zero
     }
 
     /// 창 크기와 입력 수용 여부를 함께 정한다.
-    /// 창은 위쪽으로만 늘어나므로 캐릭터는 제자리에 남는다.
+    /// 창은 캐릭터를 기준으로 늘어나므로(위, 자리가 없으면 아래) 캐릭터는 제자리에 남는다.
     /// 브리핑은 넓게 띄우되 입력은 받지 않아 사용자의 타이핑을 가로채지 않는다.
     func setPresentation(expanded: Bool, acceptsInput: Bool) {
         guard let panel else {
@@ -123,26 +157,122 @@ final class CompanionOverlayPanel {
         applyFrame()
     }
 
-    private func applyFrame() {
+    private func applyFrame(forcingCardPlacement: Bool = false) {
         guard let panel else { return }
         let size = currentSize
         let dx = (size.width - Constants.companionSpriteSize.width) / 2
+        updateCardPlacement(force: forcingCardPlacement)
+        // 뒤집혔을 때는 캐릭터가 창 위쪽에 있으므로 그만큼 창을 내려 잡는다.
+        let y = isCardBelow
+            ? spriteOrigin.y + Constants.companionSpriteSize.height - size.height
+            : spriteOrigin.y
         panel.setFrame(
             NSRect(
                 x: spriteOrigin.x - dx,
-                y: spriteOrigin.y,
+                y: y,
                 width: size.width,
                 height: size.height
             ),
             display: true
         )
         panel.contentView?.frame = NSRect(origin: .zero, size: size)
+        // 캐릭터가 걸어다니면 커서가 가만히 있어도 창 밑의 그림이 바뀐다.
+        updateClickThrough()
+    }
+
+    /// 말풍선은 늘 캐릭터 위에 둔다.
+    /// 화면 위쪽에 붙어 정말 자리가 없을 때만, 그리고 아래에 자리가 있을 때만 내린다.
+    ///
+    /// 창 높이가 아니라 실제로 그려진 카드 높이로 잰다.
+    /// 창은 말풍선이 커질 때를 대비해 넉넉히 잡아두므로, 창 높이로 재면
+    /// 화면 위에 아직 여유가 많은데도 화면 중턱에서 미리 뒤집힌다.
+    private func updateCardPlacement(force: Bool) {
+        // 끌고 가는 도중에 뒤집으면 SwiftUI 가 캐릭터 뷰를 새로 만들면서
+        // 잡고 있던 드래그 제스처가 끊긴다. 버튼을 뗄 때 다시 잡는다.
+        guard force || NSEvent.pressedMouseButtons == 0 else { return }
+
+        let cardHeight = contentFrame.height
+        let spriteTop = spriteOrigin.y + Constants.companionSpriteSize.height
+        var cardBelow = false
+        if cardHeight > 0, let visible = screenContainingSprite()?.visibleFrame {
+            let fitsAbove = spriteTop + Self.cardSpacing + cardHeight <= visible.maxY
+            let fitsBelow = spriteOrigin.y - Self.cardSpacing - cardHeight >= visible.minY
+            cardBelow = !fitsAbove && fitsBelow
+        }
+
+        guard isCardBelow != cardBelow else { return }
+        isCardBelow = cardBelow
+        state.isCardBelow = cardBelow
+    }
+
+    /// 캐릭터와 말풍선 사이 간격. 뷰의 `VStack` 간격과 같아야 자리 계산이 맞는다.
+    private static let cardSpacing: CGFloat = 6
+
+    /// 캐릭터가 올라가 있는 화면. 여러 대를 쓰면 화면마다 위쪽 한계가 다르다.
+    private func screenContainingSprite() -> NSScreen? {
+        let point = CGPoint(
+            x: spriteOrigin.x + Constants.companionSpriteSize.width / 2,
+            y: spriteOrigin.y + Constants.companionSpriteSize.height / 2
+        )
+        return NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main
+    }
+
+    /// 캐릭터와 말풍선이 그려진 자리에서만 창이 클릭을 받게 한다.
+    ///
+    /// 창은 캐릭터보다 훨씬 넓어서(말풍선이 뜰 자리를 미리 잡아둔다) 나머지는 늘 투명하다.
+    /// 그런데 macOS 는 투명한 픽셀이라고 클릭을 통과시켜 주지 않고, 뷰에서 판정 영역을
+    /// 좁혀도(`contentShape`) 창이 이미 이벤트를 삼킨 뒤라 아래 앱까지 닿지 않는다.
+    /// 그래서 커서가 캐릭터 밖에 있는 동안에는 창 자체를 이벤트에서 비켜 둔다.
+    private func updateClickThrough() {
+        guard let panel else { return }
+        // 드래그 도중에 창을 비키면 끌던 캐릭터를 놓치므로 버튼을 뗄 때까지 미룬다.
+        guard NSEvent.pressedMouseButtons == 0 else { return }
+        let point = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let isOverCompanion = spriteRect.contains(point) || contentRect.contains(point)
+        // 값이 같아도 대입하면 그때마다 윈도우 서버까지 다녀와 커서가 끊긴다.
+        guard panel.ignoresMouseEvents == isOverCompanion else { return }
+        panel.ignoresMouseEvents = !isOverCompanion
+    }
+
+    /// 커서가 캐릭터 안팎을 드나드는지 짧은 주기로 직접 확인한다.
+    ///
+    /// 마우스 이벤트에만 기대면 놓치는 자리가 있다. 대화 중에는 창이 키 윈도우가 되고
+    /// 캐릭터도 걷지 않아 `applyFrame` 이 멈추는데, 이때 이동 이벤트까지 오지 않으면
+    /// 통과 상태가 굳어 대화창의 닫기 버튼이 눌리지 않는다.
+    /// 계산은 1µs 도 안 되고 값이 바뀔 때만 창에 쓰므로 주기적으로 봐도 부담이 없다.
+    private func startMouseTracking() {
+        guard mouseMonitors.isEmpty else { return }
+        clickThroughTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateClickThrough() }
+        }
+        // 버튼을 뗀 순간에는 드래그 중 미뤄둔 말풍선 방향을 바로 잡아준다.
+        let mask: NSEvent.EventTypeMask = [.leftMouseUp, .rightMouseUp]
+        let global = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyFrame(forcingCardPlacement: true) }
+        }
+        let local = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            MainActor.assumeIsolated { self?.applyFrame(forcingCardPlacement: true) }
+            return event
+        }
+        mouseMonitors = [global, local].compactMap { $0 }
+    }
+
+    private func stopMouseTracking() {
+        mouseMonitors.forEach(NSEvent.removeMonitor)
+        mouseMonitors.removeAll()
     }
 }
 
 private final class CompanionPanel: NSPanel {
     /// 대화 중일 때만 입력을 받는다. 평소엔 눌러도 호롱호롱이 앞으로 나오지 않는다.
     var isChatMode = false
+
+    /// 창은 캐릭터보다 훨씬 크고 위쪽 대부분이 말풍선용 빈자리다.
+    /// 기본 제약을 두면 이 빈자리가 메뉴바에 먼저 걸려 캐릭터가 화면 위까지 못 올라간다.
+    /// 위치는 활동 영역에 맞춰 이미 계산해 두므로 요청한 자리를 그대로 쓴다.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
     var onCancel: (() -> Void)?
     var onRightClick: ((NSPoint) -> Void)?
 
