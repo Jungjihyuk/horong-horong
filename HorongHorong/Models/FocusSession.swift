@@ -701,9 +701,7 @@ enum PomodoroTaskCompletionRecorder {
         let reminderIdentifier = "memo.deadline.\(memo.id.uuidString)"
         if memo.isCompletedValue || memo.isArchivedValue {
             NotificationManager.shared.cancel(identifier: reminderIdentifier)
-        } else if let deadline = memo.deadline,
-                  let offset = memo.reminderOffsetMinutes {
-            let fireDate = deadline.addingTimeInterval(TimeInterval(-offset * 60))
+        } else if let fireDate = memo.reminderFireDate {
             let reminderBody = memo.content
                 .split(whereSeparator: \.isNewline)
                 .map(String.init)
@@ -711,7 +709,7 @@ enum PomodoroTaskCompletionRecorder {
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             NotificationManager.shared.scheduleMemoReminder(
                 identifier: reminderIdentifier,
-                title: "메모 마감 알림",
+                title: memo.reminderNotificationTitle,
                 body: reminderBody.isEmpty ? "제목 없음" : reminderBody,
                 at: fireDate
             )
