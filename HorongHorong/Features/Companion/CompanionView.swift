@@ -866,6 +866,7 @@ private struct CompanionMenuCard: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 6)
+        .companionHighlight("companion.menu.\(item.id)")
         .onHover { hovered = $0 ? item.id : nil }
     }
 }

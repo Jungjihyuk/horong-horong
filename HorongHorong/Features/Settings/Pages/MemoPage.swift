@@ -72,6 +72,7 @@ struct MemoPage: View {
                         .help("기본값(⌘⇧N) 으로 되돌리기")
                     }
                 }
+                .companionHighlight("settings.memoShortcut")
                 SettingsRow(
                     "포커스 잃을 때 자동 저장",
                     subtitle: "패널이 닫힐 때 내용이 비어있지 않으면 저장합니다.",

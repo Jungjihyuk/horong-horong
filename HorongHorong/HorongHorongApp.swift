@@ -264,22 +264,9 @@ private extension StatsViewMode {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    let appState = AppState()
-    private(set) var timerManager: TimerManager!
-    private let appTracker = AppTracker()
-    private let quickMemoPanel = QuickMemoPanel()
-    private var companionController: CompanionController!
-    private var screenshotWindow: NSWindow?
-
-    private(set) var modelContainer: ModelContainer!
-
-    override init() {
-        super.init()
-        timerManager = TimerManager(appState: appState)
-        companionController = CompanionController(appState: appState)
-
-        let schema = Schema([
+enum HorongHorongModelSchema {
+    static func make() -> Schema {
+        Schema([
             Memo.self,
             AchievementGoalRecord.self,
             FocusSession.self,
@@ -296,6 +283,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NewsJob.self,
             NewsReportIndex.self,
         ])
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let appState = AppState()
+    private(set) var timerManager: TimerManager!
+    private let appTracker = AppTracker()
+    private let quickMemoPanel = QuickMemoPanel()
+    private var companionController: CompanionController!
+    private var screenshotWindow: NSWindow?
+
+    private(set) var modelContainer: ModelContainer!
+
+    override init() {
+        super.init()
+        timerManager = TimerManager(appState: appState)
+        companionController = CompanionController(appState: appState)
+
+        let schema = HorongHorongModelSchema.make()
         do {
             let storeURL = try SwiftDataStoreLocation.storeURL()
             let config = ModelConfiguration(schema: schema, url: storeURL)
@@ -625,6 +632,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// 메뉴바 라벨. 사용자가 선택한 라벨/시간 형식에 맞춰 텍스트·아이콘을 합성한다.
 private struct MenuBarLabel: View {
     let appState: AppState
+    @Environment(\.openSettings) private var openSettings
     @AppStorage(Constants.AppStorageKey.menubarLabelStyle)
     private var labelStyleRaw: String = Constants.defaultMenubarLabelStyle
     @AppStorage(Constants.AppStorageKey.menubarTimeStyle)
@@ -650,29 +658,48 @@ private struct MenuBarLabel: View {
         let state = appState.timerState
         let isActive = state == .focusing || state == .paused || state == .breaking
 
-        if !isActive {
-            Label {
-                Text("호롱호롱")
-            } icon: {
-                Image(menubarIcon.imageName)
-                    .renderingMode(.original)
-            }
-        } else {
-            switch labelStyle {
-            case .timeAndIcon:
-                HStack(spacing: 3) {
-                    stateIconView(for: state)
+        Group {
+            if !isActive {
+                Label {
+                    Text("호롱호롱")
+                } icon: {
+                    Image(menubarIcon.imageName)
+                        .renderingMode(.original)
+                }
+            } else {
+                switch labelStyle {
+                case .timeAndIcon:
+                    HStack(spacing: 3) {
+                        stateIconView(for: state)
+                        Text(appState.formattedRemaining(style: timeStyle))
+                    }
+                case .timeOnly:
                     Text(appState.formattedRemaining(style: timeStyle))
-                }
-            case .timeOnly:
-                Text(appState.formattedRemaining(style: timeStyle))
-            case .categoryOnly:
-                HStack(spacing: 3) {
+                case .categoryOnly:
+                    HStack(spacing: 3) {
+                        stateIconView(for: state)
+                        Text(categoryText(for: state))
+                    }
+                case .iconOnly:
                     stateIconView(for: state)
-                    Text(categoryText(for: state))
                 }
-            case .iconOnly:
-                stateIconView(for: state)
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .companionOnboardingPerform)
+        ) { notification in
+            guard notification.object as? String == "settings.open" else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
+            DispatchQueue.main.async {
+                for window in NSApp.windows {
+                    let id = window.identifier?.rawValue ?? ""
+                    if id.contains("com_apple_SwiftUI_Settings")
+                        || window.title.localizedCaseInsensitiveContains("설정") {
+                        window.makeKeyAndOrderFront(nil)
+                        window.orderFrontRegardless()
+                    }
+                }
             }
         }
     }
@@ -700,6 +727,11 @@ private struct MenuBarLabel: View {
 @main
 struct HorongHorongApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var onboardingDemoStore = CompanionOnboardingDemoStore.shared
+
+    private var guidedModelContainer: ModelContainer {
+        onboardingDemoStore.modelContainer ?? appDelegate.modelContainer
+    }
 
     var body: some Scene {
         // 팝오버 / 통계 / 설정 — 외관 모드(라이트·다크·시스템) 는 *설정 윈도우에만* 적용한다.
@@ -707,7 +739,8 @@ struct HorongHorongApp: App {
         MenuBarExtra {
             MenuBarPopover(timerManager: appDelegate.timerManager)
                 .environment(appDelegate.appState)
-                .modelContainer(appDelegate.modelContainer)
+                .modelContainer(guidedModelContainer)
+                .id(onboardingDemoStore.isActive)
         } label: {
             MenuBarLabel(appState: appDelegate.appState)
         }
@@ -716,14 +749,16 @@ struct HorongHorongApp: App {
         Window("호롱호롱 통계", id: "stats-detail") {
             StatsDetailWindow()
                 .environment(appDelegate.appState)
-                .modelContainer(appDelegate.modelContainer)
+                .modelContainer(guidedModelContainer)
+                .id(onboardingDemoStore.isActive)
         }
         .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
 
         Window("호롱호롱 성취", id: "achievement-detail") {
             AchievementDetailWindow()
                 .environment(appDelegate.appState)
-                .modelContainer(appDelegate.modelContainer)
+                .modelContainer(guidedModelContainer)
+                .id(onboardingDemoStore.isActive)
         }
         .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
 
