@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import XCTest
 import SwiftData
 @testable import 호롱호롱
@@ -363,6 +365,66 @@ final class CompanionDragTests: XCTestCase {
 
         XCTAssertEqual(engine.position, CGPoint(x: 400, y: 400))
         XCTAssertEqual(engine.motion, .resting)
+    }
+}
+
+@MainActor
+final class CompanionViewLayoutTests: XCTestCase {
+    func testMenuReportsItsInteractiveFrame() {
+        let state = CompanionPresentationState(character: .hororong)
+        state.isMenuVisible = true
+        var reportedFrame = CGRect.zero
+        let hostingView = NSHostingView(
+            rootView: CompanionView(state: state) { reportedFrame = $0 }
+        )
+        hostingView.sizingOptions = []
+        hostingView.frame = CGRect(origin: .zero, size: Constants.companionExpandedOverlaySize)
+
+        hostingView.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        XCTAssertFalse(reportedFrame.isEmpty)
+        XCTAssertEqual(reportedFrame.width, 168, accuracy: 1)
+    }
+}
+
+final class CompanionOverlayMousePolicyTests: XCTestCase {
+    private let spriteRect = CGRect(x: 120, y: 0, width: 96, height: 104)
+    private let contentRect = CGRect(x: 84, y: 110, width: 168, height: 210)
+
+    func testVisibleMenuKeepsPanelInteractiveOutsideMeasuredRects() {
+        XCTAssertFalse(
+            CompanionOverlayMousePolicy.shouldIgnoreMouseEvents(
+                at: CGPoint(x: 10, y: 10),
+                spriteRect: spriteRect,
+                contentRect: contentRect,
+                isMenuVisible: true
+            )
+        )
+    }
+
+    func testTransparentAreaPassesClicksThroughWhenMenuIsClosed() {
+        XCTAssertTrue(
+            CompanionOverlayMousePolicy.shouldIgnoreMouseEvents(
+                at: CGPoint(x: 10, y: 10),
+                spriteRect: spriteRect,
+                contentRect: contentRect,
+                isMenuVisible: false
+            )
+        )
+    }
+
+    func testCompanionContentRemainsInteractiveWhenMenuIsClosed() {
+        for point in [CGPoint(x: 150, y: 50), CGPoint(x: 100, y: 200)] {
+            XCTAssertFalse(
+                CompanionOverlayMousePolicy.shouldIgnoreMouseEvents(
+                    at: point,
+                    spriteRect: spriteRect,
+                    contentRect: contentRect,
+                    isMenuVisible: false
+                )
+            )
+        }
     }
 }
 
