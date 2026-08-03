@@ -898,7 +898,8 @@ struct TimerView: View {
     }
 
     private func startFocus() {
-        let task = selectedTask
+        // 안내용 메모 ID가 실제 집중 기록에 연결되지 않게 한다.
+        let task = CompanionOnboardingDemoStore.shared.isActive ? nil : selectedTask
         timerManager.startFocus(
             category: selectedFocusCategory,
             linkedMemoID: task?.id,

@@ -60,25 +60,6 @@ struct MenuBarPopover: View {
                     .id(selectedTab)
                     .companionDimUnlessTargeting(["timer.", "memo.", "stats.", "achievement.", "news.", "agent."])
                     .onReceive(
-                        NotificationCenter.default.publisher(for: .companionOnboardingPerform)
-                    ) { notification in
-                        // 온보딩은 팝오버를 통해서만 설정을 열 수 있다.
-                        // (Settings 씬은 열리기 전까지 알림을 받을 뷰가 없다)
-                        guard notification.object as? String == "settings.open" else { return }
-                        NSApp.activate(ignoringOtherApps: true)
-                        openSettings()
-                        DispatchQueue.main.async {
-                            for window in NSApp.windows {
-                                let id = window.identifier?.rawValue ?? ""
-                                if id.contains("com_apple_SwiftUI_Settings")
-                                    || window.title.localizedCaseInsensitiveContains("설정") {
-                                    window.makeKeyAndOrderFront(nil)
-                                    window.orderFrontRegardless()
-                                }
-                            }
-                        }
-                    }
-                    .onReceive(
                         NotificationCenter.default.publisher(for: .companionOnboardingSelectTab)
                     ) { notification in
                         // 온보딩이 단계에 맞는 탭을 보여달라고 요청한다.
