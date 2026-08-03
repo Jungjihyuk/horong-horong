@@ -5,6 +5,7 @@ import AppKit
 struct NewsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openWindow) private var openWindow
     @AppStorage(Constants.NewsStorageKey.dataBasePath) private var dataBasePath = Constants.defaultNewsDataBasePath
     @AppStorage(Constants.NewsStorageKey.selectedProvider) private var selectedProvider = Constants.defaultNewsProvider
     @AppStorage(Constants.NewsStorageKey.ollamaModel) private var ollamaModel = Constants.defaultNewsOllamaModel
@@ -25,6 +26,7 @@ struct NewsView: View {
     @State private var isRunButtonHovered = false
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
     @State private var selectedReport: NewsReportIndex?
+    @State private var hostWindow: NSWindow?
 
     private let pipelineSteps = ["collect", "normalize", "dedupe", "classify", "rank", "summarize", "render"]
     private var pipelineService: NewsPipelineService { appState.newsPipelineService }
@@ -68,6 +70,9 @@ struct NewsView: View {
         }
         .onAppear {
             applyDefaultPathsIfNeeded()
+        }
+        .configureHostWindow { window in
+            hostWindow = window
         }
     }
 
@@ -261,12 +266,29 @@ struct NewsView: View {
     }
 
     private var reportsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("최근 리포트")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkTertiary)
+        let availableReports = availableRecentReports
 
-            if recentReports.isEmpty {
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("최근 리포트")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                Spacer()
+                Button {
+                    openReportArchive(report: nil)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("모든 리포트")
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 8.5, weight: .bold))
+                    }
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if availableReports.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "newspaper")
                         .foregroundStyle(PopoverChrome.inkTertiary)
@@ -277,44 +299,73 @@ struct NewsView: View {
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .popoverCard()
             } else {
-                ForEach(recentReports.prefix(5)) { report in
+                ForEach(availableReports.prefix(5)) { report in
                     reportRow(report: report)
                 }
             }
         }
     }
 
-    private func reportRow(report: NewsReportIndex) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(formatDate(report.reportDate))
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkTertiary)
-                Text(report.topTitle)
-                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                    .lineLimit(2)
-                    .foregroundStyle(PopoverChrome.ink)
-            }
-            Spacer()
-            HStack(spacing: 4) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 10, weight: .medium))
-                Text("\(report.itemCount)개")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-            }
-            .foregroundStyle(PopoverChrome.inkSecondary)
+    private var availableRecentReports: [NewsReportIndex] {
+        recentReports.filter { report in
+            let configuredURL = NewsReportArchiveStore.configuredReportURL(
+                reportPath: report.reportPath,
+                dataBasePath: dataBasePath
+            )
+            return FileManager.default.fileExists(atPath: configuredURL.path)
         }
-        .popoverCard(padding: 12, radius: 10)
-        .background(
-            selectedReport?.jobId == report.jobId
-                ? PopoverChrome.accentSoft.opacity(0.22)
-                : Color.clear,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
+    }
+
+    private func reportRow(report: NewsReportIndex) -> some View {
+        Button {
             selectedReport = report
-            NSWorkspace.shared.open(URL(fileURLWithPath: report.reportPath))
+            openReportArchive(report: report)
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(formatDate(report.reportDate))
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    Text(report.topTitle)
+                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .lineLimit(2)
+                        .foregroundStyle(PopoverChrome.ink)
+                }
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("\(report.itemCount)개")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+                .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+            .popoverCard(padding: 12, radius: 10)
+            .background(
+                selectedReport?.jobId == report.jobId
+                    ? PopoverChrome.accentSoft.opacity(0.22)
+                    : Color.clear,
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openReportArchive(report: NewsReportIndex?) {
+        NewsReportArchiveSelection.shared.select(reportID: report?.jobId)
+        let popoverWindow = hostWindow
+        openWindow(id: "news-report-archive")
+        popoverWindow?.orderOut(nil)
+
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first(where: {
+                $0.identifier?.rawValue == "news-report-archive" || $0.title == "뉴스 리포트 보관함"
+            }) {
+                window.collectionBehavior.insert(.moveToActiveSpace)
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
         }
     }
 
