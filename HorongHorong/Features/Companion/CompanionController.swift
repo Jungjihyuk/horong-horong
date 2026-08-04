@@ -42,6 +42,13 @@ final class CompanionController {
     /// 감정 동작을 보여줄 시간. 이후에는 듣는 자세로 돌아온다.
     private static let moodReactionSeconds: Double = 2.5
 
+    /// 집중 넛지를 띄워두는 시간. 집중을 깨지 않을 만큼만 머문다.
+    private static let focusNudgeSeconds: Double = 6
+
+    private var focusScoreMonitor: FocusScoreMonitor?
+    /// 마지막으로 띄운 집중 넛지 문구. 자동 소멸 예약이 자기가 띄운 말풍선만 지우도록 표시해 둔다.
+    private var focusNudgeMessage: String?
+
     private var engine: CompanionRoamingEngine?
     private var mode: Mode = .hidden
     private var appliedRoamingRegion: CGRect?
@@ -87,6 +94,15 @@ final class CompanionController {
     func start(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
 
+        let monitor = FocusScoreMonitor(
+            appState: appState,
+            modelContainer: modelContainer
+        ) { [weak self] message in
+            self?.presentFocusNudge(message) ?? false
+        }
+        focusScoreMonitor = monitor
+        monitor.start()
+
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: UserDefaults.standard,
@@ -113,6 +129,8 @@ final class CompanionController {
 
     func stop() {
         CompanionOnboardingDemoStore.shared.stop()
+        focusScoreMonitor?.stop()
+        focusScoreMonitor = nil
         if let defaultsObserver {
             NotificationCenter.default.removeObserver(defaultsObserver)
         }
@@ -338,6 +356,21 @@ final class CompanionController {
     private func moveOverlay() {
         guard let engine else { return }
         overlay.move(spriteOrigin: engine.position)
+    }
+
+    private func moveOverlayToFocusNudgeCenter() {
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
+        guard let stage = screen?.visibleFrame else {
+            moveOverlay()
+            return
+        }
+        overlay.move(
+            spriteOrigin: CompanionRoamingRegion.centeredSpriteOrigin(
+                stage: stage,
+                spriteSize: Constants.companionSpriteSize
+            )
+        )
     }
 
     private func startTicking() {
@@ -1097,17 +1130,65 @@ final class CompanionController {
 
     // MARK: - 말풍선 유틸
 
+    /// 집중 넛지. 판정 이유와 수치 뒤에 사용자가 등록한 문구를 이어 말한다.
+    ///
+    /// 집중 중에는 숨어 있으므로, 말할 때만 잠깐 나타났다 다시 사라진다.
+    /// 대화나 온보딩이 떠 있으면 건너뛰고 false 를 돌려준다 — 이번 세션의 한 번을 쓴 것으로
+    /// 치지 않아야 다음 판정 때 다시 올 수 있다.
+    @discardableResult
+    private func presentFocusNudge(_ message: String) -> Bool {
+        guard Self.isEnabled, !isOnboarding, !state.isChatting, !state.isMenuVisible else {
+            return false
+        }
+
+        bubbleDismissTask?.cancel()
+        focusNudgeMessage = message
+        state.bubble = CompanionBubble(message: message, isDismissible: true)
+        overlay.setPresentation(expanded: false, acceptsInput: false)
+        setAnimation(.waving)
+        // 집중 중에 컴패니언을 켠 경우처럼 아직 무대를 잡은 적이 없으면 여기서 잡는다.
+        // 그러지 않으면 자리가 정해지지 않은 채로 나타난다.
+        if engine == nil {
+            appliedRoamingRegion = Self.roamingRegion
+            rebuildEngine(force: true)
+        }
+        moveOverlayToFocusNudgeCenter()
+        overlay.show()
+        startTicking()
+
+        bubbleDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.focusNudgeSeconds))
+            guard let self, !Task.isCancelled, self.focusNudgeMessage == message else { return }
+            self.focusNudgeMessage = nil
+            self.state.bubble = nil
+            // 숨어 있어야 할 상태였다면 말만 하고 다시 사라진다.
+            if self.mode == .hidden {
+                self.stopTicking()
+                self.overlay.hide()
+            } else {
+                self.setAnimation(.idle)
+            }
+        }
+        return true
+    }
+
     /// 사용자가 직접 닫을 때까지 말풍선을 유지한다.
     private func dismissBubble() {
         if isOnboarding {
             finishOnboarding()
             return
         }
+        focusNudgeMessage = nil
         bubbleDismissTask?.cancel()
         bubbleDismissTask = nil
         state.bubble = nil
         overlay.setPresentation(expanded: false, acceptsInput: false)
         setAnimation(.idle)
+        // 넛지 때문에 잠깐 나와 있던 것이라면 말풍선을 닫는 순간 다시 숨는다.
+        if mode == .hidden {
+            stopTicking()
+            overlay.hide()
+        }
     }
 
     /// `seconds` 가 nil 이면 저절로 사라지지 않는다(브리핑처럼 사용자가 닫아야 하는 경우).

@@ -17,12 +17,13 @@ enum SwiftDataStoreLocation {
 
     static let directoryName = "HorongHorong"
     static let storeFileName = "default.store"
-    // 구버전이 새 스키마를 열지 못하도록 @Model 속성이나 엔티티 변경 시 반드시 증가시킨다.
-    static let storeGeneration = 2
     static let maximumBackupCount = 5
 
     private static let storesDirectoryName = "Stores"
     private static let backupsDirectoryName = "Backups"
+    private static let activeBackupsDirectoryName = "current"
+    /// 단일 저장소 도입 전 사용하던 경로. 새 저장소가 없을 때만 최신 순서로 복사한다.
+    private static let legacyStoreDirectoryNames = ["v2", "v1"]
     private static let storeFileSuffixes = ["", "-shm", "-wal"]
 
     static var currentScope: Scope {
@@ -89,15 +90,16 @@ enum SwiftDataStoreLocation {
             at: appDirectory,
             withIntermediateDirectories: true
         )
-        let generationDirectory = appDirectory
-            .appendingPathComponent(storesDirectoryName, isDirectory: true)
-            .appendingPathComponent("v\(storeGeneration)", isDirectory: true)
+        let storesDirectory = appDirectory.appendingPathComponent(
+            storesDirectoryName,
+            isDirectory: true
+        )
         try fileManager.createDirectory(
-            at: generationDirectory,
+            at: storesDirectory,
             withIntermediateDirectories: true
         )
 
-        let targetStoreURL = generationDirectory.appendingPathComponent(
+        let targetStoreURL = storesDirectory.appendingPathComponent(
             storeFileName,
             isDirectory: false
         )
@@ -137,17 +139,11 @@ enum SwiftDataStoreLocation {
         scope: Scope,
         fileManager: FileManager
     ) throws {
-        var candidates: [URL] = []
-
-        if storeGeneration > 1 {
-            for generation in stride(from: storeGeneration - 1, through: 1, by: -1) {
-                candidates.append(
-                    appDirectory
-                        .appendingPathComponent(storesDirectoryName, isDirectory: true)
-                        .appendingPathComponent("v\(generation)", isDirectory: true)
-                        .appendingPathComponent(storeFileName, isDirectory: false)
-                )
-            }
+        var candidates = legacyStoreDirectoryNames.map { directoryName in
+            appDirectory
+                .appendingPathComponent(storesDirectoryName, isDirectory: true)
+                .appendingPathComponent(directoryName, isDirectory: true)
+                .appendingPathComponent(storeFileName, isDirectory: false)
         }
 
         candidates.append(
@@ -184,7 +180,7 @@ enum SwiftDataStoreLocation {
     ) throws {
         let backupRoot = appDirectory
             .appendingPathComponent(backupsDirectoryName, isDirectory: true)
-            .appendingPathComponent("v\(storeGeneration)", isDirectory: true)
+            .appendingPathComponent(activeBackupsDirectoryName, isDirectory: true)
         try fileManager.createDirectory(
             at: backupRoot,
             withIntermediateDirectories: true

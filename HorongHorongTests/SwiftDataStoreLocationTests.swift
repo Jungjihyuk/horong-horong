@@ -2,7 +2,7 @@ import XCTest
 @testable import 호롱호롱
 
 final class SwiftDataStoreLocationTests: XCTestCase {
-    func testStoreURLUsesVersionedProductionDirectory() throws {
+    func testStoreURLUsesStableProductionDirectory() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
 
         let storeURL = try SwiftDataStoreLocation.storeURL(
@@ -11,7 +11,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
 
         XCTAssertEqual(
             storeURL.path,
-            versionedStoreURL(
+            stableStoreURL(
                 in: applicationSupportDirectory,
                 scope: .production
             ).path
@@ -23,7 +23,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         )
     }
 
-    func testStoreURLCopiesUnversionedAppStoreIntoCurrentGeneration() throws {
+    func testStoreURLCopiesUnversionedAppStoreIntoStableStore() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
         let unversionedStoreURL = applicationSupportDirectory
             .appendingPathComponent("HorongHorong", isDirectory: true)
@@ -37,14 +37,31 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         try assertStoreFiles(at: storeURL)
     }
 
-    func testStoreURLCopiesPreviousGenerationIntoCurrentGeneration() throws {
+    func testStoreURLCopiesVersionTwoStoreIntoStableStoreAndKeepsSource() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        let previousStoreURL = applicationSupportDirectory
+        let versionTwoStoreURL = applicationSupportDirectory
+            .appendingPathComponent("HorongHorong", isDirectory: true)
+            .appendingPathComponent("Stores", isDirectory: true)
+            .appendingPathComponent("v2", isDirectory: true)
+            .appendingPathComponent("default.store", isDirectory: false)
+        try writeStoreFiles(at: versionTwoStoreURL)
+
+        let storeURL = try SwiftDataStoreLocation.storeURL(
+            applicationSupportDirectory: applicationSupportDirectory
+        )
+
+        try assertStoreFiles(at: storeURL)
+        try assertStoreFiles(at: versionTwoStoreURL)
+    }
+
+    func testStoreURLFallsBackToVersionOneStore() throws {
+        let applicationSupportDirectory = temporaryApplicationSupportDirectory()
+        let versionOneStoreURL = applicationSupportDirectory
             .appendingPathComponent("HorongHorong", isDirectory: true)
             .appendingPathComponent("Stores", isDirectory: true)
             .appendingPathComponent("v1", isDirectory: true)
             .appendingPathComponent("default.store", isDirectory: false)
-        try writeStoreFiles(at: previousStoreURL)
+        try writeStoreFiles(at: versionOneStoreURL)
 
         let storeURL = try SwiftDataStoreLocation.storeURL(
             applicationSupportDirectory: applicationSupportDirectory
@@ -53,7 +70,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         try assertStoreFiles(at: storeURL)
     }
 
-    func testStoreURLCopiesLegacyRootStoreIntoCurrentGeneration() throws {
+    func testStoreURLCopiesLegacyRootStoreIntoStableStore() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
         let legacyStoreURL = applicationSupportDirectory.appendingPathComponent(
             "default.store",
@@ -68,9 +85,9 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         try assertStoreFiles(at: storeURL)
     }
 
-    func testStoreURLDoesNotOverwriteExistingVersionedStore() throws {
+    func testStoreURLDoesNotOverwriteExistingStableStore() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        let storeURL = versionedStoreURL(
+        let storeURL = stableStoreURL(
             in: applicationSupportDirectory,
             scope: .production
         )
@@ -109,7 +126,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
 
         XCTAssertEqual(
             developmentStoreURL,
-            versionedStoreURL(
+            stableStoreURL(
                 in: applicationSupportDirectory,
                 scope: .development
             )
@@ -121,7 +138,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
 
     func testExistingStoreIsBackedUpOncePerBuild() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        let storeURL = versionedStoreURL(
+        let storeURL = stableStoreURL(
             in: applicationSupportDirectory,
             scope: .production
         )
@@ -158,7 +175,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
 
     func testBackupRetentionKeepsLatestFiveBuilds() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        let storeURL = versionedStoreURL(
+        let storeURL = stableStoreURL(
             in: applicationSupportDirectory,
             scope: .production
         )
@@ -192,17 +209,13 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         return directory
     }
 
-    private func versionedStoreURL(
+    private func stableStoreURL(
         in applicationSupportDirectory: URL,
         scope: SwiftDataStoreLocation.Scope
     ) -> URL {
         applicationSupportDirectory
             .appendingPathComponent(scope.directoryName, isDirectory: true)
             .appendingPathComponent("Stores", isDirectory: true)
-            .appendingPathComponent(
-                "v\(SwiftDataStoreLocation.storeGeneration)",
-                isDirectory: true
-            )
             .appendingPathComponent("default.store", isDirectory: false)
     }
 
@@ -213,10 +226,7 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         applicationSupportDirectory
             .appendingPathComponent(scope.directoryName, isDirectory: true)
             .appendingPathComponent("Backups", isDirectory: true)
-            .appendingPathComponent(
-                "v\(SwiftDataStoreLocation.storeGeneration)",
-                isDirectory: true
-            )
+            .appendingPathComponent("current", isDirectory: true)
     }
 
     private func writeStoreFiles(
