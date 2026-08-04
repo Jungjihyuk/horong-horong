@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-08-05
+
 ### 추가
 
 - 포모도로 진행 중 최근 10분의 몰입도와 앱 전환 횟수로 흐트러짐을 감지하고, 호로롱이가 판정 이유와 측정값을 알려주는 집중 넛지를 추가했습니다.
@@ -120,7 +122,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.5
 [0.2.4]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.4
 [0.2.3]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.3
 [0.2.2]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.2
