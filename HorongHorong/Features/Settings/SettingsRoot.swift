@@ -124,6 +124,7 @@ struct SettingsRoot: View {
         case .hotkey:     HotkeyPage()
         case .category:   CategoryMappingPage()
         case .stats:      StatsPage()
+        case .focus:      FocusPage()
         case .achievement: AchievementPage()
         case .news:       NewsPage()
         case .agent:      AgentPage()
@@ -172,6 +173,11 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineStartHour)
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineEndHour)
             defaults.removeObject(forKey: Constants.AppStorageKey.timelineBucketMinutes)
+        case .focus:
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionFocusNudgeEnabled)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionFocusNudgeMessages)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionFocusNudgeLastMessage)
+            defaults.removeObject(forKey: Constants.AppStorageKey.companionFocusScoreThreshold)
         case .achievement:
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
