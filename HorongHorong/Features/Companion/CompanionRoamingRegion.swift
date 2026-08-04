@@ -69,6 +69,14 @@ enum CompanionRoamingRegion {
         )
     }
 
+    /// 캐릭터 자체가 화면 정중앙에 오도록 스프라이트 좌하단을 계산한다.
+    static func centeredSpriteOrigin(stage: CGRect, spriteSize: CGSize) -> CGPoint {
+        CGPoint(
+            x: stage.midX - spriteSize.width / 2,
+            y: stage.midY - spriteSize.height / 2
+        )
+    }
+
     /// 사람이 읽을 수 있는 영역 설명. 설정 화면에 그대로 쓴다.
     static func description(for rect: CGRect?) -> String {
         guard let rect else { return "화면 전체" }

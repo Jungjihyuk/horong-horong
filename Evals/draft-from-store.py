@@ -21,7 +21,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-STORE = Path.home() / "Library/Application Support/HorongHorong/Stores/v2/default.store"
+STORE = Path.home() / "Library/Application Support/HorongHorong/Stores/default.store"
 ROOT = Path(__file__).resolve().parent.parent
 DRAFTS = ROOT / "Evals/golden/drafts"
 

@@ -84,6 +84,24 @@ struct PomodoroSessionObservation: Equatable {
         max(0, recordedSeconds - ambiguousOverlapSeconds)
     }
 
+    /// 앱은 기록됐지만 아직 카테고리를 모르는 시간.
+    var unclassifiedSeconds: Int {
+        categories
+            .filter { $0.category == Constants.unclassifiedAppCategory }
+            .reduce(0) { $0 + max(0, $1.durationSeconds) }
+    }
+
+    /// 앱 사용 기록 중 카테고리까지 알 수 있는 시간.
+    var classifiedAppSeconds: Int {
+        max(0, attributedSeconds - unclassifiedSeconds)
+    }
+
+    /// 기록된 앱 사용 중 카테고리를 아는 비율. 앱 기록이 없으면 분류 문제도 없으므로 nil이다.
+    var classifiedAppRatio: Double? {
+        guard attributedSeconds > 0 else { return nil }
+        return Double(classifiedAppSeconds) / Double(attributedSeconds)
+    }
+
     var averageAppUsageRunSeconds: Double? {
         guard appUsageRunCount > 0 else { return nil }
         return Double(attributedSeconds) / Double(appUsageRunCount)

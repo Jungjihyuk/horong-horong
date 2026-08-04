@@ -246,6 +246,7 @@ struct ManualSegmentEditorView: View {
         session.focusMinutes = max(1, Int(ceil(draft.end.timeIntervalSince(draft.start) / 60)))
         session.completed = true
         session.actualFocusSeconds = newDuration
+        session.resetPauseIntervalsForContinuousSession()
 
         syncFocusRecord(category: oldCategory, date: oldStart, deltaSeconds: -oldDuration)
         syncFocusRecord(category: draft.category, date: draft.start, deltaSeconds: newDuration)
