@@ -23,6 +23,7 @@ struct CategoryMappingPage: View {
     @State private var categoryRules: [AppCategoryRule] = []
     @State private var websiteRules: [AppCategoryRule] = []
     @State private var unclassifiedApps: [UnclassifiedAppUsage] = []
+    @State private var focusSamples: [FocusScoreSample] = []
     @State private var categoryStore = CategoryStore.shared
     @State private var idleThresholdStore = IdleThresholdStore.shared
     @State private var pairStore = CategoryPairStore.shared
@@ -284,6 +285,14 @@ struct CategoryMappingPage: View {
                     .frame(width: 120)
                 }
 
+                Text("포모도로에서 기록된 앱 사용 시간의 50%를 초과해 미분류이면, 피드백 저장 후 분류를 안내합니다.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+
                 if !unclassifiedApps.isEmpty {
                     appRuleGroupHeader(
                         category: Constants.unclassifiedAppCategory,
@@ -378,6 +387,9 @@ struct CategoryMappingPage: View {
     private func appRuleGroupTitle(_ category: String) -> String {
         if category == Self.excludedRuleGroup {
             return "기록 안 함"
+        }
+        if category == Constants.unclassifiedAppCategory {
+            return "분류 필요"
         }
         if Constants.isProductivityManagementCategory(category) {
             return Constants.productivityManagementAppCategory
@@ -708,6 +720,23 @@ struct CategoryMappingPage: View {
                     .padding(.top, 10)
                     .padding(.bottom, 4)
 
+                if let suggestion = pairSuggestion {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wand.and.stars")
+                            .foregroundStyle(Color.accentColor)
+                        Text("\(suggestion.category) ↔ \(suggestion.partner) · \(Int((suggestion.share * 100).rounded()))%")
+                            .font(.caption.bold())
+                        Spacer(minLength: 8)
+                        Button("짝으로 묶기") {
+                            pairStore.add(suggestion.category, suggestion.partner)
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor.opacity(0.06))
+                }
+
                 if pairStore.pairs.isEmpty {
                     Text("등록된 짝이 없습니다")
                         .font(.caption)
@@ -748,6 +777,13 @@ struct CategoryMappingPage: View {
                 .padding(.vertical, 10)
             }
         }
+    }
+
+    private var pairSuggestion: FocusPairSuggestion? {
+        FocusPairSuggester.strongestSuggestion(
+            samples: focusSamples,
+            isPaired: { pairStore.contains($0, $1) }
+        )
     }
 
     private var addPairForm: some View {
@@ -1108,6 +1144,7 @@ struct CategoryMappingPage: View {
         unclassifiedApps = AppClassificationService.allUnclassifiedApps(
             modelContext: modelContext
         )
+        focusSamples = FocusScoreHistory.samples(modelContext: modelContext)
     }
 
     private func insertMissingDefaultRules() {

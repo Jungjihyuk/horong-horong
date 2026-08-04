@@ -278,6 +278,7 @@ enum HorongHorongModelSchema {
             BreakTransitionIntent.self,
             AttentionEvent.self,
             AttentionDaySummary.self,
+            FocusNudgeEvent.self,
             StatsAggregateCache.self,
             AppCategoryRule.self,
             NewsJob.self,
