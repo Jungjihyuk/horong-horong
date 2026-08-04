@@ -2,21 +2,58 @@ import Foundation
 
 /// 집중 세션 한 건의 몰입도.
 ///
-/// 정의는 한 줄이다 — **하기로 한 일에 쓴 시간 ÷ 세션 전체 시간**.
-/// 자리를 비웠거나 기록되지 않은 시간도 분모에 남는다. 포모도로 25분은 책상에 있기로 한 시간이므로
+/// 정의는 한 줄이다 — **하기로 한 일에 쓴 시간 ÷ 무슨 일인지 알 수 있는 시간**.
+///
+/// 자리를 비웠거나 기록되지 않은 시간은 분모에 남는다. 포모도로 25분은 책상에 있기로 한 시간이므로
 /// 자리를 비운 것도 몰입하지 않은 것으로 센다.
+/// 반면 **매핑하지 않은 앱(미분류)에 쓴 시간은 분자·분모 양쪽에서 뺀다.** 그건 딴짓이라는 사실이
+/// 아니라 아직 모른다는 뜻이라, 딴짓으로 세면 처음 쓰는 업무 앱을 켠 사람을 몰아세우게 된다.
 struct FocusScore: Equatable {
     /// 집중 카테고리 + 짝 카테고리에 쓴 시간.
     let focusSeconds: Int
+    /// 무슨 일인지 알 수 있는 시간. 세션 전체에서 미분류 앱 시간을 뺀 값.
+    let measuredSeconds: Int
     /// 세션 전체 시간.
     let totalSeconds: Int
+    /// 실제 앱 사용 기록 중 카테고리를 아는 시간.
+    let classifiedAppSeconds: Int
+    /// 카테고리 판정이 가능한 앱 사용 기록 전체 시간. 겹쳐서 귀속할 수 없는 시간은 제외한다.
+    let recordedAppSeconds: Int
 
-    static let zero = FocusScore(focusSeconds: 0, totalSeconds: 0)
+    /// 기록된 앱 사용의 이만큼은 카테고리를 알아야 몰입도를 말한다.
+    static let minimumClassifiedAppRatio = 0.5
 
-    /// 0...1. 잴 시간이 없으면 0.
+    init(
+        focusSeconds: Int,
+        measuredSeconds: Int,
+        totalSeconds: Int,
+        classifiedAppSeconds: Int? = nil,
+        recordedAppSeconds: Int? = nil
+    ) {
+        self.focusSeconds = max(0, focusSeconds)
+        self.measuredSeconds = max(0, measuredSeconds)
+        self.totalSeconds = max(0, totalSeconds)
+        // 기존 호출부는 종전의 measured / total 판정을 그대로 유지한다. 실제 관측 계산은 아래 두 값을 넘긴다.
+        self.classifiedAppSeconds = max(0, classifiedAppSeconds ?? measuredSeconds)
+        self.recordedAppSeconds = max(0, recordedAppSeconds ?? totalSeconds)
+    }
+
+    /// 0...1. 잴 시간이 없으면 0. 이 값을 쓰기 전에 `isMeasurable` 을 먼저 봐야 한다.
     var value: Double {
-        guard totalSeconds > 0 else { return 0 }
-        return min(1, max(0, Double(focusSeconds) / Double(totalSeconds)))
+        guard measuredSeconds > 0 else { return 0 }
+        return min(1, max(0, Double(focusSeconds) / Double(measuredSeconds)))
+    }
+
+    /// 기록된 앱 사용의 카테고리를 몰입도를 말할 만큼 알고 있는가.
+    ///
+    /// 매핑하지 않은 앱으로 세션 내내 일한 경우 `value` 는 0 이 되지만 그건 딴짓해서가 아니다.
+    /// 그 세션은 판정하지 않고 넘어간다.
+    var isMeasurable: Bool {
+        guard totalSeconds > 0 else { return false }
+        // 앱 기록이 전혀 없는 시간은 기존 정책대로 미기록(비집중)으로 다룬다.
+        guard recordedAppSeconds > 0 else { return true }
+        return Double(classifiedAppSeconds) / Double(recordedAppSeconds)
+            >= Self.minimumClassifiedAppRatio
     }
 }
 
@@ -45,7 +82,7 @@ enum FocusPairSuggester {
 
     /// 집중 카테고리와 실제 쓰는 앱의 카테고리가 어긋나면 몰입도는 낮게 나오지만 딴짓이 아니다.
     /// (예: 공부로 포모도로를 걸고 에디터로 공부하기)
-    /// 기준선을 낮추는 것으로 덮지 말고 짝으로 묶어 지표 자체를 바로잡게 안내한다.
+    /// 판정 기준을 느슨하게 만드는 것으로 덮지 말고 짝으로 묶어 지표 자체를 바로잡게 안내한다.
     static func suggestion(
         category: String,
         samples: [FocusScoreSample],
@@ -62,7 +99,14 @@ enum FocusPairSuggester {
         guard total > 0 else { return nil }
 
         let candidate = secondsByCategory
-            .filter { $0.key != category && !isPaired(category, $0.key) }
+            // 미분류·생산성 관리 같은 예약 카테고리는 짝이 될 수 없다.
+            // 짝 편집 화면은 사용자 카테고리에서만 고르게 해 이걸 막는데, 자동 제안이 그 관문을
+            // 우회하면 "업무 ↔ 미분류" 가 묶여 앞으로 매핑 안 된 앱이 전부 몰입으로 계산된다.
+            .filter {
+                $0.key != category
+                    && !Constants.reservedCategoryNames.contains($0.key)
+                    && !isPaired(category, $0.key)
+            }
             // 같은 시간이면 이름순으로 골라 실행할 때마다 제안이 바뀌지 않게 한다.
             .max { lhs, rhs in
                 lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key > rhs.key
@@ -76,7 +120,7 @@ enum FocusPairSuggester {
 
     /// 가장 크게 어긋난 카테고리 하나.
     ///
-    /// 전체 보기에서도 보여줘야 한다. 어긋난 카테고리 하나가 전체 기준선을 바닥까지 끌어내리는데,
+    /// 전체 보기에서도 보여줘야 한다. 어긋난 카테고리 하나가 전체 몰입도를 바닥까지 끌어내리는데,
     /// 그 사실이 카테고리를 골라봐야만 드러나면 사용자는 원인을 영영 못 찾는다.
     static func strongestSuggestion(
         samples: [FocusScoreSample],
@@ -99,64 +143,139 @@ enum FocusScoreCalculator {
         focusCategory: String,
         isPaired: (String, String) -> Bool
     ) -> FocusScore {
-        let focusSeconds = observation.categories
-            .filter { $0.category == focusCategory || isPaired(focusCategory, $0.category) }
-            .reduce(0) { $0 + max(0, $1.durationSeconds) }
+        var focusSeconds = 0
+        var unknownSeconds = 0
+        for entry in observation.categories {
+            let seconds = max(0, entry.durationSeconds)
+            if entry.category == Constants.unclassifiedAppCategory {
+                unknownSeconds += seconds
+            } else if entry.category == focusCategory || isPaired(focusCategory, entry.category) {
+                focusSeconds += seconds
+            }
+        }
 
+        let totalSeconds = max(0, observation.sessionSeconds)
         return FocusScore(
             focusSeconds: focusSeconds,
-            totalSeconds: max(0, observation.sessionSeconds)
+            measuredSeconds: max(0, totalSeconds - unknownSeconds),
+            totalSeconds: totalSeconds,
+            classifiedAppSeconds: observation.classifiedAppSeconds,
+            recordedAppSeconds: observation.attributedSeconds
         )
     }
 }
 
-enum FocusScoreThreshold {
-    /// 과거 기록이 없을 때 쓸 기준선.
-    static let fallback = 0.60
-    /// 선이 그래프 밖으로 나가면 다시 잡을 수 없다. 위아래로 여백을 남긴다.
-    static let range: ClosedRange<Double> = 0.05...0.95
+enum FocusNudgeDetectionMode: String {
+    case personalized
+    case ruleBased
+}
 
-    static func clamped(_ value: Double) -> Double {
-        min(range.upperBound, max(range.lowerBound, value))
-    }
+enum FocusNudgeFrequencyMode: String {
+    case unlimited
+    case limited
+}
 
-    /// 첫 기준선. 과거 몰입도의 하위 25% 지점을 잡아 "평소보다 안 되는 날" 만 걸리게 한다.
-    /// 평균을 쓰면 절반이 걸려 잔소리가 일상이 된다.
-    static func percentileDefault(_ scores: [Double]) -> Double {
-        guard !scores.isEmpty else { return fallback }
-        let sorted = scores.sorted()
-        // nearest-rank. 표본이 하나면 그 값이 그대로 기준이 된다.
-        let rank = Int((0.25 * Double(sorted.count)).rounded(.up))
-        let index = min(sorted.count - 1, max(0, rank - 1))
-        return clamped(sorted[index])
-    }
+/// 최근 10분 한 창에 적용할 설명 가능한 규칙.
+///
+/// 두 조건은 OR 이다. 몰입 시간이 부족하거나 앱을 너무 자주 옮겨 다닌 경우 중 하나만
+/// 만족해도 위반으로 본다.
+struct FocusNudgeDetectionRule: Equatable {
+    static let focusRatioRange: ClosedRange<Double> = 0.05...0.95
+    static let appSwitchRange: ClosedRange<Int> = 0...100
 
-    /// 이 기준이었다면 몇 번 걸렸을지. 선 위에 정확히 걸친 값은 세지 않는다.
-    static func belowCount(_ scores: [Double], threshold: Double) -> Int {
-        scores.filter { $0 < threshold }.count
+    let minimumFocusRatio: Double
+    let maximumAppSwitches: Int
+
+    init(minimumFocusRatio: Double, maximumAppSwitches: Int) {
+        self.minimumFocusRatio = min(
+            Self.focusRatioRange.upperBound,
+            max(Self.focusRatioRange.lowerBound, minimumFocusRatio)
+        )
+        self.maximumAppSwitches = min(
+            Self.appSwitchRange.upperBound,
+            max(Self.appSwitchRange.lowerBound, maximumAppSwitches)
+        )
     }
 }
 
-/// 판정에 필요한 전부. 조건이 이 다섯 줄을 넘지 않아야 사용자가 설명을 듣고 납득한다.
-struct FocusScoreNudgeInput: Equatable {
-    let isFocusing: Bool
-    let elapsedSeconds: TimeInterval
-    let score: Double
-    let threshold: Double
-    /// 이번 세션에서 이미 말을 걸었는지.
-    let hasNudgedThisSession: Bool
+enum FocusNudgePolicySource: String, Equatable {
+    case ruleBased
+    case personalized
+
+    var thresholdLabel: String {
+        switch self {
+        case .ruleBased: return "설정 기준"
+        case .personalized: return "개인 기준"
+        }
+    }
 }
 
-enum FocusScoreDetector {
-    /// 세션 초반에는 분모가 작아 앱 하나만 잘못 잡아도 0% 가 된다. 그때까지는 보지 않는다.
-    static let warmUpSeconds: TimeInterval = 5 * 60
+struct FocusNudgePolicy: Equatable {
+    let source: FocusNudgePolicySource
+    let rule: FocusNudgeDetectionRule
+    /// nil 이면 세션당 상한이 없다. 같은 위반 상태에서는 한 번만 말하고 회복해야 재활성화된다.
+    let maximumNudgesPerSession: Int?
+}
 
-    /// 규칙은 하나다 — 5분이 지난 뒤 몰입도가 기준선 아래로 떨어지면, 세션당 한 번.
-    static func shouldNudge(_ input: FocusScoreNudgeInput) -> Bool {
-        guard input.isFocusing else { return false }
-        guard !input.hasNudgedThisSession else { return false }
-        guard input.elapsedSeconds >= warmUpSeconds else { return false }
-        return input.score < input.threshold
+/// 최근 10분의 실제 관측값. 창이 온전히 쌓이지 않았으면 이 값 자체를 만들지 않는다.
+struct FocusNudgeWindowMetrics: Equatable {
+    let score: FocusScore
+    let appSwitchCount: Int
+}
+
+struct FocusRatioViolation: Equatable {
+    let observed: Double
+    let minimum: Double
+}
+
+struct FocusAppSwitchViolation: Equatable {
+    let observed: Int
+    let maximum: Int
+}
+
+struct FocusNudgeViolation: Equatable {
+    let focusRatio: FocusRatioViolation?
+    let appSwitches: FocusAppSwitchViolation?
+
+    var isEmpty: Bool { focusRatio == nil && appSwitches == nil }
+}
+
+enum FocusNudgeDetector {
+    /// 최근 창의 관측값이 어느 기준을 넘었는지 사실만 돌려준다.
+    static func violation(
+        metrics: FocusNudgeWindowMetrics,
+        rule: FocusNudgeDetectionRule
+    ) -> FocusNudgeViolation {
+        let focusViolation = metrics.score.isMeasurable
+            && metrics.score.value < rule.minimumFocusRatio
+            ? FocusRatioViolation(
+                observed: metrics.score.value,
+                minimum: rule.minimumFocusRatio
+            )
+            : nil
+        let switchViolation = metrics.appSwitchCount > rule.maximumAppSwitches
+            ? FocusAppSwitchViolation(
+                observed: metrics.appSwitchCount,
+                maximum: rule.maximumAppSwitches
+            )
+            : nil
+        return FocusNudgeViolation(
+            focusRatio: focusViolation,
+            appSwitches: switchViolation
+        )
+    }
+
+    /// 위반이 계속되는 동안은 다시 말하지 않는다. 정상 창을 한 번 확인해야 다음 위반이 새로 열린다.
+    static func shouldNudge(
+        isFocusing: Bool,
+        violation: FocusNudgeViolation,
+        isViolationLatched: Bool,
+        nudgeCount: Int,
+        maximumNudgesPerSession: Int?
+    ) -> Bool {
+        guard isFocusing, !violation.isEmpty, !isViolationLatched else { return false }
+        guard let maximumNudgesPerSession else { return true }
+        return nudgeCount < max(1, maximumNudgesPerSession)
     }
 }
 
@@ -186,5 +305,27 @@ enum FocusScoreMessages {
             return first
         }
         return pool[(index + 1) % pool.count]
+    }
+
+    /// 무엇이 얼마만큼 기준을 넘었는지 먼저 말하고 사용자가 고른 문구를 이어 붙인다.
+    static func explained(
+        baseMessage: String,
+        violation: FocusNudgeViolation,
+        source: FocusNudgePolicySource
+    ) -> String {
+        var reasons: [String] = []
+        if let focusRatio = violation.focusRatio {
+            reasons.append(
+                "최근 10분 몰입 시간이 \(Int((focusRatio.observed * 100).rounded()))%로 "
+                    + "\(source.thresholdLabel) \(Int((focusRatio.minimum * 100).rounded()))%보다 낮아요."
+            )
+        }
+        if let appSwitches = violation.appSwitches {
+            reasons.append(
+                "최근 10분 앱 전환이 \(appSwitches.observed)회로 "
+                    + "\(source.thresholdLabel) \(appSwitches.maximum)회를 넘었어요."
+            )
+        }
+        return (reasons + [baseMessage]).joined(separator: " ")
     }
 }

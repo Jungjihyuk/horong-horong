@@ -119,6 +119,20 @@ final class CompanionRoamingRegionTests: XCTestCase {
         XCTAssertEqual(bounds.maxY, main.maxY - spriteSize.height)
     }
 
+    func testCenteredSpriteOriginPlacesCompanionAtStageCenter() {
+        let stage = CGRect(x: -1_920, y: 24, width: 1_920, height: 1_056)
+        let spriteSize = CGSize(width: 96, height: 104)
+
+        let origin = CompanionRoamingRegion.centeredSpriteOrigin(
+            stage: stage,
+            spriteSize: spriteSize
+        )
+        let spriteFrame = CGRect(origin: origin, size: spriteSize)
+
+        XCTAssertEqual(spriteFrame.midX, stage.midX, accuracy: 0.001)
+        XCTAssertEqual(spriteFrame.midY, stage.midY, accuracy: 0.001)
+    }
+
     func testBoundsCollapseWhenRegionIsSmallerThanSprite() {
         let region = CGRect(x: 300, y: 300, width: 40, height: 40)
         let bounds = CompanionRoamingRegion.bounds(region: region, stage: main, spriteSize: spriteSize)

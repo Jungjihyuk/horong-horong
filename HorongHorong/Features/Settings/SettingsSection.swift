@@ -65,7 +65,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .hotkey:     return "keyboard"
         case .category:   return "square.grid.2x2"
         case .stats:      return "chart.bar"
-        case .focus:      return "chart.bar.xaxis"
+        case .focus:      return "flame.fill"
         case .achievement: return "target"
         case .news:       return "newspaper"
         case .agent:      return "bolt.horizontal.circle"

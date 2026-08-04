@@ -76,14 +76,18 @@ final class TimerManager: @unchecked Sendable {
         startCountdown()
     }
 
-    func pause() {
+    func pause(at now: Date = Date()) {
         guard appState.timerState == .focusing else { return }
-        appState.timerState = .paused
         timer?.invalidate()
+        currentSession?.recordPauseStarted(at: now)
+        try? modelContext?.save()
+        appState.timerState = .paused
     }
 
-    func resume() {
+    func resume(at now: Date = Date()) {
         guard appState.timerState == .paused else { return }
+        currentSession?.recordPauseEnded(at: now)
+        try? modelContext?.save()
         appState.timerState = .focusing
         startCountdown()
     }
@@ -124,7 +128,9 @@ final class TimerManager: @unchecked Sendable {
             return nil
         }
 
-        session.endedAt = Date()
+        let endedAt = Date()
+        session.recordPauseEnded(at: endedAt)
+        session.endedAt = endedAt
         session.completed = true
         session.actualFocusSeconds = actualSeconds
         session.endKind = .recordedEarly
