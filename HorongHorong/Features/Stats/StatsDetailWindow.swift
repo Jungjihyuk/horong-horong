@@ -2407,6 +2407,8 @@ struct FocusDetailView: View {
                     filteredEmptyState
                 } else {
                     periodFocusContent
+                    // 이 카드만 기간 선택과 무관하게 최근 몇 주를 본다. 추이는 기간을 좁히면 안 보인다.
+                    FocusNudgeTrendCard()
                     taskGroupListSection
                 }
             }

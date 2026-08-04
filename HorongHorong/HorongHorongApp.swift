@@ -278,6 +278,7 @@ enum HorongHorongModelSchema {
             BreakTransitionIntent.self,
             AttentionEvent.self,
             AttentionDaySummary.self,
+            FocusNudgeEvent.self,
             StatsAggregateCache.self,
             AppCategoryRule.self,
             NewsJob.self,
@@ -625,6 +626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
+        FocusThresholdStore.shared.renameCategory(from: oldCategory, to: newCategory)
         CategoryManager.shared.loadUserRules(from: context)
     }
 }
