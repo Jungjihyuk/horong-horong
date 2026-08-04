@@ -556,6 +556,12 @@ enum Constants {
     static let defaultCompanionFocusNudgeEnabled = true
     /// 등록할 수 있는 넛지 문구 전체 길이 상한.
     static let companionFocusNudgeMessagesMaxLength = 500
+    static let defaultFocusNudgeDetectionMode = FocusNudgeDetectionMode.ruleBased
+    static let defaultFocusNudgeFrequencyMode = FocusNudgeFrequencyMode.limited
+    static let defaultFocusNudgeRequiredFeedbackCount = 20
+    static let defaultFocusNudgeManualFocusPercent = 60
+    static let defaultFocusNudgeManualMaxAppSwitches = 6
+    static let defaultFocusNudgeMaximumPerSession = 2
     /// 스프라이트 원본(192×208) 의 절반. 화면에서 부담스럽지 않은 크기.
     static let companionSpriteSize = CGSize(width: 96, height: 104)
     /// 말풍선까지 담는 오버레이 창 크기. 스프라이트는 하단 중앙에 놓인다.
@@ -830,8 +836,18 @@ enum Constants {
         static let companionFocusNudgeMessages = "companion.focusNudgeMessages"
         /// 직전에 쓴 문구. 같은 말이 연달아 나오지 않게 한다.
         static let companionFocusNudgeLastMessage = "companion.focusNudgeLastMessage"
-        /// 사용자가 그래프에서 직접 그은 몰입도 기준선(0...1).
-        static let companionFocusScoreThreshold = "companion.focusScoreThreshold"
+        static let companionFocusNudgeDetectionMode = "companion.focusNudgeDetectionMode"
+        static let companionFocusNudgeRequiredFeedbackCount =
+            "companion.focusNudgeRequiredFeedbackCount"
+        static let companionFocusNudgeManualFocusPercent =
+            "companion.focusNudgeManualFocusPercent"
+        static let companionFocusNudgeManualMaxAppSwitches =
+            "companion.focusNudgeManualMaxAppSwitches"
+        static let companionFocusNudgeFrequencyMode = "companion.focusNudgeFrequencyMode"
+        static let companionFocusNudgeMaximumPerSession =
+            "companion.focusNudgeMaximumPerSession"
+        static let companionFocusNudgePendingEvents = "companion.focusNudgePendingEvents"
+        static let companionFocusNudgeSessionState = "companion.focusNudgeSessionState"
         static let companionUserNickname = "companion.userNickname"
         static let companionUserNote = "companion.userNote"
         static let companionOnboardingSeen = "companion.onboardingSeen"

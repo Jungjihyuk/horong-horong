@@ -1409,6 +1409,39 @@ final class ConstantsDefaultsTests: XCTestCase {
     }
 
     @MainActor
+    func testTimerManagerRecordsPauseIntervalAcrossResume() throws {
+        let schema = Schema([FocusSession.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let appState = AppState()
+        appState.focusMinutes = 30
+        let manager = TimerManager(appState: appState)
+        manager.setModelContext(context)
+        manager.startFocus(category: "개발")
+
+        let session = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        session.startedAt = start
+        manager.pause(at: start.addingTimeInterval(10 * 60))
+        manager.resume(at: start.addingTimeInterval(30 * 60))
+
+        XCTAssertEqual(appState.timerState, .focusing)
+        XCTAssertNil(session.pauseStartedAt)
+        XCTAssertEqual(
+            session.pauseIntervals,
+            [
+                FocusSessionPauseInterval(
+                    startedAt: start.addingTimeInterval(10 * 60),
+                    endedAt: start.addingTimeInterval(30 * 60)
+                ),
+            ]
+        )
+
+        manager.discardCurrentFocus()
+    }
+
+    @MainActor
     func testTimerManagerDiscardsCurrentFocusWithoutPersistingSession() throws {
         let schema = Schema([FocusSession.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
@@ -4825,6 +4858,8 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertNil(sessions.first?.linkedMemoID)
         XCTAssertNil(sessions.first?.taskTitleSnapshot)
         XCTAssertNil(sessions.first?.reflectionDeferredAt)
+        XCTAssertNil(sessions.first?.pauseIntervalsData)
+        XCTAssertNil(sessions.first?.pauseStartedAt)
         XCTAssertTrue(
             try updatedContainer.mainContext.fetch(
                 FetchDescriptor<PomodoroTaskCompletion>()

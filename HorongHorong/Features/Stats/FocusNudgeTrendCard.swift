@@ -2,10 +2,7 @@ import Charts
 import SwiftData
 import SwiftUI
 
-/// 몰입 상세 아래에 붙는 "기준을 얼마나 지키고 있나" 카드.
-///
-/// 여기 몰입도(%)는 설정 → 몰입의 그 숫자다. 같은 화면 위쪽의 **몰입 점수(1–5)** 는
-/// 세션이 끝난 뒤 직접 고른 체감이라 서로 다른 값이다. 이름을 갈라 적는 이유가 그것이다.
+/// 실제로 표시된 집중 잔소리와 세션 몰입도의 주간 추이.
 struct FocusNudgeTrendCard: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -18,11 +15,11 @@ struct FocusNudgeTrendCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("기준선 지키기 추이")
+                Text("집중 잔소리 추이")
                     .font(.headline)
                     .foregroundStyle(PopoverChrome.ink)
                 Spacer()
-                Text("최근 \(FocusTrendBuilder.weekCount)주 · 설정 → 몰입의 기준선 기준")
+                Text("최근 \(FocusTrendBuilder.weekCount)주 · 실제 표시 기록")
                     .font(.caption)
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
@@ -34,13 +31,11 @@ struct FocusNudgeTrendCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
             } else {
-                onTargetChart
                 nudgeChart
                 categoryChart
 
                 Divider()
-                Text("잔소리는 몰입도가 낮을 때만 뜨므로, 잔소리 뒤에 좋아진 것처럼 보여도 "
-                    + "그것만으로 효과라고 볼 수는 없어요. 달성률이 꾸준히 오르는지를 보세요.")
+                Text("횟수는 호로롱이가 화면에 실제로 나타난 경우만 셉니다. 설정을 바꿔도 과거 횟수는 다시 계산하지 않습니다.")
                     .font(.caption2)
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -52,47 +47,13 @@ struct FocusNudgeTrendCard: View {
 
     // MARK: - 차트
 
-    private var onTargetChart: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("주간 기준선 달성률")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(PopoverChrome.ink)
-            Text("그 주 세션 중 몰입도가 기준선 이상이었던 비율")
-                .font(.caption2)
-                .foregroundStyle(PopoverChrome.inkTertiary)
-
-            Chart(weeks) { week in
-                LineMark(
-                    x: .value("주", week.weekStart, unit: .weekOfYear),
-                    y: .value("달성률", week.onTargetRatio * 100)
-                )
-                .foregroundStyle(PopoverChrome.accent)
-                PointMark(
-                    x: .value("주", week.weekStart, unit: .weekOfYear),
-                    y: .value("달성률", week.onTargetRatio * 100)
-                )
-                .foregroundStyle(PopoverChrome.accent)
-            }
-            .chartYScale(domain: 0...100)
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: [0, 50, 100]) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let percent = value.as(Int.self) { Text("\(percent)%") }
-                    }
-                }
-            }
-            .frame(height: Self.chartHeight)
-        }
-    }
-
     private var nudgeChart: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("주간 잔소리 횟수")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(PopoverChrome.ink)
             Text(totalNudgeCount > 0
-                ? "줄어들면 기준선 아래로 떨어지는 세션이 줄고 있다는 뜻이에요"
+                ? "말풍선이 실제로 표시된 횟수입니다"
                 : "아직 잔소리를 들은 기록이 없어요")
                 .font(.caption2)
                 .foregroundStyle(PopoverChrome.inkTertiary)
@@ -162,13 +123,12 @@ struct FocusNudgeTrendCard: View {
                 sortBy: [SortDescriptor(\.firedAt)]
             )
         )) ?? []
-        let nudges = events.map { FocusNudgeRecord(firedAt: $0.firedAt, category: $0.category) }
+        let nudgeDates = events.map(\.firedAt)
 
-        totalNudgeCount = nudges.count
+        totalNudgeCount = nudgeDates.count
         weeks = FocusTrendBuilder.weeks(
             samples: samples,
-            nudges: nudges,
-            threshold: { FocusThresholdStore.shared.threshold(for: $0) }
+            nudgeDates: nudgeDates
         )
         categoryPoints = FocusTrendBuilder.categoryWeeks(samples: samples)
     }

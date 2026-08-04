@@ -358,6 +358,21 @@ final class CompanionController {
         overlay.move(spriteOrigin: engine.position)
     }
 
+    private func moveOverlayToFocusNudgeCenter() {
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouseLocation) } ?? NSScreen.main
+        guard let stage = screen?.visibleFrame else {
+            moveOverlay()
+            return
+        }
+        overlay.move(
+            spriteOrigin: CompanionRoamingRegion.centeredSpriteOrigin(
+                stage: stage,
+                spriteSize: Constants.companionSpriteSize
+            )
+        )
+    }
+
     private func startTicking() {
         guard tickTimer == nil else { return }
         lastTickAt = Date()
@@ -1115,7 +1130,7 @@ final class CompanionController {
 
     // MARK: - 말풍선 유틸
 
-    /// 집중 넛지. 문구는 사용자가 등록한 그대로 말한다.
+    /// 집중 넛지. 판정 이유와 수치 뒤에 사용자가 등록한 문구를 이어 말한다.
     ///
     /// 집중 중에는 숨어 있으므로, 말할 때만 잠깐 나타났다 다시 사라진다.
     /// 대화나 온보딩이 떠 있으면 건너뛰고 false 를 돌려준다 — 이번 세션의 한 번을 쓴 것으로
@@ -1137,6 +1152,7 @@ final class CompanionController {
             appliedRoamingRegion = Self.roamingRegion
             rebuildEngine(force: true)
         }
+        moveOverlayToFocusNudgeCenter()
         overlay.show()
         startTicking()
 

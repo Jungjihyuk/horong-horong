@@ -626,7 +626,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
-        FocusThresholdStore.shared.renameCategory(from: oldCategory, to: newCategory)
         CategoryManager.shared.loadUserRules(from: context)
     }
 }
