@@ -18,6 +18,57 @@ enum FocusSessionEndKind: String {
     case recordedEarly = "recorded_early"
 }
 
+/// 포모도로가 실제로 멈춰 있던 벽시계 구간.
+struct FocusSessionPauseInterval: Codable, Equatable {
+    let startedAt: Date
+    let endedAt: Date
+}
+
+/// 연속된 세션 시간에서 일시정지 구간을 잘라 실제 집중 구간만 만든다.
+enum FocusSessionActivityIntervals {
+    static func make(
+        startedAt: Date,
+        endedAt: Date,
+        excluding pauses: [FocusSessionPauseInterval],
+        maximumActiveSeconds: TimeInterval? = nil
+    ) -> [DateInterval] {
+        guard endedAt > startedAt else { return [] }
+
+        var intervals: [DateInterval] = []
+        var cursor = startedAt
+        for pause in pauses.sorted(by: { $0.startedAt < $1.startedAt }) {
+            let pauseStart = max(startedAt, pause.startedAt)
+            let pauseEnd = min(endedAt, pause.endedAt)
+            guard pauseEnd > cursor else { continue }
+
+            if pauseStart > cursor {
+                intervals.append(DateInterval(start: cursor, end: min(pauseStart, endedAt)))
+            }
+            cursor = max(cursor, pauseEnd)
+            guard cursor < endedAt else { break }
+        }
+        if cursor < endedAt {
+            intervals.append(DateInterval(start: cursor, end: endedAt))
+        }
+
+        guard let maximumActiveSeconds else { return intervals }
+        var remaining = max(0, maximumActiveSeconds)
+        var limited: [DateInterval] = []
+        for interval in intervals where remaining > 0 {
+            let duration = min(interval.duration, remaining)
+            guard duration > 0 else { continue }
+            limited.append(
+                DateInterval(
+                    start: interval.start,
+                    end: interval.start.addingTimeInterval(duration)
+                )
+            )
+            remaining -= duration
+        }
+        return limited
+    }
+}
+
 enum FocusSessionTaskLinkUpdateError: LocalizedError, Equatable {
     case pendingChanges
     case sessionNotFound
@@ -54,6 +105,10 @@ final class FocusSession {
     /// 일시정지를 제외하고 카운트다운이 실제 진행된 초.
     /// nil = 이 기능 도입 이전에 만들어진 기록.
     var actualFocusSeconds: Int?
+    /// 닫힌 일시정지 구간을 JSON 으로 저장한다. nil 은 이 기능 도입 이전 세션이다.
+    var pauseIntervalsData: Data?
+    /// 현재 일시정지가 시작된 시각. 재개하거나 세션을 끝내면 닫힌 구간으로 옮긴다.
+    var pauseStartedAt: Date?
     /// 타이머 만료와 사용자의 기록 후 종료를 구분한다.
     var endKindRawValue: String?
     /// 몰입 지도에서 이 세션 점에 쓸 사용자 지정 색 키. nil = 카테고리 기본색.
@@ -78,6 +133,8 @@ final class FocusSession {
         self.taskTitleSnapshot = linkedMemoID == nil ? nil : Self.normalizedText(taskTitleSnapshot)
         self.inputActiveSeconds = nil
         self.actualFocusSeconds = nil
+        self.pauseIntervalsData = try? JSONEncoder().encode([FocusSessionPauseInterval]())
+        self.pauseStartedAt = nil
         self.endKindRawValue = nil
         self.markerColorKey = nil
         self.reflectionDeferredAt = nil
@@ -134,6 +191,43 @@ final class FocusSession {
 }
 
 extension FocusSession {
+    /// nil 과 빈 배열을 구분해 과거 세션에는 기존 단일 구간 계산을 유지한다.
+    var hasPauseIntervalTracking: Bool {
+        pauseIntervalsData != nil
+    }
+
+    var pauseIntervals: [FocusSessionPauseInterval] {
+        guard let pauseIntervalsData else { return [] }
+        return (try? JSONDecoder().decode(
+            [FocusSessionPauseInterval].self,
+            from: pauseIntervalsData
+        )) ?? []
+    }
+
+    func recordPauseStarted(at date: Date = Date()) {
+        guard pauseStartedAt == nil else { return }
+        pauseStartedAt = max(startedAt, date)
+    }
+
+    func recordPauseEnded(at date: Date = Date()) {
+        guard let pauseStartedAt else { return }
+        let pauseEnd = max(pauseStartedAt, date)
+        var intervals = pauseIntervals
+        if pauseEnd > pauseStartedAt {
+            intervals.append(
+                FocusSessionPauseInterval(startedAt: pauseStartedAt, endedAt: pauseEnd)
+            )
+            pauseIntervalsData = try? JSONEncoder().encode(intervals)
+        }
+        self.pauseStartedAt = nil
+    }
+
+    /// 사용자가 시작·종료 시각을 직접 고친 세션은 편집된 범위 전체를 하나의 집중 구간으로 본다.
+    func resetPauseIntervalsForContinuousSession() {
+        pauseIntervalsData = try? JSONEncoder().encode([FocusSessionPauseInterval]())
+        pauseStartedAt = nil
+    }
+
     var endKind: FocusSessionEndKind? {
         get { endKindRawValue.flatMap(FocusSessionEndKind.init(rawValue:)) }
         set { endKindRawValue = newValue?.rawValue }

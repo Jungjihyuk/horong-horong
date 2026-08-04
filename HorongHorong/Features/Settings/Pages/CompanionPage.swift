@@ -161,7 +161,8 @@ struct CompanionPage: View {
                     Text("알아줬으면 하는 것")
                         .font(.callout)
                     Text("대화할 때 참고할 배경을 적어주세요. 예: \"AI 엔지니어 취업 준비 중\", \"야근이 잦아요\"\n"
-                        + "\"~할 때 ~라고 해줘\" 같은 조건부 지시는 아직 지켜지지 않습니다.")
+                        + "여기 적은 것은 대화하는 내내 항상 적용됩니다. \"~할 때 ~라고 해줘\" 같은 조건부 지시는 "
+                        + "조건과 무관하게 튀어나오므로, 집중이 흐트러졌을 때 해줄 말은 설정 → 몰입에 적어주세요.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

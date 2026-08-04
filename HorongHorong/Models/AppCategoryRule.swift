@@ -105,6 +105,23 @@ struct UnclassifiedAppUsage: Identifiable, Equatable {
     var id: String { bundleIdentifier }
 }
 
+struct UnclassifiedAppAssessment: Equatable {
+    let apps: [UnclassifiedAppUsage]
+    /// 앱으로 귀속할 수 있었던 전체 기록 시간. 겹쳐 어느 앱인지 모르는 시간은 제외한다.
+    let recordedAppSeconds: Int
+    let unclassifiedAppSeconds: Int
+
+    var unclassifiedRatio: Double {
+        guard recordedAppSeconds > 0 else { return 0 }
+        return min(1, max(0, Double(unclassifiedAppSeconds) / Double(recordedAppSeconds)))
+    }
+
+    var needsClassificationFollowUp: Bool {
+        guard !apps.isEmpty, recordedAppSeconds > 0 else { return false }
+        return 1 - unclassifiedRatio < FocusScore.minimumClassifiedAppRatio
+    }
+}
+
 struct ProductivityManagementAppUsage: Identifiable, Equatable {
     let bundleIdentifier: String
     let appName: String
@@ -173,6 +190,19 @@ enum AppClassificationService {
         modelContext: ModelContext
     ) -> [ProductivityManagementAppUsage] {
         guard end > start else { return [] }
+        return productivityManagementAppUsages(
+            activeIntervals: [DateInterval(start: start, end: end)],
+            modelContext: modelContext
+        )
+    }
+
+    static func productivityManagementAppUsages(
+        activeIntervals: [DateInterval],
+        modelContext: ModelContext
+    ) -> [ProductivityManagementAppUsage] {
+        let intervals = normalized(activeIntervals)
+        guard let start = intervals.first?.start,
+              let end = intervals.last?.end else { return [] }
         let managementCategory = Constants.productivityManagementAppCategory
         let legacyCategory = Constants.legacySupportAppCategory
         let descriptor = FetchDescriptor<AppUsageSegment>(
@@ -187,9 +217,7 @@ enum AppClassificationService {
 
         return grouped.compactMap { bundleIdentifier, appSegments in
             let durationSeconds = appSegments.reduce(0) { total, segment in
-                let clippedStart = max(start, segment.startTime)
-                let clippedEnd = min(end, segment.endTime)
-                return total + max(0, Int(clippedEnd.timeIntervalSince(clippedStart)))
+                total + clippedDuration(of: segment, to: intervals)
             }
             guard durationSeconds >= Constants.productivityManagementReflectionThresholdSeconds else {
                 return nil
@@ -274,6 +302,59 @@ enum AppClassificationService {
         modelContext: ModelContext
     ) -> [UnclassifiedAppUsage] {
         guard end > start else { return [] }
+        return unclassifiedApps(
+            activeIntervals: [DateInterval(start: start, end: end)],
+            modelContext: modelContext
+        )
+    }
+
+    static func unclassifiedAssessment(
+        activeIntervals: [DateInterval],
+        modelContext: ModelContext
+    ) -> UnclassifiedAppAssessment {
+        let intervals = normalized(activeIntervals)
+        guard let start = intervals.first?.start,
+              let end = intervals.last?.end else {
+            return UnclassifiedAppAssessment(
+                apps: [],
+                recordedAppSeconds: 0,
+                unclassifiedAppSeconds: 0
+            )
+        }
+        let segments = (try? modelContext.fetch(
+            FetchDescriptor<AppUsageSegment>(
+                predicate: #Predicate { $0.startTime < end && $0.endTime > start },
+                sortBy: [SortDescriptor(\.startTime)]
+            )
+        )) ?? []
+        var recordedAppSeconds = 0
+        var unclassifiedAppSeconds = 0
+        for interval in intervals {
+            let observation = PomodoroSessionObservationBuilder.observation(
+                from: interval.start,
+                to: interval.end,
+                segments: segments
+            )
+            recordedAppSeconds += observation.attributedSeconds
+            unclassifiedAppSeconds += observation.unclassifiedSeconds
+        }
+        return UnclassifiedAppAssessment(
+            apps: unclassifiedApps(
+                activeIntervals: intervals,
+                modelContext: modelContext
+            ),
+            recordedAppSeconds: recordedAppSeconds,
+            unclassifiedAppSeconds: unclassifiedAppSeconds
+        )
+    }
+
+    static func unclassifiedApps(
+        activeIntervals: [DateInterval],
+        modelContext: ModelContext
+    ) -> [UnclassifiedAppUsage] {
+        let intervals = normalized(activeIntervals)
+        guard let start = intervals.first?.start,
+              let end = intervals.last?.end else { return [] }
         let unclassifiedCategory = Constants.unclassifiedAppCategory
         let descriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate {
@@ -290,9 +371,7 @@ enum AppClassificationService {
 
         return grouped.map { bundleIdentifier, segments in
             let duration = segments.reduce(0) { total, segment in
-                let clippedStart = max(start, segment.startTime)
-                let clippedEnd = min(end, segment.endTime)
-                return total + max(0, Int(clippedEnd.timeIntervalSince(clippedStart)))
+                total + clippedDuration(of: segment, to: intervals)
             }
             return UnclassifiedAppUsage(
                 bundleIdentifier: bundleIdentifier,
@@ -306,6 +385,21 @@ enum AppClassificationService {
                 return $0.durationSeconds > $1.durationSeconds
             }
             return $0.appName.localizedCaseInsensitiveCompare($1.appName) == .orderedAscending
+        }
+    }
+
+    private static func normalized(_ intervals: [DateInterval]) -> [DateInterval] {
+        intervals.filter { $0.duration > 0 }.sorted { $0.start < $1.start }
+    }
+
+    private static func clippedDuration(
+        of segment: AppUsageSegment,
+        to intervals: [DateInterval]
+    ) -> Int {
+        intervals.reduce(0) { total, interval in
+            let start = max(interval.start, segment.startTime)
+            let end = min(interval.end, segment.endTime)
+            return total + max(0, Int(end.timeIntervalSince(start)))
         }
     }
 
