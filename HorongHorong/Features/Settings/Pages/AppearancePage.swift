@@ -18,7 +18,6 @@ struct AppearancePage: View {
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
     @AppStorage(Constants.AppStorageKey.appIcon)
     private var appIconRaw: String = Constants.defaultAppIcon
-    @State private var menubarAnim: Bool = true
 
     var body: some View {
         SettingsPageScroll {
@@ -224,13 +223,6 @@ struct AppearancePage: View {
                 menubarIconMenu
             }
             appIconSelector
-            SettingsRow(
-                "메뉴바 아이콘 애니메이션",
-                subtitle: "타이머가 실행 중일 때 호롱불이 깜빡입니다.",
-                comingSoon: true
-            ) {
-                Toggle("", isOn: $menubarAnim).labelsHidden()
-            }
         }        .companionHighlight("settings.appIcon")
 
     }

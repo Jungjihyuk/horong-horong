@@ -84,7 +84,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
             return ["로그인 시 자동 시작", "자동 업데이트", "익명 사용 데이터 전송"]
         case .appearance:
             return ["모드", "화면 모드", "라이트", "다크", "시스템",
-                    "강조 색", "정보 밀도", "앱 아이콘", "메뉴바 아이콘 애니메이션",
+                    "강조 색", "정보 밀도", "앱 아이콘",
                     "테마", "팝오버 테마", "따뜻한 등불", "와인 랜턴", "게임 픽셀"]
         case .timer:
             return ["프리셋", "포모도로", "긴 집중", "커스텀",
