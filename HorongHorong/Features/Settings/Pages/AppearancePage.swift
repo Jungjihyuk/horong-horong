@@ -16,7 +16,8 @@ struct AppearancePage: View {
     private var gamePixelAccent = AppearanceAccentPalette.defaultID(for: .gamePixel)
     @AppStorage(Constants.AppStorageKey.menubarIcon)
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
-    @State private var appIcon: String = "auto"
+    @AppStorage(Constants.AppStorageKey.appIcon)
+    private var appIconRaw: String = Constants.defaultAppIcon
     @State private var menubarAnim: Bool = true
 
     var body: some View {
@@ -37,6 +38,16 @@ struct AppearancePage: View {
             }
             density = AppearanceDensity.normalized(rawValue: density).rawValue
             normalizeAccentSelections()
+            appIconRaw = selectedAppIcon.rawValue
+            AppIconManager.apply(selectedAppIcon)
+        }
+        .onChange(of: appIconRaw) { _, newValue in
+            let normalized = Constants.AppIconStyle.normalized(rawValue: newValue)
+            if newValue != normalized.rawValue {
+                appIconRaw = normalized.rawValue
+                return
+            }
+            AppIconManager.apply(normalized)
         }
     }
 
@@ -212,21 +223,7 @@ struct AppearancePage: View {
             ) {
                 menubarIconMenu
             }
-            SettingsRow(
-                "앱 아이콘",
-                subtitle: "Dock 및 앱 전환기에 표시되는 아이콘 스타일.",
-                comingSoon: true
-            ) {
-                Picker("", selection: $appIcon) {
-                    Text("자동").tag("auto")
-                    Text("라이트").tag("light")
-                    Text("다크").tag("dark")
-                    Text("축제").tag("festival")
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 240)
-            }
+            appIconSelector
             SettingsRow(
                 "메뉴바 아이콘 애니메이션",
                 subtitle: "타이머가 실행 중일 때 호롱불이 깜빡입니다.",
@@ -236,6 +233,116 @@ struct AppearancePage: View {
             }
         }        .companionHighlight("settings.appIcon")
 
+    }
+
+    private var selectedAppIcon: Constants.AppIconStyle {
+        Constants.AppIconStyle.normalized(rawValue: appIconRaw)
+    }
+
+    private var appIconSelector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("앱 아이콘")
+                    .font(.callout)
+                Text("Dock 및 앱 전환기에 표시할 아이콘을 선택합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                spacing: 12
+            ) {
+                ForEach(Constants.AppIconStyle.allCases) { style in
+                    appIconCard(style)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(height: 0.5)
+                .padding(.leading, 14)
+        }
+    }
+
+    private func appIconCard(_ style: Constants.AppIconStyle) -> some View {
+        let isSelected = selectedAppIcon == style
+
+        return Button {
+            appIconRaw = style.rawValue
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Text(style.label)
+                        .font(.callout.bold())
+                        .lineLimit(1)
+
+                    if style == .horong {
+                        Text("기본")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(
+                            isSelected
+                                ? Color.accentColor
+                                : Color.secondary.opacity(0.45)
+                        )
+                }
+
+                appIconPreview(style)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? Color.accentColor.opacity(0.08)
+                            : Color.primary.opacity(0.035)
+                    )
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? Color.accentColor.opacity(0.75)
+                            : Color.primary.opacity(0.1),
+                        lineWidth: isSelected ? 1.5 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(style.label) 앱 아이콘 선택")
+        .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
+    }
+
+    @ViewBuilder
+    private func appIconPreview(_ style: Constants.AppIconStyle) -> some View {
+        if let image = AppIconManager.image(for: style) {
+            Image(nsImage: image)
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 104, height: 104)
+        } else {
+            Image(systemName: "app.dashed")
+                .font(.system(size: 42))
+                .foregroundStyle(.tertiary)
+                .frame(width: 104, height: 104)
+        }
     }
 
     private var selectedMenubarIcon: Constants.MenubarIconStyle {

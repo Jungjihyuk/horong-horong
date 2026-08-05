@@ -67,6 +67,9 @@ targets:
       - path: assets/companion
         type: folder
         buildPhase: resources
+      - path: assets/overview
+        type: folder
+        buildPhase: resources
       - path: HorongHorong/Resources/Guide
         buildPhase: resources
       - path: USER_GUIDE.md
@@ -135,6 +138,9 @@ targets:
           - "Info.plist"
           - "Services/AppUpdate/**"
       - path: assets/companion
+        type: folder
+        buildPhase: resources
+      - path: assets/overview
         type: folder
         buildPhase: resources
       - path: HorongHorong/Resources/Guide

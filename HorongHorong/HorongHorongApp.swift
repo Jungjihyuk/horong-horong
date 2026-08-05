@@ -315,6 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         _ = NotificationManager.shared
+        AppIconManager.applyStoredSelection()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

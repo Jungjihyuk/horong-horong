@@ -172,9 +172,11 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.appearanceDensity)
             defaults.removeObject(forKey: Constants.AppStorageKey.popoverTheme)
             defaults.removeObject(forKey: Constants.AppStorageKey.menubarIcon)
+            defaults.removeObject(forKey: Constants.AppStorageKey.appIcon)
             defaults.removeObject(forKey: Constants.AppStorageKey.warmLanternAccent)
             defaults.removeObject(forKey: Constants.AppStorageKey.wineLanternAccent)
             defaults.removeObject(forKey: Constants.AppStorageKey.gamePixelAccent)
+            AppIconManager.apply(.horong)
         case .timer:
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroFocusMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroBreakMinutes)
