@@ -15,6 +15,18 @@ struct HotkeyCombo: Codable, Equatable {
         modifierRaw: NSEvent.ModifierFlags([.command, .shift]).rawValue
     )
 
+    /// 기본 메뉴바 팝오버 단축키: ⌃ + ⌥ + Space.
+    static let defaultMenuBarPopover = HotkeyCombo(
+        keyCode: 49,
+        modifierRaw: NSEvent.ModifierFlags([.control, .option]).rawValue
+    )
+
+    /// 기본 타이머 시작/일시정지 단축키: ⌃ + ⌥ + P.
+    static let defaultTimerToggle = HotkeyCombo(
+        keyCode: 35,
+        modifierRaw: NSEvent.ModifierFlags([.control, .option]).rawValue
+    )
+
     /// 메뉴바 / 단축키 패널에 보여줄 ["⌘", "⇧", "N"] 형태의 토큰 배열.
     var displayParts: [String] {
         var parts: [String] = []
@@ -108,31 +120,72 @@ struct HotkeyCombo: Codable, Equatable {
 final class HotkeyStore {
     static let shared = HotkeyStore()
 
-    private let quickMemoKey = "hotkey.quickMemo"
+    private static let quickMemoKey = "hotkey.quickMemo"
+    private static let menuBarPopoverKey = "hotkey.menuBarPopover"
+    private static let timerToggleKey = "hotkey.timerToggle"
 
     var quickMemo: HotkeyCombo {
         didSet {
-            persistQuickMemo()
+            persist(quickMemo, forKey: Self.quickMemoKey)
             HotKeyManager.shared.reregisterQuickMemo()
         }
     }
 
-    private init() {
-        if let data = UserDefaults.standard.data(forKey: quickMemoKey),
-           let decoded = try? JSONDecoder().decode(HotkeyCombo.self, from: data) {
-            quickMemo = decoded
-        } else {
-            quickMemo = .defaultQuickMemo
+    var menuBarPopover: HotkeyCombo {
+        didSet {
+            persist(menuBarPopover, forKey: Self.menuBarPopoverKey)
+            HotKeyManager.shared.reregisterMenuBarPopover()
         }
+    }
+
+    var timerToggle: HotkeyCombo {
+        didSet {
+            persist(timerToggle, forKey: Self.timerToggleKey)
+            HotKeyManager.shared.reregisterTimerToggle()
+        }
+    }
+
+    private init() {
+        quickMemo = Self.storedCombo(
+            forKey: Self.quickMemoKey,
+            defaultValue: .defaultQuickMemo
+        )
+        menuBarPopover = Self.storedCombo(
+            forKey: Self.menuBarPopoverKey,
+            defaultValue: .defaultMenuBarPopover
+        )
+        timerToggle = Self.storedCombo(
+            forKey: Self.timerToggleKey,
+            defaultValue: .defaultTimerToggle
+        )
     }
 
     func resetQuickMemoToDefault() {
         quickMemo = .defaultQuickMemo
     }
 
-    private func persistQuickMemo() {
-        if let data = try? JSONEncoder().encode(quickMemo) {
-            UserDefaults.standard.set(data, forKey: quickMemoKey)
+    func resetMenuBarPopoverToDefault() {
+        menuBarPopover = .defaultMenuBarPopover
+    }
+
+    func resetTimerToggleToDefault() {
+        timerToggle = .defaultTimerToggle
+    }
+
+    private static func storedCombo(
+        forKey key: String,
+        defaultValue: HotkeyCombo
+    ) -> HotkeyCombo {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode(HotkeyCombo.self, from: data) else {
+            return defaultValue
+        }
+        return decoded
+    }
+
+    private func persist(_ combo: HotkeyCombo, forKey key: String) {
+        if let data = try? JSONEncoder().encode(combo) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 }
