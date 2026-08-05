@@ -85,6 +85,7 @@ private struct MemoCompactControlButtonStyle: ButtonStyle {
 
 struct MemoBrowserWindow: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appearanceDensity) private var appearanceDensity
     // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다.
     // updatedAt 을 쓰면 메모를 수정할 때마다 fetch 가 무효화돼 창 전체가 재계산된다.
     // 표시 순서는 어차피 makeSnapshot() 에서 sort 옵션대로 다시 정한다.
@@ -272,6 +273,7 @@ struct MemoBrowserWindow: View {
         }
         .frame(minWidth: 920, minHeight: 560)
         .background(PopoverChrome.surface)
+        .appearanceAccentTint(.popover)
         .id(popoverTheme)
         .onAppear {
             todayReferenceDate = Date()
@@ -407,7 +409,7 @@ struct MemoBrowserWindow: View {
     }
 
     private func memoListPane(_ snapshot: Snapshot) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: appearanceDensity.informationMetric(14)) {
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -438,7 +440,7 @@ struct MemoBrowserWindow: View {
                 emptyList(snapshot)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: appearanceDensity.informationMetric(10)) {
                         ForEach(snapshot.memos) { memo in
                             memoRow(memo)
                         }
@@ -446,8 +448,8 @@ struct MemoBrowserWindow: View {
                             externalReminderSection(snapshot)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, appearanceDensity.informationMetric(14))
+                    .padding(.bottom, appearanceDensity.informationMetric(12))
                 }
             }
 
@@ -1131,6 +1133,7 @@ private func memoDeadlineLabel(_ date: Date) -> String {
 
 /// 행을 독립 View 로 두면 SwiftUI 가 메모별로 재렌더 범위를 좁힐 수 있다.
 private struct MemoRowView: View {
+    @Environment(\.appearanceDensity) private var appearanceDensity
     let memo: Memo
     let isSelected: Bool
     let onSelect: () -> Void
@@ -1141,15 +1144,15 @@ private struct MemoRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: appearanceDensity.informationMetric(12)) {
                 Text(memoRowIcon(memo))
                     .font(.system(size: 20))
                     .frame(width: 34, height: 34)
                     .background(PopoverChrome.surfaceAlt.opacity(0.9), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
 
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(7)) {
                     Text(memoRowTitle(memo))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: appearanceDensity.informationMetric(15), weight: .semibold, design: .rounded))
                         .foregroundStyle(memo.isCompletedValue ? PopoverChrome.inkTertiary : PopoverChrome.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -1190,7 +1193,7 @@ private struct MemoRowView: View {
                 .menuIndicator(.hidden)
                 .frame(width: 22)
             }
-            .padding(14)
+            .padding(appearanceDensity.informationMetric(14))
             .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
@@ -1209,7 +1212,7 @@ private struct MemoRowView: View {
             Text(date, style: .relative)
             Text(" 전")
         }
-        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .font(.system(size: appearanceDensity.informationMetric(12), weight: .semibold, design: .rounded))
         .foregroundStyle(PopoverChrome.inkTertiary)
     }
 }

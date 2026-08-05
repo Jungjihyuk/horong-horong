@@ -366,7 +366,7 @@ struct CategoryMappingPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(SettingsTheme.accent.opacity(0.04))
+        .background(Color.accentColor.opacity(0.04))
     }
 
     private func appRuleGroupHeader(category: String, count: Int) -> some View {
@@ -404,7 +404,7 @@ struct CategoryMappingPage: View {
         ) {
             Text(rule.isUserDefined ? "사용자" : "기본")
                 .font(.caption2)
-                .foregroundStyle(rule.isUserDefined ? SettingsTheme.accent : Color.secondary)
+                .foregroundStyle(rule.isUserDefined ? Color.accentColor : Color.secondary)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
                 .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
@@ -494,7 +494,7 @@ struct CategoryMappingPage: View {
         VStack(spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "app.fill")
-                    .foregroundStyle(SettingsTheme.accent)
+                    .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(newAppName)
                         .font(.caption.weight(.semibold))
@@ -596,7 +596,7 @@ struct CategoryMappingPage: View {
         ) {
             Text(rule.isUserDefined ? "사용자" : "기본")
                 .font(.caption2)
-                .foregroundStyle(rule.isUserDefined ? SettingsTheme.accent : Color.secondary)
+                .foregroundStyle(rule.isUserDefined ? Color.accentColor : Color.secondary)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
                 .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))

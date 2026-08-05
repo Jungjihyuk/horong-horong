@@ -4,14 +4,20 @@ struct AppearancePage: View {
     // 화면 모드: light / dark. (시스템 따라가기는 미구현)
     @AppStorage(Constants.AppStorageKey.appearanceMode)
     private var appearanceMode: String = Constants.defaultAppearanceMode
+    @AppStorage(Constants.AppStorageKey.appearanceDensity)
+    private var density: String = Constants.defaultAppearanceDensity
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
+    @AppStorage(Constants.AppStorageKey.warmLanternAccent)
+    private var warmLanternAccent = AppearanceAccentPalette.defaultID(for: .warmLantern)
+    @AppStorage(Constants.AppStorageKey.wineLanternAccent)
+    private var wineLanternAccent = AppearanceAccentPalette.defaultID(for: .wineLantern)
+    @AppStorage(Constants.AppStorageKey.gamePixelAccent)
+    private var gamePixelAccent = AppearanceAccentPalette.defaultID(for: .gamePixel)
     @AppStorage(Constants.AppStorageKey.menubarIcon)
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
-    @State private var accent: Color = SettingsTheme.accent
-    @State private var density: String = "comfortable"
-    @State private var appIcon: String = "auto"
-    @State private var menubarAnim: Bool = true
+    @AppStorage(Constants.AppStorageKey.appIcon)
+    private var appIconRaw: String = Constants.defaultAppIcon
 
     var body: some View {
         SettingsPageScroll {
@@ -29,6 +35,18 @@ struct AppearancePage: View {
             if Constants.PopoverTheme(rawValue: popoverTheme) == nil {
                 popoverTheme = Constants.defaultPopoverTheme
             }
+            density = AppearanceDensity.normalized(rawValue: density).rawValue
+            normalizeAccentSelections()
+            appIconRaw = selectedAppIcon.rawValue
+            AppIconManager.apply(selectedAppIcon)
+        }
+        .onChange(of: appIconRaw) { _, newValue in
+            let normalized = Constants.AppIconStyle.normalized(rawValue: newValue)
+            if newValue != normalized.rawValue {
+                appIconRaw = normalized.rawValue
+                return
+            }
+            AppIconManager.apply(normalized)
         }
     }
 
@@ -50,36 +68,46 @@ struct AppearancePage: View {
             }
             SettingsRow(
                 "강조 색",
-                subtitle: "버튼·활성 상태·토스트에 사용되는 색입니다.",
-                comingSoon: true
+                subtitle: "현재 팝오버 테마와 앱의 버튼·활성 상태·토스트에 사용됩니다."
             ) {
                 HStack(spacing: 8) {
-                    ForEach(SettingsTheme.accentPalette, id: \.name) { swatch in
-                        Circle()
-                            .fill(swatch.color)
-                            .frame(width: 20, height: 20)
-                            .overlay(
+                    ForEach(accentOptions) { option in
+                        Button {
+                            selectedAccentID = option.id
+                        } label: {
+                            ZStack {
                                 Circle()
-                                    .stroke(accent == swatch.color ? Color.white : Color.clear, lineWidth: 2)
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
-                            )
-                            .onTapGesture { accent = swatch.color }
-                            .help(swatch.name)
+                                    .fill(option.popoverColor)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+                                    )
+
+                                if selectedAccentID == option.id {
+                                    Circle()
+                                        .stroke(Color.primary, lineWidth: 1.5)
+                                        .frame(width: 25, height: 25)
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                            .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(option.name)
+                        .accessibilityLabel(option.name)
+                        .accessibilityValue(selectedAccentID == option.id ? "선택됨" : "")
                     }
                 }
             }
             SettingsRow(
                 "정보 밀도",
-                subtitle: "목록 항목 간 여백과 폰트 크기를 조절합니다.",
-                comingSoon: true
+                subtitle: "설정 목록의 항목 간 여백과 폰트 크기를 조절합니다."
             ) {
                 Picker("", selection: $density) {
-                    Text("촘촘").tag("compact")
-                    Text("보통").tag("comfortable")
-                    Text("넉넉").tag("comfy")
+                    ForEach(AppearanceDensity.allCases) { option in
+                        Text(option.label).tag(option.rawValue)
+                    }
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
@@ -87,6 +115,48 @@ struct AppearancePage: View {
             }
         }        .companionHighlight("settings.appearanceMode")
 
+    }
+
+    private var selectedTheme: Constants.PopoverTheme {
+        Constants.PopoverTheme.normalized(rawValue: popoverTheme)
+    }
+
+    private var accentOptions: [AppearanceAccentOption] {
+        AppearanceAccentPalette.options(for: selectedTheme)
+    }
+
+    private var selectedAccentID: String {
+        get {
+            let rawValue: String
+            switch selectedTheme {
+            case .warmLantern: rawValue = warmLanternAccent
+            case .wineLantern: rawValue = wineLanternAccent
+            case .gamePixel: rawValue = gamePixelAccent
+            }
+            return AppearanceAccentPalette.normalizedID(rawValue, for: selectedTheme)
+        }
+        nonmutating set {
+            switch selectedTheme {
+            case .warmLantern: warmLanternAccent = newValue
+            case .wineLantern: wineLanternAccent = newValue
+            case .gamePixel: gamePixelAccent = newValue
+            }
+        }
+    }
+
+    private func normalizeAccentSelections() {
+        warmLanternAccent = AppearanceAccentPalette.normalizedID(
+            warmLanternAccent,
+            for: .warmLantern
+        )
+        wineLanternAccent = AppearanceAccentPalette.normalizedID(
+            wineLanternAccent,
+            for: .wineLantern
+        )
+        gamePixelAccent = AppearanceAccentPalette.normalizedID(
+            gamePixelAccent,
+            for: .gamePixel
+        )
     }
 
     // MARK: - 테마 카드 (팝오버 UI 스타일)
@@ -152,30 +222,119 @@ struct AppearancePage: View {
             ) {
                 menubarIconMenu
             }
-            SettingsRow(
-                "앱 아이콘",
-                subtitle: "Dock 및 앱 전환기에 표시되는 아이콘 스타일.",
-                comingSoon: true
-            ) {
-                Picker("", selection: $appIcon) {
-                    Text("자동").tag("auto")
-                    Text("라이트").tag("light")
-                    Text("다크").tag("dark")
-                    Text("축제").tag("festival")
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 240)
-            }
-            SettingsRow(
-                "메뉴바 아이콘 애니메이션",
-                subtitle: "타이머가 실행 중일 때 호롱불이 깜빡입니다.",
-                comingSoon: true
-            ) {
-                Toggle("", isOn: $menubarAnim).labelsHidden()
-            }
+            appIconSelector
         }        .companionHighlight("settings.appIcon")
 
+    }
+
+    private var selectedAppIcon: Constants.AppIconStyle {
+        Constants.AppIconStyle.normalized(rawValue: appIconRaw)
+    }
+
+    private var appIconSelector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("앱 아이콘")
+                    .font(.callout)
+                Text("Dock 및 앱 전환기에 표시할 아이콘을 선택합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                spacing: 12
+            ) {
+                ForEach(Constants.AppIconStyle.allCases) { style in
+                    appIconCard(style)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(height: 0.5)
+                .padding(.leading, 14)
+        }
+    }
+
+    private func appIconCard(_ style: Constants.AppIconStyle) -> some View {
+        let isSelected = selectedAppIcon == style
+
+        return Button {
+            appIconRaw = style.rawValue
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Text(style.label)
+                        .font(.callout.bold())
+                        .lineLimit(1)
+
+                    if style == .horong {
+                        Text("기본")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(
+                            isSelected
+                                ? Color.accentColor
+                                : Color.secondary.opacity(0.45)
+                        )
+                }
+
+                appIconPreview(style)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? Color.accentColor.opacity(0.08)
+                            : Color.primary.opacity(0.035)
+                    )
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? Color.accentColor.opacity(0.75)
+                            : Color.primary.opacity(0.1),
+                        lineWidth: isSelected ? 1.5 : 0.5
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(style.label) 앱 아이콘 선택")
+        .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
+    }
+
+    @ViewBuilder
+    private func appIconPreview(_ style: Constants.AppIconStyle) -> some View {
+        if let image = AppIconManager.image(for: style) {
+            Image(nsImage: image)
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 104, height: 104)
+        } else {
+            Image(systemName: "app.dashed")
+                .font(.system(size: 42))
+                .foregroundStyle(.tertiary)
+                .frame(width: 104, height: 104)
+        }
     }
 
     private var selectedMenubarIcon: Constants.MenubarIconStyle {

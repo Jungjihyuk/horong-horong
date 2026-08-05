@@ -219,10 +219,10 @@ struct MemoPage: View {
                 if list.isDefault {
                     Text("기본")
                         .font(.caption2.bold())
-                        .foregroundStyle(SettingsTheme.accent)
+                        .foregroundStyle(Color.accentColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(SettingsTheme.accent.opacity(0.12), in: Capsule())
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

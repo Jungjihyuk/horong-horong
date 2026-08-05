@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct QuickMemoView: View {
+    @Environment(\.appearanceAccentOption) private var accentOption
     @ObservedObject var presentationState: QuickMemoPresentationState
     var onSave: (String, String) -> Bool
     var onCancel: () -> Void
@@ -165,10 +166,10 @@ struct QuickMemoView: View {
             } label: {
                 Text(savesAsTodayTask ? "오늘 할 일로 저장" : "저장")
                     .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(accentOption.accentInkColor)
                     .padding(.horizontal, savesAsTodayTask ? 18 : 0)
                     .frame(width: savesAsTodayTask ? 148 : 88, height: 46)
-                    .background(Color(red: 0.63, green: 0.31, blue: 0.09), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .background(accentOption.buttonFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.return, modifiers: .command)
