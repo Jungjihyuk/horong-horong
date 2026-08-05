@@ -92,6 +92,19 @@ final class TimerManager: @unchecked Sendable {
         startCountdown()
     }
 
+    func toggleFocus(category: String = Constants.defaultFocusCategory) {
+        switch appState.timerState {
+        case .idle:
+            startFocus(category: category)
+        case .focusing:
+            pause()
+        case .paused:
+            resume()
+        case .breakAlert, .breaking:
+            break
+        }
+    }
+
     var currentFocusElapsedSeconds: Int {
         Self.elapsedFocusSeconds(
             plannedSeconds: appState.focusMinutes * 60,
