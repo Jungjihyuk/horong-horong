@@ -9,6 +9,87 @@ enum SettingsTheme {
     static let windowDefaultSize = CGSize(width: 980, height: 680)
 }
 
+enum AppearanceDensity: String, CaseIterable, Identifiable, Sendable {
+    case compact
+    case comfortable
+    case spacious
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .compact: return "촘촘"
+        case .comfortable: return "보통"
+        case .spacious: return "넉넉"
+        }
+    }
+
+    static func normalized(rawValue: String) -> AppearanceDensity {
+        AppearanceDensity(rawValue: rawValue) ?? .comfortable
+    }
+
+    var dynamicTypeSize: DynamicTypeSize {
+        switch self {
+        case .compact: return .medium
+        case .comfortable: return .large
+        case .spacious: return .xLarge
+        }
+    }
+
+    var controlSize: ControlSize {
+        switch self {
+        case .compact: return .small
+        case .comfortable: return .regular
+        case .spacious: return .large
+        }
+    }
+
+    var rowHorizontalSpacing: CGFloat { value(10, 12, 14) }
+    var rowTextSpacing: CGFloat { value(1, 2, 4) }
+    var rowTrailingSpacing: CGFloat { value(6, 8, 10) }
+    var rowHorizontalPadding: CGFloat { value(12, 14, 16) }
+    var rowVerticalPadding: CGFloat { value(6, 10, 14) }
+    var rowTitleFontSize: CGFloat { value(12, 13, 14) }
+    var rowSubtitleFontSize: CGFloat { value(10, 11, 12) }
+    var cardHeaderSpacing: CGFloat { value(4, 6, 8) }
+    var pageContentSpacing: CGFloat { value(14, 18, 24) }
+    var pageVerticalPadding: CGFloat { value(18, 24, 30) }
+    var pageTitleFontSize: CGFloat { value(26, 28, 30) }
+    var pageHeaderSpacing: CGFloat { value(3, 4, 5) }
+    var pageHeaderBottomPadding: CGFloat { value(4, 6, 8) }
+
+    func popoverMetric(_ metric: CGFloat) -> CGFloat {
+        metric * value(0.94, 1, 1.06)
+    }
+
+    func informationMetric(_ metric: CGFloat) -> CGFloat {
+        metric * value(0.88, 1, 1.12)
+    }
+
+    private func value(
+        _ compact: CGFloat,
+        _ comfortable: CGFloat,
+        _ spacious: CGFloat
+    ) -> CGFloat {
+        switch self {
+        case .compact: return compact
+        case .comfortable: return comfortable
+        case .spacious: return spacious
+        }
+    }
+}
+
+private struct AppearanceDensityEnvironmentKey: EnvironmentKey {
+    static let defaultValue = AppearanceDensity.comfortable
+}
+
+extension EnvironmentValues {
+    var appearanceDensity: AppearanceDensity {
+        get { self[AppearanceDensityEnvironmentKey.self] }
+        set { self[AppearanceDensityEnvironmentKey.self] = newValue }
+    }
+}
+
 struct AppearanceAccentOption: Identifiable, Equatable, Sendable {
     let id: String
     let name: String

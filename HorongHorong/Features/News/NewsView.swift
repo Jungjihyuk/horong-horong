@@ -6,6 +6,7 @@ struct NewsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @AppStorage(Constants.NewsStorageKey.dataBasePath) private var dataBasePath = Constants.defaultNewsDataBasePath
     @AppStorage(Constants.NewsStorageKey.selectedProvider) private var selectedProvider = Constants.defaultNewsProvider
     @AppStorage(Constants.NewsStorageKey.ollamaModel) private var ollamaModel = Constants.defaultNewsOllamaModel
@@ -259,7 +260,7 @@ struct NewsView: View {
     private var reportsSection: some View {
         let availableReports = availableRecentReports
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(8)) {
             HStack(spacing: 8) {
                 Text("최근 리포트")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -312,13 +313,13 @@ struct NewsView: View {
             selectedReport = report
             openReportArchive(report: report)
         } label: {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: appearanceDensity.popoverMetric(10)) {
+                VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(2)) {
                     Text(formatDate(report.reportDate))
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .font(.system(size: appearanceDensity.popoverMetric(10.5), weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                     Text(report.topTitle)
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .font(.system(size: appearanceDensity.popoverMetric(12.5), weight: .medium, design: .rounded))
                         .lineLimit(2)
                         .foregroundStyle(PopoverChrome.ink)
                 }
@@ -327,11 +328,11 @@ struct NewsView: View {
                     Image(systemName: "doc.text")
                         .font(.system(size: 10, weight: .medium))
                     Text("\(report.itemCount)개")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(size: appearanceDensity.popoverMetric(11), weight: .medium, design: .rounded))
                 }
                 .foregroundStyle(PopoverChrome.inkSecondary)
             }
-            .popoverCard(padding: 12, radius: 10)
+            .popoverCard(padding: appearanceDensity.popoverMetric(12), radius: 10)
             .background(
                 selectedReport?.jobId == report.jobId
                     ? PopoverChrome.accentSoft.opacity(0.22)
