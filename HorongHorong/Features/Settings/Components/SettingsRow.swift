@@ -2,6 +2,8 @@ import SwiftUI
 
 /// `title/sub + 우측 컨트롤` 형식의 행 프리미티브. 디자인의 Row 컴포넌트에 대응.
 struct SettingsRow<Trailing: View>: View {
+    @Environment(\.appearanceDensity) private var density
+
     var title: String
     var subtitle: String?
     var comingSoon: Bool
@@ -20,37 +22,37 @@ struct SettingsRow<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: density.rowHorizontalSpacing) {
+            VStack(alignment: .leading, spacing: density.rowTextSpacing) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(.callout)
+                        .font(.system(size: density.rowTitleFontSize))
                     if comingSoon {
                         ComingSoonLabel()
                     }
                 }
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(.system(size: density.rowSubtitleFontSize))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 12)
-            HStack(spacing: 8) {
+            Spacer(minLength: density.rowHorizontalSpacing)
+            HStack(spacing: density.rowTrailingSpacing) {
                 trailing()
             }
             .disabled(comingSoon)
             .opacity(comingSoon ? 0.55 : 1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, density.rowHorizontalPadding)
+        .padding(.vertical, density.rowVerticalPadding)
         .overlay(alignment: .bottom) {
             // 행 사이 구분선. 마지막 행은 부모가 마스크.
             Rectangle()
                 .fill(Color.primary.opacity(0.06))
                 .frame(height: 0.5)
-                .padding(.leading, 14)
+                .padding(.leading, density.rowHorizontalPadding)
         }
     }
 }
@@ -87,10 +89,10 @@ struct HotkeyField: View {
         if isRecording {
             Text("● 키를 누르세요")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(SettingsTheme.accent)
+                .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(SettingsTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
         } else {
             HStack(spacing: 3) {
                 ForEach(Array(keys.enumerated()), id: \.offset) { idx, key in

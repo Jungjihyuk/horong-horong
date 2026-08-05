@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>LSUIElement</key>
-	<true/>
+	<false/>
 	<key>SupabaseURL</key>
 	<string>$(SUPABASE_URL)</string>
 	<key>SupabasePublishableKey</key>

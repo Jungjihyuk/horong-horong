@@ -776,7 +776,12 @@ enum Constants {
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
+        static let appearanceDensity = "appearance.density"
         static let popoverTheme = "appearance.popoverTheme"
+        static let warmLanternAccent = "appearance.accent.warmLantern"
+        static let wineLanternAccent = "appearance.accent.wineLantern"
+        static let gamePixelAccent = "appearance.accent.gamePixel"
+        static let appIcon = "appearance.appIcon"
         static let agentRootDirectoryPath = "agent.rootDirectoryPath"
         static let ideaDirectoryPath = "agent.ideaDirectoryPath"
         static let outputDirectoryPath = "agent.outputDirectoryPath"
@@ -1168,8 +1173,31 @@ enum Constants {
         }
     }
 
+    enum AppIconStyle: String, CaseIterable, Identifiable {
+        case horong = "app-icon"
+        case cozyHorong = "app-icon2"
+        case cozyBear = "app-icon3"
+
+        var id: String { rawValue }
+        var resourceName: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .horong: return "호롱"
+            case .cozyHorong: return "포근한 호롱"
+            case .cozyBear: return "포근한 곰"
+            }
+        }
+
+        static func normalized(rawValue: String) -> Self {
+            Self(rawValue: rawValue) ?? .horong
+        }
+    }
+
     static let defaultAppearanceMode = "light"
+    static let defaultAppearanceDensity = AppearanceDensity.comfortable.rawValue
     static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
+    static let defaultAppIcon = AppIconStyle.horong.rawValue
 
     static let availableNewsSchedules: [(value: String, label: String)] = [
         ("manual", "수동"),

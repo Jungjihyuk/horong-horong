@@ -8,6 +8,8 @@ struct SettingsRoot: View {
     @State private var hostWindow: NSWindow?
     @AppStorage(Constants.AppStorageKey.appearanceMode)
     private var appearanceMode: String = Constants.defaultAppearanceMode
+    @AppStorage(Constants.AppStorageKey.appearanceDensity)
+    private var appearanceDensityRaw: String = Constants.defaultAppearanceDensity
 
     init(initialSelection: SettingsTab = .general) {
         _selection = State(initialValue: initialSelection)
@@ -20,6 +22,10 @@ struct SettingsRoot: View {
         case "light": return .light
         default:      return nil
         }
+    }
+
+    private var appearanceDensity: AppearanceDensity {
+        AppearanceDensity.normalized(rawValue: appearanceDensityRaw)
     }
 
     var body: some View {
@@ -44,6 +50,10 @@ struct SettingsRoot: View {
             configureWindowChrome(window)
         }
         .preferredColorScheme(colorScheme)
+        .environment(\.appearanceDensity, appearanceDensity)
+        .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
+        .controlSize(appearanceDensity.controlSize)
+        .appearanceAccentTint(.adaptive)
         .onChange(of: appearanceMode) { _, newValue in
             applyAppearance(newValue, to: hostWindow)
         }
@@ -157,6 +167,16 @@ struct SettingsRoot: View {
     private func resetToDefaults(for tab: SettingsTab) {
         let defaults = UserDefaults.standard
         switch tab {
+        case .appearance:
+            defaults.removeObject(forKey: Constants.AppStorageKey.appearanceMode)
+            defaults.removeObject(forKey: Constants.AppStorageKey.appearanceDensity)
+            defaults.removeObject(forKey: Constants.AppStorageKey.popoverTheme)
+            defaults.removeObject(forKey: Constants.AppStorageKey.menubarIcon)
+            defaults.removeObject(forKey: Constants.AppStorageKey.appIcon)
+            defaults.removeObject(forKey: Constants.AppStorageKey.warmLanternAccent)
+            defaults.removeObject(forKey: Constants.AppStorageKey.wineLanternAccent)
+            defaults.removeObject(forKey: Constants.AppStorageKey.gamePixelAccent)
+            AppIconManager.apply(.horong)
         case .timer:
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroFocusMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroBreakMinutes)

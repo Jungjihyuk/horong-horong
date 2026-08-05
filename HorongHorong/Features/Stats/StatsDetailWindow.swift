@@ -38,6 +38,7 @@ enum StatsContentMode {
 
 struct StatsDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     @State private var viewMode: StatsViewMode = .daily
@@ -118,7 +119,7 @@ struct StatsDetailWindow: View {
                             )
                         }
                     }
-                    .padding(20)
+                    .padding(appearanceDensity.informationMetric(20))
                 }
                 .opacity(showsVacationIllustration ? 0 : 1)
                 .allowsHitTesting(!showsVacationIllustration)
@@ -131,6 +132,7 @@ struct StatsDetailWindow: View {
             }
         }
         .frame(minWidth: 820, minHeight: 560)
+        .appearanceAccentTint(.popover)
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {

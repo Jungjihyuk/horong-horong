@@ -82,6 +82,7 @@ struct MenuBarPopover: View {
             }
         }
         .frame(width: Constants.popoverWidth, height: Constants.popoverMaxHeight, alignment: .top)
+        .appearanceAccentTint(.popover)
         .background {
             RoundedRectangle(cornerRadius: PopoverChrome.panelRadius, style: .continuous)
                 .fill(PopoverChrome.surface)
@@ -421,11 +422,10 @@ struct MenuBarPopover: View {
     }
 }
 
+@MainActor
 enum PopoverChrome {
     static var theme: Constants.PopoverTheme {
-        Constants.PopoverTheme.normalized(
-            rawValue: UserDefaults.standard.string(forKey: Constants.AppStorageKey.popoverTheme) ?? Constants.defaultPopoverTheme
-        )
+        AppearanceAccentStore.shared.theme
     }
 
     static var isGamePixel: Bool {
@@ -434,6 +434,10 @@ enum PopoverChrome {
 
     static var isWineLantern: Bool {
         theme == .wineLantern
+    }
+
+    static var accentOption: AppearanceAccentOption {
+        AppearanceAccentStore.shared.option
     }
 
     static var panelRadius: CGFloat {
@@ -545,29 +549,15 @@ enum PopoverChrome {
     }
 
     static var accent: Color {
-        switch theme {
-        case .gamePixel:
-            return Color(red: 0.478, green: 0.322, blue: 0.839) // #7a52d6
-        case .wineLantern:
-            return Color(red: 0.635, green: 0.227, blue: 0.322) // #a23a52
-        case .warmLantern:
-            return Color(red: 0.94, green: 0.47, blue: 0.18)
-        }
+        accentOption.popoverColor
     }
 
     static var accentSoft: Color {
-        switch theme {
-        case .gamePixel:
-            return Color(red: 0.847, green: 0.776, blue: 0.961) // #d8c6f5
-        case .wineLantern:
-            return Color(red: 0.227, green: 0.129, blue: 0.161) // #3a2129
-        case .warmLantern:
-            return Color(red: 1.00, green: 0.86, blue: 0.70)
-        }
+        accentOption.softColor
     }
 
     static var accentInk: Color {
-        isGamePixel ? Color.white : Color.white
+        Color.white
     }
 
     static var selectionFill: Color {
@@ -583,24 +573,11 @@ enum PopoverChrome {
     }
 
     static var glow: Color {
-        isWineLantern ? accent.opacity(0.22) : Color(red: 0.75, green: 0.44, blue: 0.16).opacity(0.08)
+        accent.opacity(isWineLantern ? 0.22 : 0.10)
     }
 
     static var primaryButtonFill: AnyShapeStyle {
-        if isGamePixel || isWineLantern {
-            return AnyShapeStyle(accent)
-        }
-
-        return AnyShapeStyle(
-            LinearGradient(
-                colors: [
-                    Color(red: 1.00, green: 0.60, blue: 0.24),
-                    Color(red: 0.96, green: 0.40, blue: 0.10),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        accentOption.buttonFill
     }
 
     static var focusOnImageName: String {
