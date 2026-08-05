@@ -88,7 +88,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "테마", "팝오버 테마", "따뜻한 등불", "와인 랜턴", "게임 픽셀"]
         case .timer:
             return ["프리셋", "포모도로", "긴 집중", "커스텀",
-                    "프리셋 시간 편집", "집중 완료 시 자동으로 휴식 시작", "종료 알림 사운드",
+                    "프리셋 시간 편집",
                     "메뉴바 표시", "라벨 형식", "시간 형식"]
         case .hotkey:
             return ["퀵 메모 띄우기", "호롱호롱 팝오버 열기", "타이머 시작", "일시정지",

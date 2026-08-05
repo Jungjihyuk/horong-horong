@@ -34,8 +34,6 @@ struct TimerPage: View {
     @AppStorage(Constants.AppStorageKey.menubarTimeStyle)
     private var menubarTimeStyleRaw: String = Constants.defaultMenubarTimeStyle
 
-    @State private var autoBreak: Bool = true
-    @State private var soundEnabled: Bool = true
     @State private var notificationAuthorizationState: NotificationManager.AlertAuthorizationState?
 
     private var menubarLabelStyle: Binding<Constants.MenubarLabelStyle> {
@@ -239,20 +237,6 @@ struct TimerPage: View {
                     }
                 }
 
-                SettingsRow(
-                    "집중 완료 시 자동으로 휴식 시작",
-                    subtitle: "휴식 종료 후 다음 집중도 자동으로 이어집니다.",
-                    comingSoon: true
-                ) {
-                    Toggle("", isOn: $autoBreak).labelsHidden()
-                }
-                SettingsRow(
-                    "종료 알림 사운드",
-                    subtitle: "시스템 알림과 함께 호롱호롱 사운드를 재생합니다.",
-                    comingSoon: true
-                ) {
-                    Toggle("", isOn: $soundEnabled).labelsHidden()
-                }
             }
 
             SettingsGroupCard("메뉴바 표시") {

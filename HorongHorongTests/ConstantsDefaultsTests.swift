@@ -29,6 +29,17 @@ final class ConstantsDefaultsTests: XCTestCase {
         )
     }
 
+    func testGlobalHotkeyDefaultsMatchDisplayedShortcuts() {
+        XCTAssertEqual(
+            HotkeyCombo.defaultMenuBarPopover.displayParts,
+            ["⌃", "⌥", "Space"]
+        )
+        XCTAssertEqual(
+            HotkeyCombo.defaultTimerToggle.displayParts,
+            ["⌃", "⌥", "P"]
+        )
+    }
+
     func testAppearanceDensityMetricsScaleInOrder() {
         let compact = AppearanceDensity.compact
         let comfortable = AppearanceDensity.comfortable
@@ -1548,6 +1559,36 @@ final class ConstantsDefaultsTests: XCTestCase {
         let records = try context.fetch(FetchDescriptor<AppUsageRecord>())
         XCTAssertEqual(records.count, 1)
         XCTAssertEqual(records.first?.durationSeconds, 18 * 60 + 42)
+    }
+
+    @MainActor
+    func testTimerManagerToggleFocusStartsPausesAndResumes() {
+        let appState = AppState()
+        let manager = TimerManager(appState: appState)
+
+        manager.toggleFocus(category: "개발")
+        XCTAssertEqual(appState.timerState, .focusing)
+
+        manager.toggleFocus(category: "개발")
+        XCTAssertEqual(appState.timerState, .paused)
+
+        manager.toggleFocus(category: "개발")
+        XCTAssertEqual(appState.timerState, .focusing)
+
+        manager.discardCurrentFocus()
+    }
+
+    @MainActor
+    func testTimerManagerToggleFocusDoesNothingDuringBreak() {
+        let appState = AppState()
+        let manager = TimerManager(appState: appState)
+
+        appState.timerState = .breaking
+        appState.remainingSeconds = 5 * 60
+        manager.toggleFocus(category: "개발")
+
+        XCTAssertEqual(appState.timerState, .breaking)
+        XCTAssertEqual(appState.remainingSeconds, 5 * 60)
     }
 
     @MainActor
