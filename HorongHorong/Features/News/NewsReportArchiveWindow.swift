@@ -277,6 +277,7 @@ struct NewsReportArchiveDocument: Equatable {
 }
 
 struct NewsReportArchiveWindow: View {
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse)
     private var indexedReports: [NewsReportIndex]
     @ObservedObject private var selection = NewsReportArchiveSelection.shared
@@ -305,6 +306,7 @@ struct NewsReportArchiveWindow: View {
             }
         }
         .frame(minWidth: 840, minHeight: 540)
+        .appearanceAccentTint(.popover)
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {
@@ -397,13 +399,13 @@ struct NewsReportArchiveWindow: View {
                 .padding(18)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: appearanceDensity.informationMetric(10)) {
                         ForEach(filteredEntries) { entry in
                             reportCard(entry)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 14)
+                    .padding(.horizontal, appearanceDensity.informationMetric(12))
+                    .padding(.bottom, appearanceDensity.informationMetric(14))
                 }
             }
         }
@@ -419,14 +421,14 @@ struct NewsReportArchiveWindow: View {
         return Button {
             selectedEntryID = entry.id
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(8)) {
                 Text(entry.reportURL.lastPathComponent)
-                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(12.5), weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)
 
                 Text("\(entry.itemCount)개 항목 · \(formattedFileSize(document?.fileSize))")
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(10.5), weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
 
                 if let keywords = document?.interestKeywords, !keywords.isEmpty {
@@ -438,7 +440,7 @@ struct NewsReportArchiveWindow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(11)
+            .padding(appearanceDensity.informationMetric(11))
             .background(
                 isSelected ? PopoverChrome.accentSoft.opacity(0.42) : PopoverChrome.card,
                 in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous)
@@ -482,19 +484,19 @@ struct NewsReportArchiveWindow: View {
         let document = documents[entry.id]
 
         return HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(7)) {
                 Text(entry.reportURL.lastPathComponent)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(17), weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     Text(formattedDate(entry.reportDate))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(size: appearanceDensity.informationMetric(11), weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                     if let keywords = document?.interestKeywords, !keywords.isEmpty {
                         Text("관심 키워드")
-                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .font(.system(size: appearanceDensity.informationMetric(10.5), weight: .semibold, design: .rounded))
                             .foregroundStyle(PopoverChrome.inkSecondary)
                         ForEach(Array(keywords.prefix(4)), id: \.self) { keyword in
                             keywordChip(keyword)
@@ -537,14 +539,14 @@ struct NewsReportArchiveWindow: View {
                 .padding(24)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: appearanceDensity.informationMetric(12)) {
                         ForEach(Array(NewsReportMarkdownParser.parse(document.markdown).enumerated()), id: \.offset) { _, block in
                             markdownBlock(block)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 22)
+                    .padding(.horizontal, appearanceDensity.informationMetric(24))
+                    .padding(.vertical, appearanceDensity.informationMetric(22))
                 }
                 .tint(PopoverChrome.accent)
             }
@@ -559,7 +561,7 @@ struct NewsReportArchiveWindow: View {
         switch block {
         case .title(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(22), weight: .bold, design: .rounded))
                 .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
@@ -576,7 +578,7 @@ struct NewsReportArchiveWindow: View {
 
         case .heading(let level, let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: level == 2 ? 18 : 15, weight: .bold, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(level == 2 ? 18 : 15), weight: .bold, design: .rounded))
                 .foregroundStyle(level == 2 ? PopoverChrome.accent : PopoverChrome.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, level == 2 ? 10 : 5)
@@ -584,7 +586,7 @@ struct NewsReportArchiveWindow: View {
 
         case .metadata(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(11.5), weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
 
         case .quote(let text):
@@ -593,7 +595,7 @@ struct NewsReportArchiveWindow: View {
                     .fill(PopoverChrome.accent)
                     .frame(width: 3)
                 Text(inlineMarkdown(text))
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(11), weight: .semibold, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -603,7 +605,7 @@ struct NewsReportArchiveWindow: View {
 
         case .callout(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(13), weight: .semibold, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(13)
@@ -615,7 +617,7 @@ struct NewsReportArchiveWindow: View {
 
         case .insight(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(12), weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
@@ -624,7 +626,7 @@ struct NewsReportArchiveWindow: View {
 
         case .note(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(11.5), weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
 
         case .bullet(let text):
@@ -633,7 +635,7 @@ struct NewsReportArchiveWindow: View {
                     .fill(PopoverChrome.accent)
                     .frame(width: 5, height: 5)
                 Text(inlineMarkdown(text))
-                    .font(.system(size: 12.5, weight: .regular, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(12.5), weight: .regular, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -642,19 +644,19 @@ struct NewsReportArchiveWindow: View {
         case .numbered(let number, let text):
             HStack(alignment: .firstTextBaseline, spacing: 9) {
                 Text(number)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(10), weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white)
                     .frame(width: 20, height: 20)
                     .background(PopoverChrome.accent, in: Circle())
                 Text(inlineMarkdown(text))
-                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .font(.system(size: appearanceDensity.informationMetric(12.5), weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
         case .paragraph(let text):
             Text(inlineMarkdown(text))
-                .font(.system(size: 12.5, weight: .regular, design: .rounded))
+                .font(.system(size: appearanceDensity.informationMetric(12.5), weight: .regular, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
@@ -662,7 +664,7 @@ struct NewsReportArchiveWindow: View {
         case .code(let text):
             ScrollView(.horizontal) {
                 Text(text)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: appearanceDensity.informationMetric(11), design: .monospaced))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .textSelection(.enabled)
                     .padding(12)

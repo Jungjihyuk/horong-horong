@@ -4,6 +4,148 @@ import UserNotifications
 @testable import 호롱호롱
 
 final class ConstantsDefaultsTests: XCTestCase {
+    func testAllDistributionsShowTheDockIcon() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        for relativePath in ["HorongHorong/Info.plist", "HorongHorong/Info-AppStore.plist"] {
+            let data = try Data(contentsOf: projectRoot.appendingPathComponent(relativePath))
+            let plist = try XCTUnwrap(
+                PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            )
+            XCTAssertEqual(plist["LSUIElement"] as? Bool, false, relativePath)
+        }
+    }
+
+    func testAppearanceDensityDefaultsToComfortable() {
+        XCTAssertEqual(
+            Constants.defaultAppearanceDensity,
+            AppearanceDensity.comfortable.rawValue
+        )
+        XCTAssertEqual(
+            AppearanceDensity.normalized(rawValue: "unsupported"),
+            .comfortable
+        )
+    }
+
+    func testAppearanceDensityMetricsScaleInOrder() {
+        let compact = AppearanceDensity.compact
+        let comfortable = AppearanceDensity.comfortable
+        let spacious = AppearanceDensity.spacious
+
+        XCTAssertLessThan(compact.rowVerticalPadding, comfortable.rowVerticalPadding)
+        XCTAssertLessThan(comfortable.rowVerticalPadding, spacious.rowVerticalPadding)
+        XCTAssertLessThan(compact.rowTitleFontSize, comfortable.rowTitleFontSize)
+        XCTAssertLessThan(comfortable.rowTitleFontSize, spacious.rowTitleFontSize)
+        XCTAssertLessThan(compact.pageContentSpacing, comfortable.pageContentSpacing)
+        XCTAssertLessThan(comfortable.pageContentSpacing, spacious.pageContentSpacing)
+        XCTAssertLessThan(compact.popoverMetric(12), comfortable.popoverMetric(12))
+        XCTAssertLessThan(comfortable.popoverMetric(12), spacious.popoverMetric(12))
+        XCTAssertLessThan(compact.informationMetric(12), comfortable.informationMetric(12))
+        XCTAssertLessThan(comfortable.informationMetric(12), spacious.informationMetric(12))
+
+        XCTAssertEqual(comfortable.rowVerticalPadding, 10)
+        XCTAssertEqual(comfortable.pageContentSpacing, 18)
+        XCTAssertEqual(comfortable.pageVerticalPadding, 24)
+        XCTAssertEqual(comfortable.pageTitleFontSize, 28)
+        XCTAssertEqual(comfortable.popoverMetric(12), 12)
+        XCTAssertEqual(comfortable.informationMetric(12), 12)
+        XCTAssertGreaterThan(compact.popoverMetric(12), compact.informationMetric(12))
+        XCTAssertLessThan(spacious.popoverMetric(12), spacious.informationMetric(12))
+    }
+
+    func testAppearanceAccentPalettesHaveFourUniqueOptionsPerTheme() {
+        for theme in Constants.PopoverTheme.allCases {
+            let options = AppearanceAccentPalette.options(for: theme)
+            XCTAssertEqual(options.count, 4, "\(theme.rawValue) 팔레트 개수")
+            XCTAssertEqual(Set(options.map(\.id)).count, options.count)
+            XCTAssertTrue(options.contains { $0.id == AppearanceAccentPalette.defaultID(for: theme) })
+        }
+    }
+
+    func testAppearanceAccentDefaultsPreserveCurrentThemeColors() {
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .warmLantern, id: "invalid").popoverRGB,
+            0xF0782E
+        )
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .wineLantern, id: "invalid").popoverRGB,
+            0xA23A52
+        )
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .gamePixel, id: "invalid").popoverRGB,
+            0x7A52D6
+        )
+    }
+
+    func testAppearanceAccentSelectionsAreStoredPerTheme() throws {
+        let suiteName = "AppearanceAccentPaletteTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set("bamboo", forKey: AppearanceAccentPalette.storageKey(for: .warmLantern))
+        defaults.set("brass", forKey: AppearanceAccentPalette.storageKey(for: .wineLantern))
+        defaults.set("heart", forKey: AppearanceAccentPalette.storageKey(for: .gamePixel))
+
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .warmLantern, defaults: defaults).id, "bamboo")
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .wineLantern, defaults: defaults).id, "brass")
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .gamePixel, defaults: defaults).id, "heart")
+    }
+
+    @MainActor
+    func testAppearanceAccentStoreObservesThemeAndAccentChanges() throws {
+        let suiteName = "AppearanceAccentStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let notificationCenter = NotificationCenter()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(Constants.PopoverTheme.warmLantern.rawValue, forKey: Constants.AppStorageKey.popoverTheme)
+        defaults.set("bamboo", forKey: Constants.AppStorageKey.warmLanternAccent)
+        let store = AppearanceAccentStore(defaults: defaults, notificationCenter: notificationCenter)
+        XCTAssertEqual(store.theme, .warmLantern)
+        XCTAssertEqual(store.option.id, "bamboo")
+
+        defaults.set(Constants.PopoverTheme.wineLantern.rawValue, forKey: Constants.AppStorageKey.popoverTheme)
+        defaults.set("sage", forKey: Constants.AppStorageKey.wineLanternAccent)
+        notificationCenter.post(name: UserDefaults.didChangeNotification, object: defaults)
+
+        XCTAssertEqual(store.theme, .wineLantern)
+        XCTAssertEqual(store.option.id, "sage")
+    }
+
+    func testAppearanceAccentColorsMeetControlContrastTargets() {
+        let lightBackground: UInt32 = 0xFFFFFF
+        let darkBackground: UInt32 = 0x1E1E1E
+
+        for theme in Constants.PopoverTheme.allCases {
+            for option in AppearanceAccentPalette.options(for: theme) {
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.settingsLightRGB, lightBackground),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 라이트 강조 색 대비"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.settingsDarkRGB, darkBackground),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 다크 강조 색 대비"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.popoverRGB, option.accentInkRGB),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 버튼 글자 대비"
+                )
+                for gradientRGB in [option.buttonTopRGB, option.buttonBottomRGB].compactMap({ $0 }) {
+                    XCTAssertGreaterThanOrEqual(
+                        AppearanceAccentPalette.contrastRatio(gradientRGB, option.accentInkRGB),
+                        4.5,
+                        "\(theme.rawValue).\(option.id) 그라데이션 버튼 글자 대비"
+                    )
+                }
+            }
+        }
+    }
+
     func testMondayWeekStartUsesMondayThroughSunday() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

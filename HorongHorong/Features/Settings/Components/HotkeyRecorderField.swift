@@ -16,13 +16,13 @@ struct HotkeyRecorderField: View {
                 if isRecording {
                     Text("● 키를 누르세요")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(SettingsTheme.accent)
+                        .foregroundStyle(Color.accentColor)
                 } else {
                     ForEach(Array(combo.displayParts.enumerated()), id: \.offset) { idx, key in
                         if idx > 0 {
                             Text("+")
                                 .font(.caption2)
-                                .foregroundStyle(SettingsTheme.accent.opacity(0.6))
+                                .foregroundStyle(Color.accentColor.opacity(0.6))
                         }
                         Text(key)
                             .font(.caption.monospacedDigit().weight(.medium))
@@ -30,11 +30,11 @@ struct HotkeyRecorderField: View {
                             .padding(.vertical, 2)
                             .background(
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(SettingsTheme.accent.opacity(0.14))
+                                    .fill(Color.accentColor.opacity(0.14))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 4)
-                                    .stroke(SettingsTheme.accent.opacity(0.35), lineWidth: 0.5)
+                                    .stroke(Color.accentColor.opacity(0.35), lineWidth: 0.5)
                             )
                     }
                 }
@@ -44,12 +44,12 @@ struct HotkeyRecorderField: View {
             .background(
                 RoundedRectangle(cornerRadius: 7)
                     .fill(isRecording
-                          ? SettingsTheme.accent.opacity(0.10)
-                          : (isHovering ? SettingsTheme.accent.opacity(0.06) : Color.clear))
+                          ? Color.accentColor.opacity(0.10)
+                          : (isHovering ? Color.accentColor.opacity(0.06) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 7)
-                    .stroke(SettingsTheme.accent.opacity(isRecording ? 0.7 : (isHovering ? 0.55 : 0.35)),
+                    .stroke(Color.accentColor.opacity(isRecording ? 0.7 : (isHovering ? 0.55 : 0.35)),
                             lineWidth: isRecording ? 1.2 : 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 7))

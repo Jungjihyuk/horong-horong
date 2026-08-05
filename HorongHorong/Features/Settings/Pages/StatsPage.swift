@@ -117,7 +117,7 @@ struct StatsPage: View {
                 if trackerStore.isSensitiveMode {
                     Label("기록 중지 중", systemImage: "eye.slash")
                         .font(.caption2)
-                        .foregroundStyle(SettingsTheme.accent)
+                        .foregroundStyle(Color.accentColor)
                 }
                 Toggle("", isOn: Binding(
                     get: { trackerStore.isSensitiveMode },
