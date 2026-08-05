@@ -4,6 +4,97 @@ import UserNotifications
 @testable import 호롱호롱
 
 final class ConstantsDefaultsTests: XCTestCase {
+    func testAppearanceAccentPalettesHaveFourUniqueOptionsPerTheme() {
+        for theme in Constants.PopoverTheme.allCases {
+            let options = AppearanceAccentPalette.options(for: theme)
+            XCTAssertEqual(options.count, 4, "\(theme.rawValue) 팔레트 개수")
+            XCTAssertEqual(Set(options.map(\.id)).count, options.count)
+            XCTAssertTrue(options.contains { $0.id == AppearanceAccentPalette.defaultID(for: theme) })
+        }
+    }
+
+    func testAppearanceAccentDefaultsPreserveCurrentThemeColors() {
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .warmLantern, id: "invalid").popoverRGB,
+            0xF0782E
+        )
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .wineLantern, id: "invalid").popoverRGB,
+            0xA23A52
+        )
+        XCTAssertEqual(
+            AppearanceAccentPalette.option(for: .gamePixel, id: "invalid").popoverRGB,
+            0x7A52D6
+        )
+    }
+
+    func testAppearanceAccentSelectionsAreStoredPerTheme() throws {
+        let suiteName = "AppearanceAccentPaletteTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set("bamboo", forKey: AppearanceAccentPalette.storageKey(for: .warmLantern))
+        defaults.set("brass", forKey: AppearanceAccentPalette.storageKey(for: .wineLantern))
+        defaults.set("heart", forKey: AppearanceAccentPalette.storageKey(for: .gamePixel))
+
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .warmLantern, defaults: defaults).id, "bamboo")
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .wineLantern, defaults: defaults).id, "brass")
+        XCTAssertEqual(AppearanceAccentPalette.selectedOption(for: .gamePixel, defaults: defaults).id, "heart")
+    }
+
+    @MainActor
+    func testAppearanceAccentStoreObservesThemeAndAccentChanges() throws {
+        let suiteName = "AppearanceAccentStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let notificationCenter = NotificationCenter()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(Constants.PopoverTheme.warmLantern.rawValue, forKey: Constants.AppStorageKey.popoverTheme)
+        defaults.set("bamboo", forKey: Constants.AppStorageKey.warmLanternAccent)
+        let store = AppearanceAccentStore(defaults: defaults, notificationCenter: notificationCenter)
+        XCTAssertEqual(store.theme, .warmLantern)
+        XCTAssertEqual(store.option.id, "bamboo")
+
+        defaults.set(Constants.PopoverTheme.wineLantern.rawValue, forKey: Constants.AppStorageKey.popoverTheme)
+        defaults.set("sage", forKey: Constants.AppStorageKey.wineLanternAccent)
+        notificationCenter.post(name: UserDefaults.didChangeNotification, object: defaults)
+
+        XCTAssertEqual(store.theme, .wineLantern)
+        XCTAssertEqual(store.option.id, "sage")
+    }
+
+    func testAppearanceAccentColorsMeetControlContrastTargets() {
+        let lightBackground: UInt32 = 0xFFFFFF
+        let darkBackground: UInt32 = 0x1E1E1E
+
+        for theme in Constants.PopoverTheme.allCases {
+            for option in AppearanceAccentPalette.options(for: theme) {
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.settingsLightRGB, lightBackground),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 라이트 강조 색 대비"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.settingsDarkRGB, darkBackground),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 다크 강조 색 대비"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    AppearanceAccentPalette.contrastRatio(option.popoverRGB, option.accentInkRGB),
+                    4.5,
+                    "\(theme.rawValue).\(option.id) 버튼 글자 대비"
+                )
+                for gradientRGB in [option.buttonTopRGB, option.buttonBottomRGB].compactMap({ $0 }) {
+                    XCTAssertGreaterThanOrEqual(
+                        AppearanceAccentPalette.contrastRatio(gradientRGB, option.accentInkRGB),
+                        4.5,
+                        "\(theme.rawValue).\(option.id) 그라데이션 버튼 글자 대비"
+                    )
+                }
+            }
+        }
+    }
+
     func testMondayWeekStartUsesMondayThroughSunday() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

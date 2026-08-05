@@ -115,11 +115,11 @@ struct AboutPage: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(SettingsTheme.accent.opacity(0.08))
+                .fill(Color.accentColor.opacity(0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(SettingsTheme.accent.opacity(0.3), lineWidth: 0.5)
+                .stroke(Color.accentColor.opacity(0.3), lineWidth: 0.5)
         )
     }
 

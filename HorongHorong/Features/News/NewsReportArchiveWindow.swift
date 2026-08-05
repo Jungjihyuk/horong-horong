@@ -305,6 +305,7 @@ struct NewsReportArchiveWindow: View {
             }
         }
         .frame(minWidth: 840, minHeight: 540)
+        .appearanceAccentTint(.popover)
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {

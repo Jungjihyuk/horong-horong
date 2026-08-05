@@ -411,11 +411,11 @@ struct TimerPage: View {
                             if style == Constants.defaultTimerCompletionNotificationStyle {
                                 Text("기본")
                                     .font(.caption2.bold())
-                                    .foregroundStyle(SettingsTheme.accent)
+                                    .foregroundStyle(Color.accentColor)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(
-                                        SettingsTheme.accent.opacity(0.12),
+                                        Color.accentColor.opacity(0.12),
                                         in: Capsule()
                                     )
                             }
@@ -431,7 +431,7 @@ struct TimerPage: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(
                             isSelected
-                                ? SettingsTheme.accent
+                                ? Color.accentColor
                                 : Color.secondary.opacity(0.45)
                         )
                 }
@@ -445,7 +445,7 @@ struct TimerPage: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         isSelected
-                            ? SettingsTheme.accent.opacity(0.08)
+                            ? Color.accentColor.opacity(0.08)
                             : Color.primary.opacity(0.035)
                     )
             )
@@ -453,7 +453,7 @@ struct TimerPage: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(
                         isSelected
-                            ? SettingsTheme.accent.opacity(0.75)
+                            ? Color.accentColor.opacity(0.75)
                             : Color.primary.opacity(0.1),
                         lineWidth: isSelected ? 1.5 : 0.5
                     )

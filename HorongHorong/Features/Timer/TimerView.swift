@@ -49,6 +49,8 @@ enum PomodoroTaskCandidateBuilder {
 }
 
 private struct TimerGradientButtonStyle: ButtonStyle {
+    @Environment(\.appearanceAccentOption) private var accentOption
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -74,7 +76,7 @@ private struct TimerGradientButtonStyle: ButtonStyle {
             .shadow(
                 color: PopoverChrome.isGamePixel
                     ? .clear
-                    : Color(red: 0.92, green: 0.40, blue: 0.08).opacity(configuration.isPressed ? 0.22 : 0.32),
+                    : accentOption.popoverColor.opacity(configuration.isPressed ? 0.22 : 0.32),
                 radius: PopoverChrome.isGamePixel ? 0 : 13,
                 x: 0,
                 y: PopoverChrome.isGamePixel ? 0 : 8
@@ -84,7 +86,7 @@ private struct TimerGradientButtonStyle: ButtonStyle {
     }
 
     private var timerButtonFill: some ShapeStyle {
-        PopoverChrome.primaryButtonFill
+        accentOption.buttonFill
     }
 }
 
@@ -263,6 +265,7 @@ private struct HybridPixelDigit: View {
 
 struct TimerView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.appearanceAccentOption) private var accentOption
     @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse)
     private var goalRecords: [AchievementGoalRecord]
@@ -351,8 +354,8 @@ struct TimerView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 1.00, green: 0.67, blue: 0.31).opacity(isFocusing ? 0.44 : 0.34),
-                            Color(red: 1.00, green: 0.75, blue: 0.39).opacity(0.18),
+                            accentOption.popoverColor.opacity(isFocusing ? 0.44 : 0.34),
+                            accentOption.popoverColor.opacity(0.18),
                             .clear,
                         ],
                         center: .center,
@@ -403,7 +406,7 @@ struct TimerView: View {
             .font(PopoverChrome.displayFont(size: 66, weight: .bold))
             .monospacedDigit()
             .shadow(
-                color: PopoverChrome.isGamePixel ? .clear : Color(red: 0.95, green: 0.45, blue: 0.13).opacity(0.15),
+                color: PopoverChrome.isGamePixel ? .clear : accentOption.popoverColor.opacity(0.15),
                 radius: PopoverChrome.isGamePixel ? 0 : 18,
                 x: 0,
                 y: PopoverChrome.isGamePixel ? 0 : 10

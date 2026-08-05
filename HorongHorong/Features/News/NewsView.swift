@@ -155,16 +155,7 @@ struct NewsView: View {
                     }
                 } else {
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 1.00, green: 0.59, blue: 0.22),
-                                    Color(red: 0.94, green: 0.45, blue: 0.16),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(PopoverChrome.primaryButtonFill)
                 }
             }
             .overlay(

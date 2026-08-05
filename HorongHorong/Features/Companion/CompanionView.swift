@@ -129,6 +129,7 @@ struct CompanionView: View {
             alignment: state.isCardBelow ? .top : .bottom
         )
         .coordinateSpace(.named(Self.overlaySpace))
+        .appearanceAccentTint(.adaptive)
         // 배경을 두지 않아 투명한 영역에는 아무것도 그리지 않는다.
         // 다만 macOS 는 투명하다고 클릭을 통과시켜 주지 않으므로,
         // 실제 통과 처리는 창이 맡는다. (`CompanionOverlayPanel`)

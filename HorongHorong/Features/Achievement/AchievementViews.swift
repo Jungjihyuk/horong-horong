@@ -1575,6 +1575,7 @@ private enum AchievementDataBuilder {
         return "\(formatter.string(from: weekStart)) – \(formatter.string(from: end))"
     }
 
+    @MainActor
     static func goals(from records: [AchievementGoalRecord], memos: [Memo]) -> [AchievementGoal] {
         let memoByID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         func nonEmpty(_ value: String?) -> String? {
@@ -1870,6 +1871,7 @@ private enum AchievementDataBuilder {
         return "\(trimmed.prefix(limit))..."
     }
 
+    @MainActor
     static func color(from hex: String) -> Color {
         let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else {
@@ -2419,6 +2421,7 @@ struct AchievementDetailWindow: View {
             .clipped()
         }
         .frame(minWidth: 760, minHeight: 560)
+        .appearanceAccentTint(.popover)
         .background(PopoverChrome.surface)
         .sheet(isPresented: Binding(get: { managingGoalID != nil }, set: { isPresented in
             if !isPresented {

@@ -44,6 +44,7 @@ struct SettingsRoot: View {
             configureWindowChrome(window)
         }
         .preferredColorScheme(colorScheme)
+        .appearanceAccentTint(.adaptive)
         .onChange(of: appearanceMode) { _, newValue in
             applyAppearance(newValue, to: hostWindow)
         }
@@ -157,6 +158,13 @@ struct SettingsRoot: View {
     private func resetToDefaults(for tab: SettingsTab) {
         let defaults = UserDefaults.standard
         switch tab {
+        case .appearance:
+            defaults.removeObject(forKey: Constants.AppStorageKey.appearanceMode)
+            defaults.removeObject(forKey: Constants.AppStorageKey.popoverTheme)
+            defaults.removeObject(forKey: Constants.AppStorageKey.menubarIcon)
+            defaults.removeObject(forKey: Constants.AppStorageKey.warmLanternAccent)
+            defaults.removeObject(forKey: Constants.AppStorageKey.wineLanternAccent)
+            defaults.removeObject(forKey: Constants.AppStorageKey.gamePixelAccent)
         case .timer:
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroFocusMinutes)
             defaults.removeObject(forKey: Constants.AppStorageKey.pomodoroBreakMinutes)
