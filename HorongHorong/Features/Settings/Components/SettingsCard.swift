@@ -2,6 +2,8 @@ import SwiftUI
 
 /// 섹션 헤더 + 그룹 제목 + 카드 컨테이너의 기본 단위. 한 페이지에 여러 개를 쌓는다.
 struct SettingsGroupCard<Content: View>: View {
+    @Environment(\.appearanceDensity) private var density
+
     var title: String?
     @ViewBuilder var content: () -> Content
 
@@ -11,7 +13,7 @@ struct SettingsGroupCard<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: density.cardHeaderSpacing) {
             if let title {
                 Text(title)
                     .font(.caption.bold())
@@ -43,13 +45,15 @@ struct SettingsGroupCard<Content: View>: View {
 
 /// 페이지 최상단 헤더: <h1> + 부제.
 struct SettingsPageHeader: View {
+    @Environment(\.appearanceDensity) private var density
+
     var title: String
     var subtitle: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: density.pageHeaderSpacing) {
             Text(title)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: density.pageTitleFontSize, weight: .bold))
             if let subtitle {
                 Text(subtitle)
                     .font(.callout)
@@ -57,22 +61,24 @@ struct SettingsPageHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 6)
+        .padding(.bottom, density.pageHeaderBottomPadding)
     }
 }
 
 /// 페이지 공통 스크롤 컨테이너.
 /// 카드는 detail 영역 전체에서 좌우 padding 만 빼고 자유롭게 늘어난다 (윈도우를 키우면 카드도 같이 커짐).
 struct SettingsPageScroll<Content: View>: View {
+    @Environment(\.appearanceDensity) private var density
+
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: density.pageContentSpacing) {
                 content()
             }
             .padding(.horizontal, 28)
-            .padding(.vertical, 24)
+            .padding(.vertical, density.pageVerticalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

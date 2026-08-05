@@ -88,6 +88,7 @@ final class QuickMemoPanel {
                 self?.close()
             }
         )
+        .appearanceAccentTint(.popover)
 
         self.presentationState = presentationState
         panel.contentView = NSHostingView(rootView: contentView)
