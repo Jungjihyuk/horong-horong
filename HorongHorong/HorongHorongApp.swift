@@ -365,12 +365,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppUpdateManager.shared.refreshState()
         #endif
 
-        HotKeyManager.shared.setup { [weak self] in
-            guard let self else { return }
-            self.quickMemoPanel.toggle(modelContext: context)
-        }
+        HotKeyManager.shared.setup(
+            onQuickMemo: { [weak self] in
+                guard let self else { return }
+                self.quickMemoPanel.toggle(modelContext: context)
+            },
+            onMenuBarPopover: {
+                MenuBarExtraController.toggle()
+            },
+            onTimerToggle: { [weak self] in
+                self?.toggleTimerFromHotkey()
+            }
+        )
 
         companionController.start(modelContainer: modelContainer)
+    }
+
+    private func toggleTimerFromHotkey() {
+        let storedCategory = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.selectedFocusCategory
+        )?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let category = storedCategory.flatMap { $0.isEmpty ? nil : $0 }
+            ?? Constants.defaultFocusCategory
+        timerManager.toggleFocus(category: category)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
