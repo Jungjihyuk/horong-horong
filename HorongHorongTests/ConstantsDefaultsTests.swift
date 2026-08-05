@@ -4,6 +4,20 @@ import UserNotifications
 @testable import 호롱호롱
 
 final class ConstantsDefaultsTests: XCTestCase {
+    func testAllDistributionsShowTheDockIcon() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        for relativePath in ["HorongHorong/Info.plist", "HorongHorong/Info-AppStore.plist"] {
+            let data = try Data(contentsOf: projectRoot.appendingPathComponent(relativePath))
+            let plist = try XCTUnwrap(
+                PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            )
+            XCTAssertEqual(plist["LSUIElement"] as? Bool, false, relativePath)
+        }
+    }
+
     func testAppearanceDensityDefaultsToComfortable() {
         XCTAssertEqual(
             Constants.defaultAppearanceDensity,
