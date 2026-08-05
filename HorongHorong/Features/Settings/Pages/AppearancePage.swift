@@ -6,9 +6,14 @@ struct AppearancePage: View {
     private var appearanceMode: String = Constants.defaultAppearanceMode
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
+    @AppStorage(Constants.AppStorageKey.warmLanternAccent)
+    private var warmLanternAccent = AppearanceAccentPalette.defaultID(for: .warmLantern)
+    @AppStorage(Constants.AppStorageKey.wineLanternAccent)
+    private var wineLanternAccent = AppearanceAccentPalette.defaultID(for: .wineLantern)
+    @AppStorage(Constants.AppStorageKey.gamePixelAccent)
+    private var gamePixelAccent = AppearanceAccentPalette.defaultID(for: .gamePixel)
     @AppStorage(Constants.AppStorageKey.menubarIcon)
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
-    @State private var accent: Color = SettingsTheme.accent
     @State private var density: String = "comfortable"
     @State private var appIcon: String = "auto"
     @State private var menubarAnim: Bool = true
@@ -29,6 +34,7 @@ struct AppearancePage: View {
             if Constants.PopoverTheme(rawValue: popoverTheme) == nil {
                 popoverTheme = Constants.defaultPopoverTheme
             }
+            normalizeAccentSelections()
         }
     }
 
@@ -50,24 +56,35 @@ struct AppearancePage: View {
             }
             SettingsRow(
                 "강조 색",
-                subtitle: "버튼·활성 상태·토스트에 사용되는 색입니다.",
-                comingSoon: true
+                subtitle: "현재 팝오버 테마와 앱의 버튼·활성 상태·토스트에 사용됩니다."
             ) {
                 HStack(spacing: 8) {
-                    ForEach(SettingsTheme.accentPalette, id: \.name) { swatch in
-                        Circle()
-                            .fill(swatch.color)
-                            .frame(width: 20, height: 20)
-                            .overlay(
+                    ForEach(accentOptions) { option in
+                        Button {
+                            selectedAccentID = option.id
+                        } label: {
+                            ZStack {
                                 Circle()
-                                    .stroke(accent == swatch.color ? Color.white : Color.clear, lineWidth: 2)
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
-                            )
-                            .onTapGesture { accent = swatch.color }
-                            .help(swatch.name)
+                                    .fill(option.popoverColor)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.18), lineWidth: 0.5)
+                                    )
+
+                                if selectedAccentID == option.id {
+                                    Circle()
+                                        .stroke(Color.primary, lineWidth: 1.5)
+                                        .frame(width: 25, height: 25)
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                            .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(option.name)
+                        .accessibilityLabel(option.name)
+                        .accessibilityValue(selectedAccentID == option.id ? "선택됨" : "")
                     }
                 }
             }
@@ -87,6 +104,48 @@ struct AppearancePage: View {
             }
         }        .companionHighlight("settings.appearanceMode")
 
+    }
+
+    private var selectedTheme: Constants.PopoverTheme {
+        Constants.PopoverTheme.normalized(rawValue: popoverTheme)
+    }
+
+    private var accentOptions: [AppearanceAccentOption] {
+        AppearanceAccentPalette.options(for: selectedTheme)
+    }
+
+    private var selectedAccentID: String {
+        get {
+            let rawValue: String
+            switch selectedTheme {
+            case .warmLantern: rawValue = warmLanternAccent
+            case .wineLantern: rawValue = wineLanternAccent
+            case .gamePixel: rawValue = gamePixelAccent
+            }
+            return AppearanceAccentPalette.normalizedID(rawValue, for: selectedTheme)
+        }
+        nonmutating set {
+            switch selectedTheme {
+            case .warmLantern: warmLanternAccent = newValue
+            case .wineLantern: wineLanternAccent = newValue
+            case .gamePixel: gamePixelAccent = newValue
+            }
+        }
+    }
+
+    private func normalizeAccentSelections() {
+        warmLanternAccent = AppearanceAccentPalette.normalizedID(
+            warmLanternAccent,
+            for: .warmLantern
+        )
+        wineLanternAccent = AppearanceAccentPalette.normalizedID(
+            wineLanternAccent,
+            for: .wineLantern
+        )
+        gamePixelAccent = AppearanceAccentPalette.normalizedID(
+            gamePixelAccent,
+            for: .gamePixel
+        )
     }
 
     // MARK: - 테마 카드 (팝오버 UI 스타일)

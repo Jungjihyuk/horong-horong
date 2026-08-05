@@ -87,10 +87,10 @@ struct HotkeyField: View {
         if isRecording {
             Text("● 키를 누르세요")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(SettingsTheme.accent)
+                .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(SettingsTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
         } else {
             HStack(spacing: 3) {
                 ForEach(Array(keys.enumerated()), id: \.offset) { idx, key in

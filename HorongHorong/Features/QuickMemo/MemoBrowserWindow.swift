@@ -272,6 +272,7 @@ struct MemoBrowserWindow: View {
         }
         .frame(minWidth: 920, minHeight: 560)
         .background(PopoverChrome.surface)
+        .appearanceAccentTint(.popover)
         .id(popoverTheme)
         .onAppear {
             todayReferenceDate = Date()

@@ -131,6 +131,7 @@ struct StatsDetailWindow: View {
             }
         }
         .frame(minWidth: 820, minHeight: 560)
+        .appearanceAccentTint(.popover)
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {

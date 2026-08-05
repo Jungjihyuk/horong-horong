@@ -777,6 +777,9 @@ enum Constants {
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
         static let popoverTheme = "appearance.popoverTheme"
+        static let warmLanternAccent = "appearance.accent.warmLantern"
+        static let wineLanternAccent = "appearance.accent.wineLantern"
+        static let gamePixelAccent = "appearance.accent.gamePixel"
         static let agentRootDirectoryPath = "agent.rootDirectoryPath"
         static let ideaDirectoryPath = "agent.ideaDirectoryPath"
         static let outputDirectoryPath = "agent.outputDirectoryPath"
