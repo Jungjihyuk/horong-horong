@@ -4,6 +4,8 @@ struct AppearancePage: View {
     // 화면 모드: light / dark. (시스템 따라가기는 미구현)
     @AppStorage(Constants.AppStorageKey.appearanceMode)
     private var appearanceMode: String = Constants.defaultAppearanceMode
+    @AppStorage(Constants.AppStorageKey.appearanceDensity)
+    private var density: String = Constants.defaultAppearanceDensity
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     @AppStorage(Constants.AppStorageKey.warmLanternAccent)
@@ -14,7 +16,6 @@ struct AppearancePage: View {
     private var gamePixelAccent = AppearanceAccentPalette.defaultID(for: .gamePixel)
     @AppStorage(Constants.AppStorageKey.menubarIcon)
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
-    @State private var density: String = "comfortable"
     @State private var appIcon: String = "auto"
     @State private var menubarAnim: Bool = true
 
@@ -34,6 +35,7 @@ struct AppearancePage: View {
             if Constants.PopoverTheme(rawValue: popoverTheme) == nil {
                 popoverTheme = Constants.defaultPopoverTheme
             }
+            density = AppearanceDensity.normalized(rawValue: density).rawValue
             normalizeAccentSelections()
         }
     }
@@ -90,13 +92,12 @@ struct AppearancePage: View {
             }
             SettingsRow(
                 "정보 밀도",
-                subtitle: "목록 항목 간 여백과 폰트 크기를 조절합니다.",
-                comingSoon: true
+                subtitle: "설정 목록의 항목 간 여백과 폰트 크기를 조절합니다."
             ) {
                 Picker("", selection: $density) {
-                    Text("촘촘").tag("compact")
-                    Text("보통").tag("comfortable")
-                    Text("넉넉").tag("comfy")
+                    ForEach(AppearanceDensity.allCases) { option in
+                        Text(option.label).tag(option.rawValue)
+                    }
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)

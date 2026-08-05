@@ -2284,6 +2284,7 @@ private struct AchievementRecordMonthGroup: Identifiable {
 
 struct AchievementDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -2378,7 +2379,7 @@ struct AchievementDetailWindow: View {
             toolbar
             ZStack(alignment: .trailing) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(14)) {
                         switch selectedTab {
                         case .progress:
                             progressHeader
@@ -2389,7 +2390,7 @@ struct AchievementDetailWindow: View {
                             journeyContent
                         }
                     }
-                    .padding(18)
+                    .padding(appearanceDensity.informationMetric(18))
                 }
                 .background(PopoverChrome.surface)
                 .disabled(showGoalComposer)

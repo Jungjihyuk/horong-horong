@@ -4,6 +4,43 @@ import UserNotifications
 @testable import 호롱호롱
 
 final class ConstantsDefaultsTests: XCTestCase {
+    func testAppearanceDensityDefaultsToComfortable() {
+        XCTAssertEqual(
+            Constants.defaultAppearanceDensity,
+            AppearanceDensity.comfortable.rawValue
+        )
+        XCTAssertEqual(
+            AppearanceDensity.normalized(rawValue: "unsupported"),
+            .comfortable
+        )
+    }
+
+    func testAppearanceDensityMetricsScaleInOrder() {
+        let compact = AppearanceDensity.compact
+        let comfortable = AppearanceDensity.comfortable
+        let spacious = AppearanceDensity.spacious
+
+        XCTAssertLessThan(compact.rowVerticalPadding, comfortable.rowVerticalPadding)
+        XCTAssertLessThan(comfortable.rowVerticalPadding, spacious.rowVerticalPadding)
+        XCTAssertLessThan(compact.rowTitleFontSize, comfortable.rowTitleFontSize)
+        XCTAssertLessThan(comfortable.rowTitleFontSize, spacious.rowTitleFontSize)
+        XCTAssertLessThan(compact.pageContentSpacing, comfortable.pageContentSpacing)
+        XCTAssertLessThan(comfortable.pageContentSpacing, spacious.pageContentSpacing)
+        XCTAssertLessThan(compact.popoverMetric(12), comfortable.popoverMetric(12))
+        XCTAssertLessThan(comfortable.popoverMetric(12), spacious.popoverMetric(12))
+        XCTAssertLessThan(compact.informationMetric(12), comfortable.informationMetric(12))
+        XCTAssertLessThan(comfortable.informationMetric(12), spacious.informationMetric(12))
+
+        XCTAssertEqual(comfortable.rowVerticalPadding, 10)
+        XCTAssertEqual(comfortable.pageContentSpacing, 18)
+        XCTAssertEqual(comfortable.pageVerticalPadding, 24)
+        XCTAssertEqual(comfortable.pageTitleFontSize, 28)
+        XCTAssertEqual(comfortable.popoverMetric(12), 12)
+        XCTAssertEqual(comfortable.informationMetric(12), 12)
+        XCTAssertGreaterThan(compact.popoverMetric(12), compact.informationMetric(12))
+        XCTAssertLessThan(spacious.popoverMetric(12), spacious.informationMetric(12))
+    }
+
     func testAppearanceAccentPalettesHaveFourUniqueOptionsPerTheme() {
         for theme in Constants.PopoverTheme.allCases {
             let options = AppearanceAccentPalette.options(for: theme)

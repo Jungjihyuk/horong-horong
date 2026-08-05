@@ -9,6 +9,7 @@ private enum MemoListTab: String, CaseIterable {
 struct MemoListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var selectedTab: MemoListTab = .active
     @State private var editingMemo: Memo?
@@ -147,7 +148,7 @@ struct MemoListView: View {
                 .popoverCard()
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 4) {
+                    LazyVStack(spacing: appearanceDensity.popoverMetric(4)) {
                         ForEach(visibleMemos) { memo in
                             memoRow(memo)
                         }
@@ -161,23 +162,23 @@ struct MemoListView: View {
     }
 
     private func memoRow(_ memo: Memo) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(4)) {
             if editingMemo?.id == memo.id {
                 editView(memo)
             } else {
                 displayView(memo)
             }
         }
-        .popoverCard(padding: 10, radius: 14)
+        .popoverCard(padding: appearanceDensity.popoverMetric(10), radius: 14)
     }
 
     private func displayView(_ memo: Memo) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: appearanceDensity.popoverMetric(10)) {
             memoIconButton(for: memo)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(2)) {
                 Text(memo.content)
-                    .font(.callout)
+                    .font(.system(size: appearanceDensity.popoverMetric(13)))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(3)
                     .textSelection(.enabled)
@@ -185,7 +186,7 @@ struct MemoListView: View {
                     Text(memo.createdAt, style: .relative)
                     Text(" 전")
                 }
-                .font(.caption2)
+                .font(.system(size: appearanceDensity.popoverMetric(10)))
                 .foregroundStyle(PopoverChrome.inkTertiary)
             }
             Spacer()
@@ -254,7 +255,7 @@ struct MemoListView: View {
     private func editView(_ memo: Memo) -> some View {
         VStack(spacing: 6) {
             TextEditor(text: $editContent)
-                .font(.callout)
+                .font(.system(size: appearanceDensity.popoverMetric(13)))
                 .frame(minHeight: 40, maxHeight: 80)
                 .scrollContentBackground(.hidden)
 

@@ -36,6 +36,7 @@ private enum StatsSummaryScope: String, CaseIterable, Identifiable {
 struct StatsSummaryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.appearanceDensity) private var appearanceDensity
     @State private var categoryUsages: [CategoryUsage] = []
     @State private var weeklyDailyTotals: [(date: Date, durationSeconds: Int)] = []
     @State private var todayFocusSummary = DailyFocusSummary(
@@ -140,14 +141,14 @@ struct StatsSummaryView: View {
     }
 
     private var todaySummary: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: appearanceDensity.popoverMetric(10)) {
             summaryHeader(title: "오늘 기록", total: "총 \(shortDuration(totalUsageSeconds))", showsTop3: true)
 
             if !categoryUsages.isEmpty {
                 HStack(alignment: .center, spacing: 14) {
                     summaryDonut
                         .frame(width: 88, height: 88)
-                    VStack(spacing: 6) {
+                    VStack(spacing: appearanceDensity.popoverMetric(6)) {
                         ForEach(topCategoryUsages) { usage in
                             compactUsageRow(usage)
                         }
@@ -223,22 +224,22 @@ struct StatsSummaryView: View {
     private func compactUsageRow(_ usage: CategoryUsage) -> some View {
         let total = max(1, totalUsageSeconds)
         let percent = Int(round(Double(usage.durationSeconds) / Double(total) * 100))
-        return HStack(spacing: 6) {
+        return HStack(spacing: appearanceDensity.popoverMetric(6)) {
             Circle()
                 .fill(usage.color)
                 .frame(width: 8, height: 8)
             Text(usage.emoji)
             Text(usage.category)
-                .font(.caption)
+                .font(.system(size: appearanceDensity.popoverMetric(12)))
                 .foregroundStyle(PopoverChrome.ink)
                 .lineLimit(1)
             Spacer()
             Text(shortDuration(usage.durationSeconds))
-                .font(.caption.bold())
+                .font(.system(size: appearanceDensity.popoverMetric(12), weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(PopoverChrome.ink)
             Text("\(percent)%")
-                .font(.caption2)
+                .font(.system(size: appearanceDensity.popoverMetric(10)))
                 .monospacedDigit()
                 .foregroundStyle(PopoverChrome.inkTertiary)
                 .frame(width: 30, alignment: .trailing)
@@ -253,17 +254,17 @@ struct StatsSummaryView: View {
     }
 
     private func summaryMetricCard(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(4)) {
             Text(label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: appearanceDensity.popoverMetric(11), weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: appearanceDensity.popoverMetric(17), weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(PopoverChrome.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .popoverCard(padding: 12, radius: 10)
+        .popoverCard(padding: appearanceDensity.popoverMetric(12), radius: 10)
     }
 
     private var horongStatusCard: some View {
@@ -329,7 +330,7 @@ struct StatsSummaryView: View {
     }
 
     private var weekSummary: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: appearanceDensity.popoverMetric(10)) {
             summaryHeader(title: "이번 주 기록", total: "총 \(weekTotalFormatted)", showsTop3: false)
 
             VStack(spacing: 8) {

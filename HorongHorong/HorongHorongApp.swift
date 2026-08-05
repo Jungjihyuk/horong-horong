@@ -729,9 +729,15 @@ private struct MenuBarLabel: View {
 struct HorongHorongApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var onboardingDemoStore = CompanionOnboardingDemoStore.shared
+    @AppStorage(Constants.AppStorageKey.appearanceDensity)
+    private var appearanceDensityRaw = Constants.defaultAppearanceDensity
 
     private var guidedModelContainer: ModelContainer {
         onboardingDemoStore.modelContainer ?? appDelegate.modelContainer
+    }
+
+    private var appearanceDensity: AppearanceDensity {
+        AppearanceDensity.normalized(rawValue: appearanceDensityRaw)
     }
 
     var body: some Scene {
@@ -740,6 +746,7 @@ struct HorongHorongApp: App {
         MenuBarExtra {
             MenuBarPopover(timerManager: appDelegate.timerManager)
                 .environment(appDelegate.appState)
+                .environment(\.appearanceDensity, appearanceDensity)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
         } label: {
@@ -750,6 +757,9 @@ struct HorongHorongApp: App {
         Window("호롱호롱 통계", id: "stats-detail") {
             StatsDetailWindow()
                 .environment(appDelegate.appState)
+                .environment(\.appearanceDensity, appearanceDensity)
+                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
+                .controlSize(appearanceDensity.controlSize)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
         }
@@ -758,6 +768,9 @@ struct HorongHorongApp: App {
         Window("호롱호롱 성취", id: "achievement-detail") {
             AchievementDetailWindow()
                 .environment(appDelegate.appState)
+                .environment(\.appearanceDensity, appearanceDensity)
+                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
+                .controlSize(appearanceDensity.controlSize)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
         }
@@ -766,6 +779,9 @@ struct HorongHorongApp: App {
         Window("전체 메모 - 호롱호롱", id: "memo-browser") {
             MemoBrowserWindow()
                 .environment(appDelegate.appState)
+                .environment(\.appearanceDensity, appearanceDensity)
+                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
+                .controlSize(appearanceDensity.controlSize)
                 .modelContainer(appDelegate.modelContainer)
         }
         .defaultSize(width: Constants.memoBrowserWindowWidth, height: Constants.memoBrowserWindowHeight)
@@ -773,6 +789,9 @@ struct HorongHorongApp: App {
         Window("뉴스 리포트 보관함", id: "news-report-archive") {
             NewsReportArchiveWindow()
                 .environment(appDelegate.appState)
+                .environment(\.appearanceDensity, appearanceDensity)
+                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
+                .controlSize(appearanceDensity.controlSize)
                 .modelContainer(appDelegate.modelContainer)
         }
         .defaultSize(width: 940, height: 660)

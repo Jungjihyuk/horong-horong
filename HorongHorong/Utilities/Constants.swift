@@ -776,6 +776,7 @@ enum Constants {
 
     enum AppStorageKey {
         static let appearanceMode = "appearance.mode"  // "light" | "dark"
+        static let appearanceDensity = "appearance.density"
         static let popoverTheme = "appearance.popoverTheme"
         static let warmLanternAccent = "appearance.accent.warmLantern"
         static let wineLanternAccent = "appearance.accent.wineLantern"
@@ -1172,6 +1173,7 @@ enum Constants {
     }
 
     static let defaultAppearanceMode = "light"
+    static let defaultAppearanceDensity = AppearanceDensity.comfortable.rawValue
     static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
 
     static let availableNewsSchedules: [(value: String, label: String)] = [
