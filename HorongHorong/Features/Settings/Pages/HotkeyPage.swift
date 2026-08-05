@@ -7,6 +7,17 @@ struct HotkeyPage: View {
         Binding(get: { store.quickMemo }, set: { store.quickMemo = $0 })
     }
 
+    private var menuBarPopoverBinding: Binding<HotkeyCombo> {
+        Binding(
+            get: { store.menuBarPopover },
+            set: { store.menuBarPopover = $0 }
+        )
+    }
+
+    private var timerToggleBinding: Binding<HotkeyCombo> {
+        Binding(get: { store.timerToggle }, set: { store.timerToggle = $0 })
+    }
+
     var body: some View {
         SettingsPageScroll {
             SettingsPageHeader(title: SettingsTab.hotkey.label, subtitle: SettingsTab.hotkey.subtitle)
@@ -36,16 +47,35 @@ struct HotkeyPage: View {
                 }
                 SettingsRow(
                     "호롱호롱 팝오버 열기",
-                    subtitle: "메뉴바 팝오버를 호출합니다.",
-                    comingSoon: true
+                    subtitle: "메뉴바 팝오버를 열거나 닫습니다."
                 ) {
-                    HotkeyField(keys: ["⌃", "⌥", "Space"])
+                    HotkeyRecorderField(combo: menuBarPopoverBinding)
+                    if store.menuBarPopover != .defaultMenuBarPopover {
+                        Button {
+                            store.resetMenuBarPopoverToDefault()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("기본값(⌃⌥Space) 으로 되돌리기")
+                    }
                 }
                 SettingsRow(
-                    "타이머 시작 / 일시정지",
-                    comingSoon: true
+                    "타이머 시작/일시정지",
+                    subtitle: "대기 중이면 시작하고, 집중 중이면 일시정지하며, 일시정지 중이면 재개합니다."
                 ) {
-                    HotkeyField(keys: ["⌃", "⌥", "P"])
+                    HotkeyRecorderField(combo: timerToggleBinding)
+                    if store.timerToggle != .defaultTimerToggle {
+                        Button {
+                            store.resetTimerToggleToDefault()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("기본값(⌃⌥P) 으로 되돌리기")
+                    }
                 }
             }
 

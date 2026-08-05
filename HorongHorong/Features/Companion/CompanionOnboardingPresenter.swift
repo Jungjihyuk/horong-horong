@@ -18,6 +18,35 @@ extension Notification.Name {
     )
 }
 
+/// `MenuBarExtra`가 만든 상태바 버튼을 찾아 실제 클릭과 같은 동작을 수행한다.
+@MainActor
+enum MenuBarExtraController {
+    @discardableResult
+    static func toggle() -> Bool {
+        guard let button = statusItemButton() else { return false }
+        button.performClick(nil)
+        return true
+    }
+
+    private static func statusItemButton() -> NSStatusBarButton? {
+        for window in NSApp.windows where window.className.contains("StatusBar") {
+            if let button = findButton(in: window.contentView) {
+                return button
+            }
+        }
+        return nil
+    }
+
+    private static func findButton(in view: NSView?) -> NSStatusBarButton? {
+        guard let view else { return nil }
+        if let button = view as? NSStatusBarButton { return button }
+        for subview in view.subviews {
+            if let button = findButton(in: subview) { return button }
+        }
+        return nil
+    }
+}
+
 /// 온보딩 단계에 맞춰 실제 앱 화면을 띄운다.
 ///
 /// 메뉴바 팝오버는 `MenuBarExtra` 가 관리해 직접 참조할 수 없어, 상태바 버튼을 찾아 눌러 연다.
@@ -94,17 +123,15 @@ enum CompanionOnboardingPresenter {
 
     /// 온보딩이 끝나면 열어둔 팝오버를 닫아 원래 상태로 돌려놓는다.
     static func closePopover() {
-        guard isPopoverOpen, let button = statusItemButton() else {
+        guard isPopoverOpen, MenuBarExtraController.toggle() else {
             isPopoverOpen = false
             return
         }
-        button.performClick(nil)
         isPopoverOpen = false
     }
 
     private static func openPopover(tab: PopoverTab) {
-        if !isPopoverOpen, let button = statusItemButton() {
-            button.performClick(nil)
+        if !isPopoverOpen, MenuBarExtraController.toggle() {
             isPopoverOpen = true
         }
         guard isPopoverOpen else { return }
@@ -112,25 +139,6 @@ enum CompanionOnboardingPresenter {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             NotificationCenter.default.post(name: .companionOnboardingSelectTab, object: tab)
         }
-    }
-
-    /// `MenuBarExtra` 가 만든 상태바 버튼을 찾는다.
-    private static func statusItemButton() -> NSStatusBarButton? {
-        for window in NSApp.windows where window.className.contains("StatusBar") {
-            if let button = findButton(in: window.contentView) {
-                return button
-            }
-        }
-        return nil
-    }
-
-    private static func findButton(in view: NSView?) -> NSStatusBarButton? {
-        guard let view else { return nil }
-        if let button = view as? NSStatusBarButton { return button }
-        for subview in view.subviews {
-            if let button = findButton(in: subview) { return button }
-        }
-        return nil
     }
 
     /// 온보딩이 대신 눌러주는 동작. 각 화면이 알림을 받아 자기 상태를 바꾼다.
