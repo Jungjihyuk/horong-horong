@@ -110,7 +110,8 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .news:
             return ["소스", "YouTube", "Google News", "Hacker News", "RSS", "YOZM IT",
                     "관심 키워드", "관심사", "파이프라인",
-                    "자동 수집 스케줄", "요약 에이전트", "일일 리포트 저장 위치", "LLM",
+                    "자동 수집 스케줄", "특정 시각", "수집 시각", "수집 간격", "n시간 간격",
+                    "요약 에이전트", "일일 리포트 저장 위치", "LLM",
                     "리포트", "레포트", "생성"]
         case .agent:
             return ["실행 환경", "실험 루트 폴더", "기본 Agent",

@@ -360,6 +360,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
         TodayPlanningReminderCoordinator.shared.start(modelContext: context)
+        NewsScheduler.shared.start(
+            pipelineService: appState.newsPipelineService,
+            modelContext: context
+        )
         NotificationManager.shared.requestAuthorization()
         #if DIRECT_DISTRIBUTION
         AppUpdateManager.shared.refreshState()
