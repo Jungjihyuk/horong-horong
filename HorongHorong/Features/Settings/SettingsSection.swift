@@ -140,16 +140,22 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
 
 enum SettingsGroup: String, CaseIterable, Identifiable {
     case preferences = "환경설정"
-    case features = "기능"
-    case advanced = "고급"
+    case focusAndMeasurement = "몰입과 측정"
+    case insightsAndAction = "관심사와 실험"
+    case system = "시스템 관리"
 
     var id: String { rawValue }
 
     var tabs: [SettingsTab] {
         switch self {
-        case .preferences: return [.general, .appearance, .hotkey]
-        case .features:    return [.timer, .memo, .category, .stats, .news, .agent, .achievement, .companion, .focus]
-        case .advanced:    return [.data, .about]
+        case .preferences:
+            return [.general, .appearance, .hotkey]
+        case .focusAndMeasurement:
+            return [.timer, .stats, .category, .focus]
+        case .insightsAndAction:
+            return [.news, .memo, .agent, .achievement, .companion]
+        case .system:
+            return [.data, .about]
         }
     }
 }
