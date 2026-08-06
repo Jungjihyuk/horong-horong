@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-08-06
+
 ### 추가
 
 - 설정 > 외관에 테마별 수동·자동 강조 색상 선택 기능을 추가했습니다.
@@ -135,7 +137,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.6
 [0.2.5]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.5
 [0.2.4]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.4
 [0.2.3]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.3
