@@ -7,7 +7,6 @@ from providers.cli_providers import (
     AntigravityCliProvider,
     ClaudeCliProvider,
     CodexCliProvider,
-    GeminiCliProvider,
     OpencodeCliProvider,
 )
 from providers.ollama_provider import OllamaProvider
@@ -21,7 +20,6 @@ _PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
     "antigravity": AntigravityCliProvider,
     "claude": ClaudeCliProvider,
     "codex": CodexCliProvider,
-    "gemini": GeminiCliProvider,
     "ollama": OllamaProvider,
     "opencode": OpencodeCliProvider,
 }

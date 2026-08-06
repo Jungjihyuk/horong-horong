@@ -189,7 +189,6 @@ struct NewsProviderCLIResolver {
         case "ollama": return "ollama"
         case "codex": return "codex"
         case "claude": return "claude"
-        case "gemini": return "gemini"
         case "opencode": return "opencode"
         case "antigravity": return "agy"
         default: return nil
