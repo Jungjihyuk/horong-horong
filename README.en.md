@@ -137,7 +137,7 @@ Track the active app in the background and automatically aggregate time by categ
 <td width="45%" valign="middle">
 
 ### 📰 News Curation
-Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. News providers support Codex, Claude, Antigravity, Opencode, and Gemini. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
+Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. News providers support Codex, Claude, Antigravity, and Opencode. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
 
 </td>
 <td width="55%" align="center">
@@ -259,10 +259,10 @@ Use this path when you want to build the app directly or contribute to the codeb
 - [`uv`](https://github.com/astral-sh/uv) — *(required for the news feature)* `brew install uv`
 - Python 3 — *(required for the news feature)*
 - At least one LLM CLI
-  - News: `codex`, `claude`, Antigravity (`agy`), `opencode`, `gemini`
+  - News: `codex`, `claude`, Antigravity (`agy`), `opencode`
   - Agent experiments: `codex`, `claude`, Antigravity (`agy`), `opencode`, `gemini`
 
-<sub><font color="#6B7280">Note: The Gemini provider is scheduled for service shutdown on June 18, 2026, so it may be removed later.</font></sub>
+<sub><font color="#6B7280">Note: Support for the news Gemini provider has been removed as of v0.2.6.</font></sub>
 
 #### Build Steps
 

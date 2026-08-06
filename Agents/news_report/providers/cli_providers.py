@@ -27,11 +27,6 @@ class CodexCliProvider(BaseCliProvider):
         return ["codex", "exec", "--skip-git-repo-check", prompt]
 
 
-class GeminiCliProvider(BaseCliProvider):
-    def _build_command(self, prompt: str) -> list[str]:
-        return ["gemini", "--skip-trust", "-p", prompt]
-
-
 class OpencodeCliProvider(BaseCliProvider):
     def _build_command(self, prompt: str) -> list[str]:
         return ["opencode", "run", prompt]
