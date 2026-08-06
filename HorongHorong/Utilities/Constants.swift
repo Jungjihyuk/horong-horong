@@ -1129,7 +1129,7 @@ enum Constants {
     }
     // 기본 뉴스 키워드 = 빈 문자열. 사용자가 관심사를 직접 등록하기 전까지 자동 키워드는 넣지 않는다.
     static let defaultNewsInterestKeywords = ""
-    static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode", "gemini"]
+    static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode"]
     enum NewsStorageKey {
         static let dataBasePath = "news.dataBasePath"
         static let selectedProvider = "news.selectedProvider"

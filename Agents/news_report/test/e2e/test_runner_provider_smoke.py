@@ -25,7 +25,6 @@ PROVIDER_FIXTURES = [
     ("ollama", "ollama-all-sources-request.json"),
     ("claude", "claude-all-sources-request.json"),
     ("codex", "codex-all-sources-request.json"),
-    ("gemini", "gemini-all-sources-request.json"),
     ("antigravity", "antigravity-all-sources-request.json"),
 ]
 
@@ -33,7 +32,6 @@ PROVIDER_COMMANDS = {
     "antigravity": "agy",
     "claude": "claude",
     "codex": "codex",
-    "gemini": "gemini",
 }
 
 
