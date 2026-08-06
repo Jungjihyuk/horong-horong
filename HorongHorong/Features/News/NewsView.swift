@@ -14,7 +14,8 @@ struct NewsView: View {
     @AppStorage(Constants.NewsStorageKey.ollamaTimeout) private var ollamaTimeout = Constants.defaultNewsOllamaTimeout
     @AppStorage(Constants.NewsStorageKey.interestKeywords) private var interestKeywords = Constants.defaultNewsInterestKeywords
     @AppStorage(Constants.NewsStorageKey.youtubeChannelIds) private var youtubeChannelIdsRaw = ""
-    @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource: Int = Constants.defaultNewsMaxItemsPerSource
+    @AppStorage(Constants.NewsStorageKey.schedule) private var schedule = Constants.defaultNewsSchedule
+    @AppStorage(Constants.NewsStorageKey.scheduleNextSlotAt) private var nextSlotAtRaw: Double = 0
 
     @State private var newChannelInput = ""
     @State private var showExecutionEnvironmentAlert = false
@@ -43,6 +44,16 @@ struct NewsView: View {
                     }
 
                     runButton
+
+                    if let nextCollectionText {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 9))
+                            Text("다음 자동 수집 \(nextCollectionText)")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    }
 
                     if isPreparingOllama {
                         ollamaInstallProgressSection
@@ -126,6 +137,22 @@ struct NewsView: View {
         .buttonStyle(.plain)
     }
 
+    /// 자동 수집이 예약되어 있을 때만 다음 시각을 보여준다. `수동` 모드면 nil.
+    private var nextCollectionText: String? {
+        guard Constants.NewsScheduleMode.normalized(rawValue: schedule) != .manual,
+              nextSlotAtRaw > 0 else { return nil }
+        return NewsSchedulePlan.displayText(for: Date(timeIntervalSince1970: nextSlotAtRaw))
+    }
+
+    /// 자동 수집이 도는 중이라는 것을 라벨로 구분한다.
+    /// 중복 실행 방지는 이미 되어 있다 — 실행 중에는 버튼 자체가 `중단` 으로 바뀐다.
+    private var runButtonTitle: String {
+        if pipelineService.isRunning {
+            return NewsScheduler.shared.isAutoRunInFlight ? "자동 수집 중… 중단" : "중단"
+        }
+        return isPreparingOllama ? "모델 준비 중" : "리포트 생성"
+    }
+
     private var runButton: some View {
         Button {
             if pipelineService.isRunning {
@@ -137,7 +164,7 @@ struct NewsView: View {
             HStack(spacing: 7) {
                 Image(systemName: pipelineService.isRunning ? "stop.fill" : (isPreparingOllama ? "arrow.down.circle" : "sparkles"))
                     .font(.system(size: 10, weight: .bold))
-                Text(pipelineService.isRunning ? "중단" : (isPreparingOllama ? "모델 준비 중" : "리포트 생성"))
+                Text(runButtonTitle)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
             }
             .foregroundStyle(PopoverChrome.accentInk)
@@ -640,35 +667,13 @@ struct NewsView: View {
     }
 
     private func startPipelineJob() {
-        let resolvedRunnerPath = Constants.defaultNewsRunnerPath
-        let resolvedDataBasePath = dataBasePath.trimmingCharacters(in: .whitespacesAndNewlines)
-        let keywords = interestKeywords
-            .components(separatedBy: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        pipelineService.startJob(
-            provider: selectedProvider,
-            providerOptions: providerOptions,
-            runnerPath: resolvedRunnerPath,
-            dataBasePath: resolvedDataBasePath,
-            interestKeywords: keywords,
-            youtubeChannelIds: youtubeChannelIds,
-            maxItemsPerSource: maxItemsPerSource,
-            context: modelContext
-        )
+        NewsPipelineLaunchConfiguration
+            .current()
+            .launch(on: pipelineService, context: modelContext)
         if pipelineService.lastErrorCode == "E_ENV" || pipelineService.lastErrorCode == "E_PROVIDER_CLI" {
             executionEnvironmentAlertMessage = pipelineService.lastErrorMessage ?? "uv 또는 Python 3 실행 환경을 확인해주세요."
             showExecutionEnvironmentAlert = true
         }
-    }
-
-    private var providerOptions: NewsProviderOptionsPayload? {
-        guard selectedProvider == "ollama" else { return nil }
-        return NewsProviderOptionsPayload(
-            model: cleanOllamaModel,
-            endpoint: cleanOllamaEndpoint,
-            timeout: ollamaTimeout
-        )
     }
 
     private func applyDefaultPathsIfNeeded() {

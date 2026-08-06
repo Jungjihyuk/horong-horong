@@ -1140,6 +1140,20 @@ enum Constants {
         static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
         static let sources = "news.sources.v1"
         static let schedule = "news.schedule"
+        static let scheduleDailyHour = "news.schedule.dailyHour"
+        static let scheduleDailyMinute = "news.schedule.dailyMinute"
+        static let scheduleIntervalHours = "news.schedule.intervalHours"
+        /// 간격 격자의 기준점. `특정 시각` 모드의 시각과는 별개 값이다.
+        static let scheduleIntervalStartHour = "news.schedule.intervalStartHour"
+        static let scheduleIntervalStartMinute = "news.schedule.intervalStartMinute"
+        /// 다음 예정 슬롯. 격자를 유지하는 장부 — 실행 여부와 무관하게 전진한다.
+        static let scheduleNextSlotAt = "news.schedule.nextSlotAt"
+        /// 마지막으로 수집을 *시작* 한 시각. 수동·자동 모두 기록하며 격자에는 영향을 주지 않고,
+        /// 슬롯 직전에 이미 수집했는지 판정하는 데만 쓴다.
+        static let scheduleLastRunAt = "news.schedule.lastRunAt"
+        /// 지금의 스케줄 설정이 확정된 시각. 이보다 오래된 `lastRunAt` 은 지금 스케줄과 무관하므로
+        /// 유예 창 판정에서 제외한다 — 새 스케줄의 첫 회차가 옛 기록 때문에 사라지지 않게 한다.
+        static let scheduleConfiguredAt = "news.schedule.configuredAt"
         static let maxItemsPerSource = "news.maxItemsPerSource"
     }
 
@@ -1199,12 +1213,42 @@ enum Constants {
     static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
     static let defaultAppIcon = AppIconStyle.horong.rawValue
 
-    static let availableNewsSchedules: [(value: String, label: String)] = [
-        ("manual", "수동"),
-        ("hourly", "매시간"),
-        ("daily", "매일"),
-    ]
-    static let defaultNewsSchedule = "manual"
+    enum NewsScheduleMode: String, CaseIterable, Identifiable {
+        /// 사용자가 팝오버의 `리포트 생성` 을 직접 누를 때만 수집한다.
+        case manual
+        /// 매일 정해진 시각에 한 번.
+        case dailyAt
+        /// 고정 격자 위에서 n 시간마다.
+        case interval
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .manual: return "수동"
+            case .dailyAt: return "특정 시각"
+            case .interval: return "n시간 간격"
+            }
+        }
+
+        /// 예전 값(`hourly` / `daily`) 도 흡수한다. 저장된 rawValue 자체를 바꾸는 마이그레이션은
+        /// `NewsScheduler.migrateLegacyScheduleIfNeeded()` 가 따로 수행한다.
+        static func normalized(rawValue: String) -> Self {
+            if let mode = Self(rawValue: rawValue) { return mode }
+            switch rawValue {
+            case "hourly": return .interval
+            case "daily": return .dailyAt
+            default: return .manual
+            }
+        }
+    }
+
+    static let defaultNewsSchedule = NewsScheduleMode.manual.rawValue
+    static let defaultNewsScheduleDailyHour = 9
+    static let defaultNewsScheduleDailyMinute = 0
+    static let defaultNewsScheduleIntervalHours = 3
+    static let defaultNewsScheduleIntervalStartHour = 9
+    static let defaultNewsScheduleIntervalStartMinute = 0
 
     static func agentIdeaDirectoryPath(for rootDirectoryPath: String) -> String {
         appendPath(rootDirectoryPath, agentIdeaDirectoryName)

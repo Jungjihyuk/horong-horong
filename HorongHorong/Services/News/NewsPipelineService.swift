@@ -2,6 +2,12 @@ import Darwin
 import Foundation
 import SwiftData
 
+extension Notification.Name {
+    /// 잡이 어떤 이유로든 끝났을 때(성공·실패·취소) 발송된다.
+    /// `NewsScheduler` 가 자동 수집 결과를 알리고 상태를 정리하는 데 쓴다.
+    static let newsPipelineJobFinished = Notification.Name("news.pipeline.jobFinished")
+}
+
 // MARK: - JSON Contract Structures
 
 struct NewsPlaylist: Codable {
@@ -519,6 +525,7 @@ final class NewsPipelineService: @unchecked Sendable {
         isRunning = false
         currentStep = ""
         lastJobStatus = "cancelled"
+        notifyJobFinished()
     }
 
     func isOllamaModelInstalled(model: String, endpoint: String) async throws -> Bool {
@@ -639,6 +646,7 @@ final class NewsPipelineService: @unchecked Sendable {
         lastWarnings = result.warnings ?? []
         currentStep = result.status
         isRunning = false
+        notifyJobFinished()
     }
 
     private func finishFailed(job: NewsJob, context: ModelContext, code: String, message: String) {
@@ -654,6 +662,7 @@ final class NewsPipelineService: @unchecked Sendable {
         cleanup()
         currentStep = "failed"
         isRunning = false
+        notifyJobFinished()
     }
 
     private func finishConfigurationFailed(code: String, message: String) {
@@ -663,6 +672,11 @@ final class NewsPipelineService: @unchecked Sendable {
         cleanup()
         currentStep = "failed"
         isRunning = false
+        notifyJobFinished()
+    }
+
+    private func notifyJobFinished() {
+        NotificationCenter.default.post(name: .newsPipelineJobFinished, object: self)
     }
 
     private func cleanup() {
