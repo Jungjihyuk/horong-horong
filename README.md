@@ -139,7 +139,7 @@
 <td width="45%" valign="middle">
 
 ### 📰 뉴스 큐레이션
-YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접하는 채널에서 데이터를 수집해 LLM이 동적 카테고리 분류, 관련도 필터링, 랭킹, 요약, 카테고리별 트렌드 요약을 생성합니다. 뉴스 Provider는 `Codex`, `Claude`, `Antigravity`, `Opencode`, `Gemini` 5가지를 지원합니다. 실행 중에는 수집→정규화→중복 제거→분류→랭킹→요약→렌더링 단계를 표시하고, 결과는 마크다운 리포트와 메타데이터로 저장됩니다.
+YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접하는 채널에서 데이터를 수집해 LLM이 동적 카테고리 분류, 관련도 필터링, 랭킹, 요약, 카테고리별 트렌드 요약을 생성합니다. 뉴스 Provider는 `Codex`, `Claude`, `Antigravity`, `Opencode` 4가지를 지원합니다. 실행 중에는 수집→정규화→중복 제거→분류→랭킹→요약→렌더링 단계를 표시하고, 결과는 마크다운 리포트와 메타데이터로 저장됩니다.
 
 </td>
 <td width="55%" align="center">
@@ -292,10 +292,10 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 - [`uv`](https://github.com/astral-sh/uv) — *(뉴스 기능 사용 시)* `brew install uv`
 - Python 3 — *(뉴스 기능 사용 시)*
 - LLM CLI 중 하나 이상
-  - 뉴스: `codex`, `claude`, Antigravity(`agy`), `opencode`, `gemini`
+  - 뉴스: `codex`, `claude`, Antigravity(`agy`), `opencode`
   - Agent 실험: `codex`, `claude`, Antigravity(`agy`), `opencode`, `gemini`
 
-<sub><font color="#6B7280">참고: Gemini Provider는 외부 서비스 지원 상태에 따라 이후 제거될 수 있습니다.</font></sub>
+<sub><font color="#6B7280">참고: 뉴스 Gemini Provider는 v0.2.6 버전 이후로 지원이 제거되었습니다.</font></sub>
 
 
 #### 빌드 절차
