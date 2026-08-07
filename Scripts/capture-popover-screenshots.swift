@@ -8,6 +8,7 @@ private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achieveme
 private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "achievement", "news", "agent", "companion", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
 private let achievementDetailModes = ["progress", "timeline-all", "journey", "records"]
+private let companionModes = ["chat", "schedule"]
 private let popoverThemes: [PopoverThemeOption] = [
     PopoverThemeOption(identifier: "warm-lantern", rawValue: "warmLantern"),
     PopoverThemeOption(identifier: "wine-lantern", rawValue: "wineLantern"),
@@ -20,6 +21,8 @@ private let allTargets = popoverTabs.map { "popover:\($0)" }
     + achievementDetailModes
         .filter { $0 != "progress" }
         .map { "achievement-detail:\($0)" }
+    + ["companion", "companion:schedule"]
+    + ["news-report-archive"]
 
 private struct ScriptError: LocalizedError {
     let message: String
@@ -156,7 +159,13 @@ private struct CaptureOptions {
 
     private static func isValidTarget(_ target: String) -> Bool {
         let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return target == "achievement-detail" || target == "companion" }
+        guard parts.count == 2 else {
+            return target == "achievement-detail"
+                || target == "companion"
+                || target == "companion-schedule"
+                || target == "news-report-archive"
+                || target == "news-archive"
+        }
         switch parts[0] {
         case "popover":
             return popoverTabs.contains(parts[1])
@@ -166,6 +175,10 @@ private struct CaptureOptions {
             return statsDetailModes.contains(parts[1])
         case "achievement-detail":
             return achievementDetailModes.contains(parts[1])
+        case "companion":
+            return companionModes.contains(parts[1])
+        case "news":
+            return parts[1] == "report-archive" || parts[1] == "archive"
         default:
             return false
         }
