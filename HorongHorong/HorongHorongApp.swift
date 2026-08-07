@@ -26,6 +26,8 @@ private struct ScreenshotCaptureConfiguration {
             return CGSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
         case .companion:
             return Constants.companionExpandedOverlaySize
+        case .newsReportArchive:
+            return CGSize(width: 940, height: 660)
         }
     }
 
@@ -33,7 +35,7 @@ private struct ScreenshotCaptureConfiguration {
         switch target {
         case .popover, .companion:
             return [.borderless]
-        case .settings, .statsDetail, .achievementDetail(_):
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive:
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         }
     }
@@ -112,13 +114,21 @@ private struct ScreenshotCaptureConfiguration {
     }
 }
 
+private enum CompanionScreenshotMode: String {
+    case chat
+    case schedule
+
+    var screenshotIdentifier: String { rawValue }
+}
+
 private enum ScreenshotCaptureTarget {
     case popover(PopoverTab)
     case settings(SettingsTab)
     case statsDetail(StatsViewMode)
     case achievementDetail(AchievementDetailScreenshotMode = .progress)
-    /// 화면 위에 뜨는 컴패니언. 대화 중인 상태를 그린다.
-    case companion
+    /// 화면 위에 뜨는 컴패니언.
+    case companion(CompanionScreenshotMode = .chat)
+    case newsReportArchive
 
     var identifier: String {
         switch self {
@@ -130,8 +140,10 @@ private enum ScreenshotCaptureTarget {
             return "stats-detail-\(mode.screenshotIdentifier)"
         case .achievementDetail(let mode):
             return mode == .progress ? "achievement-detail" : "achievement-detail-\(mode.screenshotIdentifier)"
-        case .companion:
-            return "companion"
+        case .companion(let mode):
+            return mode == .chat ? "companion" : "companion-\(mode.screenshotIdentifier)"
+        case .newsReportArchive:
+            return "news-report-archive"
         }
     }
 
@@ -143,7 +155,15 @@ private enum ScreenshotCaptureTarget {
                 return
             }
             if identifier == "companion" {
-                self = .companion
+                self = .companion(.chat)
+                return
+            }
+            if identifier == "companion-schedule" {
+                self = .companion(.schedule)
+                return
+            }
+            if identifier == "news-report-archive" || identifier == "news-archive" {
+                self = .newsReportArchive
                 return
             }
             if let tab = PopoverTab(screenshotIdentifier: identifier) {
@@ -166,6 +186,20 @@ private enum ScreenshotCaptureTarget {
         case "achievement-detail":
             guard let mode = AchievementDetailScreenshotMode(screenshotIdentifier: parts[1]) else { return nil }
             self = .achievementDetail(mode)
+        case "companion":
+            if parts[1] == "schedule" {
+                self = .companion(.schedule)
+            } else if parts[1] == "chat" {
+                self = .companion(.chat)
+            } else {
+                return nil
+            }
+        case "news":
+            if parts[1] == "report-archive" || parts[1] == "archive" {
+                self = .newsReportArchive
+            } else {
+                return nil
+            }
         default:
             return nil
         }
@@ -452,7 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .popover, .companion:
             window.isOpaque = false
             window.backgroundColor = .clear
-        case .settings, .statsDetail, .achievementDetail(_):
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive:
             window.isOpaque = true
             window.backgroundColor = config.resolvedWindowBackgroundColor
             hostingView.wantsLayer = true
@@ -512,9 +546,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         height: Constants.statsWindowHeight
                     )
             )
-        case .companion:
-            // 실제 대화는 모델이 답하므로 화면마다 내용이 달라진다.
-            // 문서용 스크린샷은 매번 같아야 해서 대화 내용을 고정해 그린다.
+        case .companion(let mode):
             let state = CompanionPresentationState(
                 character: CompanionRegistry.character(
                     for: UserDefaults.standard.string(
@@ -522,14 +554,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ) ?? Constants.defaultCompanionIdentifier
                 )
             )
-            state.isChatting = true
-            state.chatMessages = Self.screenshotChatMessages
+            switch mode {
+            case .chat:
+                // 실제 대화는 모델이 답하므로 화면마다 내용이 달라진다.
+                // 문서용 스크린샷은 매번 같아야 해서 대화 내용을 고정해 그린다.
+                state.isChatting = true
+                state.chatMessages = Self.screenshotChatMessages
+            case .schedule:
+                // 일정 브리핑 스크린샷.
+                state.animation = .review
+                let mockEntries = Self.screenshotScheduleEntries
+                state.bubble = CompanionBubble(
+                    headline: CompanionBriefingSummary.headline(for: mockEntries),
+                    message: "오늘의 일정을 알려드릴게요!",
+                    schedule: mockEntries,
+                    isDismissible: true
+                )
+            }
             return AnyView(
                 CompanionView(state: state)
                     .frame(
                         width: Constants.companionExpandedOverlaySize.width,
                         height: Constants.companionExpandedOverlaySize.height
                     )
+            )
+        case .newsReportArchive:
+            return AnyView(
+                NewsReportArchiveWindow()
+                    .environment(appState)
+                    .modelContainer(modelContainer)
+                    .frame(width: 940, height: 660)
             )
         }
     }
@@ -543,6 +597,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 + "짧은 메모 정리는 오후로 미뤄도 괜찮아요."
         ),
     ]
+
+    /// 컴패니언 일정 브리핑 스크린샷에 쓸 고정 일정.
+    private static var screenshotScheduleEntries: [CompanionScheduleEntry] {
+        let calendar = Calendar.current
+        let now = Date()
+        let time1 = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: now)
+        let time2 = calendar.date(bySettingHour: 14, minute: 30, second: 0, of: now)
+        let time3 = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now)
+        return [
+            CompanionScheduleEntry(time: time1, title: "오전 몰입 작업 (성취 추천 모델 문서화)", isCompleted: true),
+            CompanionScheduleEntry(time: time2, title: "주간 팀 싱크 미팅 및 진행 상황 공유", isCompleted: false),
+            CompanionScheduleEntry(time: time3, title: "타이머 UI 테마 리팩토링 검토", isCompleted: false),
+        ]
+    }
 
     private func seedDefaultCategoryRules(in context: ModelContext) {
         try? DefaultAppCategoryRuleStore.reconcile(in: context)
