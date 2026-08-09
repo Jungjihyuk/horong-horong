@@ -210,7 +210,8 @@ struct CompanionPage: View {
                         }
                     }
                     .labelsHidden()
-                    .fixedSize()
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
                     .disabled(!isEnabled)
                 }
 
@@ -248,19 +249,11 @@ struct CompanionPage: View {
                 }
 
                 if chatProviderKind == Constants.CompanionChatProviderKind.mlx.rawValue {
-                    SettingsRow(
-                        "MLX 를 쓰면 좋은 점",
-                        subtitle: Self.mlxAdvantages
-                    ) {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(.secondary)
-                    }
-
                     // 카드 목록이라 SettingsRow 의 오른쪽 슬롯에 넣으면 잘린다. 전체 폭을 쓴다.
                     VStack(alignment: .leading, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("MLX 모델").font(.callout)
-                            Text("늘 떠 있는 컴패니언이라 가벼운 쪽을 권합니다.")
+                            Text("루미롱에서 모델은 켜져 있는 동안 항상 메모리를 사용한다는 점을 유의하세요.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -401,14 +394,7 @@ struct CompanionPage: View {
         isOllamaReachable = await OllamaChatClient.isReachable(endpoint: ollamaEndpoint)
     }
 
-    /// 설정 화면에서 MLX 를 고를 때 무엇이 좋아지는지 그대로 읽어 알 수 있게 쓴다.
-    private static let mlxAdvantages = """
-    · 따로 깔 프로그램이 없습니다. 터미널을 열 일도, 서버를 켜 둘 일도 없습니다.
-    · 모델을 한 번만 내려받으면 그 뒤로는 인터넷 없이도 대화할 수 있습니다.
-    · 앱이 직접 돌려서 중간에 거치는 단계가 없어 답이 더 빨리 시작됩니다.
-    · Apple 온디바이스 모델보다 큰 모델을 골라 쓸 수 있어 말귀를 더 잘 알아듣습니다.
-    알아둘 점 — Apple Silicon 맥에서만 되고, 고른 모델 크기만큼 이 앱이 메모리를 씁니다.
-    """
+
 
     private var isMLXSupported: Bool {
         #if canImport(MLXLLM)

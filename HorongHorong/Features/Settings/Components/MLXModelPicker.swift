@@ -22,6 +22,9 @@ struct MLXModelPicker: View {
     @State private var deletionTarget: Constants.CompanionMLXModelOption?
     /// 지운 뒤 남기는 안내. 이 값이 바뀌어야 «받음» 배지도 다시 그려진다.
     @State private var actionMessage: String?
+    @State private var page = 0
+
+    private let modelsPerPage = 5
 
     private var memoryGB: Int {
         Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
@@ -41,9 +44,13 @@ struct MLXModelPicker: View {
             }
 
             VStack(spacing: 6) {
-                ForEach(options) { option in
+                ForEach(pagedOptions) { option in
                     optionRow(option)
                 }
+            }
+
+            if pageCount > 1 {
+                pagination
             }
 
             if let actionMessage {
@@ -75,6 +82,62 @@ struct MLXModelPicker: View {
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             downloadState.tick()
         }
+        .task {
+            movePage(to: model)
+        }
+    }
+
+    private var pagedOptions: [Constants.CompanionMLXModelOption] {
+        let start = page * modelsPerPage
+        guard start < options.count else {
+            return Array(options.prefix(modelsPerPage))
+        }
+        let end = min(start + modelsPerPage, options.count)
+        return Array(options[start..<end])
+    }
+
+    private var pageCount: Int {
+        max(1, (options.count + modelsPerPage - 1) / modelsPerPage)
+    }
+
+    private var pagination: some View {
+        HStack(spacing: 6) {
+            Text("\(page + 1) / \(pageCount)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .leading)
+
+            ForEach(0..<pageCount, id: \.self) { candidate in
+                Button {
+                    page = candidate
+                } label: {
+                    Text("\(candidate + 1)")
+                        .font(.caption2.weight(.semibold))
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle()
+                                .fill(candidate == page ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(candidate == page ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.10), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(candidate == page ? Color.accentColor : Color.secondary)
+                .help("\(candidate + 1)번째 모델 후보 페이지")
+            }
+
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+
+    private func movePage(to model: String) {
+        guard let index = options.firstIndex(where: { $0.name == model }) else {
+            return
+        }
+        page = index / modelsPerPage
     }
 
     private func optionRow(_ option: Constants.CompanionMLXModelOption) -> some View {
@@ -95,8 +158,14 @@ struct MLXModelPicker: View {
                             .font(.caption2.monospaced())
                             .foregroundStyle(.secondary)
                         badge(for: option, isTooLarge: isTooLarge, isPrepared: isPrepared)
+                        Text("권장 RAM: \(option.minimumMemoryGB)GB+")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     }
-                    Text("\(option.detail) 권장 메모리: \(option.minimumMemoryGB)GB+.")
+                    Text(option.detail)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -328,21 +397,46 @@ struct MLXModelPicker: View {
         isTooLarge: Bool,
         isPrepared: Bool
     ) -> some View {
-        if isTooLarge {
-            tag("메모리 부족", color: .red)
-        } else if isPrepared {
-            tag("받음", color: .green)
+        let kind = recommendationKind(for: option)
+        tag(kind.rawValue, foreground: recommendationForegroundColor(for: kind), background: recommendationBackgroundColor(for: kind))
+    }
+
+    private func recommendationKind(for option: Constants.CompanionMLXModelOption) -> Constants.NewsOllamaRecommendationKind {
+        if option.minimumMemoryGB > memoryGB {
+            return .unsupported
+        } else if memoryGB - option.minimumMemoryGB < 8 {
+            return .caution
+        } else if memoryGB >= option.minimumMemoryGB * 3 {
+            return .lightweight
         } else {
-            tag("다운로드 필요", color: .orange)
+            return .primary
         }
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
+    private func tag(_ text: String, foreground: Color, background: Color) -> some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
+            .foregroundStyle(foreground)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+            .background(background, in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func recommendationBackgroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
+        switch kind {
+        case .primary, .quality: return Color.accentColor.opacity(0.12)
+        case .lightweight: return Color.green.opacity(0.15)
+        case .caution: return Color.orange.opacity(0.15)
+        case .unsupported: return Color.red.opacity(0.15)
+        }
+    }
+
+    private func recommendationForegroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
+        switch kind {
+        case .primary, .quality: return Color.accentColor
+        case .lightweight: return Color.green
+        case .caution: return Color.orange
+        case .unsupported: return Color.red
+        }
     }
 }

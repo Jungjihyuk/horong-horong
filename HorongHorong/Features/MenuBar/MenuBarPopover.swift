@@ -1206,8 +1206,8 @@ private enum AgentPlanLauncher {
             return "agy --prompt-interactive \(shellQuote(prompt))"
         case "Opencode":
             return "opencode run \(shellQuote(prompt))"
-        case "Gemini":
-            return "gemini \(shellQuote(prompt))"
+        case "Hermes":
+            return "hermes chat send \(shellQuote(prompt))"
         default:
             throw AgentPlanLaunchError.unsupportedAgent(agentName)
         }

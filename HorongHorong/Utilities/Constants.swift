@@ -524,7 +524,7 @@ enum Constants {
     static let defaultInterestKeywords = ""
     static let defaultAgentType = "Codex"
     static let defaultPlanDayCount = 5
-    static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Gemini"]
+    static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Hermes"]
     static let maxRepresentativeAgentCount = 3
     static let defaultRepresentativeAgentTypes = ["Codex", "Claude", "Antigravity"]
     static let defaultRepresentativeAgentTypesCSV = defaultRepresentativeAgentTypes.joined(separator: ",")
@@ -704,6 +704,54 @@ enum Constants {
             detail: "긴 지시를 가장 잘 지킵니다. 가중치가 4.6GB라 늘 켜 두면 그만큼 메모리를 계속 씁니다.",
             minimumMemoryGB: 24
         ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Qwen3.5-9B-4bit",
+            label: "Qwen3.5 9B 4bit",
+            detail: "Qwen 3.5 아키텍처 기반의 9B 모델입니다. 한국어 성능이 개선되었습니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/EXAONE-3.0-7.8B-Instruct-4bit",
+            label: "EXAONE 3.0 7.8B",
+            detail: "한국어 어휘력이 유창하며 지시 이행 능력이 뛰어납니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
+            label: "Llama 3.1 8B",
+            detail: "구조화 출력 및 논리적인 지시 이행에 최고 수준의 성능을 제공합니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Mistral-Nemo-Instruct-2407-4bit",
+            label: "Mistral Nemo 12B",
+            detail: "긴 문맥 이해와 섬세한 대화 뉘앙스 처리에 강점을 보입니다.",
+            minimumMemoryGB: 24
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Phi-3.5-mini-instruct-4bit",
+            label: "Phi-3.5 Mini",
+            detail: "가장 가벼우면서도 똑똑합니다. 메모리를 최소화해야 할 때 좋습니다.",
+            minimumMemoryGB: 8
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/Solar-10.7B-Instruct-v1.0-4bit",
+            label: "Solar 10.7B",
+            detail: "한국어와 영어 처리 밸런스가 가장 훌륭하며 논리력이 탁월합니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/EEVE-Korean-Instruct-10.8B-v1.0-4bit",
+            label: "EEVE-Korean 10.8B",
+            detail: "가장 자연스러운 한국어 대화가 가능하여 감성 컴패니언으로 강력 추천합니다.",
+            minimumMemoryGB: 16
+        ),
+        CompanionMLXModelOption(
+            name: "mlx-community/aya-23-8B-4bit",
+            label: "Aya 23 8B",
+            detail: "다국어 지원에 완벽히 특화되어 있으며 한국어도 매우 잘 구사합니다.",
+            minimumMemoryGB: 16
+        ),
     ]
 
     static func companionMLXModelLabel(for name: String) -> String {
@@ -744,6 +792,42 @@ enum Constants {
                 label: "Qwen3 14B",
                 detail: "이 목록에서 지시 준수가 가장 좋습니다. 대신 느리고 메모리를 많이 씁니다.",
                 minimumMemoryGB: 32
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3.5-35B-A3B-4bit",
+                label: "Qwen3.5 35B A3B 4bit",
+                detail: "매우 뛰어난 추론 성능을 제공합니다. 가중치가 커서 메모리가 넉넉해야 합니다.",
+                minimumMemoryGB: 32
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3.6-27B-4bit",
+                label: "Qwen3.6 27B 4bit",
+                detail: "Qwen 3.6 27B 4bit 모델. 대형 모델로 넉넉한 메모리가 필요합니다.",
+                minimumMemoryGB: 32
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3.6-35B-A3B-4bit",
+                label: "Qwen3.6 35B-A3B 4bit",
+                detail: "Qwen 3.6 35B-A3B 4bit 모델. 최고 수준의 품질을 제공하지만 메모리를 많이 씁니다.",
+                minimumMemoryGB: 48
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/Qwen3.6-27B-6bit",
+                label: "Qwen3.6 27B 6bit",
+                detail: "Qwen 3.6 27B 6bit 모델. 고품질 텍스트 생성을 위해 더 높은 정밀도를 사용합니다.",
+                minimumMemoryGB: 48
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/c4ai-command-r-v01-4bit",
+                label: "Command R 35B",
+                detail: "목표 분석 및 JSON 구조화 등 복잡한 작업 수행에 특화된 최고 수준 모델입니다.",
+                minimumMemoryGB: 32
+            ),
+            CompanionMLXModelOption(
+                name: "mlx-community/DeepSeek-V2-Lite-Chat-4bit",
+                label: "DeepSeek V2 Lite 16B",
+                detail: "논리/수학적 추론이 강점인 MoE 경량 모델입니다.",
+                minimumMemoryGB: 24
             ),
             // gemma-4-26b-a4b(MoE)와 gemma-4-31b 는 넣지 않는다.
             // 전자는 mlx-swift-lm 의 Gemma4 구현이 dense 전용이라 MoE 가중치(experts/router)에서
@@ -976,6 +1060,12 @@ enum Constants {
                 "qwen3:32b": .primary,
                 "qwen3:14b": .lightweight,
                 "gpt-oss:120b": .quality,
+                "qwen3.5:35b-a3b": .primary,
+                "qwen3.6:35b-a3b-q4_K_M": .primary,
+                "qwen3.6:35b-mlx": .primary,
+                "qwen3.6:27b-mlx": .quality,
+                "qwen3.6:27b-q4_K_M": .quality,
+                "qwen3.5:9b": .lightweight,
             ]
         case 48..<64:
             return [
@@ -983,6 +1073,12 @@ enum Constants {
                 "qwen3:14b": .lightweight,
                 "qwen3:32b": .quality,
                 "gpt-oss:120b": .caution,
+                "qwen3.5:35b-a3b": .quality,
+                "qwen3.6:35b-a3b-q4_K_M": .quality,
+                "qwen3.6:35b-mlx": .quality,
+                "qwen3.6:27b-mlx": .primary,
+                "qwen3.6:27b-q4_K_M": .primary,
+                "qwen3.5:9b": .lightweight,
             ]
         case 24..<48:
             return [
@@ -994,6 +1090,12 @@ enum Constants {
                 "qwen3:32b": .unsupported,
                 "gemma4:31b": .unsupported,
                 "gpt-oss:120b": .unsupported,
+                "qwen3.5:35b-a3b": .unsupported,
+                "qwen3.6:35b-a3b-q4_K_M": .unsupported,
+                "qwen3.6:35b-mlx": .unsupported,
+                "qwen3.6:27b-mlx": .caution,
+                "qwen3.6:27b-q4_K_M": .caution,
+                "qwen3.5:9b": .primary,
             ]
         case 16..<24:
             return [
@@ -1005,6 +1107,12 @@ enum Constants {
                 "qwen3:32b": .unsupported,
                 "gemma4:31b": .unsupported,
                 "gpt-oss:120b": .unsupported,
+                "qwen3.5:35b-a3b": .unsupported,
+                "qwen3.6:35b-a3b-q4_K_M": .unsupported,
+                "qwen3.6:35b-mlx": .unsupported,
+                "qwen3.6:27b-mlx": .unsupported,
+                "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.5:9b": .quality,
             ]
         case 12..<16:
             return [
@@ -1018,6 +1126,12 @@ enum Constants {
                 "gemma4:31b": .unsupported,
                 "gpt-oss:20b": .unsupported,
                 "gpt-oss:120b": .unsupported,
+                "qwen3.5:35b-a3b": .unsupported,
+                "qwen3.6:35b-a3b-q4_K_M": .unsupported,
+                "qwen3.6:35b-mlx": .unsupported,
+                "qwen3.6:27b-mlx": .unsupported,
+                "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.5:9b": .caution,
             ]
         default:
             return [
@@ -1031,6 +1145,12 @@ enum Constants {
                 "gemma4:31b": .unsupported,
                 "gpt-oss:20b": .unsupported,
                 "gpt-oss:120b": .unsupported,
+                "qwen3.5:35b-a3b": .unsupported,
+                "qwen3.6:35b-a3b-q4_K_M": .unsupported,
+                "qwen3.6:35b-mlx": .unsupported,
+                "qwen3.6:27b-mlx": .unsupported,
+                "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.5:9b": .unsupported,
             ]
         }
     }
@@ -1110,6 +1230,48 @@ enum Constants {
             isRecommended: false
         ),
         NewsOllamaModelOption(
+            name: "qwen3.5:9b",
+            label: "Qwen3.5 9B",
+            detail: "장점: Qwen 3.5 9B. 속도와 성능의 균형이 좋은 모델. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.5:35b-a3b",
+            label: "Qwen3.5 35B-A3B",
+            detail: "장점: Qwen 3.5 35B. 고품질 텍스트 생성 모델. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.6:27b-mlx",
+            label: "Qwen3.6 27B MLX",
+            detail: "장점: Qwen 3.6 27B. MLX 환경에 최적화된 모델. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.6:27b-q4_K_M",
+            label: "Qwen3.6 27B Q4_K_M",
+            detail: "장점: Qwen 3.6 27B. 양자화 모델로 적은 메모리로 구동 가능. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.6:35b-a3b-q4_K_M",
+            label: "Qwen3.6 35B-A3B Q4_K_M",
+            detail: "장점: Qwen 3.6 35B. 대형 양자화 모델로 높은 품질과 효율성 제공. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.6:35b-mlx",
+            label: "Qwen3.6 35B MLX",
+            detail: "장점: Qwen 3.6 35B. MLX 환경에 최적화된 대형 모델. 권장 RAM: 48GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
             name: "gpt-oss:20b",
             label: "GPT-OSS 20B",
             detail: "장점: 추론·구조화 출력·도구 사용 성향 비교에 좋음. 뉴스 품질은 eval 검증 필요. 권장 RAM: 32GB+.",
@@ -1123,13 +1285,76 @@ enum Constants {
             availability: .local,
             isRecommended: false
         ),
+        NewsOllamaModelOption(
+            name: "exaone3:7.8b",
+            label: "EXAONE 3.0 7.8B",
+            detail: "장점: 한국어와 영어에 매우 특화되어 있으며 어휘력이 유창함. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "llama3.1:8b",
+            label: "Llama 3.1 8B",
+            detail: "장점: 구조화 출력과 복잡한 지시 이행에 매우 탁월한 Meta의 최신 모델. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "mistral-nemo:12b",
+            label: "Mistral Nemo 12B",
+            detail: "장점: 긴 컨텍스트와 다국어 처리에 능숙하며 밸런스가 좋은 모델. 권장 RAM: 24GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "phi3.5:3.8b",
+            label: "Phi-3.5 Mini",
+            detail: "장점: 매우 작고 가벼우면서도 뛰어난 추론 능력을 가진 소형 모델. 권장 RAM: 8GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "solar:10.7b",
+            label: "Solar 10.7B",
+            detail: "장점: Upstage에서 만든 한국어/영어 최적화 모델. 맥락 이해와 논리력이 매우 뛰어남. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "eeve:10.8b",
+            label: "EEVE-Korean 10.8B",
+            detail: "장점: 한국인처럼 가장 자연스럽고 유창한 대화가 가능. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "command-r:35b",
+            label: "Command R 35B",
+            detail: "장점: RAG와 도구 사용, JSON 포맷 출력에 미친 성능을 보여주는 엔터프라이즈급 모델. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "aya:8b",
+            label: "Aya 23 8B",
+            detail: "장점: 23개 다국어 특화 모델로 한국어 성능도 훌륭함. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "deepseek-v2:16b",
+            label: "DeepSeek V2 Lite 16B",
+            detail: "장점: 코딩 및 수학적 추론에 강한 MoE 경량 모델. 권장 RAM: 24GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
     ]
     static var availableNewsOllamaModels: [String] {
         availableNewsOllamaModelOptions.map(\.name)
     }
     // 기본 뉴스 키워드 = 빈 문자열. 사용자가 관심사를 직접 등록하기 전까지 자동 키워드는 넣지 않는다.
     static let defaultNewsInterestKeywords = ""
-    static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode"]
+    static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode", "hermes"]
     enum NewsStorageKey {
         static let dataBasePath = "news.dataBasePath"
         static let selectedProvider = "news.selectedProvider"
