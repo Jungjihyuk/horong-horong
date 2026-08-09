@@ -3614,17 +3614,34 @@ struct AchievementDetailWindow: View {
             let remainingGoals = journeyRemainingMonthlyGoals
             let completedGoals = journeyCompletedMonthlyGoals
 
-            if !remainingGoals.isEmpty {
-                journeyGoalSectionHeader(title: "남은 월간 목표", count: remainingGoals.count)
-                ForEach(remainingGoals) { goal in
-                    journeyRemainingGoalRow(goal)
+            let displayCompleted = Array(completedGoals.prefix(2))
+            let displayRemaining = Array(remainingGoals.prefix(3))
+
+            if !completedGoals.isEmpty {
+                journeyGoalSectionHeader(title: "지나온 월간 목표 (완료)", count: completedGoals.count)
+                ForEach(displayCompleted) { goal in
+                    journeyCompletedGoalRow(goal)
+                }
+                if completedGoals.count > 2 {
+                    Text("+ \\(completedGoals.count - 2)개의 목표 더보기")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 2)
                 }
             }
 
-            if !completedGoals.isEmpty {
-                journeyGoalSectionHeader(title: "완료한 월간 목표", count: completedGoals.count)
-                ForEach(completedGoals) { goal in
-                    journeyCompletedGoalRow(goal)
+            if !remainingGoals.isEmpty {
+                journeyGoalSectionHeader(title: "이동 중인 월간 목표 (진행중)", count: remainingGoals.count)
+                ForEach(displayRemaining) { goal in
+                    journeyRemainingGoalRow(goal)
+                }
+                if remainingGoals.count > 3 {
+                    Text("+ \\(remainingGoals.count - 3)개의 목표 더보기")
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 2)
                 }
             }
 
@@ -3734,7 +3751,7 @@ struct AchievementDetailWindow: View {
     }
 
     private func journeyRemainingGoalRow(_ goal: AchievementGoal) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(goal.title)
                 .font(.system(size: 13.5, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink)
@@ -3744,6 +3761,8 @@ struct AchievementDetailWindow: View {
                 .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
                 .lineLimit(1)
+            
+            journeyChipChildren(for: goal)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -3751,23 +3770,75 @@ struct AchievementDetailWindow: View {
     }
 
     private func journeyCompletedGoalRow(_ goal: AchievementGoal) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(PopoverChrome.accent)
-            Text(goal.title)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkSecondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text("\(goal.done)/\(goal.total)")
-                .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkTertiary)
-                .monospacedDigit()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accent)
+                Text(goal.title)
+                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Text("\(goal.done)/\(goal.total)")
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .monospacedDigit()
+            }
+            journeyChipChildren(for: goal)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 36)
-        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+        .padding(12)
+        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+    }
+
+    @ViewBuilder
+    private func journeyChipChildren(for goal: AchievementGoal) -> some View {
+        let wGoals = goals.filter { $0.cadence == "주간" && $0.monthGoal == goal.title }
+        let wGoalMemoIDs = Set(wGoals.flatMap { $0.sourceMemoIDs })
+        let directMemos = linkedMemos(for: goal).filter { !wGoalMemoIDs.contains($0.id) }
+        
+        if !wGoals.isEmpty || !directMemos.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(wGoals) { wg in
+                        HStack(spacing: 4) {
+                            Image(systemName: isJourneyGoalComplete(wg) ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(isJourneyGoalComplete(wg) ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                            Text(wg.title)
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(PopoverChrome.card, in: Capsule())
+                        .overlay(Capsule().stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    }
+                    ForEach(directMemos) { memo in
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(memo.isCompletedValue ? PopoverChrome.accent : Color.blue)
+                                .frame(width: 4, height: 4)
+                            Text(AchievementDataBuilder.shortText(memo.content, limit: 15))
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(PopoverChrome.card, in: Capsule())
+                        .overlay(Capsule().stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                    }
+                }
+            }
+        }
+    }
+
+    private func linkedMemos(for goal: AchievementGoal) -> [Memo] {
+        let ids = Set(goal.sourceMemoIDs)
+        return memos.filter { ids.contains($0.id) }
+            .sorted { AchievementDataBuilder.memoDate($0) > AchievementDataBuilder.memoDate($1) }
     }
 
     private func journeyProgressCaption(for goal: AchievementGoal) -> String {
@@ -3865,7 +3936,22 @@ struct AchievementDetailWindow: View {
         while slots.count < clampedJourneyMaxFlagCount {
             slots.append(nil)
         }
-        return Array(slots.prefix(clampedJourneyMaxFlagCount))
+        let validSlots = Array(slots.prefix(clampedJourneyMaxFlagCount))
+        
+        return validSlots.enumerated().sorted {
+            let lhsGoal = $0.element
+            let rhsGoal = $1.element
+            let lhsComplete = lhsGoal.map { isJourneyGoalComplete($0) } ?? false
+            let rhsComplete = rhsGoal.map { isJourneyGoalComplete($0) } ?? false
+            
+            if lhsComplete != rhsComplete {
+                return lhsComplete
+            }
+            if (lhsGoal != nil) != (rhsGoal != nil) {
+                return lhsGoal != nil
+            }
+            return $0.offset < $1.offset
+        }.map { $0.element }
     }
 
     private func setJourneyFlagGoal(_ goal: AchievementGoal?, at index: Int) {
@@ -3919,6 +4005,13 @@ struct AchievementDetailWindow: View {
             uniquingKeysWith: { first, _ in first }
         )
         return selectedJourneyMonthlyGoals.sorted { lhs, rhs in
+            let lhsComplete = isJourneyGoalComplete(lhs)
+            let rhsComplete = isJourneyGoalComplete(rhs)
+            
+            if lhsComplete != rhsComplete {
+                return lhsComplete
+            }
+            
             let lhsOrder = flagOrder[lhs.id] ?? Int.max
             let rhsOrder = flagOrder[rhs.id] ?? Int.max
             if lhsOrder == rhsOrder {
