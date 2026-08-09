@@ -326,6 +326,7 @@ private struct AchievementGoalEditDraft {
     let rewardText: String
     let linkedMemoIDs: [UUID]?
     var dueDate: Date?
+    let additionalChildGoalIDs: [UUID]?
 }
 
 private struct AchievementPersonaVisionDraft {
@@ -2435,6 +2436,7 @@ struct AchievementDetailWindow: View {
                     linkedMemoCount: managingGoalRecord.linkedMemoIDs.count,
                     memos: linkableMemos(for: managingGoalRecord),
                     childRecords: childRecords(for: managingGoalRecord),
+                    availableChildRecords: linkableChildRecords(for: managingGoalRecord),
                     childCadence: childCadence(for: managingGoalRecord.cadence),
                     onSave: updateGoalRecord,
                     onDelete: deleteGoalRecord,
@@ -4171,7 +4173,7 @@ struct AchievementDetailWindow: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.bottom, 2)
                 }
-                ForEach(0..<leadingBlankCount, id: \.self) { _ in
+                ForEach((0..<leadingBlankCount).map { "blank-\($0)" }, id: \.self) { _ in
                     Color.clear
                         .frame(maxWidth: .infinity, minHeight: 38)
                 }
@@ -4531,6 +4533,23 @@ struct AchievementDetailWindow: View {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
+    private func linkableChildRecords(for record: AchievementGoalRecord) -> [AchievementGoalRecord] {
+        guard let childCadence = childCadence(for: record.cadence) else { return [] }
+        return goalRecords
+            .filter { child in
+                guard child.cadence == childCadence else { return false }
+                switch record.cadence {
+                case "연간":
+                    return nonEmpty(child.yearGoal) != record.title
+                case "월간":
+                    return nonEmpty(child.monthGoal) != record.title
+                default:
+                    return false
+                }
+            }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     private func updateGoalRecord(_ record: AchievementGoalRecord, draft: AchievementGoalEditDraft) {
         let oldTitle = record.title
         let newTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4544,6 +4563,15 @@ struct AchievementDetailWindow: View {
         if let linkedMemoIDs = draft.linkedMemoIDs {
             record.linkedMemoIDs = linkedMemoIDs
             record.targetCount = max(1, linkedMemoIDs.count)
+        }
+        if let additionalChildGoalIDs = draft.additionalChildGoalIDs, !additionalChildGoalIDs.isEmpty {
+            for childID in additionalChildGoalIDs {
+                if let child = goalRecords.first(where: { $0.id == childID }) {
+                    if record.cadence == "연간" { child.yearGoal = record.title }
+                    if record.cadence == "월간" { child.monthGoal = record.title }
+                    child.updatedAt = Date()
+                }
+            }
         }
         record.updatedAt = Date()
 
@@ -6213,6 +6241,7 @@ private struct AchievementGoalManagementSheet: View {
     let linkedMemoCount: Int
     let memos: [Memo]
     let childRecords: [AchievementGoalRecord]
+    let availableChildRecords: [AchievementGoalRecord]
     let childCadence: String?
     let onSave: (AchievementGoalRecord, AchievementGoalEditDraft) -> Void
     let onDelete: (AchievementGoalRecord) -> Void
@@ -6225,6 +6254,7 @@ private struct AchievementGoalManagementSheet: View {
     @State private var rule: String
     @State private var rewardText: String
     @State private var selectedMemoIDs: Set<UUID>
+    @State private var selectedAvailableChildIDs: Set<UUID> = []
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
     @State private var newChildTitle = ""
@@ -6236,6 +6266,7 @@ private struct AchievementGoalManagementSheet: View {
         linkedMemoCount: Int,
         memos: [Memo] = [],
         childRecords: [AchievementGoalRecord] = [],
+        availableChildRecords: [AchievementGoalRecord] = [],
         childCadence: String? = nil,
         onSave: @escaping (AchievementGoalRecord, AchievementGoalEditDraft) -> Void,
         onDelete: @escaping (AchievementGoalRecord) -> Void,
@@ -6247,6 +6278,7 @@ private struct AchievementGoalManagementSheet: View {
         self.linkedMemoCount = linkedMemoCount
         self.memos = memos
         self.childRecords = childRecords
+        self.availableChildRecords = availableChildRecords
         self.childCadence = childCadence
         self.onSave = onSave
         self.onDelete = onDelete
@@ -6375,6 +6407,7 @@ private struct AchievementGoalManagementSheet: View {
                     Text("삭제")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
@@ -6391,13 +6424,15 @@ private struct AchievementGoalManagementSheet: View {
                         targetCount: supportsMemoLinks ? max(1, selectedMemoIDs.count) : record.targetCount,
                         rewardText: rewardText,
                         linkedMemoIDs: supportsMemoLinks ? Array(selectedMemoIDs) : nil,
-                        dueDate: hasDueDate ? dueDate : nil
+                        dueDate: hasDueDate ? dueDate : nil,
+                        additionalChildGoalIDs: selectedAvailableChildIDs.isEmpty ? nil : Array(selectedAvailableChildIDs)
                     ))
                     dismiss()
                 } label: {
                     Text("저장")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
@@ -6494,6 +6529,68 @@ private struct AchievementGoalManagementSheet: View {
                     .padding(8)
                 }
                 .frame(maxHeight: childRecords.count > 3 ? 190 : nil)
+                .popoverScrollbar()
+                .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+            }
+
+            if !availableChildRecords.isEmpty {
+                Text("기존 \(childCadence ?? "") 목표 연결")
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .padding(.top, 4)
+
+                if !selectedAvailableChildIDs.isEmpty {
+                    let hasOtherParentOrRole = availableChildRecords.contains { child in
+                        selectedAvailableChildIDs.contains(child.id) && 
+                        ((record.cadence == "월간" ? child.monthGoal != nil : child.yearGoal != nil) || (child.roleName != record.roleName))
+                    }
+                    if hasOtherParentOrRole {
+                        Text("💡 다른 목표/역할에 연결된 항목을 선택하면 기존 연결이 해제되고 현재 목표로 이동됩니다.")
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                }
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(availableChildRecords, id: \.id) { child in
+                            let currentParent = record.cadence == "월간" ? child.monthGoal : child.yearGoal
+                            Toggle(isOn: Binding(
+                                get: { selectedAvailableChildIDs.contains(child.id) },
+                                set: { isSelected in
+                                    if isSelected {
+                                        selectedAvailableChildIDs.insert(child.id)
+                                    } else {
+                                        selectedAvailableChildIDs.remove(child.id)
+                                    }
+                                }
+                            )) {
+                                HStack(spacing: 6) {
+                                    Text(child.emoji)
+                                        .font(.system(size: 13))
+                                    Text(child.title)
+                                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(PopoverChrome.inkSecondary)
+                                    
+                                    let rolePrefix = (child.roleName != record.roleName && !child.roleName.isEmpty) ? "[\(child.roleName)] " : ""
+                                    if let currentParent, !currentParent.isEmpty {
+                                        Text("(\(rolePrefix)\(currentParent))")
+                                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                            .foregroundStyle(PopoverChrome.inkTertiary)
+                                    } else if !rolePrefix.isEmpty {
+                                        Text("\(rolePrefix.trimmingCharacters(in: .whitespaces))")
+                                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                            .foregroundStyle(PopoverChrome.inkTertiary)
+                                    }
+                                }
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    .padding(8)
+                }
+                .frame(maxHeight: availableChildRecords.count > 3 ? 140 : nil)
                 .popoverScrollbar()
                 .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
