@@ -116,7 +116,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .agent:
             return ["실행 환경", "실험 루트 폴더", "기본 Agent",
                     "계획 일수", "관심사", "터미널 명령 실행 전 확인",
-                    "Codex", "Claude", "Gemini", "생성"]
+                    "Codex", "Claude", "Antigravity", "Opencode", "Hermes", "생성"]
         case .companion:
             return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
                     "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",

@@ -14,7 +14,13 @@ struct OllamaModelPicker: View {
     @State private var installingProgress: Double?
     /// 지우기 확인을 기다리는 모델. 수 GB 를 되돌릴 수 없이 지우므로 한 번 물어본다.
     @State private var deletionTarget: Constants.NewsOllamaModelOption?
+    @State private var actionMessage: String?
     @State private var page = 0
+    @State private var customModelInput = ""
+    
+    @State private var verifyTask: Task<Void, Never>?
+    @State private var isVerifying = false
+    @State private var verifiedModelExists = false
 
     private let modelsPerPage = 5
     private let pipelineService = NewsPipelineService()
@@ -39,6 +45,36 @@ struct OllamaModelPicker: View {
                 .disabled(isLoading || installingModel != nil)
                 .help("설치 상태 새로고침")
             }
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("목록에 없는 로컬 모델 이름 입력 (예: llama3.1:70b)", text: $customModelInput)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .onChange(of: customModelInput) { _, newValue in
+                        let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        verifyTask?.cancel()
+                        if query.isEmpty {
+                            verifiedModelExists = false
+                            isVerifying = false
+                            return
+                        }
+                        isVerifying = true
+                        verifiedModelExists = false
+                        verifyTask = Task {
+                            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
+                            if Task.isCancelled { return }
+                            let exists = await checkModelExists(query)
+                            if Task.isCancelled { return }
+                            verifiedModelExists = exists
+                            isVerifying = false
+                        }
+                    }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
 
             VStack(spacing: 6) {
                 ForEach(pagedOptions) { option in
@@ -75,7 +111,7 @@ struct OllamaModelPicker: View {
                     .lineLimit(2)
             }
         }
-        .frame(width: 390, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task {
             movePage(to: model)
             await refresh()
@@ -102,17 +138,68 @@ struct OllamaModelPicker: View {
         }
     }
 
-    private var pagedOptions: [Constants.NewsOllamaModelOption] {
-        let start = page * modelsPerPage
-        guard start < Constants.availableNewsOllamaModelOptions.count else {
-            return Array(Constants.availableNewsOllamaModelOptions.prefix(modelsPerPage))
+    private var allOptions: [Constants.NewsOllamaModelOption] {
+        var options = Constants.availableNewsOllamaModelOptions
+        let hardcodedNames = Set(options.map(\.name))
+        
+        let customInstalled = installedModels.keys
+            .filter { !hardcodedNames.contains($0) }
+            .sorted()
+        
+        for name in customInstalled {
+            options.append(
+                Constants.NewsOllamaModelOption(
+                    name: name,
+                    label: name,
+                    detail: "사용자가 직접 설치한 커스텀 모델.",
+                    availability: .local,
+                    isRecommended: false
+                )
+            )
         }
-        let end = min(start + modelsPerPage, Constants.availableNewsOllamaModelOptions.count)
-        return Array(Constants.availableNewsOllamaModelOptions[start..<end])
+        
+        let query = customModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            options = options.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.label.localizedCaseInsensitiveContains(query) }
+            
+            if !options.contains(where: { $0.name.lowercased() == query.lowercased() }) {
+                let detail: String
+                if isVerifying {
+                    detail = "설치 가능 여부 확인 중..."
+                } else if verifiedModelExists {
+                    detail = "설치 가능한 커스텀 모델."
+                } else {
+                    detail = "Ollama 레지스트리에서 찾을 수 없는 모델입니다."
+                }
+
+                options.insert(
+                    Constants.NewsOllamaModelOption(
+                        name: query,
+                        label: query,
+                        detail: detail,
+                        availability: .local,
+                        isRecommended: false
+                    ),
+                    at: 0
+                )
+            }
+        }
+        
+        return options
+    }
+
+    private var pagedOptions: [Constants.NewsOllamaModelOption] {
+        let opts = allOptions
+        let start = page * modelsPerPage
+        guard start < opts.count else {
+            return Array(opts.prefix(modelsPerPage))
+        }
+        let end = min(start + modelsPerPage, opts.count)
+        return Array(opts[start..<end])
     }
 
     private var pageCount: Int {
-        max(1, (Constants.availableNewsOllamaModelOptions.count + modelsPerPage - 1) / modelsPerPage)
+        max(1, (allOptions.count + modelsPerPage - 1) / modelsPerPage)
     }
 
     private var pagination: some View {
@@ -155,6 +242,9 @@ struct OllamaModelPicker: View {
         let isCloud = option.availability == .cloud
         let isInstalled = isCloud || installedModels[option.name] != nil
         let isInstalling = installingModel == option.name
+        let isCustomUnverified = !isInstalled && !Constants.availableNewsOllamaModelOptions.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
+
+        let (desc, ramInfo) = formatOptionDetail(option.detail)
 
         return HStack(spacing: 8) {
             Button {
@@ -186,8 +276,16 @@ struct OllamaModelPicker: View {
                                     in: RoundedRectangle(cornerRadius: 4)
                                 )
                         }
+                        if let ramInfo {
+                            Text(ramInfo)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                        }
                     }
-                    Text(option.detail)
+                    Text(desc)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -222,23 +320,29 @@ struct OllamaModelPicker: View {
                 .help("\(option.name) 지우기")
             } else {
                 Button {
-                    Task { await install(option) }
+                    Task {
+                        if isInstalling {
+                            await cancelInstall()
+                        } else {
+                            await install(option)
+                        }
+                    }
                 } label: {
                     if isInstalling {
-                        ProgressView()
-                            .controlSize(.small)
+                        Image(systemName: "stop.circle")
+                            .foregroundStyle(.orange)
                     } else {
                         Image(systemName: "arrow.down.circle")
                     }
                 }
                 .buttonStyle(.borderless)
-                .disabled(installingModel != nil || isUnsupported)
-                .help(isUnsupported ? "현재 PC 사양에서는 권장하지 않음" : "\(option.name) 다운로드")
+                .disabled((installingModel != nil && !isInstalling) || isUnsupported || isCustomUnverified || isVerifying)
+                .help(isUnsupported ? "현재 PC 사양에서는 권장하지 않음" : (isInstalling ? "\(option.name) 내려받기 취소" : "\(option.name) 다운로드"))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
-        .opacity(isUnsupported ? 0.62 : 1)
+        .opacity(isUnsupported || isCustomUnverified ? 0.62 : 1)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04))
@@ -247,6 +351,15 @@ struct OllamaModelPicker: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 0.5)
         )
+    }
+
+    private func formatOptionDetail(_ detail: String) -> (String, String?) {
+        if let range = detail.range(of: " 권장 RAM: ") {
+            let desc = String(detail[..<range.lowerBound])
+            let ram = String(detail[range.upperBound...])
+            return (desc, "권장 RAM: " + ram)
+        }
+        return (detail, nil)
     }
 
     private func recommendationForegroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
@@ -287,7 +400,8 @@ struct OllamaModelPicker: View {
     }
 
     private func movePage(to model: String) {
-        guard let index = Constants.availableNewsOllamaModelOptions.firstIndex(where: { $0.name == model }) else {
+        let opts = allOptions
+        guard let index = opts.firstIndex(where: { $0.name == model }) else {
             return
         }
         page = index / modelsPerPage
@@ -330,6 +444,17 @@ struct OllamaModelPicker: View {
         }
     }
 
+    @State private var installTask: Task<Void, Never>?
+
+    @MainActor
+    private func cancelInstall() async {
+        installTask?.cancel()
+        installTask = nil
+        installingModel = nil
+        installingProgress = nil
+        installingStatus = "다운로드를 취소했습니다."
+    }
+
     @MainActor
     private func install(_ option: Constants.NewsOllamaModelOption) async {
         if Constants.newsOllamaRecommendationKinds()[option.name] == .unsupported {
@@ -348,24 +473,59 @@ struct OllamaModelPicker: View {
         installingModel = option.name
         installingStatus = "다운로드 준비 중..."
         installingProgress = nil
-        defer {
-            installingModel = nil
-            installingProgress = nil
-        }
 
-        do {
-            try await pipelineService.installOllamaModel(
-                model: option.name,
-                dataBasePath: dataBasePath,
-                progress: { progress in
-                    installingStatus = progress.message
-                    installingProgress = progress.fraction
+        let task = Task {
+            do {
+                try await pipelineService.installOllamaModel(
+                    model: option.name,
+                    dataBasePath: dataBasePath,
+                    progress: { progress in
+                        if !Task.isCancelled {
+                            installingStatus = progress.message
+                            installingProgress = progress.fraction
+                        }
+                    }
+                )
+                if !Task.isCancelled {
+                    await refresh()   // 크기까지 실제 값으로 다시 읽는다
+                    installingStatus = "\(option.name) 설치가 완료되었습니다."
                 }
-            )
-            await refresh()   // 크기까지 실제 값으로 다시 읽는다
-            installingStatus = "\(option.name) 설치가 완료되었습니다."
-        } catch {
-            installingStatus = error.localizedDescription
+            } catch is CancellationError {
+                // Cancelled explicitly
+            } catch {
+                if !Task.isCancelled {
+                    installingStatus = error.localizedDescription
+                }
+            }
+            if !Task.isCancelled {
+                installingModel = nil
+                installingProgress = nil
+            }
         }
+        installTask = task
+    }
+
+    private func checkModelExists(_ name: String) async -> Bool {
+        let parts = name.split(separator: ":")
+        let modelName = String(parts[0])
+        let tag = parts.count > 1 ? String(parts[1]) : "latest"
+        
+        let namespaceParts = modelName.split(separator: "/")
+        let namespace = namespaceParts.count > 1 ? String(namespaceParts[0]) : "library"
+        let repo = namespaceParts.count > 1 ? String(namespaceParts[1]) : modelName
+        
+        guard let url = URL(string: "https://registry.ollama.ai/v2/\(namespace)/\(repo)/manifests/\(tag)") else { return false }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                return httpResponse.statusCode == 200
+            }
+        } catch {
+            return false
+        }
+        return false
     }
 }
