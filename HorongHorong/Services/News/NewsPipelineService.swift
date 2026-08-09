@@ -733,66 +733,75 @@ final class NewsPipelineService: @unchecked Sendable {
         environment: [String: String],
         progress: (@MainActor @Sendable (OllamaModelInstallProgress) -> Void)? = nil
     ) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let proc = Process()
-                proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                proc.arguments = arguments
-                proc.environment = environment
+        let proc = Process()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    proc.arguments = arguments
+                    proc.environment = environment
 
-                let stdoutPipe = Pipe()
-                let stderrPipe = Pipe()
-                proc.standardOutput = stdoutPipe
-                proc.standardError = stderrPipe
+                    let stdoutPipe = Pipe()
+                    let stderrPipe = Pipe()
+                    proc.standardOutput = stdoutPipe
+                    proc.standardError = stderrPipe
 
-                let outputBuffer = ProcessOutputBuffer()
+                    let outputBuffer = ProcessOutputBuffer()
 
-                let handleData: @Sendable (Data) -> Void = { [weak self] data in
-                    guard !data.isEmpty,
-                          let text = String(data: data, encoding: .utf8) else {
-                        return
-                    }
-                    outputBuffer.append(text)
-                    if let progressEvent = self?.ollamaInstallProgress(from: text) {
-                        Task { @MainActor in
-                            progress?(progressEvent)
+                    let handleData: @Sendable (Data) -> Void = { [weak self] data in
+                        guard !data.isEmpty,
+                              let text = String(data: data, encoding: .utf8) else {
+                            return
+                        }
+                        outputBuffer.append(text)
+                        if let progressEvent = self?.ollamaInstallProgress(from: text) {
+                            Task { @MainActor in
+                                progress?(progressEvent)
+                            }
                         }
                     }
-                }
 
-                stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-                    handleData(handle.availableData)
-                }
-                stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-                    handleData(handle.availableData)
-                }
-
-                do {
-                    Task { @MainActor in
-                        progress?(OllamaModelInstallProgress(message: "다운로드 시작 중...", fraction: nil))
+                    stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                        handleData(handle.availableData)
                     }
-                    try proc.run()
-                    proc.waitUntilExit()
+                    stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                        handleData(handle.availableData)
+                    }
 
-                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                    stderrPipe.fileHandleForReading.readabilityHandler = nil
-
-                    if proc.terminationStatus == 0 {
+                    do {
                         Task { @MainActor in
-                            progress?(OllamaModelInstallProgress(message: "설치 완료", fraction: 1.0))
+                            progress?(OllamaModelInstallProgress(message: "다운로드 시작 중...", fraction: nil))
                         }
-                        continuation.resume(returning: ())
-                    } else {
-                        let output = outputBuffer.snapshot()
-                        let stderr = output.trimmingCharacters(in: .whitespacesAndNewlines)
-                        continuation.resume(throwing: OllamaModelError.pullFailed(stderr.isEmpty ? "ollama pull 실패" : stderr))
+                        try proc.run()
+                        proc.waitUntilExit()
+
+                        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                        stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                        if Task.isCancelled {
+                            continuation.resume(throwing: CancellationError())
+                            return
+                        }
+
+                        if proc.terminationStatus == 0 {
+                            Task { @MainActor in
+                                progress?(OllamaModelInstallProgress(message: "설치 완료", fraction: 1.0))
+                            }
+                            continuation.resume(returning: ())
+                        } else {
+                            let output = outputBuffer.snapshot()
+                            let stderr = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                            continuation.resume(throwing: OllamaModelError.pullFailed(stderr.isEmpty ? "ollama pull 실패" : stderr))
+                        }
+                    } catch {
+                        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                        stderrPipe.fileHandleForReading.readabilityHandler = nil
+                        continuation.resume(throwing: error)
                     }
-                } catch {
-                    stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                    stderrPipe.fileHandleForReading.readabilityHandler = nil
-                    continuation.resume(throwing: error)
                 }
             }
+        } onCancel: {
+            proc.terminate()
         }
     }
 

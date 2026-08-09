@@ -22,6 +22,14 @@ struct MLXModelPicker: View {
     @State private var deletionTarget: Constants.CompanionMLXModelOption?
     /// 지운 뒤 남기는 안내. 이 값이 바뀌어야 «받음» 배지도 다시 그려진다.
     @State private var actionMessage: String?
+    @State private var page = 0
+    @State private var customModelInput = ""
+    
+    @State private var verifyTask: Task<Void, Never>?
+    @State private var isVerifying = false
+    @State private var verifiedModelExists = false
+
+    private let modelsPerPage = 5
 
     private var memoryGB: Int {
         Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
@@ -40,10 +48,44 @@ struct MLXModelPicker: View {
                 Spacer()
             }
 
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("모델 검색 또는 HuggingFace 레포지토리 입력 (예: mlx-community/Phi-3...)", text: $customModelInput)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .onChange(of: customModelInput) { _, newValue in
+                        let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        verifyTask?.cancel()
+                        if query.isEmpty {
+                            verifiedModelExists = false
+                            isVerifying = false
+                            return
+                        }
+                        isVerifying = true
+                        verifiedModelExists = false
+                        verifyTask = Task {
+                            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
+                            if Task.isCancelled { return }
+                            let exists = await checkModelExists(query)
+                            if Task.isCancelled { return }
+                            verifiedModelExists = exists
+                            isVerifying = false
+                        }
+                    }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+
             VStack(spacing: 6) {
-                ForEach(options) { option in
+                ForEach(pagedOptions) { option in
                     optionRow(option)
                 }
+            }
+
+            if pageCount > 1 {
+                pagination
             }
 
             if let actionMessage {
@@ -75,15 +117,126 @@ struct MLXModelPicker: View {
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             downloadState.tick()
         }
+        .task {
+            movePage(to: model)
+        }
+    }
+
+    private var allOptions: [Constants.CompanionMLXModelOption] {
+        var opts = options
+        let hardcodedNames = Set(opts.map(\.name))
+        
+        let preparedModels = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels") ?? []
+        let customInstalled = preparedModels.filter { !hardcodedNames.contains($0) }.sorted()
+        
+        for name in customInstalled {
+            opts.append(
+                Constants.CompanionMLXModelOption(
+                    name: name,
+                    label: name.components(separatedBy: "/").last ?? name,
+                    detail: "사용자가 직접 설치한 커스텀 모델.",
+                    minimumMemoryGB: 0
+                )
+            )
+        }
+        
+        let query = customModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            opts = opts.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.label.localizedCaseInsensitiveContains(query) }
+            
+            if !opts.contains(where: { $0.name.lowercased() == query.lowercased() }) {
+                let detail: String
+                if isVerifying {
+                    detail = "설치 가능 여부 확인 중..."
+                } else if verifiedModelExists {
+                    detail = "설치 가능한 커스텀 모델."
+                } else {
+                    detail = "HuggingFace에서 찾을 수 없거나 권한이 필요한 모델입니다."
+                }
+
+                opts.insert(
+                    Constants.CompanionMLXModelOption(
+                        name: query,
+                        label: query.components(separatedBy: "/").last ?? query,
+                        detail: detail,
+                        minimumMemoryGB: 0
+                    ),
+                    at: 0
+                )
+            }
+        }
+        
+        return opts
+    }
+
+    private var pagedOptions: [Constants.CompanionMLXModelOption] {
+        let opts = allOptions
+        let start = page * modelsPerPage
+        guard start < opts.count else {
+            return Array(opts.prefix(modelsPerPage))
+        }
+        let end = min(start + modelsPerPage, opts.count)
+        return Array(opts[start..<end])
+    }
+
+    private var pageCount: Int {
+        max(1, (allOptions.count + modelsPerPage - 1) / modelsPerPage)
+    }
+
+    private var pagination: some View {
+        HStack(spacing: 6) {
+            Text("\(page + 1) / \(pageCount)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .leading)
+
+            ForEach(0..<pageCount, id: \.self) { candidate in
+                Button {
+                    page = candidate
+                } label: {
+                    Text("\(candidate + 1)")
+                        .font(.caption2.weight(.semibold))
+                        .frame(width: 22, height: 22)
+                        .background(
+                            Circle()
+                                .fill(candidate == page ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(candidate == page ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.10), lineWidth: 0.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(candidate == page ? Color.accentColor : Color.secondary)
+                .help("\(candidate + 1)번째 모델 후보 페이지")
+            }
+
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+
+    private func movePage(to model: String) {
+        let opts = allOptions
+        guard let index = opts.firstIndex(where: { $0.name == model }) else {
+            return
+        }
+        page = index / modelsPerPage
     }
 
     private func optionRow(_ option: Constants.CompanionMLXModelOption) -> some View {
         let isSelected = model == option.name
+        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
         let isTooLarge = option.minimumMemoryGB > memoryGB
-        let isPrepared = MLXModelStore.isKnownPrepared(option.name)
-
+        let isDownloadingThis = isDownloading && downloadTarget == option.name
+        let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
+        
         return HStack(spacing: 8) {
             Button {
+                guard !isTooLarge else {
+                    actionMessage = "메모리가 부족해 이 맥에서는 돌릴 수 없습니다."
+                    return
+                }
                 model = option.name
             } label: {
                 VStack(alignment: .leading, spacing: 3) {
@@ -95,8 +248,14 @@ struct MLXModelPicker: View {
                             .font(.caption2.monospaced())
                             .foregroundStyle(.secondary)
                         badge(for: option, isTooLarge: isTooLarge, isPrepared: isPrepared)
+                        Text("권장 RAM: \(option.minimumMemoryGB)GB+")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     }
-                    Text("\(option.detail) 권장 메모리: \(option.minimumMemoryGB)GB+.")
+                    Text(option.detail)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -120,7 +279,7 @@ struct MLXModelPicker: View {
                 downloadButton(for: option)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -133,11 +292,13 @@ struct MLXModelPicker: View {
                     lineWidth: 0.5
                 )
         )
-        .opacity(isTooLarge ? 0.55 : 1)
+        .opacity(isTooLarge || isCustomUnverified ? 0.62 : 1)
     }
 
     private func downloadButton(for option: Constants.CompanionMLXModelOption) -> some View {
         let isDownloadingThis = isDownloading && downloadTarget == option.name
+        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
+        let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
 
         return Button {
             Task {
@@ -149,14 +310,14 @@ struct MLXModelPicker: View {
             }
         } label: {
             if isDownloadingThis {
-                ProgressView()
-                    .controlSize(.small)
+                Image(systemName: "stop.circle")
+                    .foregroundStyle(.orange)
             } else {
                 Image(systemName: "arrow.down.circle")
             }
         }
         .buttonStyle(.borderless)
-        .disabled(!MLXModelStore.isSupported || (isDownloading && !isDownloadingThis))
+        .disabled(!MLXModelStore.isSupported || (isDownloading && !isDownloadingThis) || isCustomUnverified || isVerifying)
         .help(downloadButtonHelp(for: option, isDownloadingThis: isDownloadingThis))
     }
 
@@ -328,21 +489,64 @@ struct MLXModelPicker: View {
         isTooLarge: Bool,
         isPrepared: Bool
     ) -> some View {
-        if isTooLarge {
-            tag("메모리 부족", color: .red)
-        } else if isPrepared {
-            tag("받음", color: .green)
-        } else {
-            tag("다운로드 필요", color: .orange)
+        if let kind = recommendationKind(for: option) {
+            tag(kind.rawValue, foreground: recommendationForegroundColor(for: kind), background: recommendationBackgroundColor(for: kind))
         }
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
+    private func recommendationKind(for option: Constants.CompanionMLXModelOption) -> Constants.NewsOllamaRecommendationKind? {
+        if option.minimumMemoryGB == 0 {
+            return nil
+        } else if option.minimumMemoryGB > memoryGB {
+            return .unsupported
+        } else if memoryGB - option.minimumMemoryGB < 8 {
+            return .caution
+        } else if memoryGB >= option.minimumMemoryGB * 3 {
+            return .lightweight
+        } else {
+            return .primary
+        }
+    }
+
+    private func tag(_ text: String, foreground: Color, background: Color) -> some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
+            .foregroundStyle(foreground)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+            .background(background, in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func recommendationBackgroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
+        switch kind {
+        case .primary, .quality: return Color.accentColor.opacity(0.12)
+        case .lightweight: return Color.green.opacity(0.15)
+        case .caution: return Color.orange.opacity(0.15)
+        case .unsupported: return Color.red.opacity(0.15)
+        }
+    }
+
+    private func recommendationForegroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {
+        switch kind {
+        case .primary, .quality: return Color.accentColor
+        case .lightweight: return Color.green
+        case .caution: return Color.orange
+        case .unsupported: return Color.red
+        }
+    }
+
+    private func checkModelExists(_ name: String) async -> Bool {
+        guard let url = URL(string: "https://huggingface.co/api/models/\(name)") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                return httpResponse.statusCode == 200
+            }
+        } catch {
+            return false
+        }
+        return false
     }
 }
