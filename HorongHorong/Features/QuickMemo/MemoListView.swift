@@ -319,6 +319,7 @@ struct MemoListView: View {
                 } label: {
                     Label("새 메모", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(LanternSecondaryButtonStyle())
             }
