@@ -329,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickMemoPanel = QuickMemoPanel()
     private var companionController: CompanionController!
     private var screenshotWindow: NSWindow?
-    private var dateChangeObservers: [NSObjectProtocol] = []
+    private var notificationObservers: [NSObjectProtocol] = []
 
     private(set) var modelContainer: ModelContainer!
 
@@ -370,12 +370,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTracker.setModelContainer(modelContainer)
         appTracker.startTracking()
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(openTodayTaskComposer(_:)),
-            name: .todayPlanningReminderSelected,
-            object: nil
-        )
+        observeTodayPlanningReminderSelection()
         observeSystemDateChanges()
         TodayPlanningReminderCoordinator.shared.start(modelContext: context)
         NewsScheduler.shared.start(
@@ -415,14 +410,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         TodayPlanningReminderCoordinator.shared.stop()
         companionController.stop()
-        for observer in dateChangeObservers {
+        for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)
         }
-        dateChangeObservers.removeAll()
+        notificationObservers.removeAll()
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func openTodayTaskComposer(_ notification: Notification) {
+    /// 알림 배너를 눌렀을 때 오늘 할 일 작성창을 띄운다.
+    ///
+    /// `queue: .main` 이 필요한 이유는 `observeSystemDateChanges()` 와 같다.
+    /// 발송 지점이 백그라운드로 바뀌어도 이 클래스(`@MainActor`)가 안전하게 받는다.
+    private func observeTodayPlanningReminderSelection() {
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .todayPlanningReminderSelected, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.openTodayTaskComposer() }
+            }
+        )
+    }
+
+    private func openTodayTaskComposer() {
         guard UserDefaults.standard.bool(
             forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
         ) else {
@@ -455,7 +464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         for name in [Notification.Name.NSCalendarDayChanged, .NSSystemClockDidChange, .NSSystemTimeZoneDidChange] {
-            dateChangeObservers.append(
+            notificationObservers.append(
                 NotificationCenter.default.addObserver(
                     forName: name, object: nil, queue: .main, using: handler
                 )
