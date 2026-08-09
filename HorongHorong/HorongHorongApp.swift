@@ -329,6 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickMemoPanel = QuickMemoPanel()
     private var companionController: CompanionController!
     private var screenshotWindow: NSWindow?
+    private var notificationObservers: [NSObjectProtocol] = []
 
     private(set) var modelContainer: ModelContainer!
 
@@ -369,30 +370,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appTracker.setModelContainer(modelContainer)
         appTracker.startTracking()
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(openTodayTaskComposer(_:)),
-            name: .todayPlanningReminderSelected,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSCalendarDayChanged,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSSystemClockDidChange,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSSystemTimeZoneDidChange,
-            object: nil
-        )
+        observeTodayPlanningReminderSelection()
+        observeSystemDateChanges()
         TodayPlanningReminderCoordinator.shared.start(modelContext: context)
         NewsScheduler.shared.start(
             pipelineService: appState.newsPipelineService,
@@ -431,10 +410,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         TodayPlanningReminderCoordinator.shared.stop()
         companionController.stop()
+        for observer in notificationObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        notificationObservers.removeAll()
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func openTodayTaskComposer(_ notification: Notification) {
+    /// 알림 배너를 눌렀을 때 오늘 할 일 작성창을 띄운다.
+    ///
+    /// `queue: .main` 이 필요한 이유는 `observeSystemDateChanges()` 와 같다.
+    /// 발송 지점이 백그라운드로 바뀌어도 이 클래스(`@MainActor`)가 안전하게 받는다.
+    private func observeTodayPlanningReminderSelection() {
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .todayPlanningReminderSelected, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.openTodayTaskComposer() }
+            }
+        )
+    }
+
+    private func openTodayTaskComposer() {
         guard UserDefaults.standard.bool(
             forKey: Constants.AppStorageKey.todayPlanningReminderEnabled
         ) else {
@@ -455,8 +452,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quickMemoPanel.showTodayTask(modelContext: context)
     }
 
-    @objc private func todayPlanningDateDidChange(_ notification: Notification) {
-        TodayPlanningReminderCoordinator.shared.systemDateDidChange()
+    /// 날짜·시계·시간대가 바뀌면 오늘 할 일 알림 예약을 다시 잡는다.
+    ///
+    /// `queue: .main` 이 반드시 필요하다. `NSCalendarDayChanged` 는 자정에 백그라운드 스레드에서
+    /// 발송되는데, 셀렉터 방식 옵저버는 큐를 갈아타지 않고 그 스레드에서 그대로 실행한다.
+    /// 이 클래스가 `@MainActor` 라 격리 위반으로 런타임이 앱을 중단시킨다.
+    private func observeSystemDateChanges() {
+        let handler: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated {
+                TodayPlanningReminderCoordinator.shared.systemDateDidChange()
+            }
+        }
+        for name in [Notification.Name.NSCalendarDayChanged, .NSSystemClockDidChange, .NSSystemTimeZoneDidChange] {
+            notificationObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: nil, queue: .main, using: handler
+                )
+            )
+        }
     }
 
     private func presentScreenshotWindow(config: ScreenshotCaptureConfiguration) {
