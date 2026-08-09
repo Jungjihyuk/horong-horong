@@ -3543,6 +3543,7 @@ struct AchievementDetailWindow: View {
                 } label: {
                     Text("AI 이미지 생성")
                         .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                 }
                 .disabled(true)
                 .achievementJourneyActionStyle(isPrimary: true)
@@ -3553,6 +3554,7 @@ struct AchievementDetailWindow: View {
                     } label: {
                         Text("이미지 추가")
                             .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                     }
                     .achievementJourneyActionStyle(isPrimary: false)
                 } else {
@@ -3561,6 +3563,7 @@ struct AchievementDetailWindow: View {
                     } label: {
                         Text("이미지 변경")
                             .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                     }
                     .achievementJourneyActionStyle(isPrimary: false)
                     .popover(isPresented: showsImageOptions, arrowEdge: .bottom) {
@@ -7360,6 +7363,13 @@ private struct AchievementGoalComposerSheet: View {
                         Text("비워두면 앱이 자동으로 채웁니다.")
                             .font(.system(size: 10.5, weight: .medium, design: .rounded))
                             .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        isAdvancedSettingsExpanded.toggle()
                     }
                 }
             }

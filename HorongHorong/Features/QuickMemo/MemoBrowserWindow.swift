@@ -605,6 +605,7 @@ struct MemoBrowserWindow: View {
                 .foregroundStyle(PopoverChrome.accent)
                 .frame(maxWidth: .infinity)
                 .frame(height: 42)
+                .contentShape(Rectangle())
                 .background(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .stroke(PopoverChrome.accent.opacity(0.38), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
