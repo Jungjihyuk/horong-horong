@@ -30,3 +30,8 @@ class CodexCliProvider(BaseCliProvider):
 class OpencodeCliProvider(BaseCliProvider):
     def _build_command(self, prompt: str) -> list[str]:
         return ["opencode", "run", prompt]
+
+
+class HermesCliProvider(BaseCliProvider):
+    def _build_command(self, prompt: str) -> list[str]:
+        return ["hermes", "chat", "send", prompt]
