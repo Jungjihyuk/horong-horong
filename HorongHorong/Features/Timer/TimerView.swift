@@ -6,6 +6,7 @@ struct PomodoroTaskCandidate: Identifiable, Equatable {
     let title: String
     let isToday: Bool
     let isGoalLinked: Bool
+    let durationMinutes: Int?
 }
 
 enum PomodoroTaskCandidateBuilder {
@@ -31,11 +32,20 @@ enum PomodoroTaskCandidateBuilder {
             guard isToday || isGoalLinked else { return nil }
 
             let title = taskTitle(memo.content)
+            
+            let durationMinutes: Int?
+            if let start = memo.startDate, let deadline = memo.deadline, deadline > start {
+                durationMinutes = Int(round(deadline.timeIntervalSince(start) / 60.0))
+            } else {
+                durationMinutes = nil
+            }
+            
             return PomodoroTaskCandidate(
                 id: memo.id,
                 title: title.isEmpty ? "제목 없는 할 일" : title,
                 isToday: isToday,
-                isGoalLinked: isGoalLinked
+                isGoalLinked: isGoalLinked,
+                durationMinutes: durationMinutes
             )
         }
     }
@@ -898,6 +908,17 @@ struct TimerView: View {
     private func selectTask(_ taskID: UUID?) {
         guard selectedTaskID != taskID else { return }
         selectedTaskID = taskID
+        
+        if currentPreset == .custom {
+            if let task = selectedTask {
+                let duration = (task.durationMinutes ?? 0) > 0 ? task.durationMinutes! : Constants.defaultCustomFocusMinutes
+                customFocusMinutes = duration
+                appState.focusMinutes = duration
+            } else {
+                customFocusMinutes = Constants.defaultCustomFocusMinutes
+                appState.focusMinutes = Constants.defaultCustomFocusMinutes
+            }
+        }
     }
 
     private func startFocus() {
