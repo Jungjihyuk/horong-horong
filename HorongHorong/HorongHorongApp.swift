@@ -329,6 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let quickMemoPanel = QuickMemoPanel()
     private var companionController: CompanionController!
     private var screenshotWindow: NSWindow?
+    private var dateChangeObservers: [NSObjectProtocol] = []
 
     private(set) var modelContainer: ModelContainer!
 
@@ -375,24 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: .todayPlanningReminderSelected,
             object: nil
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSCalendarDayChanged,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSSystemClockDidChange,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(todayPlanningDateDidChange(_:)),
-            name: .NSSystemTimeZoneDidChange,
-            object: nil
-        )
+        observeSystemDateChanges()
         TodayPlanningReminderCoordinator.shared.start(modelContext: context)
         NewsScheduler.shared.start(
             pipelineService: appState.newsPipelineService,
@@ -431,6 +415,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         TodayPlanningReminderCoordinator.shared.stop()
         companionController.stop()
+        for observer in dateChangeObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        dateChangeObservers.removeAll()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -455,8 +443,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quickMemoPanel.showTodayTask(modelContext: context)
     }
 
-    @objc private func todayPlanningDateDidChange(_ notification: Notification) {
-        TodayPlanningReminderCoordinator.shared.systemDateDidChange()
+    /// 날짜·시계·시간대가 바뀌면 오늘 할 일 알림 예약을 다시 잡는다.
+    ///
+    /// `queue: .main` 이 반드시 필요하다. `NSCalendarDayChanged` 는 자정에 백그라운드 스레드에서
+    /// 발송되는데, 셀렉터 방식 옵저버는 큐를 갈아타지 않고 그 스레드에서 그대로 실행한다.
+    /// 이 클래스가 `@MainActor` 라 격리 위반으로 런타임이 앱을 중단시킨다.
+    private func observeSystemDateChanges() {
+        let handler: @Sendable (Notification) -> Void = { _ in
+            MainActor.assumeIsolated {
+                TodayPlanningReminderCoordinator.shared.systemDateDidChange()
+            }
+        }
+        for name in [Notification.Name.NSCalendarDayChanged, .NSSystemClockDidChange, .NSSystemTimeZoneDidChange] {
+            dateChangeObservers.append(
+                NotificationCenter.default.addObserver(
+                    forName: name, object: nil, queue: .main, using: handler
+                )
+            )
+        }
     }
 
     private func presentScreenshotWindow(config: ScreenshotCaptureConfiguration) {
