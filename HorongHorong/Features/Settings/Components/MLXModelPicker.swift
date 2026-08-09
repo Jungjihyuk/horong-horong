@@ -23,6 +23,11 @@ struct MLXModelPicker: View {
     /// 지운 뒤 남기는 안내. 이 값이 바뀌어야 «받음» 배지도 다시 그려진다.
     @State private var actionMessage: String?
     @State private var page = 0
+    @State private var customModelInput = ""
+    
+    @State private var verifyTask: Task<Void, Never>?
+    @State private var isVerifying = false
+    @State private var verifiedModelExists = false
 
     private let modelsPerPage = 5
 
@@ -42,6 +47,36 @@ struct MLXModelPicker: View {
                     .lineLimit(1)
                 Spacer()
             }
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("모델 검색 또는 HuggingFace 레포지토리 입력 (예: mlx-community/Phi-3...)", text: $customModelInput)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .onChange(of: customModelInput) { _, newValue in
+                        let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        verifyTask?.cancel()
+                        if query.isEmpty {
+                            verifiedModelExists = false
+                            isVerifying = false
+                            return
+                        }
+                        isVerifying = true
+                        verifiedModelExists = false
+                        verifyTask = Task {
+                            do { try await Task.sleep(nanoseconds: 500_000_000) } catch { return }
+                            if Task.isCancelled { return }
+                            let exists = await checkModelExists(query)
+                            if Task.isCancelled { return }
+                            verifiedModelExists = exists
+                            isVerifying = false
+                        }
+                    }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
 
             VStack(spacing: 6) {
                 ForEach(pagedOptions) { option in
@@ -87,17 +122,65 @@ struct MLXModelPicker: View {
         }
     }
 
-    private var pagedOptions: [Constants.CompanionMLXModelOption] {
-        let start = page * modelsPerPage
-        guard start < options.count else {
-            return Array(options.prefix(modelsPerPage))
+    private var allOptions: [Constants.CompanionMLXModelOption] {
+        var opts = options
+        let hardcodedNames = Set(opts.map(\.name))
+        
+        let preparedModels = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels") ?? []
+        let customInstalled = preparedModels.filter { !hardcodedNames.contains($0) }.sorted()
+        
+        for name in customInstalled {
+            opts.append(
+                Constants.CompanionMLXModelOption(
+                    name: name,
+                    label: name.components(separatedBy: "/").last ?? name,
+                    detail: "사용자가 직접 설치한 커스텀 모델.",
+                    minimumMemoryGB: 0
+                )
+            )
         }
-        let end = min(start + modelsPerPage, options.count)
-        return Array(options[start..<end])
+        
+        let query = customModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            opts = opts.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.label.localizedCaseInsensitiveContains(query) }
+            
+            if !opts.contains(where: { $0.name.lowercased() == query.lowercased() }) {
+                let detail: String
+                if isVerifying {
+                    detail = "설치 가능 여부 확인 중..."
+                } else if verifiedModelExists {
+                    detail = "설치 가능한 커스텀 모델."
+                } else {
+                    detail = "HuggingFace에서 찾을 수 없거나 권한이 필요한 모델입니다."
+                }
+
+                opts.insert(
+                    Constants.CompanionMLXModelOption(
+                        name: query,
+                        label: query.components(separatedBy: "/").last ?? query,
+                        detail: detail,
+                        minimumMemoryGB: 0
+                    ),
+                    at: 0
+                )
+            }
+        }
+        
+        return opts
+    }
+
+    private var pagedOptions: [Constants.CompanionMLXModelOption] {
+        let opts = allOptions
+        let start = page * modelsPerPage
+        guard start < opts.count else {
+            return Array(opts.prefix(modelsPerPage))
+        }
+        let end = min(start + modelsPerPage, opts.count)
+        return Array(opts[start..<end])
     }
 
     private var pageCount: Int {
-        max(1, (options.count + modelsPerPage - 1) / modelsPerPage)
+        max(1, (allOptions.count + modelsPerPage - 1) / modelsPerPage)
     }
 
     private var pagination: some View {
@@ -134,7 +217,8 @@ struct MLXModelPicker: View {
     }
 
     private func movePage(to model: String) {
-        guard let index = options.firstIndex(where: { $0.name == model }) else {
+        let opts = allOptions
+        guard let index = opts.firstIndex(where: { $0.name == model }) else {
             return
         }
         page = index / modelsPerPage
@@ -142,11 +226,17 @@ struct MLXModelPicker: View {
 
     private func optionRow(_ option: Constants.CompanionMLXModelOption) -> some View {
         let isSelected = model == option.name
+        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
         let isTooLarge = option.minimumMemoryGB > memoryGB
-        let isPrepared = MLXModelStore.isKnownPrepared(option.name)
-
+        let isDownloadingThis = isDownloading && downloadTarget == option.name
+        let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
+        
         return HStack(spacing: 8) {
             Button {
+                guard !isTooLarge else {
+                    actionMessage = "메모리가 부족해 이 맥에서는 돌릴 수 없습니다."
+                    return
+                }
                 model = option.name
             } label: {
                 VStack(alignment: .leading, spacing: 3) {
@@ -189,7 +279,7 @@ struct MLXModelPicker: View {
                 downloadButton(for: option)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -202,11 +292,13 @@ struct MLXModelPicker: View {
                     lineWidth: 0.5
                 )
         )
-        .opacity(isTooLarge ? 0.55 : 1)
+        .opacity(isTooLarge || isCustomUnverified ? 0.62 : 1)
     }
 
     private func downloadButton(for option: Constants.CompanionMLXModelOption) -> some View {
         let isDownloadingThis = isDownloading && downloadTarget == option.name
+        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
+        let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
 
         return Button {
             Task {
@@ -218,14 +310,14 @@ struct MLXModelPicker: View {
             }
         } label: {
             if isDownloadingThis {
-                ProgressView()
-                    .controlSize(.small)
+                Image(systemName: "stop.circle")
+                    .foregroundStyle(.orange)
             } else {
                 Image(systemName: "arrow.down.circle")
             }
         }
         .buttonStyle(.borderless)
-        .disabled(!MLXModelStore.isSupported || (isDownloading && !isDownloadingThis))
+        .disabled(!MLXModelStore.isSupported || (isDownloading && !isDownloadingThis) || isCustomUnverified || isVerifying)
         .help(downloadButtonHelp(for: option, isDownloadingThis: isDownloadingThis))
     }
 
@@ -397,12 +489,15 @@ struct MLXModelPicker: View {
         isTooLarge: Bool,
         isPrepared: Bool
     ) -> some View {
-        let kind = recommendationKind(for: option)
-        tag(kind.rawValue, foreground: recommendationForegroundColor(for: kind), background: recommendationBackgroundColor(for: kind))
+        if let kind = recommendationKind(for: option) {
+            tag(kind.rawValue, foreground: recommendationForegroundColor(for: kind), background: recommendationBackgroundColor(for: kind))
+        }
     }
 
-    private func recommendationKind(for option: Constants.CompanionMLXModelOption) -> Constants.NewsOllamaRecommendationKind {
-        if option.minimumMemoryGB > memoryGB {
+    private func recommendationKind(for option: Constants.CompanionMLXModelOption) -> Constants.NewsOllamaRecommendationKind? {
+        if option.minimumMemoryGB == 0 {
+            return nil
+        } else if option.minimumMemoryGB > memoryGB {
             return .unsupported
         } else if memoryGB - option.minimumMemoryGB < 8 {
             return .caution
@@ -438,5 +533,20 @@ struct MLXModelPicker: View {
         case .caution: return Color.orange
         case .unsupported: return Color.red
         }
+    }
+
+    private func checkModelExists(_ name: String) async -> Bool {
+        guard let url = URL(string: "https://huggingface.co/api/models/\(name)") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                return httpResponse.statusCode == 200
+            }
+        } catch {
+            return false
+        }
+        return false
     }
 }
