@@ -7,6 +7,35 @@
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-08-10
+
+### 추가
+
+- 앱 설정의 AI 모델 선택기(Ollama, MLX)에 사용자가 직접 원하는 모델을 찾아 추가할 수 있는 커스텀 모델 검색 기능을 도입했습니다.
+- 커스텀 모델 이름 입력 시 Ollama 레지스트리 및 HuggingFace API와 실시간으로 통신해 설치 가능 여부를 사전에 자동 검증하도록 했습니다.
+- 로컬 모델 다운로드 중 언제든지 즉시 취소(Ollama 프로세스 강제 종료 및 MLX 중단)할 수 있는 기능을 추가했습니다.
+- 앱 내부 AI 에이전트 연동용으로 Hermes(Python) 에이전트를 추가했습니다.
+- 성취 목표에서 다른 페르소나의 하위 목표를 연결할 수 있도록 크로스 페르소나 목표 연결 기능을 추가했습니다.
+- 메모의 소요 시간을 사용자가 커스텀하게 설정한 포모도로 타이머 시간과 자동으로 동기화하는 기능을 추가했습니다.
+- 스크린샷 캡처 대상에 컴패니언 일정(Schedule)과 뉴스 리포트 보관함(Archive)을 추가했습니다.
+
+### 변경
+
+- 기존 팝업 메뉴 형태였던 Ollama/MLX 모델 선택기 UI를 카드 목록형태(페이지네이션 포함)로 통합 개편했습니다.
+- 성취 탭의 여정(Journey) 뷰 시각화를 개선하고 목표 깃발(Flag) 정렬 로직을 고도화했습니다.
+- 앱 내 각종 버튼 및 고급 설정 항목들의 클릭 가능 영역(Clickable Area)을 더 넓혀 조작 편의성을 개선했습니다.
+- 설정 화면의 사이드바 메뉴 그룹을 4단계(4-tier) 구조로 재편성하여 접근성과 가독성을 높였습니다.
+
+### 수정
+
+- 자정에 날짜가 넘어갈 때 발생할 수 있는 Actor Isolation 관련 크래시(비정상 종료) 문제를 해결했습니다.
+- '오늘 할 일 계획 알림' 옵션 선택 시 UI가 백그라운드 스레드에서 업데이트되려던 문제를 고쳐, 안전하게 메인 큐에서 동작하도록 수정했습니다.
+- 달력(Calendar) 화면 렌더링 시 발생하던 간헐적인 UI 오류를 수정했습니다.
+
+### 제거
+
+- 사용 빈도가 낮고 유지보수가 어려운 Gemini 기반 기능 및 관련 설정 UI를 모두 제거했습니다.
+
 ## [0.2.6] - 2026-08-06
 
 ### 추가
@@ -137,7 +166,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.7
 [0.2.6]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.6
 [0.2.5]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.5
 [0.2.4]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.4
