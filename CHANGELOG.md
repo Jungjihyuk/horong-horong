@@ -7,8 +7,6 @@
 
 ## [Unreleased]
 
-## [0.2.7] - 2026-08-10
-
 ### 추가
 
 - 앱 설정의 AI 모델 선택기(Ollama, MLX)에 사용자가 직접 원하는 모델을 찾아 추가할 수 있는 커스텀 모델 검색 기능을 도입했습니다.
@@ -166,8 +164,7 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.7...HEAD
-[0.2.7]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.7
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.6...HEAD
 [0.2.6]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.6
 [0.2.5]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.5
 [0.2.4]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.4
