@@ -277,11 +277,11 @@ private struct AchievementPage: View {
             SettingsGroupCard("추천 모델") {
                 SettingsRow(
                     "추천 엔진",
-                    subtitle: "Apple 모델은 빠르고 준비가 필요 없습니다. MLX는 더 많은 할일을 한 번에 보고 묶음을 더 잘 찾지만 느리고 메모리를 씁니다."
+                    subtitle: "Apple 온디바이스는 빠르고 준비가 필요 없습니다. MLX는 더 많은 할일을 한 번에 보고 묶음을 더 잘 찾지만 느리고 메모리를 씁니다."
                 ) {
                     Picker("", selection: $suggestionProvider) {
-                        Text("Apple 모델").tag(Constants.AchievementSuggestionProviderKind.appleFoundation.rawValue)
-                        Text("MLX").tag(Constants.AchievementSuggestionProviderKind.mlx.rawValue)
+                        Text("Apple 온디바이스").tag(Constants.AchievementSuggestionProviderKind.appleFoundation.rawValue)
+                        Text("MLX (앱 내장)").tag(Constants.AchievementSuggestionProviderKind.mlx.rawValue)
                         Text("Ollama").tag(Constants.AchievementSuggestionProviderKind.ollama.rawValue)
                     }
                     .labelsHidden()
@@ -294,7 +294,7 @@ private struct AchievementPage: View {
                 if suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue {
                     pickerBlock(
                         title: "MLX 모델",
-                        subtitle: "가중치가 앱 메모리에 올라갑니다. 받지 않은 모델은 오른쪽 내려받기 버튼으로 먼저 받아 주세요. 받지 않은 채로 고르면 Apple 모델로 대신 답합니다."
+                        subtitle: "성취 탭에서는 추천 받을 때만 잠깐 모델을 메모리에 올리고 사용이 끝나면 해제합니다."
                     ) {
                         MLXModelPicker(
                             model: $suggestionMLXModel,

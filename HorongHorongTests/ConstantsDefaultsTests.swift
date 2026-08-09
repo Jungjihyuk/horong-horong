@@ -5172,8 +5172,8 @@ final class ConstantsDefaultsTests: XCTestCase {
             ["Codex", "Claude", "Antigravity"]
         )
         XCTAssertEqual(
-            Constants.normalizedRepresentativeAgentTypes(from: "Gemini,Opencode"),
-            ["Gemini", "Opencode"]
+            Constants.normalizedRepresentativeAgentTypes(from: "Antigravity,Opencode"),
+            ["Antigravity", "Opencode"]
         )
         XCTAssertEqual(
             Constants.normalizedRepresentativeAgentTypes(from: ""),

@@ -93,3 +93,24 @@ def test_create_provider__cli_timeout_option__configures_cli_provider():
     # Then: codex CLI provider의 subprocess timeout이 재정의된다.
     assert isinstance(provider, CodexCliProvider)
     assert provider.timeout == 600.0
+
+# 시나리오 7. 신규 Qwen 3.5 / 3.6 모델 이름이 OllamaProvider에 정상적으로 매핑된다.
+@pytest.mark.unit
+@pytest.mark.parametrize("model_name", [
+    "qwen3.5:9b",
+    "qwen3.5:35b-a3b",
+    "qwen3.6:27b-mlx",
+    "qwen3.6:27b-q4_K_M",
+    "qwen3.6:35b-a3b-q4_K_M",
+    "qwen3.6:35b-mlx",
+])
+def test_create_provider__qwen_new_models__mapped_correctly(model_name: str):
+    # Given: 신규 Qwen 모델 옵션을 준비한다.
+    options = ProviderOptionsConfig(model=model_name)
+
+    # When: factory가 ollama provider를 생성한다.
+    provider = create_provider("ollama", options)
+
+    # Then: 지정한 Qwen 모델이 정상적으로 매핑된다.
+    assert isinstance(provider, OllamaProvider)
+    assert provider.model == model_name

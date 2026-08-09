@@ -75,7 +75,7 @@ struct OllamaModelPicker: View {
                     .lineLimit(2)
             }
         }
-        .frame(width: 390, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task {
             movePage(to: model)
             await refresh()
@@ -156,6 +156,8 @@ struct OllamaModelPicker: View {
         let isInstalled = isCloud || installedModels[option.name] != nil
         let isInstalling = installingModel == option.name
 
+        let (desc, ramInfo) = formatOptionDetail(option.detail)
+
         return HStack(spacing: 8) {
             Button {
                 guard !isUnsupported else {
@@ -186,8 +188,16 @@ struct OllamaModelPicker: View {
                                     in: RoundedRectangle(cornerRadius: 4)
                                 )
                         }
+                        if let ramInfo {
+                            Text(ramInfo)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                        }
                     }
-                    Text(option.detail)
+                    Text(desc)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -247,6 +257,15 @@ struct OllamaModelPicker: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 0.5)
         )
+    }
+
+    private func formatOptionDetail(_ detail: String) -> (String, String?) {
+        if let range = detail.range(of: " 권장 RAM: ") {
+            let desc = String(detail[..<range.lowerBound])
+            let ram = String(detail[range.upperBound...])
+            return (desc, "권장 RAM: " + ram)
+        }
+        return (detail, nil)
     }
 
     private func recommendationForegroundColor(for kind: Constants.NewsOllamaRecommendationKind) -> Color {

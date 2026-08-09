@@ -8,6 +8,7 @@ from providers.cli_providers import (
     ClaudeCliProvider,
     CodexCliProvider,
     OpencodeCliProvider,
+    HermesCliProvider,
 )
 from providers.ollama_provider import OllamaProvider
 from providers.protocols import TextProvider
@@ -22,6 +23,7 @@ _PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
     "codex": CodexCliProvider,
     "ollama": OllamaProvider,
     "opencode": OpencodeCliProvider,
+    "hermes": HermesCliProvider,
 }
 
 

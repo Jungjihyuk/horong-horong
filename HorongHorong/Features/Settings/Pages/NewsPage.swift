@@ -427,35 +427,22 @@ struct NewsPage: View {
 
     @ViewBuilder
     private var ollamaSettingsRows: some View {
-        SettingsRow(
-            "Ollama 모델",
-            subtitle: "리포트 생성에 사용할 로컬 모델입니다. 목록 선택 후 직접 수정할 수 있습니다."
-        ) {
-            HStack(spacing: 8) {
-                Picker("", selection: $ollamaModel) {
-                    ForEach(Constants.availableNewsOllamaModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 150)
-
-                TextField("예: qwen3:14b", text: $ollamaModel)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.callout.monospaced())
-                    .frame(width: 170)
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ollama 모델").font(.callout)
+                Text("리포트 생성에 사용할 로컬 모델입니다. 설치된 모델은 체크 표시, 미설치 로컬 모델은 다운로드 버튼으로 표시합니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        }
-        SettingsRow(
-            "모델 후보",
-            subtitle: "설치된 모델은 체크 표시, 미설치 로컬 모델은 다운로드 버튼으로 표시합니다."
-        ) {
             OllamaModelPicker(
                 model: $ollamaModel,
                 endpoint: normalizedOllamaEndpoint,
                 dataBasePath: normalizedDataBasePath
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 10)
         SettingsRow(
             "Ollama Endpoint",
             subtitle: "Ollama 서버 주소입니다. 기본값은 로컬 서버입니다."
