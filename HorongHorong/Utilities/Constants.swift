@@ -711,12 +711,6 @@ enum Constants {
             minimumMemoryGB: 16
         ),
         CompanionMLXModelOption(
-            name: "mlx-community/EXAONE-3.0-7.8B-Instruct-4bit",
-            label: "EXAONE 3.0 7.8B",
-            detail: "한국어 어휘력이 유창하며 지시 이행 능력이 뛰어납니다.",
-            minimumMemoryGB: 16
-        ),
-        CompanionMLXModelOption(
             name: "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
             label: "Llama 3.1 8B",
             detail: "구조화 출력 및 논리적인 지시 이행에 최고 수준의 성능을 제공합니다.",
@@ -738,12 +732,6 @@ enum Constants {
             name: "mlx-community/Solar-10.7B-Instruct-v1.0-4bit",
             label: "Solar 10.7B",
             detail: "한국어와 영어 처리 밸런스가 가장 훌륭하며 논리력이 탁월합니다.",
-            minimumMemoryGB: 16
-        ),
-        CompanionMLXModelOption(
-            name: "mlx-community/EEVE-Korean-Instruct-10.8B-v1.0-4bit",
-            label: "EEVE-Korean 10.8B",
-            detail: "가장 자연스러운 한국어 대화가 가능하여 감성 컴패니언으로 강력 추천합니다.",
             minimumMemoryGB: 16
         ),
         CompanionMLXModelOption(
