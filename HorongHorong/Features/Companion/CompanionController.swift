@@ -32,6 +32,8 @@ final class CompanionController {
     private var chatSession: CompanionChatSession?
     private var appliedUserProfile: CompanionUserProfile?
     private var appliedChatProvider: String?
+    private var appliedOllamaModel: String?
+    private var appliedMLXModel: String?
     private var appliedBubbleSize: String?
     private var chatReplyTask: Task<Void, Never>?
     private var moodResetTask: Task<Void, Never>?
@@ -227,8 +229,20 @@ final class CompanionController {
         let selectedProvider = UserDefaults.standard.string(
             forKey: Constants.AppStorageKey.companionChatProvider
         ) ?? Constants.defaultCompanionChatProvider
-        if selectedProvider != appliedChatProvider {
+        
+        let ollamaModel = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionOllamaModel
+        ) ?? Constants.defaultCompanionOllamaModel
+        
+        let mlxModel = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionMLXModel
+        ) ?? Constants.defaultCompanionMLXModel
+
+        if selectedProvider != appliedChatProvider || ollamaModel != appliedOllamaModel || mlxModel != appliedMLXModel {
             appliedChatProvider = selectedProvider
+            appliedOllamaModel = ollamaModel
+            appliedMLXModel = mlxModel
+            
             chatProviderCache = nil
             chatSession = nil
             if selectedProvider == Constants.CompanionChatProviderKind.ollama.rawValue {
