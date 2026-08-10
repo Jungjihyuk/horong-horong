@@ -10,6 +10,7 @@ struct MemoListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
+    @Environment(AppState.self) private var appState
     @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var selectedTab: MemoListTab = .active
     @State private var editingMemo: Memo?
@@ -66,19 +67,12 @@ struct MemoListView: View {
 
     private var memoBrowserButton: some View {
         Button {
-            let popoverWindow = hostWindow
-            openWindow(id: "memo-browser")
-            popoverWindow?.orderOut(nil)
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                if let window = NSApp.windows.first(where: {
-                    $0.identifier?.rawValue == "memo-browser" || $0.title == "전체 메모 - 호롱호롱"
-                }) {
-                    window.collectionBehavior.insert(.moveToActiveSpace)
-                    window.makeKeyAndOrderFront(nil)
-                    window.orderFrontRegardless()
-                }
-            }
+            HubWindowPresenter.present(
+                tab: .memo,
+                appState: appState,
+                popoverWindow: hostWindow,
+                openWindow: openWindow
+            )
         } label: {
             HStack(spacing: 6) {
                 Text("메모 보기")

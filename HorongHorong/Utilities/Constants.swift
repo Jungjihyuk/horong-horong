@@ -510,9 +510,9 @@ enum Constants {
     static let statsWindowWidth: CGFloat = 880
     static let statsWindowHeight: CGFloat = 660
 
-    // MARK: - 메모 윈도우 크기
-    static let memoBrowserWindowWidth: CGFloat = 1012
-    static let memoBrowserWindowHeight: CGFloat = 658
+    // MARK: - 통합 윈도우 크기
+    static let hubWindowWidth: CGFloat = 1080
+    static let hubWindowHeight: CGFloat = 700
 
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
