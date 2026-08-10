@@ -1902,6 +1902,7 @@ private enum AchievementDataBuilder {
 
 struct AchievementSummaryView: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(AppState.self) private var appState
     @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
     @State private var hostWindow: NSWindow?
@@ -2033,19 +2034,12 @@ struct AchievementSummaryView: View {
     }
 
     private func openAchievementDetail() {
-        let popoverWindow = hostWindow
-        openWindow(id: "achievement-detail")
-        popoverWindow?.orderOut(nil)
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: {
-                $0.identifier?.rawValue == "achievement-detail" || $0.title == "호롱호롱 성취"
-            }) {
-                window.collectionBehavior.insert(.moveToActiveSpace)
-                window.makeKeyAndOrderFront(nil)
-                window.orderFrontRegardless()
-            }
-        }
+        HubWindowPresenter.present(
+            tab: .achievement,
+            appState: appState,
+            popoverWindow: hostWindow,
+            openWindow: openWindow
+        )
     }
 
     private func openGoalComposer() {

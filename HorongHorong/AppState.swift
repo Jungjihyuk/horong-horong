@@ -55,4 +55,7 @@ final class AppState {
     var currentTrackingApp: String = ""
     var isQuickMemoVisible: Bool = false
     var newsPipelineService = NewsPipelineService()
+
+    /// 통합 윈도우에서 현재 보고 있는 화면.
+    var hubTab: HubTab = .stats
 }
