@@ -857,8 +857,8 @@ struct HorongHorongApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("호롱호롱 통계", id: "stats-detail") {
-            StatsDetailWindow()
+        Window(HubWindowPresenter.windowTitle, id: HubWindowPresenter.windowID) {
+            MainHubWindow()
                 .environment(appDelegate.appState)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
@@ -866,38 +866,7 @@ struct HorongHorongApp: App {
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
         }
-        .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
-
-        Window("호롱호롱 성취", id: "achievement-detail") {
-            AchievementDetailWindow()
-                .environment(appDelegate.appState)
-                .environment(\.appearanceDensity, appearanceDensity)
-                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
-                .controlSize(appearanceDensity.controlSize)
-                .modelContainer(guidedModelContainer)
-                .id(onboardingDemoStore.isActive)
-        }
-        .defaultSize(width: Constants.statsWindowWidth, height: Constants.statsWindowHeight)
-
-        Window("전체 메모 - 호롱호롱", id: "memo-browser") {
-            MemoBrowserWindow()
-                .environment(appDelegate.appState)
-                .environment(\.appearanceDensity, appearanceDensity)
-                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
-                .controlSize(appearanceDensity.controlSize)
-                .modelContainer(appDelegate.modelContainer)
-        }
-        .defaultSize(width: Constants.memoBrowserWindowWidth, height: Constants.memoBrowserWindowHeight)
-
-        Window("뉴스 리포트 보관함", id: "news-report-archive") {
-            NewsReportArchiveWindow()
-                .environment(appDelegate.appState)
-                .environment(\.appearanceDensity, appearanceDensity)
-                .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
-                .controlSize(appearanceDensity.controlSize)
-                .modelContainer(appDelegate.modelContainer)
-        }
-        .defaultSize(width: 940, height: 660)
+        .defaultSize(width: Constants.hubWindowWidth, height: Constants.hubWindowHeight)
 
         Settings {
             SettingsRoot()
