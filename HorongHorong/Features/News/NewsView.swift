@@ -372,20 +372,12 @@ struct NewsView: View {
 
     private func openReportArchive(report: NewsReportIndex?) {
         NewsReportArchiveSelection.shared.select(reportID: report?.jobId)
-        let popoverWindow = hostWindow
-        openWindow(id: "news-report-archive")
-        popoverWindow?.orderOut(nil)
-
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: {
-                $0.identifier?.rawValue == "news-report-archive" || $0.title == "뉴스 리포트 보관함"
-            }) {
-                window.collectionBehavior.insert(.moveToActiveSpace)
-                window.makeKeyAndOrderFront(nil)
-                window.orderFrontRegardless()
-            }
-        }
+        HubWindowPresenter.present(
+            tab: .news,
+            appState: appState,
+            popoverWindow: hostWindow,
+            openWindow: openWindow
+        )
     }
 
     private var errorSection: some View {

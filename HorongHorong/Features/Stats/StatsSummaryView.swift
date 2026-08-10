@@ -37,6 +37,7 @@ struct StatsSummaryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
+    @Environment(AppState.self) private var appState
     @State private var categoryUsages: [CategoryUsage] = []
     @State private var weeklyDailyTotals: [(date: Date, durationSeconds: Int)] = []
     @State private var todayFocusSummary = DailyFocusSummary(
@@ -437,21 +438,12 @@ struct StatsSummaryView: View {
 
     private var detailButton: some View {
         Button {
-            let popoverWindow = hostWindow
-            openWindow(id: "stats-detail")
-            popoverWindow?.orderOut(nil)
-            // MenuBarExtra 앱은 accessory 정책이라 openWindow만으로는 앞으로 오지 않음.
-            // 창이 생성/재사용된 뒤 활성화 + orderFrontRegardless 로 최상단으로 끌어올린다.
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                if let window = NSApp.windows.first(where: {
-                    $0.identifier?.rawValue == "stats-detail" || $0.title == "호롱호롱 통계"
-                }) {
-                    window.collectionBehavior.insert(.moveToActiveSpace)
-                    window.makeKeyAndOrderFront(nil)
-                    window.orderFrontRegardless()
-                }
-            }
+            HubWindowPresenter.present(
+                tab: .stats,
+                appState: appState,
+                popoverWindow: hostWindow,
+                openWindow: openWindow
+            )
         } label: {
             HStack(spacing: 3) {
                 Text("상세 보기")
@@ -467,7 +459,8 @@ struct StatsSummaryView: View {
             NotificationCenter.default.publisher(for: .companionOnboardingPerform)
         ) { notification in
             guard notification.object as? String == "stats.openDetail" else { return }
-            openWindow(id: "stats-detail")
+            appState.hubTab = .stats
+            openWindow(id: HubWindowPresenter.windowID)
         }
     }
 

@@ -111,9 +111,7 @@ enum CompanionOnboardingPresenter {
     static func closeStatsDetailWindow() {
         guard didOpenStatsWindow else { return }
         didOpenStatsWindow = false
-        NSApp.windows.first {
-            $0.identifier?.rawValue == "stats-detail" || $0.title == "호롱호롱 통계"
-        }?.close()
+        HubWindowPresenter.existingWindow()?.close()
     }
 
     /// 대화에서 저장한 메모를 곧바로 확인할 수 있게 팝오버의 메모 탭을 연다.
@@ -153,9 +151,7 @@ enum CompanionOnboardingPresenter {
         NSApp.activate(ignoringOtherApps: true)
         perform("stats.openDetail")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            if let window = NSApp.windows.first(where: {
-                $0.identifier?.rawValue == "stats-detail" || $0.title == "호롱호롱 통계"
-            }) {
+            if let window = HubWindowPresenter.existingWindow() {
                 window.collectionBehavior.insert(.moveToActiveSpace)
                 window.makeKeyAndOrderFront(nil)
                 window.orderFrontRegardless()
