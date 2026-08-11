@@ -2554,9 +2554,13 @@ struct AchievementDetailWindow: View {
                         memos: AchievementDataBuilder.activeMemos(memos),
                         existingGoals: goals,
                         onClose: closeGoalComposer
-                    ) { record, childGoalIDs in
+                    ) { record, childGoalIDs, newChildTitles in
                         modelContext.insert(record)
                         connectChildGoals(childGoalIDs, to: record)
+                        // 컴포저에서 이름만 적어둔 하위 목표는 여기서 실제 레코드로 만든다.
+                        for childTitle in newChildTitles {
+                            addChildGoal(to: record, title: childTitle, emoji: "")
+                        }
                         try modelContext.save()
                         selectedGoalID = record.id
                         selectedRoleID = record.roleName
@@ -2586,7 +2590,6 @@ struct AchievementDetailWindow: View {
                     childCadence: childCadence(for: managingGoalRecord.cadence),
                     onSave: updateGoalRecord,
                     onDelete: deleteGoalRecord,
-                    onAddChild: addChildGoal,
                     onUpdateChild: updateChildGoal,
                     onDeleteChild: deleteGoalRecord
                 )
@@ -6463,7 +6466,6 @@ private struct AchievementGoalManagementSheet: View {
     let childCadence: String?
     let onSave: (AchievementGoalRecord, AchievementGoalEditDraft) -> Void
     let onDelete: (AchievementGoalRecord) -> Void
-    let onAddChild: (AchievementGoalRecord, String, String) -> Void
     let onUpdateChild: (AchievementGoalRecord, String, String) -> Void
     let onDeleteChild: (AchievementGoalRecord) -> Void
 
@@ -6475,8 +6477,6 @@ private struct AchievementGoalManagementSheet: View {
     @State private var selectedAvailableChildIDs: Set<UUID> = []
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
-    @State private var newChildTitle = ""
-    @State private var newChildEmoji = "🎯"
     @State private var showsDeleteConfirmation = false
 
     init(
@@ -6488,7 +6488,6 @@ private struct AchievementGoalManagementSheet: View {
         childCadence: String? = nil,
         onSave: @escaping (AchievementGoalRecord, AchievementGoalEditDraft) -> Void,
         onDelete: @escaping (AchievementGoalRecord) -> Void,
-        onAddChild: @escaping (AchievementGoalRecord, String, String) -> Void = { _, _, _ in },
         onUpdateChild: @escaping (AchievementGoalRecord, String, String) -> Void = { _, _, _ in },
         onDeleteChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
     ) {
@@ -6500,7 +6499,6 @@ private struct AchievementGoalManagementSheet: View {
         self.childCadence = childCadence
         self.onSave = onSave
         self.onDelete = onDelete
-        self.onAddChild = onAddChild
         self.onUpdateChild = onUpdateChild
         self.onDeleteChild = onDeleteChild
         _title = State(initialValue: record.title)
@@ -6510,7 +6508,6 @@ private struct AchievementGoalManagementSheet: View {
         _selectedMemoIDs = State(initialValue: Set(record.linkedMemoIDs))
         _dueDate = State(initialValue: record.dueDate ?? Date())
         _hasDueDate = State(initialValue: record.dueDate != nil)
-        _newChildEmoji = State(initialValue: AchievementGoalManagementSheet.defaultEmoji(for: childCadence))
     }
 
     var body: some View {
@@ -6673,45 +6670,6 @@ private struct AchievementGoalManagementSheet: View {
                     .font(.system(size: 10.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .monospacedDigit()
-            }
-
-            HStack(spacing: 8) {
-                TextField("📅", text: Binding(
-                    get: { newChildEmoji },
-                    set: { value in
-                        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                        newChildEmoji = trimmed.isEmpty ? Self.defaultEmoji(for: childCadence) : String(trimmed.prefix(1))
-                    }
-                ))
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .frame(width: 38)
-                .padding(8)
-                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
-                TextField("\(childCadence ?? "") 목표 추가", text: $newChildTitle)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .padding(8)
-                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
-                Button {
-                    onAddChild(record, newChildTitle, newChildEmoji)
-                    newChildTitle = ""
-                    newChildEmoji = Self.defaultEmoji(for: childCadence)
-                } label: {
-                    Text("추가")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.accentInk)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 9)
-                        .background(PopoverChrome.primaryButtonFill, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(newChildTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(newChildTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
             }
 
             if childRecords.isEmpty {
@@ -7352,7 +7310,8 @@ private struct AchievementGoalComposerSheet: View {
     let memos: [Memo]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
-    let onSave: (AchievementGoalRecord, Set<UUID>) throws -> Void
+    /// 저장한 목표, 이어붙일 기존 하위 목표, 함께 새로 만들 하위 목표 제목들.
+    let onSave: (AchievementGoalRecord, Set<UUID>, [String]) throws -> Void
 
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
     private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
@@ -7388,10 +7347,16 @@ private struct AchievementGoalComposerSheet: View {
     @State private var selectedPeriodDate = Date()
     @State private var hasDueDate = false
     @State private var expandedSuggestionKeys = Set<String>()
+    /// 하위 목표를 찾거나 새로 만들 때 쓰는 한 줄 입력.
+    @State private var childSearchText = ""
+    /// 아직 존재하지 않아 저장할 때 함께 만들 하위 목표 제목들.
+    @State private var newChildTitles: [String] = []
+    @State private var memoSearchText = ""
     @FocusState private var isEmojiInputFocused: Bool
 
     private let inputModes = ["AI 추천", "직접 입력"]
-    private let targetLevels = ["역할", "비전", "월간", "주간"]
+    /// 자주 만드는 월간·주간이 앞줄에 오도록 둔다.
+    private let targetLevels = ["월간", "주간", "역할", "비전"]
     private let colors = ["#E87333", "#2F5BEA", "#7A52D4", "#D94F73", "#2F9E73"]
 
     var body: some View {
@@ -7734,7 +7699,10 @@ private struct AchievementGoalComposerSheet: View {
                     .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
             }
 
-            fieldLabel("\(selectedTargetLevel) 목표")
+            fieldLabel("어떤 목표인가요?")
+            targetLevelGrid
+
+            fieldLabel("목표 이름")
             TextField(goalPlaceholder, text: $title)
                 .textFieldStyle(.plain)
                 .padding(10)
@@ -7754,7 +7722,7 @@ private struct AchievementGoalComposerSheet: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 11, weight: .bold))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("고급 설정")
+                        Text("세부 설정")
                             .font(.system(size: 12.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.ink)
                         Text("비워두면 앱이 자동으로 채웁니다.")
@@ -7789,9 +7757,6 @@ private struct AchievementGoalComposerSheet: View {
 
     private var advancedSettingsForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            fieldLabel("만들 대상")
-            targetLevelGrid
-
             fieldLabel("이모지")
             emojiPicker
 
@@ -7862,7 +7827,7 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private var targetLevelGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
             ForEach(targetLevels, id: \.self) { level in
                 Button {
                     selectedTargetLevel = level
@@ -7959,52 +7924,208 @@ private struct AchievementGoalComposerSheet: View {
         }
     }
 
+    /// 하위 목표를 고르는 자리.
+    ///
+    /// 한 입력창이 찾기와 만들기를 겸한다. 사용자가 위에서 아래로 짜는지 아래에서 위로 짜는지
+    /// 의식하지 않아도 되도록, 떠오르는 이름을 치면 있으면 잇고 없으면 만들어 준다.
     private var childGoalPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let level = childGoalLevel {
-                fieldLabel("하위 \(level) 목표")
+                HStack(spacing: 6) {
+                    fieldLabel("하위 \(level) 목표")
+                    Text("선택")
+                        .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(PopoverChrome.surfaceAlt, in: Capsule())
+                    Spacer()
+                }
 
-                if childGoalCandidates.isEmpty {
-                    Text("연결할 수 있는 \(level) 목표가 없습니다.")
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkSecondary)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(childGoalCandidates) { goal in
-                                Toggle(isOn: Binding(
-                                    get: { selectedChildGoalIDs.contains(goal.id) },
-                                    set: { isSelected in
-                                        if isSelected {
-                                            selectedChildGoalIDs.insert(goal.id)
-                                            validationMessage = nil
-                                        } else {
-                                            selectedChildGoalIDs.remove(goal.id)
-                                        }
-                                    }
-                                )) {
-                                    AchievementChildGoalPickerRow(goal: goal)
+                searchField(
+                    text: $childSearchText,
+                    placeholder: "찾거나 새로 입력…"
+                )
+
+                childGoalSuggestionList(level: level)
+                pickedChildChips(level: level)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func childGoalSuggestionList(level: String) -> some View {
+        let matches = matchingChildGoalCandidates
+        let canCreate = !trimmedChildSearch.isEmpty && !childTitleAlreadyUsed(trimmedChildSearch)
+
+        if matches.isEmpty && !canCreate {
+            Text(childGoalCandidates.isEmpty
+                 ? "연결할 수 있는 \(level) 목표가 없습니다. 이름을 입력하면 새로 만들 수 있어요."
+                 : "찾는 목표가 없습니다.")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(matches) { goal in
+                        Toggle(isOn: Binding(
+                            get: { selectedChildGoalIDs.contains(goal.id) },
+                            set: { isSelected in
+                                if isSelected {
+                                    selectedChildGoalIDs.insert(goal.id)
+                                    validationMessage = nil
+                                } else {
+                                    selectedChildGoalIDs.remove(goal.id)
                                 }
-                                .toggleStyle(.checkbox)
                             }
+                        )) {
+                            AchievementChildGoalPickerRow(goal: goal)
                         }
-                        .padding(10)
+                        .toggleStyle(.checkbox)
                     }
-                    .frame(maxHeight: childGoalCandidates.count > 5 ? 230 : nil)
-                    .popoverScrollbar()
-                    .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+
+                    if canCreate {
+                        if !matches.isEmpty {
+                            Divider().overlay(PopoverChrome.divider)
+                        }
+                        Button {
+                            newChildTitles.append(trimmedChildSearch)
+                            childSearchText = ""
+                            validationMessage = nil
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("«\(trimmedChildSearch)» 새로 만들기")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(PopoverChrome.accent)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(10)
+            }
+            .frame(maxHeight: matches.count > 5 ? 230 : nil)
+            .popoverScrollbar()
+            .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+        }
+    }
+
+    /// 담아둔 하위 목표. 기존 것과 새로 만들 것을 한 줄에 나란히 보여준다.
+    @ViewBuilder
+    private func pickedChildChips(level: String) -> some View {
+        let picked = childGoalCandidates.filter { selectedChildGoalIDs.contains($0.id) }
+
+        if !picked.isEmpty || !newChildTitles.isEmpty {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 240), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(picked) { goal in
+                    pickedChip(emoji: goal.emoji, title: goal.title, isNew: false) {
+                        selectedChildGoalIDs.remove(goal.id)
+                    }
+                }
+                ForEach(Array(newChildTitles.enumerated()), id: \.offset) { index, title in
+                    pickedChip(emoji: emoji(for: level), title: title, isNew: true) {
+                        newChildTitles.remove(at: index)
+                    }
                 }
             }
         }
     }
 
+    private func pickedChip(emoji: String, title: String, isNew: Bool, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text(emoji)
+                .font(.system(size: 10))
+            Text(title)
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .lineLimit(1)
+            if isNew {
+                Text("새로")
+                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.accentInk)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(PopoverChrome.accent, in: Capsule())
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(PopoverChrome.accent)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(PopoverChrome.accentSoft.opacity(0.28), in: Capsule())
+    }
+
+    private func searchField(text: Binding<String>, placeholder: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+            if !text.wrappedValue.isEmpty {
+                Button {
+                    text.wrappedValue = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(9)
+        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+    }
+
+    private var trimmedChildSearch: String {
+        childSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matchingChildGoalCandidates: [AchievementGoal] {
+        guard !trimmedChildSearch.isEmpty else { return childGoalCandidates }
+        return childGoalCandidates.filter { $0.title.localizedCaseInsensitiveContains(trimmedChildSearch) }
+    }
+
+    /// 이미 담았거나 같은 이름이 있으면 새로 만들자고 권하지 않는다.
+    private func childTitleAlreadyUsed(_ title: String) -> Bool {
+        if newChildTitles.contains(where: { $0.caseInsensitiveCompare(title) == .orderedSame }) {
+            return true
+        }
+        return childGoalCandidates.contains { $0.title.caseInsensitiveCompare(title) == .orderedSame }
+    }
+
     private var memoPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            fieldLabel("연결할 할일")
+            HStack(spacing: 6) {
+                fieldLabel("연결할 할일")
+                Text("선택")
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(PopoverChrome.surfaceAlt, in: Capsule())
+                Spacer()
+            }
+
+            if !linkableMemos.isEmpty {
+                searchField(text: $memoSearchText, placeholder: "할일 찾기…")
+            }
 
             if linkableMemos.isEmpty {
                 Text("연결할 수 있는 미완료 할일이 없습니다. 먼저 메모장에서 할일을 추가해 주세요.")
@@ -8138,9 +8259,18 @@ private struct AchievementGoalComposerSheet: View {
             .sorted(by: isMemoOrderedBefore)
     }
 
+    /// 검색어로 좁힌 할일. 이미 고른 것은 사라지지 않도록 남긴다.
+    private var visibleLinkableMemos: [Memo] {
+        let query = memoSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return linkableMemos }
+        return linkableMemos.filter {
+            $0.content.localizedCaseInsensitiveContains(query) || selectedMemoIDs.contains($0.id)
+        }
+    }
+
     private var memoPickerSections: [AchievementMemoPickerSection] {
         let iconRanks = Dictionary(uniqueKeysWithValues: MemoIcon.options.enumerated().map { ($0.element, $0.offset) })
-        return Dictionary(grouping: linkableMemos, by: { $0.icon ?? MemoIcon.defaultIcon })
+        return Dictionary(grouping: visibleLinkableMemos, by: { $0.icon ?? MemoIcon.defaultIcon })
             .map { icon, memos in
                 AchievementMemoPickerSection(
                     icon: icon,
@@ -8535,18 +8665,15 @@ private struct AchievementGoalComposerSheet: View {
         return "비슷한 할일을 묶어 주간 목표 초안을 만들었습니다."
     }
 
+    /// 제목만 있으면 만들 수 있다.
+    /// 할일·하위 목표 연결은 지금 해도 되고 나중에 목표 관리에서 이어도 된다.
     private var canSave: Bool {
         selectedInputMode == "직접 입력"
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && (allowsSavingWithoutLinkedSource || !selectedLinkableMemoIDs.isEmpty || !selectedChildGoalIDs.isEmpty)
     }
 
     private var supportsPersonaVisionGroup: Bool {
         ["비전", "월간", "주간"].contains(selectedTargetLevel)
-    }
-
-    private var allowsSavingWithoutLinkedSource: Bool {
-        ["역할", "비전"].contains(selectedTargetLevel)
     }
 
     private var shouldShowMemoPicker: Bool {
@@ -8615,7 +8742,12 @@ private struct AchievementGoalComposerSheet: View {
         if shouldShowMemoPicker {
             return selectedLinkableMemoIDs.count
         }
-        return selectedChildGoalIDs.count
+        return selectedChildGoalIDs.count + pendingNewChildTitles.count
+    }
+
+    /// 저장할 때 함께 만들 하위 목표. 현재 단계에 하위가 없으면 비운다.
+    private var pendingNewChildTitles: [String] {
+        childGoalLevel == nil ? [] : newChildTitles
     }
 
     private var selectedLinkableMemoIDs: Set<UUID> {
@@ -8712,10 +8844,6 @@ private struct AchievementGoalComposerSheet: View {
             validationMessage = "\(selectedTargetLevel) 목표를 입력해 주세요."
             return
         }
-        guard allowsSavingWithoutLinkedSource || !selectedLinkableMemoIDs.isEmpty || !selectedChildGoalIDs.isEmpty else {
-            validationMessage = "연결할 하위 목표나 할 일을 하나 이상 선택해 주세요."
-            return
-        }
         let trimmedTitle = AchievementDataBuilder.shortText(title, limit: 40)
         let childGoals = existingGoals.filter { selectedChildGoalIDs.contains($0.id) }
         let linkedMemoIDs = Array(selectedLinkableMemoIDs.union(childGoals.flatMap(\.sourceMemoIDs)))
@@ -8725,7 +8853,7 @@ private struct AchievementGoalComposerSheet: View {
         let resolvedCriterion = optionalText(criterion) ?? defaultCriterionText(
             for: selectedTargetLevel,
             linkedMemoCount: linkedMemoIDs.count,
-            childGoalCount: selectedChildGoalIDs.count
+            childGoalCount: selectedChildGoalIDs.count + pendingNewChildTitles.count
         )
         let record = AchievementGoalRecord(
             title: trimmedTitle,
@@ -8746,7 +8874,7 @@ private struct AchievementGoalComposerSheet: View {
             linkedMemoIDs: linkedMemoIDs
         )
         do {
-            try onSave(record, selectedChildGoalIDs)
+            try onSave(record, selectedChildGoalIDs, pendingNewChildTitles)
             onClose()
         } catch {
             validationMessage = "목표 저장에 실패했습니다: \(error.localizedDescription)"
