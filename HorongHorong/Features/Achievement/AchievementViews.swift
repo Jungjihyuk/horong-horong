@@ -2766,7 +2766,8 @@ struct AchievementDetailWindow: View {
                     overdueMemosBanner
                     AchievementGoalTimelineView(
                         items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos, weekStarting: displayedWeekStart),
-                        onMoveTodo: moveTimelineMemo
+                        onMoveTodo: moveTimelineMemo,
+                        onToggleTodoCompletion: toggleTimelineMemoCompletion
                     )
                 } else {
                     AchievementEmptyDetailCard(message: "주간 목표를 추가하면 타임라인이 표시됩니다.")
@@ -2941,6 +2942,44 @@ struct AchievementDetailWindow: View {
 
         let dayText = weekdayText(targetDay)
         syncLinkedRemindersIfNeeded([memo], successMessage: "할일을 \(dayText)요일로 이동했습니다.")
+    }
+
+    /// 타임라인에서 할일의 완료를 뒤집는다.
+    ///
+    /// 메모장에서 체크한 것과 같은 결과가 되도록 알림 정리와 미리알림 동기화까지 함께 한다.
+    private func toggleTimelineMemoCompletion(_ memoID: UUID) {
+        guard let memo = memos.first(where: { $0.id == memoID }) else { return }
+
+        overdueRescheduleMessage = ""
+        let previousCompleted = memo.isCompleted
+        let previousChangedAt = memo.completionStateChangedAt
+        let previousPinned = memo.isPinned
+
+        memo.isCompletedValue.toggle()
+        if memo.isCompletedValue {
+            // 끝낸 일을 계속 위에 붙여둘 이유가 없다.
+            memo.isPinned = false
+        }
+        memo.updatedAt = Date()
+        // 완료·완료 해제에 맞춰 마감 알림을 취소하거나 다시 잡는다.
+        scheduleLocalReminder(for: memo)
+
+        do {
+            try modelContext.save()
+        } catch {
+            // 화면과 저장소가 어긋나지 않도록 건드린 값을 전부 되돌린다.
+            memo.isCompleted = previousCompleted
+            memo.completionStateChangedAt = previousChangedAt
+            memo.isPinned = previousPinned
+            scheduleLocalReminder(for: memo)
+            overdueRescheduleMessage = "완료 표시에 실패했습니다: \(error.localizedDescription)"
+            return
+        }
+
+        syncLinkedRemindersIfNeeded(
+            [memo],
+            successMessage: memo.isCompletedValue ? "할일을 완료했습니다." : "완료를 해제했습니다."
+        )
     }
 
     private func rescheduleOverdueMemos(_ memos: [Memo], targetDays: [Date], messagePrefix: String) {
@@ -5803,6 +5842,7 @@ private struct AchievementTimelineFilters: View {
 private struct AchievementGoalTimelineView: View {
     let items: [AchievementTimelineItem]
     let onMoveTodo: (UUID, Date) -> Void
+    let onToggleTodoCompletion: (UUID) -> Void
     @State private var expandedItemIDs = Set<UUID>()
     @State private var hoveredColumnID: UUID?
 
@@ -5860,6 +5900,7 @@ private struct AchievementGoalTimelineView: View {
                                 }
                             },
                             onMoveTodo: onMoveTodo,
+                            onToggleTodoCompletion: onToggleTodoCompletion,
                             onTodoHoverChange: { hovering in
                                 hoveredColumnID = hovering ? item.id : (hoveredColumnID == item.id ? nil : hoveredColumnID)
                             }
@@ -5899,6 +5940,7 @@ private struct AchievementTimelineColumn: View {
     let isLast: Bool
     let onToggleExpanded: () -> Void
     let onMoveTodo: (UUID, Date) -> Void
+    let onToggleTodoCompletion: (UUID) -> Void
     var onTodoHoverChange: (Bool) -> Void = { _ in }
     @State private var isDropTargeted = false
 
@@ -5946,7 +5988,8 @@ private struct AchievementTimelineColumn: View {
                         AchievementTimelineTodoBox(
                             todo: todo,
                             width: todoBoxContentWidth,
-                            onHoverChange: onTodoHoverChange
+                            onHoverChange: onTodoHoverChange,
+                            onToggleCompletion: { onToggleTodoCompletion(todo.memoID) }
                         )
                     }
 
@@ -6088,6 +6131,7 @@ private struct AchievementTimelineTodoBox: View {
     let todo: AchievementTimelineTodo
     var width: CGFloat = 94
     var onHoverChange: (Bool) -> Void = { _ in }
+    var onToggleCompletion: () -> Void = {}
 
     @State private var isHovering = false
     @State private var hoverTask: Task<Void, Never>?
@@ -6097,9 +6141,16 @@ private struct AchievementTimelineTodoBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .top, spacing: 5) {
-                Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                // 동그라미만 눌러 완료를 뒤집는다. 카드 전체를 버튼으로 만들면 끌어서 옮기기와 부딪힌다.
+                Button(action: onToggleCompletion) {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(todo.isCompleted ? "완료를 해제합니다" : "완료로 표시합니다")
                 Text(todo.title)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
