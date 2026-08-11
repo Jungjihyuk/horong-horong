@@ -2132,6 +2132,7 @@ private struct AchievementGoalSummaryCard: View {
                     .font(.system(size: scaled(14), weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PopoverChrome.ink)
+                AchievementGoalRewardAction(goal: goal, textScale: textScale)
             }
 
             if let todo = goal.nextTodo {
@@ -2218,6 +2219,7 @@ private enum AchievementDetailTab: String, CaseIterable, Identifiable {
     case progress = "진행"
     case journey = "여정"
     case records = "달성 기록"
+    case reward = "보상"
 
     var id: String { rawValue }
 
@@ -2229,6 +2231,8 @@ private enum AchievementDetailTab: String, CaseIterable, Identifiable {
             self = .journey
         case "records":
             self = .records
+        case "reward":
+            self = .reward
         default:
             return nil
         }
@@ -2240,6 +2244,213 @@ private enum AchievementPeriod: String, CaseIterable, Identifiable {
     case month = "월간"
 
     var id: String { rawValue }
+}
+
+/// 달성한 목표에서 보상을 수확하는 버튼.
+///
+/// 주간 목표는 눌러서 포인트를 쌓고, 월간 목표는 쌓인 포인트로 보상을 고른다.
+/// 달성 여부가 파생값이라 버튼 노출만으로는 중복을 못 막는다 — 실제 차단은 `RewardEngine`이 한다.
+private struct AchievementGoalRewardAction: View {
+    let goal: AchievementGoal
+    var textScale: CGFloat = 1
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var entries: [RewardLedgerEntry]
+    @Query(sort: \RewardCatalogItem.sortOrder) private var catalogItems: [RewardCatalogItem]
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var weeklyPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+
+    @State private var showRewardPicker = false
+    @State private var failureMessage = ""
+
+    private var claimable: RewardClaimableGoal {
+        RewardClaimableGoal(
+            id: goal.id,
+            title: goal.title,
+            emoji: goal.emoji,
+            cadence: goal.cadence,
+            isComplete: goal.isComplete
+        )
+    }
+
+    private var snapshots: [RewardEntrySnapshot] { entries.map(\.snapshot) }
+    private var balance: Int { RewardLedger.balance(snapshots) }
+    private var hasClaimed: Bool { RewardLedger.hasClaimed(goalID: goal.id, in: snapshots) }
+    private var hasRedeemed: Bool { RewardLedger.hasRedeemed(goalID: goal.id, in: snapshots) }
+
+    private func scaled(_ value: CGFloat) -> CGFloat { value * textScale }
+
+    var body: some View {
+        Group {
+            if claimable.isWeekly, goal.isComplete {
+                if hasClaimed {
+                    receivedChip
+                } else {
+                    claimButton
+                }
+            } else if claimable.isMonthly, goal.isComplete {
+                if hasRedeemed {
+                    receivedChip
+                } else {
+                    pickButton
+                }
+            }
+        }
+        .sheet(isPresented: $showRewardPicker) {
+            AchievementRewardPickerSheet(
+                goalTitle: goal.title,
+                balance: balance,
+                items: catalogItems.filter { !$0.isArchived },
+                failureMessage: failureMessage
+            ) { item in
+                switch RewardEngine.redeem(item: item, forMonthlyGoal: claimable, in: modelContext) {
+                case .success:
+                    failureMessage = ""
+                    showRewardPicker = false
+                case .failure(let error):
+                    failureMessage = error.message
+                }
+            }
+        }
+    }
+
+    private var claimButton: some View {
+        Button {
+            RewardEngine.claim(
+                claimable,
+                policy: FixedWeeklyRewardPolicy(pointsPerGoal: weeklyPoints),
+                in: modelContext
+            )
+        } label: {
+            Text("보상 받기 +\(weeklyPoints)P")
+                .font(.system(size: scaled(11), weight: .bold, design: .rounded))
+        }
+        .buttonStyle(LanternPrimaryButtonStyle())
+        .controlSize(.small)
+        .fixedSize()
+        .help("이 목표의 포인트를 호롱불에 채웁니다")
+    }
+
+    private var pickButton: some View {
+        Button {
+            failureMessage = ""
+            showRewardPicker = true
+        } label: {
+            Text("보상 고르기")
+                .font(.system(size: scaled(11), weight: .bold, design: .rounded))
+        }
+        .buttonStyle(LanternPrimaryButtonStyle())
+        .controlSize(.small)
+        .fixedSize()
+        .help("모은 \(balance)P로 보상을 고릅니다")
+    }
+
+    private var receivedChip: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: scaled(10), weight: .bold))
+            Text("받음")
+                .font(.system(size: scaled(10.5), weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(PopoverChrome.accent)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(
+            Capsule().fill(PopoverChrome.accentSoft.opacity(0.22))
+        )
+        .fixedSize()
+    }
+}
+
+/// 월간 목표 달성 시 뜨는 보상 선택 시트.
+private struct AchievementRewardPickerSheet: View {
+    let goalTitle: String
+    let balance: Int
+    let items: [RewardCatalogItem]
+    let failureMessage: String
+    let onPick: (RewardCatalogItem) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("«\(goalTitle)» 달성!")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                Text("모은 \(balance)P로 보상을 고르세요.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            if items.isEmpty {
+                Text("아직 정한 보상이 없어요. 성취 창의 «보상» 탭에서 먼저 만들어 주세요.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 20)
+            } else {
+                ScrollView {
+                    VStack(spacing: 7) {
+                        ForEach(items) { item in
+                            rewardRow(item)
+                        }
+                    }
+                }
+                .frame(maxHeight: 260)
+            }
+
+            if !failureMessage.isEmpty {
+                Text(failureMessage)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                Spacer()
+                Button("닫기") { dismiss() }
+                    .buttonStyle(LanternSecondaryButtonStyle())
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+        .background(PopoverChrome.surface)
+    }
+
+    private func rewardRow(_ item: RewardCatalogItem) -> some View {
+        let canAfford = balance >= item.costPoints
+
+        return Button {
+            onPick(item)
+        } label: {
+            HStack(spacing: 10) {
+                Text(item.emoji)
+                    .font(.system(size: 17))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                    if !canAfford {
+                        Text("\(item.costPoints - balance)P 부족")
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text("\(item.costPoints) P")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(canAfford ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+            }
+            .padding(11)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous)
+                    .fill(PopoverChrome.card)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!canAfford)
+        .opacity(canAfford ? 1 : 0.5)
+    }
 }
 
 private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
@@ -2383,6 +2594,8 @@ struct AchievementDetailWindow: View {
                             recordsContent
                         case .journey:
                             journeyContent
+                        case .reward:
+                            RewardTabView()
                         }
                     }
                     .padding(appearanceDensity.informationMetric(18))
@@ -6077,6 +6290,7 @@ private struct AchievementDetailGoalRow: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PopoverChrome.ink)
+                AchievementGoalRewardAction(goal: goal)
             }
 
             if !goal.todos.isEmpty {

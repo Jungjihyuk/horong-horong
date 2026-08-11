@@ -261,6 +261,8 @@ private struct AchievementPage: View {
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementSuggestionProvider)
     private var suggestionProvider: String = Constants.defaultAchievementSuggestionProvider
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMLXModel)
@@ -449,6 +451,27 @@ private struct AchievementPage: View {
                 }
             }
 
+            SettingsGroupCard("보상") {
+                SettingsRow(
+                    "주간 목표 달성 포인트",
+                    subtitle: "주간 목표를 달성하고 «보상 받기»를 누를 때 호롱불에 채워지는 포인트입니다."
+                ) {
+                    Text("\(clampedRewardWeeklyGoalPoints)P")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                    Stepper(
+                        "\(clampedRewardWeeklyGoalPoints)P",
+                        value: Binding(
+                            get: { clampedRewardWeeklyGoalPoints },
+                            set: { rewardWeeklyGoalPoints = clamped($0, in: Constants.rewardWeeklyGoalPointsRange) }
+                        ),
+                        in: Constants.rewardWeeklyGoalPointsRange
+                    )
+                    .labelsHidden()
+                }
+            }
+
             SettingsGroupCard("적용 방식") {
                 Text("추천은 목표 초안만 만듭니다. 할일을 주간 목표로 묶고, 주간 목표가 충분히 쌓이면 월간 목표 초안도 함께 제안합니다.")
                     .font(.caption)
@@ -465,6 +488,7 @@ private struct AchievementPage: View {
         .onChange(of: monthlySuggestionCount) { _, _ in normalizeValues() }
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
+        .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
     }
 
     /// 전체 폭이 필요한 컨트롤용 블록. `SettingsRow` 는 컨트롤을 오른쪽 좁은 슬롯에 두므로
@@ -510,6 +534,10 @@ private struct AchievementPage: View {
         clamped(journeyMaxFlagCount, in: Constants.achievementJourneyMaxFlagCountRange)
     }
 
+    private var clampedRewardWeeklyGoalPoints: Int {
+        clamped(rewardWeeklyGoalPoints, in: Constants.rewardWeeklyGoalPointsRange)
+    }
+
     private var excludedMemoIcons: Set<String> {
         let raw = excludedMemoIconsRaw == Constants.legacyAchievementSuggestionExcludedMemoIconsRaw
             ? Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
@@ -527,6 +555,7 @@ private struct AchievementPage: View {
         monthlySuggestionMinWeeklyGoalCount = clampedMonthlyMinWeeklyGoalCount
         monthlySuggestionCount = clampedMonthlySuggestionCount
         journeyMaxFlagCount = clampedJourneyMaxFlagCount
+        rewardWeeklyGoalPoints = clampedRewardWeeklyGoalPoints
         excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)
     }
 
