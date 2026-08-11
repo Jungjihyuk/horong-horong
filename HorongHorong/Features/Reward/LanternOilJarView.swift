@@ -73,13 +73,21 @@ private struct LanternJarShape: Shape {
 /// 기름이 차오를수록 심지 불빛이 밝아진다.
 struct LanternOilJarView: View {
     let progress: RewardProgress
+    /// 달성했지만 아직 보상을 안 고른 월간 목표 이름들.
+    /// 기름(포인트)이 아무리 차도 이게 비어 있으면 불이 붙지 않는다.
+    var unlockedGoalTitles: [String] = []
 
-    /// 받을 수 있는 보상이 생기면 불빛이 천천히 밝아졌다 어두워진다.
+    /// 지금 보상을 받을 수 있으면 불빛이 천천히 밝아졌다 어두워진다.
     @State private var isPulsing = false
 
     private var isPixel: Bool { PopoverChrome.isGamePixel }
     private var balance: Int { progress.balance }
     private var fillRatio: Double { progress.fillRatio }
+
+    /// 월간 목표를 달성해 불을 붙일 수 있는 상태.
+    private var isLit: Bool { !unlockedGoalTitles.isEmpty }
+    /// 불도 붙었고 기름도 충분해 실제로 받을 수 있는 상태.
+    private var canRedeemNow: Bool { isLit && progress.hasAffordableReward }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -98,23 +106,18 @@ struct LanternOilJarView: View {
                         .contentTransition(.numericText())
                 }
 
-                if progress.hasAffordableReward {
-                    readyBadge
-                } else {
-                    Text(captionText)
-                        .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkSecondary)
-                }
+                statusLines
             }
         }
         .animation(.easeOut(duration: 0.45), value: fillRatio)
         .animation(.easeOut(duration: 0.45), value: balance)
+        .animation(.easeOut(duration: 0.5), value: isLit)
         .onAppear { syncPulse() }
-        .onChange(of: progress.hasAffordableReward) { _, _ in syncPulse() }
+        .onChange(of: canRedeemNow) { _, _ in syncPulse() }
     }
 
     private func syncPulse() {
-        guard progress.hasAffordableReward, !isPixel else {
+        guard canRedeemNow, !isPixel else {
             isPulsing = false
             return
         }
@@ -123,26 +126,39 @@ struct LanternOilJarView: View {
         }
     }
 
-    /// 받을 수 있는 보상이 생겼다는 것을 눈에 띄게 알린다.
-    private var readyBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "gift.fill")
-                .font(.system(size: 10, weight: .bold))
-            Text("받을 수 있는 보상 \(progress.affordableCount)개")
-                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+    // MARK: - 상태 문구
+
+    /// 불이 붙었으면 어떤 목표 덕분인지 먼저 말하고, 그다음 지금 받을 수 있는지 말한다.
+    @ViewBuilder
+    private var statusLines: some View {
+        if isLit {
+            Text("🎉 «\(unlockedGoalTitles.joined(separator: "», «"))» 달성!")
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.accent)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .transition(.scale.combined(with: .opacity))
         }
-        .foregroundStyle(PopoverChrome.accentInk)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(PopoverChrome.accent, in: Capsule())
-        .transition(.scale.combined(with: .opacity))
+
+        Text(captionText)
+            .font(.system(size: 11.5, weight: .medium, design: .rounded))
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .multilineTextAlignment(.center)
     }
 
     private var captionText: String {
-        guard let pointsToNext = progress.pointsToNext else {
+        guard progress.pointsToNext != nil || progress.hasAffordableReward else {
             return "보상 목록에 받고 싶은 걸 먼저 정해보세요"
         }
-        return "다음 보상까지 \(pointsToNext)P"
+        if let pointsToNext = progress.pointsToNext {
+            return isLit
+                ? "\(pointsToNext)P 더 모으면 받을 수 있어요"
+                : "다음 보상까지 \(pointsToNext)P"
+        }
+        // 기름은 가득 찼다. 불만 붙이면 된다.
+        return isLit
+            ? "지금 보상을 받을 수 있어요"
+            : "월간 목표를 달성하면 불을 밝힐 수 있어요"
     }
 
     // MARK: - 호롱
@@ -200,12 +216,16 @@ struct LanternOilJarView: View {
         }
     }
 
-    /// 심지 위의 불꽃. 기름이 많을수록 크고 밝다.
+    /// 심지와 불꽃.
+    ///
+    /// **불은 월간 목표를 달성해야 붙는다.** 기름(포인트)이 가득해도 불이 꺼져 있으면
+    /// 아직 받을 수 없다는 뜻이고, 설명 없이도 그게 보인다.
+    /// 불이 붙은 뒤의 크기·밝기는 기름 양을 따른다.
     private var flame: some View {
         let intensity = 0.35 + 0.65 * fillRatio
 
         return ZStack(alignment: .bottom) {
-            if !isPixel {
+            if !isPixel, isLit {
                 Circle()
                     .fill(PopoverChrome.accent.opacity(0.30 * intensity))
                     .frame(width: 44, height: 44)
@@ -215,21 +235,23 @@ struct LanternOilJarView: View {
             }
 
             VStack(spacing: 0) {
-                FlameShape()
-                    .fill(PopoverChrome.accent.opacity(0.55 + 0.45 * intensity))
-                    .frame(width: 12 + 5 * intensity, height: 20 + 8 * intensity)
-                    .overlay(alignment: .bottom) {
-                        FlameShape()
-                            .fill(Color.white.opacity(isPixel ? 0.45 : 0.6 * intensity))
-                            .frame(width: 5 + 2 * intensity, height: 9 + 4 * intensity)
-                            .offset(y: -2)
-                    }
-                // 심지
+                if isLit {
+                    FlameShape()
+                        .fill(PopoverChrome.accent.opacity(0.55 + 0.45 * intensity))
+                        .frame(width: 12 + 5 * intensity, height: 20 + 8 * intensity)
+                        .overlay(alignment: .bottom) {
+                            FlameShape()
+                                .fill(Color.white.opacity(isPixel ? 0.45 : 0.6 * intensity))
+                                .frame(width: 5 + 2 * intensity, height: 9 + 4 * intensity)
+                                .offset(y: -2)
+                        }
+                        .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
+                }
+                // 심지는 불이 꺼져 있어도 남는다.
                 Capsule()
-                    .fill(PopoverChrome.inkTertiary)
-                    .frame(width: 2.5, height: 6)
+                    .fill(isLit ? PopoverChrome.inkTertiary : PopoverChrome.inkTertiary.opacity(0.55))
+                    .frame(width: 2.5, height: isLit ? 6 : 9)
             }
         }
-        .opacity(balance > 0 ? 1 : 0.25)
     }
 }
