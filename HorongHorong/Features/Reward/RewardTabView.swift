@@ -17,6 +17,7 @@ struct RewardTabView: View {
     @State private var editingItem: RewardCatalogItem?
     @State private var pendingDeletion: RewardCatalogItem?
     @State private var unboxing: UnboxedReward?
+    @State private var showHistory = false
     @State private var failureMessage = ""
 
     /// 개봉 연출에 넘길 결과. 원장은 이미 기록된 뒤다.
@@ -53,12 +54,24 @@ struct RewardTabView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(18)) {
+            // 이력은 계속 쌓여 화면을 아래로 늘리므로 별도 창으로 뺀다.
+            HStack {
+                Spacer()
+                Button {
+                    showHistory = true
+                } label: {
+                    Label("적립·사용 이력", systemImage: "clock.arrow.circlepath")
+                }
+                .buttonStyle(LanternSecondaryButtonStyle())
+                .controlSize(.small)
+                .fixedSize()
+            }
+
             LanternOilJarView(
                 progress: progress,
                 unlockedGoalTitles: unlockedGoals.map(\.title)
             )
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
 
             if !failureMessage.isEmpty {
                 Text(failureMessage)
@@ -68,7 +81,9 @@ struct RewardTabView: View {
 
             catalogSection
             trophySection
-            historySection
+        }
+        .sheet(isPresented: $showHistory) {
+            RewardHistorySheet(entries: entries)
         }
         .sheet(item: $unboxing) { reward in
             RewardUnboxingOverlay(
@@ -328,62 +343,6 @@ struct RewardTabView: View {
         return formatter
     }()
 
-    // MARK: - 이력
-
-    private var historySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("적립·사용 이력", systemImage: "clock.arrow.circlepath")
-
-            if entries.isEmpty {
-                emptyCard(
-                    icon: "clock",
-                    title: "아직 이력이 없어요",
-                    subtitle: "주간 목표를 달성하고 «보상 받기»를 누르면 여기에 쌓입니다."
-                )
-            } else {
-                VStack(spacing: 6) {
-                    ForEach(entries) { entry in
-                        historyRow(entry)
-                    }
-                }
-            }
-        }
-    }
-
-    private func historyRow(_ entry: RewardLedgerEntry) -> some View {
-        let isEarn = entry.kind == .earn
-
-        return HStack(spacing: 10) {
-            Image(systemName: isEarn ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(isEarn ? PopoverChrome.accent : PopoverChrome.inkTertiary)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.note.isEmpty ? (isEarn ? "포인트 적립" : "보상 사용") : entry.note)
-                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.ink)
-                    .lineLimit(1)
-                Text(Self.dateFormatter.string(from: entry.occurredAt))
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkTertiary)
-            }
-
-            Spacer(minLength: 8)
-
-            Text(isEarn ? "+\(entry.amount) P" : "\(entry.amount) P")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(isEarn ? PopoverChrome.accent : PopoverChrome.inkSecondary)
-        }
-        .popoverCard(padding: 10, radius: 11)
-    }
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy. M. d. (E) HH:mm"
-        return formatter
-    }()
-
     // MARK: - 공통 조각
 
     private func sectionTitle(_ text: String, systemImage: String) -> some View {
@@ -492,4 +451,108 @@ private struct RewardItemComposer: View {
         .frame(width: 380)
         .background(PopoverChrome.surface)
     }
+}
+
+// MARK: - 적립·사용 이력 창
+
+/// 이력은 계속 쌓이므로 보상 탭에 눌러두지 않고 별도 창에서 본다.
+private struct RewardHistorySheet: View {
+    let entries: [RewardLedgerEntry]
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var earnedTotal: Int {
+        entries.filter { $0.kind == .earn }.reduce(0) { $0 + $1.amount }
+    }
+
+    private var spentTotal: Int {
+        entries.filter { $0.kind == .spend }.reduce(0) { $0 - $1.amount }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("적립·사용 이력")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                Spacer()
+                Text("모은 \(earnedTotal)P · 쓴 \(spentTotal)P")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+
+            if entries.isEmpty {
+                VStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.title2)
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    Text("아직 이력이 없어요")
+                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    Text("주간 목표를 달성하고 «보상 받기»를 누르면 여기에 쌓입니다.")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(entries) { entry in
+                            row(entry)
+                        }
+                    }
+                }
+                // 항목이 적으면 창도 짧아진다. ScrollView 는 그냥 두면 남는 공간을 다 차지한다.
+                .frame(height: min(340, CGFloat(entries.count) * 62))
+            }
+
+            HStack {
+                Spacer()
+                Button("닫기") { dismiss() }
+                    .buttonStyle(LanternSecondaryButtonStyle())
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .background(PopoverChrome.surface)
+        .appearanceAccentTint(.popover)
+    }
+
+    private func row(_ entry: RewardLedgerEntry) -> some View {
+        let isEarn = entry.kind == .earn
+
+        return HStack(spacing: 10) {
+            // 기름 방울은 채운 것, 선물은 받은 것. 위아래 화살표보다 이 화면의 이야기에 맞는다.
+            Image(systemName: isEarn ? "drop.fill" : "gift.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(isEarn ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.note.isEmpty ? (isEarn ? "포인트 적립" : "보상 사용") : entry.note)
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .lineLimit(1)
+                Text(Self.dateFormatter.string(from: entry.occurredAt))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(isEarn ? "+\(entry.amount) P" : "\(entry.amount) P")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(isEarn ? PopoverChrome.accent : PopoverChrome.inkSecondary)
+        }
+        .popoverCard(padding: 10, radius: 11)
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy. M. d. (E) HH:mm"
+        return formatter
+    }()
 }
