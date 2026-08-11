@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 from collections.abc import Callable, Mapping, Sequence
 from hashlib import sha1
 from typing import Protocol, cast, get_args
@@ -55,6 +57,8 @@ def select_source_candidates(
                 provider,
                 threshold=threshold,
             )
+        except RateLimitError:
+            raise
         except Exception as error:
             warning = (
                 f"relevance 판단 실패: {item_title_safe(item)} "

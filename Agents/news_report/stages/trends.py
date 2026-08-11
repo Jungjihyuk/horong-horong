@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 import json
 import re
 
@@ -71,6 +73,8 @@ def summarize_category_trends(by_category: dict, provider, log_fn) -> dict[str, 
     )
     try:
         raw = provider.run(prompt)
+    except RateLimitError:
+        raise
     except Exception as error:
         log_fn(f"  trend summary LLM 호출 실패: {error}")
         return {}
@@ -84,6 +88,8 @@ def summarize_category_trends(by_category: dict, provider, log_fn) -> dict[str, 
             for entry in parsed
             if isinstance(entry, dict) and entry.get("category") and entry.get("summary")
         }
+    except RateLimitError:
+        raise
     except Exception as error:
         log_fn(f"  trend summary JSON 파싱 실패: {error}")
         return {}

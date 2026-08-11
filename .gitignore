@@ -137,16 +137,12 @@ htmlcov/
 
 ## Claude
 .claude/*
-!.claude/skills/
-!.claude/skills/**
 .claude/settings.local.json
 .claude/docs-file.json
 .claude/**/*.bak.*
 
 ## Codex
 .codex/*
-!.codex/skills/
-!.codex/skills/**
 .codex/docs-file.json
 
 ## Antigravity 

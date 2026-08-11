@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 import json
 import re
 
@@ -30,6 +32,8 @@ def filter_relevance(
         batch = youtube_items[batch_start : batch_start + batch_size]
         try:
             batch_scores = score_youtube_relevance_batch(batch, keywords_str, provider)
+        except RateLimitError:
+            raise
         except Exception as error:
             log_fn(
                 f"  관련성 배치 판정 실패, 단건 fallback 적용: {batch_start // batch_size + 1} - {error}"
@@ -45,6 +49,8 @@ def filter_relevance(
                     score, reason = score_youtube_relevance_single(
                         item, keywords_str, provider
                     )
+                except RateLimitError:
+                    raise
                 except Exception as error:
                     log_fn(f"  관련성 판정 실패 (drop): {title[:40]} - {error}")
                     dropped += 1
