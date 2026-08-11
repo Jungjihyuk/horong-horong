@@ -64,8 +64,12 @@ private struct AchievementGoal: Identifiable {
         return min(1, Double(done) / Double(total))
     }
 
+    /// 달성 여부.
+    ///
+    /// `total` 이 0 이면 연결된 할일이 없다는 뜻이라 달성이 아니다.
+    /// 가드가 없으면 `0 >= 0` 이 참이 되어 빈 목표가 달성으로 잡힌다.
     var isComplete: Bool {
-        done >= total
+        total > 0 && done >= total
     }
 
     /// 마감일을 지정했고, 그 날이 지났는데 아직 끝내지 못한 상태.
