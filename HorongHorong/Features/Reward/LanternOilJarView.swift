@@ -147,15 +147,19 @@ struct LanternOilJarView: View {
 
     // MARK: - 상태 문구
 
-    /// 불이 붙었으면 어떤 목표 덕분인지 먼저 말하고, 그다음 지금 받을 수 있는지 말한다.
+    /// 몇 번 받을 수 있는지 먼저 말하고, 어떤 목표 덕분인지는 불씨 칩으로 보여준다.
+    ///
+    /// 목표 이름을 쉼표로 이어 붙이면 개수가 문장에 묻혀 몇 번 받을 수 있는지 읽히지 않는다.
+    /// 칩 하나가 기회 하나라 세어보지 않아도 보이고, 하나 쓰면 칩이 하나 사라진다.
     @ViewBuilder
     private var statusLines: some View {
         if isLit {
-            Text("🎉 «\(unlockedGoalTitles.joined(separator: "», «"))» 달성!")
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+            Text("보상을 \(unlockedGoalTitles.count)번 받을 수 있어요")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.accent)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+                .transition(.scale.combined(with: .opacity))
+
+            ChanceChipRow(titles: unlockedGoalTitles)
                 .transition(.scale.combined(with: .opacity))
         }
 
@@ -166,18 +170,27 @@ struct LanternOilJarView: View {
     }
 
     private var captionText: String {
-        guard progress.pointsToNext != nil || progress.hasAffordableReward else {
+        guard !progress.marks.isEmpty else {
             return "보상 목록에 받고 싶은 걸 먼저 정해보세요"
         }
-        if let pointsToNext = progress.pointsToNext {
-            return isLit
-                ? "\(pointsToNext)P 더 모으면 받을 수 있어요"
-                : "다음 보상까지 \(pointsToNext)P"
+
+        // 불이 꺼져 있으면 포인트가 얼마든 그게 가장 중요한 소식이다.
+        guard isLit else {
+            if progress.hasAffordableReward {
+                return "월간 목표를 달성하면 불을 밝힐 수 있어요"
+            }
+            return progress.pointsToNext.map { "다음 보상까지 \($0)P" }
+                ?? "월간 목표를 달성하면 불을 밝힐 수 있어요"
         }
-        // 기름은 가득 찼다. 불만 붙이면 된다.
-        return isLit
-            ? "지금 보상을 받을 수 있어요"
-            : "월간 목표를 달성하면 불을 밝힐 수 있어요"
+
+        guard let pointsToNext = progress.pointsToNext else {
+            return "목록의 보상을 모두 받을 수 있어요"
+        }
+        // 이미 받을 수 있는 게 있는데 "더 모으면 받을 수 있어요" 라고 하면
+        // 지금 받을 수 있는 보상을 없는 셈 치게 된다.
+        return progress.hasAffordableReward
+            ? "다음 보상까지 \(pointsToNext)P"
+            : "\(pointsToNext)P 더 모으면 받을 수 있어요"
     }
 
     // MARK: - 호롱
@@ -328,5 +341,36 @@ struct LanternOilJarView: View {
                     .frame(width: 2.5, height: isLit ? 6 : 9)
             }
         }
+    }
+}
+
+/// 달성한 월간 목표를 불씨 칩으로 늘어놓는다. 칩 하나가 보상 한 번을 받을 기회다.
+private struct ChanceChipRow: View {
+    let titles: [String]
+
+    var body: some View {
+        // 이름이 길고 개수도 들쭉날쭉하므로 폭에 맞춰 자동으로 줄바꿈한다.
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 96, maximum: 190), spacing: 6)],
+            alignment: .center,
+            spacing: 6
+        ) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { _, title in
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(title)
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .foregroundStyle(PopoverChrome.accentInk)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(PopoverChrome.accent, in: Capsule())
+                .help(title)
+            }
+        }
+        .frame(maxWidth: 400)
     }
 }

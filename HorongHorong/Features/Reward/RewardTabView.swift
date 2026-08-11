@@ -125,6 +125,21 @@ struct RewardTabView: View {
         }
     }
 
+    /// 포인트도 충분하고 아직 쓰지 않은 달성 목표도 남아야 받을 수 있다.
+    private func canRedeem(_ item: RewardCatalogItem) -> Bool {
+        balance >= item.costPoints && !unlockedGoals.isEmpty
+    }
+
+    private func redeemHelpText(_ item: RewardCatalogItem) -> String {
+        if balance < item.costPoints {
+            return "\(item.costPoints - balance)P 가 더 필요해요"
+        }
+        if unlockedGoals.isEmpty {
+            return "월간 목표를 달성하면 받을 수 있어요"
+        }
+        return "달성한 월간 목표를 걸고 이 보상을 받습니다"
+    }
+
     /// 달성한 월간 목표 하나를 걸고 보상을 받는다. 원장에 사용 기록이 남고 포인트가 깎인다.
     private func redeem(_ item: RewardCatalogItem) {
         guard let unlocked = unlockedGoals.first else {
@@ -238,16 +253,14 @@ struct RewardTabView: View {
                         .fill(canAfford ? PopoverChrome.accentSoft.opacity(0.25) : Color.clear)
                 )
 
-            if canAfford {
-                Button("받기") { redeem(item) }
-                    .buttonStyle(LanternPrimaryButtonStyle())
-                    .controlSize(.small)
-                    .fixedSize()
-                    .disabled(unlockedGoals.isEmpty)
-                    .help(unlockedGoals.isEmpty
-                          ? "월간 목표를 달성하면 받을 수 있어요"
-                          : "달성한 월간 목표를 걸고 이 보상을 받습니다")
-            }
+            // 버튼은 항상 자리를 지킨다. 조건에 따라 나타났다 사라지면 줄마다 모양이 달라진다.
+            Button("받기") { redeem(item) }
+                .buttonStyle(LanternPrimaryButtonStyle())
+                .controlSize(.small)
+                .fixedSize()
+                .disabled(!canRedeem(item))
+                .opacity(canRedeem(item) ? 1 : 0.4)
+                .help(redeemHelpText(item))
 
             Menu {
                 Button("수정") { editingItem = item }
