@@ -7,11 +7,6 @@ import UniformTypeIdentifiers
 import FoundationModels
 #endif
 
-private enum AchievementRewardStatus {
-    case pending
-    case earned
-}
-
 private enum AchievementTodoStatus {
     case done
     case pending
@@ -23,7 +18,6 @@ private struct AchievementReward {
     static let emptyAmount = "보상 없음"
 
     let amount: String
-    let status: AchievementRewardStatus
 }
 
 private struct AchievementTodo: Identifiable {
@@ -1650,7 +1644,6 @@ private enum AchievementDataBuilder {
             let goalProgress = progress(for: record)
             let done = goalProgress.total > 0 ? min(goalProgress.done, goalProgress.total) : 0
             let total = goalProgress.total
-            let rewardStatus: AchievementRewardStatus = total > 0 && done >= total ? .earned : .pending
             return AchievementGoal(
                 id: record.id,
                 emoji: record.emoji,
@@ -1660,8 +1653,7 @@ private enum AchievementDataBuilder {
                 done: min(done, total),
                 total: total,
                 reward: AchievementReward(
-                    amount: record.rewardText.isEmpty ? AchievementReward.emptyAmount : record.rewardText,
-                    status: rewardStatus
+                    amount: record.rewardText.isEmpty ? AchievementReward.emptyAmount : record.rewardText
                 ),
                 color: color(from: record.colorHex),
                 todos: todos,
@@ -2447,7 +2439,8 @@ private struct AchievementGoalRewardAction: View {
 private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
     case all = "전체"
     case goal = "목표별"
-    case reward = "보상만"
+    /// 아직 끝내지 못한 목표. 예전 이름은 «보상만» 이었는데 보상과는 상관이 없었다.
+    case remaining = "남은 것"
 
     var id: String { rawValue }
 
@@ -2457,8 +2450,8 @@ private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
             self = .all
         case "goal":
             self = .goal
-        case "reward":
-            self = .reward
+        case "remaining", "reward":
+            self = .remaining
         default:
             return nil
         }
@@ -2558,8 +2551,8 @@ struct AchievementDetailWindow: View {
             return weeklyGoals
         case .goal:
             return selectedWeekGoal.map { [$0] } ?? []
-        case .reward:
-            return weeklyGoals.filter { $0.reward.status == .pending }
+        case .remaining:
+            return weeklyGoals.filter { !$0.isComplete }
         }
     }
 
@@ -2569,8 +2562,8 @@ struct AchievementDetailWindow: View {
             return "전체 주간 목표 흐름"
         case .goal:
             return selectedWeekGoal.map { "\($0.title) 흐름" } ?? "주간 목표 흐름"
-        case .reward:
-            return "보상 대기 목표 흐름"
+        case .remaining:
+            return "남은 주간 목표 흐름"
         }
     }
 
