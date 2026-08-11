@@ -98,6 +98,56 @@ struct NewsSourceStats: Codable {
     var failed: Int
 }
 
+/// CLI가 보고한 요금제 한도 사용률 스냅샷.
+///
+/// `windowMinutes`는 요금제마다 다르다 (Codex pro는 300/10080, free는 43200이고
+/// secondary가 없다). 창 길이를 하드코딩하지 말고 이 값에서 표시 문구를 만든다.
+struct NewsRateLimitSnapshot: Codable {
+    var scope: String
+    var usedPercent: Double?
+    var windowMinutes: Int?
+    var resetsAt: Int?
+    var planType: String?
+}
+
+/// 리포트 실행 1회의 누적 소모량.
+///
+/// Provider별로 얻을 수 있는 정보가 다르다. Claude는 토큰과 비용을 주지만 구독
+/// 잔여 한도를 노출하지 않고, Codex는 비용 대신 요금제 사용률을 노출한다.
+/// Antigravity/Opencode/Hermes는 아무것도 보고하지 않아 usage 자체가 nil이다.
+struct NewsJobUsage: Codable {
+    var inputTokens: Int
+    var outputTokens: Int
+    var cachedInputTokens: Int
+    var cacheWriteInputTokens: Int
+    var reasoningOutputTokens: Int
+    var totalCostUSD: Double?
+    var callCount: Int
+    var rateLimitsFirst: [NewsRateLimitSnapshot]
+    var rateLimits: [NewsRateLimitSnapshot]
+
+    var totalTokens: Int { inputTokens + outputTokens }
+
+    /// 이번 실행으로 차감된 요금제 사용률(%).
+    ///
+    /// 사용률은 누적 절대값이라 시작/종료 스냅샷의 차이로만 구할 수 있다.
+    /// 창이 중간에 리셋되면 음수가 나올 수 있어 그 경우 nil을 돌려준다.
+    func usedPercentDelta(scope: String) -> Double? {
+        guard
+            let start = rateLimitsFirst.first(where: { $0.scope == scope })?.usedPercent,
+            let end = rateLimits.first(where: { $0.scope == scope })?.usedPercent
+        else { return nil }
+        let delta = end - start
+        return delta >= 0 ? delta : nil
+    }
+
+    func windowMinutes(scope: String) -> Int? {
+        rateLimits.first(where: { $0.scope == scope })?.windowMinutes
+    }
+
+    var planType: String? { rateLimits.first?.planType }
+}
+
 struct NewsJobResultPayload: Codable {
     var jobId: String
     var status: String
@@ -108,6 +158,7 @@ struct NewsJobResultPayload: Codable {
     var sourceStats: [String: NewsSourceStats]?
     var topItems: [NewsTopItem]?
     var warnings: [String]?
+    var usage: NewsJobUsage?
     var errorCode: String?
     var errorMessage: String?
 }
@@ -401,25 +452,10 @@ final class NewsPipelineService: @unchecked Sendable {
         )
         try? FileManager.default.createDirectory(atPath: traceDir, withIntermediateDirectories: true)
 
-        // 설정 창의 NewsSourceStore 에서 사용자가 등록한 소스를 그대로 받아온다.
-        // 사용자 interest_keywords 를 google_news / yozm_it 의 검색어로 전파해 fetch 범위가 키워드에 따라 달라지게 한다.
-        var sources = NewsSourceStore.shared.toPipelineSources(interestKeywords: interestKeywords)
-
-        // 호환성: 팝오버 NewsView 가 전달하는 youtubeChannelIds(legacy CSV 기반) 가 있고,
-        // NewsSourceStore 에 등록된 YouTube 항목이 없다면 그 채널들로 채워 넣는다.
-        if !youtubeChannelIds.isEmpty,
-           !sources.contains(where: { $0.type == "youtube" }) {
-            sources.append(NewsSource(
-                type: "youtube",
-                enabled: true,
-                channelIds: youtubeChannelIds
-            ))
-        }
-
-        // 그래도 비어있으면 (사용자가 아무 소스도 등록 안 한 첫 사용자) 디폴트 소스로 폴백.
-        if sources.isEmpty {
-            sources = NewsSource.defaultSources
-        }
+        let sources = Self.resolvedSources(
+            interestKeywords: interestKeywords,
+            youtubeChannelIds: youtubeChannelIds
+        )
 
         // Build and write request.json
         let request = NewsJobRequestPayload(
@@ -447,6 +483,7 @@ final class NewsPipelineService: @unchecked Sendable {
 
         job.startedAt = Date()
         job.status = "running"
+        job.usagePlannedItems = sources.count * max(1, maxItemsPerSource)
         try? context.save()
 
         // Start elapsed timer on main thread
@@ -617,6 +654,7 @@ final class NewsPipelineService: @unchecked Sendable {
         job.logPath = logPath
         job.errorCode = result.errorCode
         job.errorMessage = result.errorMessage
+        applyUsage(result.usage, to: job)
         try? context.save()
 
         // Index report on success or partial_success
@@ -646,6 +684,52 @@ final class NewsPipelineService: @unchecked Sendable {
         currentStep = result.status
         isRunning = false
         notifyJobFinished()
+    }
+
+    /// 이번 실행에 쓰일 소스 목록을 결정한다.
+    ///
+    /// 소모량 예측기가 호출 규모를 계산할 때 실제 실행과 같은 값을 봐야 하므로
+    /// startJob 안에 두지 않고 꺼내 둔다.
+    static func resolvedSources(
+        interestKeywords: [String],
+        youtubeChannelIds: [String]
+    ) -> [NewsSource] {
+        // 설정 창의 NewsSourceStore 에서 사용자가 등록한 소스를 그대로 받아온다.
+        // 사용자 interest_keywords 를 google_news / yozm_it 의 검색어로 전파해 fetch 범위가 키워드에 따라 달라지게 한다.
+        var sources = NewsSourceStore.shared.toPipelineSources(interestKeywords: interestKeywords)
+
+        // 호환성: 팝오버 NewsView 가 전달하는 youtubeChannelIds(legacy CSV 기반) 가 있고,
+        // NewsSourceStore 에 등록된 YouTube 항목이 없다면 그 채널들로 채워 넣는다.
+        if !youtubeChannelIds.isEmpty,
+           !sources.contains(where: { $0.type == "youtube" }) {
+            sources.append(NewsSource(
+                type: "youtube",
+                enabled: true,
+                channelIds: youtubeChannelIds
+            ))
+        }
+
+        // 그래도 비어있으면 (사용자가 아무 소스도 등록 안 한 첫 사용자) 디폴트 소스로 폴백.
+        if sources.isEmpty {
+            sources = NewsSource.defaultSources
+        }
+        return sources
+    }
+
+    /// runner가 보고한 소모량을 NewsJob에 옮긴다.
+    ///
+    /// 소모량을 보고하지 않는 provider는 usage가 nil이므로 아무것도 쓰지 않는다.
+    private func applyUsage(_ usage: NewsJobUsage?, to job: NewsJob) {
+        guard let usage else { return }
+        job.usageInputTokens = usage.inputTokens
+        job.usageOutputTokens = usage.outputTokens
+        job.usageTotalCostUSD = usage.totalCostUSD
+        job.usageCallCount = usage.callCount
+        job.usagePrimaryPercentDelta = usage.usedPercentDelta(scope: "primary")
+        job.usagePrimaryWindowMinutes = usage.windowMinutes(scope: "primary")
+        job.usageSecondaryPercentDelta = usage.usedPercentDelta(scope: "secondary")
+        job.usageSecondaryWindowMinutes = usage.windowMinutes(scope: "secondary")
+        job.usagePlanType = usage.planType
     }
 
     private func finishFailed(job: NewsJob, context: ModelContext, code: String, message: String) {

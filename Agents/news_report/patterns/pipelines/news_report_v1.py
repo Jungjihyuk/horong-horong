@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import cast
 
@@ -17,7 +18,7 @@ from patterns.research import (
 )
 from patterns.research.result import ResearchResult
 from patterns.result import PatternResult
-from providers.protocols import StructuredProvider
+from providers.protocols import RateLimitError, StructuredProvider
 from providers.traced_provider import TracedStructuredProvider
 from renderers.markdown import render_artifact_markdown_report
 from stages.normalize import dedupe_items, normalize_items
@@ -51,6 +52,22 @@ class NewsReportV1Pipeline:
                 trace,
                 request.provider,
             )
+
+        step("preflight")
+        log("Running provider pre-flight check...")
+        try:
+            # claude/agy는 /usage, codex는 /status 명령어로 RateLimitError 발생 여부를 미리 확인한다.
+            preflight_cmd = "/status" if request.provider == "codex" else "/usage"
+            usage_output = structured_provider.run(preflight_cmd)
+            usage_lower = usage_output.lower()
+            # 로컬 명령어의 출력문을 분석하여 claude의 '100% used' 또는 agy의 'Remaining 0%' 상태인지 검사한다.
+            if "100% used" in usage_lower or re.search(r"remaining\s+0(?:\.0+)?%", usage_lower):
+                raise RateLimitError(f"사용량 한도 초과 감지: {usage_output[:200]}")
+        except RateLimitError:
+            raise
+        except Exception as e:
+            # RateLimitError 이외의 에러(ex: /usage 미지원 등)는 수집 단계로 넘어가기 위해 무시한다.
+            log(f"Pre-flight check failed (ignored): {e}")
 
         step("collect")
         collect_result = collect_sources(sources, max_items, log, trace=trace)

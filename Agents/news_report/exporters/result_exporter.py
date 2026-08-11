@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+from providers.usage import UsageRecord
+
 
 def build_success_result(
     *,
@@ -15,6 +17,7 @@ def build_success_result(
     source_stats: dict,
     items: list[dict],
     warnings: list[str],
+    usage: UsageRecord | None = None,
 ) -> dict:
     """성공 또는 부분 성공 result payload를 만든다."""
     has_failures = any(stats.get("failed", 0) > 0 for stats in source_stats.values())
@@ -37,6 +40,8 @@ def build_success_result(
             for item in items[:5]
         ],
         "warnings": warnings,
+        # 소모량을 보고하지 않는 provider는 null이다.
+        "usage": usage.to_result_payload() if usage is not None else None,
         "errorCode": None,
         "errorMessage": None,
     }
