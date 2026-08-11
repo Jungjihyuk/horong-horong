@@ -2166,6 +2166,35 @@ private struct AchievementGoalSummaryCard: View {
     }
 }
 
+/// 목표 카드 오른쪽에 붙는 배지.
+/// 보상 문구·«보상 받기»·«받음» 이 모두 같은 모양을 쓴다.
+private struct AchievementRewardChip: View {
+    let systemImage: String
+    let text: String
+    let color: Color
+    var textScale: CGFloat = 1
+    /// 누를 수 있는 배지는 포인터를 올렸을 때만 살짝 진해진다. 평상시 모양은 같다.
+    var isHovering: Bool = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10 * textScale, weight: .bold))
+            Text(text)
+                .font(.system(size: 11.5 * textScale, weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            color.opacity(isHovering ? 0.32 : 0.18),
+            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+        )
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
 private struct AchievementRewardBadge: View {
     let reward: AchievementReward
     let color: Color
@@ -2174,20 +2203,14 @@ private struct AchievementRewardBadge: View {
     var body: some View {
         // 보상 문구를 적지 않았으면 배지를 아예 띄우지 않는다.
         // "보상 없음 대기" 같은 문구는 알려주는 게 없다.
-        // 받았는지 여부는 옆의 «보상 받기» 버튼과 «받음 ✓» 칩이 말해준다.
+        // 받았는지 여부는 옆의 «보상 받기» 배지가 말해준다.
         if reward.amount != AchievementReward.emptyAmount {
-            HStack(spacing: 5) {
-                Image(systemName: "gift")
-                    .font(.system(size: 10 * textScale, weight: .bold))
-                Text(reward.amount)
-                    .font(.system(size: 11.5 * textScale, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-            .fixedSize(horizontal: true, vertical: false)
+            AchievementRewardChip(
+                systemImage: "gift",
+                text: reward.amount,
+                color: color,
+                textScale: textScale
+            )
         }
     }
 }
@@ -2259,13 +2282,14 @@ private struct AchievementGoalRewardAction: View {
     let goal: AchievementGoal
     var textScale: CGFloat = 1
     /// 보상 탭으로 데려다주는 동작. 성취 상세 창에서만 넘어온다.
-    /// nil 이면(팝오버) 보상권이 있다는 사실만 알린다.
+    /// nil 이면(팝오버) 받을 수 있다는 사실만 알린다.
     var onOpenRewardTab: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @Query private var entries: [RewardLedgerEntry]
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var weeklyPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+    @State private var isHovering = false
 
     private var claimable: RewardClaimableGoal {
         RewardClaimableGoal(
@@ -2298,36 +2322,35 @@ private struct AchievementGoalRewardAction: View {
                 if hasRedeemed {
                     receivedChip
                 } else if goal.isComplete {
-                    voucherAction
+                    monthlyAction
                 }
             }
         }
     }
 
-    /// 월간 목표를 달성하면 보상권이 한 장 생긴다. 실제 교환은 보상 탭에서 한다.
+    /// 월간 목표를 달성하면 보상을 받을 수 있게 된다. 실제 교환은 보상 탭에서 한다.
     @ViewBuilder
-    private var voucherAction: some View {
+    private var monthlyAction: some View {
         if let onOpenRewardTab {
             Button(action: onOpenRewardTab) {
-                Text("보상 받으러 가기")
-                    .font(.system(size: scaled(11), weight: .bold, design: .rounded))
+                AchievementRewardChip(
+                    systemImage: "flame.fill",
+                    text: "보상 받기",
+                    color: goal.color,
+                    textScale: textScale,
+                    isHovering: isHovering
+                )
             }
-            .buttonStyle(LanternPrimaryButtonStyle())
-            .controlSize(.small)
-            .fixedSize()
+            .buttonStyle(.plain)
+            .onHover { isHovering = $0 }
             .help("모은 \(balance)P로 보상 탭에서 보상을 받습니다")
         } else {
-            HStack(spacing: 3) {
-                Image(systemName: "ticket.fill")
-                    .font(.system(size: scaled(10), weight: .bold))
-                Text("보상권 1장")
-                    .font(.system(size: scaled(10.5), weight: .bold, design: .rounded))
-            }
-            .foregroundStyle(PopoverChrome.accent)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(PopoverChrome.accentSoft.opacity(0.22)))
-            .fixedSize()
+            AchievementRewardChip(
+                systemImage: "flame.fill",
+                text: "보상 받을 수 있어요",
+                color: goal.color,
+                textScale: textScale
+            )
             .help("성취 창의 보상 탭에서 보상을 받을 수 있어요")
         }
     }
@@ -2340,29 +2363,26 @@ private struct AchievementGoalRewardAction: View {
                 in: modelContext
             )
         } label: {
-            Text("보상 받기 +\(weeklyPoints)P")
-                .font(.system(size: scaled(11), weight: .bold, design: .rounded))
+            AchievementRewardChip(
+                systemImage: "gift",
+                text: "보상 받기 +\(weeklyPoints)P",
+                color: goal.color,
+                textScale: textScale,
+                isHovering: isHovering
+            )
         }
-        .buttonStyle(LanternPrimaryButtonStyle())
-        .controlSize(.small)
-        .fixedSize()
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
         .help("이 목표의 포인트를 호롱불에 채웁니다")
     }
 
     private var receivedChip: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: scaled(10), weight: .bold))
-            Text("받음")
-                .font(.system(size: scaled(10.5), weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(PopoverChrome.accent)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule().fill(PopoverChrome.accentSoft.opacity(0.22))
+        AchievementRewardChip(
+            systemImage: "checkmark.circle.fill",
+            text: "받음",
+            color: goal.color,
+            textScale: textScale
         )
-        .fixedSize()
     }
 }
 
@@ -2509,7 +2529,7 @@ struct AchievementDetailWindow: View {
                         case .journey:
                             journeyContent
                         case .reward:
-                            RewardTabView(vouchers: rewardVouchers)
+                            RewardTabView(unlockedMonthlyGoals: unlockedMonthlyGoals)
                         }
                     }
                     .padding(appearanceDensity.informationMetric(18))
@@ -4375,9 +4395,9 @@ struct AchievementDetailWindow: View {
         goals.filter { $0.cadence == "월간" }
     }
 
-    /// 달성한 월간 목표는 보상 하나를 바꿀 권리가 된다.
-    /// 이미 썼는지는 원장을 보는 보상 탭이 걸러낸다.
-    private var rewardVouchers: [RewardClaimableGoal] {
+    /// 달성한 월간 목표는 호롱불에 불을 붙일 자격이 된다.
+    /// 이미 보상을 골랐는지는 원장을 보는 보상 탭이 걸러낸다.
+    private var unlockedMonthlyGoals: [RewardClaimableGoal] {
         monthlyGoals.filter(\.isComplete).map { goal in
             RewardClaimableGoal(
                 id: goal.id,
