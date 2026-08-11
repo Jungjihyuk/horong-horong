@@ -10,13 +10,6 @@ import FoundationModels
 private enum AchievementRewardStatus {
     case pending
     case earned
-
-    var label: String {
-        switch self {
-        case .pending: return "대기"
-        case .earned: return "완료"
-        }
-    }
 }
 
 private enum AchievementTodoStatus {
@@ -26,6 +19,9 @@ private enum AchievementTodoStatus {
 }
 
 private struct AchievementReward {
+    /// 보상 문구를 적지 않은 목표. 이 값이면 배지를 띄우지 않는다.
+    static let emptyAmount = "보상 없음"
+
     let amount: String
     let status: AchievementRewardStatus
 }
@@ -1659,7 +1655,10 @@ private enum AchievementDataBuilder {
                 rule: displayRule(for: record, total: total),
                 done: min(done, total),
                 total: total,
-                reward: AchievementReward(amount: record.rewardText.isEmpty ? "보상 없음" : record.rewardText, status: rewardStatus),
+                reward: AchievementReward(
+                    amount: record.rewardText.isEmpty ? AchievementReward.emptyAmount : record.rewardText,
+                    status: rewardStatus
+                ),
                 color: color(from: record.colorHex),
                 todos: todos,
                 roleName: record.roleName,
@@ -1719,7 +1718,8 @@ private enum AchievementDataBuilder {
                     (timelineDate($0) ?? .distantFuture) < (timelineDate($1) ?? .distantFuture)
                 }
             let isLastDay = offset == 6
-            let hasReward = isLastDay && !goal.reward.amount.isEmpty && goal.reward.amount != "보상 없음"
+            let hasReward = isLastDay && !goal.reward.amount.isEmpty
+                && goal.reward.amount != AchievementReward.emptyAmount
             let isCompletedDay = dayMemos.contains(where: \.isCompletedValue)
             let isFutureDay = !isCompletedDay && calendar.startOfDay(for: day) > calendar.startOfDay(for: referenceDate)
             let topLabel: String?
@@ -2172,18 +2172,23 @@ private struct AchievementRewardBadge: View {
     var textScale: CGFloat = 1
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "gift")
-                .font(.system(size: 10 * textScale, weight: .bold))
-            Text("\(reward.amount) \(reward.status.label)")
-                .font(.system(size: 11.5 * textScale, weight: .bold, design: .rounded))
-                .lineLimit(1)
+        // 보상 문구를 적지 않았으면 배지를 아예 띄우지 않는다.
+        // "보상 없음 대기" 같은 문구는 알려주는 게 없다.
+        // 받았는지 여부는 옆의 «보상 받기» 버튼과 «받음 ✓» 칩이 말해준다.
+        if reward.amount != AchievementReward.emptyAmount {
+            HStack(spacing: 5) {
+                Image(systemName: "gift")
+                    .font(.system(size: 10 * textScale, weight: .bold))
+                Text(reward.amount)
+                    .font(.system(size: 11.5 * textScale, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -2282,16 +2287,18 @@ private struct AchievementGoalRewardAction: View {
 
     var body: some View {
         Group {
-            if claimable.isWeekly, goal.isComplete {
+            if claimable.isWeekly {
+                // 이미 받았으면 목표가 미완성으로 되돌아가도 계속 보여준다.
+                // 포인트는 그대로 남는데 표시만 사라지면 어디서 온 포인트인지 알 수 없다.
                 if hasClaimed {
                     receivedChip
-                } else {
+                } else if goal.isComplete {
                     claimButton
                 }
-            } else if claimable.isMonthly, goal.isComplete {
+            } else if claimable.isMonthly {
                 if hasRedeemed {
                     receivedChip
-                } else {
+                } else if goal.isComplete {
                     pickButton
                 }
             }

@@ -52,51 +52,16 @@ final class RewardLedgerTests: XCTestCase {
 
     // MARK: - 구매 가능 판정
 
-    func testAffordableIncludesItemPricedExactlyAtBalance() {
+    /// 가격이 잔액과 정확히 같으면 살 수 있다.
+    func testItemPricedExactlyAtBalanceIsAffordable() {
         let items = [
             RewardItemSnapshot(costPoints: 30),
             RewardItemSnapshot(costPoints: 31),
         ]
-        let affordable = RewardLedger.affordable(items, balance: 30)
+        let progress = RewardLedger.progress(balance: 30, items: items)
 
-        XCTAssertEqual(affordable.map(\.costPoints), [30])
-    }
-
-    func testAffordableExcludesArchivedItems() {
-        let items = [
-            RewardItemSnapshot(costPoints: 10, isArchived: true),
-            RewardItemSnapshot(costPoints: 10),
-        ]
-        XCTAssertEqual(RewardLedger.affordable(items, balance: 50).count, 1)
-    }
-
-    // MARK: - 다음 보상까지
-
-    func testPointsToNextRewardUsesCheapestUnreachableItem() {
-        let items = [
-            RewardItemSnapshot(costPoints: 100),
-            RewardItemSnapshot(costPoints: 40),
-            RewardItemSnapshot(costPoints: 10),
-        ]
-        // 잔액 25 → 40짜리가 가장 싼 미달 보상이므로 15P 남았다.
-        XCTAssertEqual(RewardLedger.pointsToNextReward(items: items, balance: 25), 15)
-    }
-
-    func testPointsToNextRewardIsNilWhenEverythingIsAffordable() {
-        let items = [RewardItemSnapshot(costPoints: 10)]
-        XCTAssertNil(RewardLedger.pointsToNextReward(items: items, balance: 10))
-    }
-
-    func testPointsToNextRewardIsNilWithEmptyCatalog() {
-        XCTAssertNil(RewardLedger.pointsToNextReward(items: [], balance: 0))
-    }
-
-    func testPointsToNextRewardIgnoresArchivedItems() {
-        let items = [
-            RewardItemSnapshot(costPoints: 20, isArchived: true),
-            RewardItemSnapshot(costPoints: 50),
-        ]
-        XCTAssertEqual(RewardLedger.pointsToNextReward(items: items, balance: 10), 40)
+        XCTAssertEqual(progress.affordableCount, 1)
+        XCTAssertNil(progress.pointsToNext)
     }
 
     // MARK: - 호롱불 기름 높이
@@ -111,6 +76,73 @@ final class RewardLedgerTests: XCTestCase {
         XCTAssertEqual(RewardLedger.fillRatio(balance: 0, target: 40), 0)
         XCTAssertEqual(RewardLedger.fillRatio(balance: 20, target: 40), 0.5)
         XCTAssertEqual(RewardLedger.fillRatio(balance: 80, target: 40), 1)
+    }
+
+    // MARK: - 진행 상태 (호롱불 + 안내 문구)
+
+    /// 살 수 있는 보상이 있으면 미달 보상을 가리키지 않는다.
+    /// 이걸 놓치면 10P 보상을 받을 수 있는데도 "다음 보상까지 40P"라고 말하게 된다.
+    func testProgressAnnouncesAffordableRewardInsteadOfNextTarget() {
+        let items = [
+            RewardItemSnapshot(costPoints: 10),
+            RewardItemSnapshot(costPoints: 50),
+        ]
+        let progress = RewardLedger.progress(balance: 10, items: items)
+
+        XCTAssertEqual(progress.affordableCount, 1)
+        XCTAssertTrue(progress.hasAffordableReward)
+        XCTAssertNil(progress.pointsToNext)
+        XCTAssertEqual(progress.fillRatio, 1)
+    }
+
+    /// 보상을 쓰고 잔액이 0이 되면 다시 가장 싼 보상을 목표로 잡는다.
+    /// 카탈로그 항목은 소모되지 않으므로 10P 보상이 그대로 다음 목표다.
+    func testProgressTargetsCheapestRewardAgainAfterSpending() {
+        let items = [
+            RewardItemSnapshot(costPoints: 10),
+            RewardItemSnapshot(costPoints: 50),
+        ]
+        let progress = RewardLedger.progress(balance: 0, items: items)
+
+        XCTAssertEqual(progress.affordableCount, 0)
+        XCTAssertEqual(progress.pointsToNext, 10)
+        XCTAssertEqual(progress.fillRatio, 0)
+    }
+
+    func testProgressCountsEveryAffordableReward() {
+        let items = [
+            RewardItemSnapshot(costPoints: 10),
+            RewardItemSnapshot(costPoints: 30),
+            RewardItemSnapshot(costPoints: 90),
+        ]
+        XCTAssertEqual(RewardLedger.progress(balance: 30, items: items).affordableCount, 2)
+    }
+
+    func testProgressFillsPartiallyTowardCheapestReward() {
+        let items = [RewardItemSnapshot(costPoints: 50)]
+        let progress = RewardLedger.progress(balance: 20, items: items)
+
+        XCTAssertEqual(progress.pointsToNext, 30)
+        XCTAssertEqual(progress.fillRatio, 0.4, accuracy: 0.0001)
+    }
+
+    func testProgressWithEmptyCatalogHasNothingToAimFor() {
+        let progress = RewardLedger.progress(balance: 40, items: [])
+
+        XCTAssertEqual(progress.affordableCount, 0)
+        XCTAssertNil(progress.pointsToNext)
+        XCTAssertEqual(progress.fillRatio, 0)
+    }
+
+    func testProgressIgnoresArchivedItems() {
+        let items = [
+            RewardItemSnapshot(costPoints: 10, isArchived: true),
+            RewardItemSnapshot(costPoints: 50),
+        ]
+        let progress = RewardLedger.progress(balance: 10, items: items)
+
+        XCTAssertEqual(progress.affordableCount, 0)
+        XCTAssertEqual(progress.pointsToNext, 40)
     }
 
     // MARK: - 적립 정책

@@ -17,14 +17,8 @@ struct RewardTabView: View {
         RewardLedger.balance(entries.map(\.snapshot))
     }
 
-    private var pointsToNext: Int? {
-        RewardLedger.pointsToNextReward(items: catalogItems.map(\.snapshot), balance: balance)
-    }
-
-    /// 기름 높이의 기준은 다음 보상 가격이다. 다 살 수 있으면 가득 채운다.
-    private var fillRatio: Double {
-        guard let pointsToNext else { return catalogItems.isEmpty ? 0 : 1 }
-        return RewardLedger.fillRatio(balance: balance, target: balance + pointsToNext)
+    private var progress: RewardProgress {
+        RewardLedger.progress(balance: balance, items: catalogItems.map(\.snapshot))
     }
 
     private var visibleItems: [RewardCatalogItem] {
@@ -33,7 +27,7 @@ struct RewardTabView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(18)) {
-            LanternOilJarView(balance: balance, pointsToNext: pointsToNext, fillRatio: fillRatio)
+            LanternOilJarView(progress: progress)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
 
@@ -111,9 +105,30 @@ struct RewardTabView: View {
                 .font(.system(size: 18))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.ink)
+                HStack(spacing: 5) {
+                    Text(item.title)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                    if canAfford {
+                        Text("받을 수 있어요")
+                            .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.accentInk)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(PopoverChrome.accent, in: Capsule())
+                    }
+                }
+                if canAfford {
+                    Text("월간 목표를 달성하면 이 보상을 고를 수 있어요")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .lineLimit(1)
+                } else {
+                    Text("\(item.costPoints - balance)P 더 모으면 받을 수 있어요")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .lineLimit(1)
+                }
                 if !item.note.isEmpty {
                     Text(item.note)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -147,6 +162,13 @@ struct RewardTabView: View {
             .fixedSize()
         }
         .popoverCard(padding: 11, radius: 12)
+        .overlay {
+            // 받을 수 있는 보상은 테두리로 한 번 더 구분한다.
+            if canAfford {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(PopoverChrome.accent, lineWidth: 1.5)
+            }
+        }
     }
 
     // MARK: - 이력
