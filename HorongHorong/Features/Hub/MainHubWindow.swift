@@ -66,9 +66,12 @@ struct MainHubWindow: View {
                 RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
                     .fill(isSelected ? PopoverChrome.selectionFill : .clear)
             )
+            // contentShape 는 label 안에 있어야 한다.
+            // Button 바깥에 걸면 히트 영역이 label 내용(아이콘·글자) 모양 그대로라
+            // 배경이 비어 있는 비선택 항목은 글자에 정확히 대야만 눌린다.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
         .help(tab.label)
         .accessibilityLabel(tab.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
