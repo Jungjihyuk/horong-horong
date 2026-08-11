@@ -22,6 +22,7 @@
 		09CA990DEC583F533576BEEF /* AboutPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */; };
 		0A73805E0D529289643AF890 /* SettingsTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FAEB9F45DE8BC411F55FF0 /* SettingsTheme.swift */; };
 		0A772F747106ED004FC2F388 /* FocusNudgeTrendCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3803D628E9203EC096F3A7 /* FocusNudgeTrendCard.swift */; };
+		0C09A80E27253D3737BB561C /* RewardUnboxingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDCF4EC20941BA38C8310F9 /* RewardUnboxingOverlay.swift */; };
 		0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */; };
 		0C9BD0C654A4E26439111DD6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B31DB4E51995E349060A4BF /* AppState.swift */; };
 		0DA902D388B24F3F3018AE26 /* AppUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */; };
@@ -131,6 +132,7 @@
 		6C206EDE2C37A453BBEA18D8 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 76D70BAFD216660F52671512 /* MLXLLM */; };
 		7067CFF66B6206B3E78C1353 /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */; };
 		71F7538C217AFC97575FFF3A /* MemoReminderLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */; };
+		7381ECEE40AEE16CA4883D10 /* RewardUnboxingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDCF4EC20941BA38C8310F9 /* RewardUnboxingOverlay.swift */; };
 		741E5301F53675649A8485C2 /* achievement_weekly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */; };
 		743204795E302BF902290E6E /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */; };
 		760BEF844A5B3167F3E07AC4 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
@@ -397,6 +399,7 @@
 		8B9D3EA221748570FEE29669 /* NewsReportArchiveWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsReportArchiveWindow.swift; sourceTree = "<group>"; };
 		8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakTransitionIntent.swift; sourceTree = "<group>"; };
 		8D0D6724228BCA301EECBFEC /* FocusTrend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTrend.swift; sourceTree = "<group>"; };
+		8DDCF4EC20941BA38C8310F9 /* RewardUnboxingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardUnboxingOverlay.swift; sourceTree = "<group>"; };
 		922D40CD9D1BF83B6C912DB0 /* CompanionAppFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAppFacts.swift; sourceTree = "<group>"; };
 		9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		93C3B4093C76333C488BBFBF /* DataPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPage.swift; sourceTree = "<group>"; };
@@ -829,6 +832,7 @@
 				FF5EDFA03DFDA5A1F91F7991 /* RewardEngine.swift */,
 				23024A3A59FDBED2A95D852B /* RewardLedger.swift */,
 				1DEF83A33677F0B7AD6A6DA7 /* RewardTabView.swift */,
+				8DDCF4EC20941BA38C8310F9 /* RewardUnboxingOverlay.swift */,
 			);
 			path = Reward;
 			sourceTree = "<group>";
@@ -1192,6 +1196,7 @@
 				EAD29B347369D84A9F8512BE /* RewardLedger.swift in Sources */,
 				C7E776E921733C226007FEED /* RewardRecords.swift in Sources */,
 				1F3183431E3119583297B306 /* RewardTabView.swift in Sources */,
+				7381ECEE40AEE16CA4883D10 /* RewardUnboxingOverlay.swift in Sources */,
 				B993B2B4F9A1B5B33F7810B8 /* SettingsCard.swift in Sources */,
 				EC2A470059AF29664EC97895 /* SettingsRoot.swift in Sources */,
 				78C38709A39CB5916E78C7FF /* SettingsRow.swift in Sources */,
@@ -1326,6 +1331,7 @@
 				B37012611F784B8746C60180 /* RewardLedger.swift in Sources */,
 				551E54ED93091D6338E60980 /* RewardRecords.swift in Sources */,
 				F057E18C0E2DFAD9E3D8FF5C /* RewardTabView.swift in Sources */,
+				0C09A80E27253D3737BB561C /* RewardUnboxingOverlay.swift in Sources */,
 				532725CCFBCA016CF30E224A /* SettingsCard.swift in Sources */,
 				89CC7ED84F662AE66906C38D /* SettingsRoot.swift in Sources */,
 				AFED5C415142D67BF18348E0 /* SettingsRow.swift in Sources */,
