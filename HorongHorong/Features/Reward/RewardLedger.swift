@@ -21,14 +21,36 @@ struct RewardEntrySnapshot: Equatable {
 /// 보상 항목의 계산용 스냅샷.
 struct RewardItemSnapshot: Equatable {
     let id: UUID
+    let emoji: String
+    let title: String
     let costPoints: Int
     let isArchived: Bool
 
-    init(id: UUID = UUID(), costPoints: Int, isArchived: Bool = false) {
+    init(
+        id: UUID = UUID(),
+        emoji: String = "🎁",
+        title: String = "",
+        costPoints: Int,
+        isArchived: Bool = false
+    ) {
         self.id = id
+        self.emoji = emoji
+        self.title = title
         self.costPoints = costPoints
         self.isArchived = isArchived
     }
+}
+
+/// 등잔에 그을 눈금 하나. 보상 하나가 눈금 하나다.
+struct RewardMark: Equatable, Identifiable {
+    let id: UUID
+    let emoji: String
+    let title: String
+    let costPoints: Int
+    /// 등잔 바닥에서의 높이 0…1.
+    let heightRatio: Double
+    /// 기름이 이 눈금을 넘었는가 — 지금 받을 수 있는가.
+    let isReached: Bool
 }
 
 /// 목표를 Reward 쪽으로 넘기기 위한 경계 타입.
@@ -77,28 +99,32 @@ enum RewardLedger {
     /// 미달 보상만 보고 "다음 보상까지 N P"를 띄우면, 이미 받을 수 있는 보상이 있는데도
     /// 아직 멀었다고 말하게 된다.
     static func progress(balance: Int, items: [RewardItemSnapshot]) -> RewardProgress {
-        let active = items.filter { !$0.isArchived }
-        let affordableCount = active.filter { $0.costPoints <= balance }.count
+        let active = items
+            .filter { !$0.isArchived }
+            .sorted { $0.costPoints < $1.costPoints }
 
-        if affordableCount > 0 {
-            return RewardProgress(
-                balance: balance,
-                affordableCount: affordableCount,
-                pointsToNext: nil,
-                fillRatio: 1
+        // 게이지의 100% 는 **가장 비싼 보상**이다.
+        // 가장 싼 미달 보상을 기준으로 삼으면 하나 살 수 있게 되는 순간 계속 가득 차 있게 되고,
+        // 전체 합계를 기준으로 삼으면 보상을 추가할 때마다 게이지가 뚝 떨어져 등록을 벌주게 된다.
+        let ceiling = active.map(\.costPoints).max() ?? 0
+
+        let marks = active.map { item in
+            RewardMark(
+                id: item.id,
+                emoji: item.emoji,
+                title: item.title,
+                costPoints: item.costPoints,
+                heightRatio: ceiling > 0 ? Double(item.costPoints) / Double(ceiling) : 0,
+                isReached: item.costPoints <= balance
             )
-        }
-
-        guard let cheapest = active.map(\.costPoints).min() else {
-            // 보상 목록이 비면 채울 기준 자체가 없다.
-            return RewardProgress(balance: balance, affordableCount: 0, pointsToNext: nil, fillRatio: 0)
         }
 
         return RewardProgress(
             balance: balance,
-            affordableCount: 0,
-            pointsToNext: cheapest - balance,
-            fillRatio: fillRatio(balance: balance, target: cheapest)
+            affordableCount: active.filter { $0.costPoints <= balance }.count,
+            pointsToNext: active.first { $0.costPoints > balance }.map { $0.costPoints - balance },
+            fillRatio: fillRatio(balance: balance, target: ceiling),
+            marks: marks
         )
     }
 }
@@ -108,9 +134,11 @@ struct RewardProgress: Equatable {
     let balance: Int
     /// 지금 잔액으로 받을 수 있는 보상 개수.
     let affordableCount: Int
-    /// 가장 싼 보상까지 남은 포인트. 이미 받을 수 있는 게 있으면 nil.
+    /// 가장 싼 미달 보상까지 남은 포인트. 전부 받을 수 있으면 nil.
     let pointsToNext: Int?
     let fillRatio: Double
+    /// 등잔에 그을 눈금. 싼 것부터.
+    let marks: [RewardMark]
 
     var hasAffordableReward: Bool { affordableCount > 0 }
 }

@@ -106,6 +106,12 @@ extension RewardCatalogItem {
     }
 
     var snapshot: RewardItemSnapshot {
-        RewardItemSnapshot(id: id, costPoints: costPoints, isArchived: isArchived)
+        RewardItemSnapshot(
+            id: id,
+            emoji: emoji,
+            title: title,
+            costPoints: costPoints,
+            isArchived: isArchived
+        )
     }
 }

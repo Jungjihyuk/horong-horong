@@ -84,16 +84,35 @@ struct LanternOilJarView: View {
     private var balance: Int { progress.balance }
     private var fillRatio: Double { progress.fillRatio }
 
+    private static let lanternHeight: CGFloat = 132
+    /// 불꽃이 차지하는 높이. 등잔 본체는 그 아래부터다.
+    private static let flameHeight: CGFloat = 32
+    private static let markRowHeight: CGFloat = 18
+
     /// 월간 목표를 달성해 불을 붙일 수 있는 상태.
     private var isLit: Bool { !unlockedGoalTitles.isEmpty }
+
+    /// 등잔 몸통(기름이 차는 구간)의 높이.
+    private var bodyHeight: CGFloat {
+        (Self.lanternHeight - Self.flameHeight + 3) * (1 - LanternJarShape.neckRatio)
+    }
+
+    /// 눈금 하나가 놓일 y 좌표. 바닥에서 `heightRatio` 만큼 올라간 위치.
+    private func markOffsetY(_ mark: RewardMark) -> CGFloat {
+        Self.lanternHeight - bodyHeight * mark.heightRatio - Self.markRowHeight / 2
+    }
     /// 불도 붙었고 기름도 충분해 실제로 받을 수 있는 상태.
     private var canRedeemNow: Bool { isLit && progress.hasAffordableReward }
 
     var body: some View {
         VStack(spacing: 14) {
-            lantern
-                .frame(width: 108, height: 132)
-                .accessibilityLabel("모은 포인트 \(balance)")
+            HStack(alignment: .top, spacing: 2) {
+                lantern
+                    .frame(width: 108, height: Self.lanternHeight)
+                    .accessibilityLabel("모은 포인트 \(balance)")
+                markColumn
+                    .frame(width: 170, height: Self.lanternHeight, alignment: .topLeading)
+            }
 
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
@@ -171,6 +190,47 @@ struct LanternOilJarView: View {
         }
     }
 
+    /// 등잔 오른쪽에 보상마다 눈금을 세운다. 기름이 넘어선 눈금은 진하게.
+    private var markColumn: some View {
+        ZStack(alignment: .topLeading) {
+            // 눈금자 몸통. 등잔의 기름 구간과 같은 높이를 차지해 눈금들이 허공에 뜨지 않게 한다.
+            // 기름이 닿은 구간은 진하게 칠해 등잔 안의 수위와 같은 이야기를 한다.
+            ZStack(alignment: .bottom) {
+                Capsule()
+                    .fill(PopoverChrome.divider)
+                    .frame(width: 2, height: bodyHeight)
+                Capsule()
+                    .fill(PopoverChrome.accent)
+                    .frame(width: 2, height: bodyHeight * fillRatio)
+            }
+            .offset(x: 3, y: Self.lanternHeight - bodyHeight)
+
+            ForEach(progress.marks) { mark in
+                HStack(spacing: 5) {
+                    Rectangle()
+                        .fill(mark.isReached ? PopoverChrome.accent : PopoverChrome.divider)
+                        .frame(width: 9, height: mark.isReached ? 2 : 1)
+                    Text(mark.emoji)
+                        .font(.system(size: 11))
+                    Text("\(mark.costPoints)P")
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                    Text(mark.title)
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .lineLimit(1)
+                    if mark.isReached {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                }
+                .foregroundStyle(mark.isReached ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                .frame(height: Self.markRowHeight, alignment: .leading)
+                .offset(y: markOffsetY(mark))
+            }
+        }
+        .animation(.easeOut(duration: 0.45), value: fillRatio)
+    }
+
     private var jar: some View {
         LanternJarShape()
             .fill(PopoverChrome.surfaceAlt)
@@ -189,6 +249,21 @@ struct LanternOilJarView: View {
                                     .fill(Color.white.opacity(isPixel ? 0.45 : 0.55))
                                     .frame(height: isPixel ? 2 : 1.5)
                             }
+                    }
+                }
+                .clipShape(LanternJarShape())
+            }
+            .overlay {
+                // 보상 가격마다 등잔을 가로지르는 선. 기름 수위가 어느 보상을 넘었는지 몸통에서도 읽힌다.
+                GeometryReader { proxy in
+                    let body = proxy.size.height * (1 - LanternJarShape.neckRatio)
+                    ForEach(progress.marks) { mark in
+                        Rectangle()
+                            .fill(mark.isReached
+                                  ? Color.white.opacity(0.5)
+                                  : PopoverChrome.divider)
+                            .frame(height: 1)
+                            .offset(y: proxy.size.height - body * mark.heightRatio)
                     }
                 }
                 .clipShape(LanternJarShape())

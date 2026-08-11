@@ -61,7 +61,7 @@ final class RewardLedgerTests: XCTestCase {
         let progress = RewardLedger.progress(balance: 30, items: items)
 
         XCTAssertEqual(progress.affordableCount, 1)
-        XCTAssertNil(progress.pointsToNext)
+        XCTAssertEqual(progress.pointsToNext, 1)
     }
 
     // MARK: - 호롱불 기름 높이
@@ -80,9 +80,9 @@ final class RewardLedgerTests: XCTestCase {
 
     // MARK: - 진행 상태 (호롱불 + 안내 문구)
 
-    /// 살 수 있는 보상이 있으면 미달 보상을 가리키지 않는다.
-    /// 이걸 놓치면 10P 보상을 받을 수 있는데도 "다음 보상까지 40P"라고 말하게 된다.
-    func testProgressAnnouncesAffordableRewardInsteadOfNextTarget() {
+    /// 살 수 있는 보상이 생겨도 게이지는 가장 비싼 보상을 향해 계속 차오른다.
+    /// 여기서 1로 못박으면 싼 보상 하나만 있어도 등불이 영영 가득 차 보인다.
+    func testProgressKeepsFillingTowardMostExpensiveReward() {
         let items = [
             RewardItemSnapshot(costPoints: 10),
             RewardItemSnapshot(costPoints: 50),
@@ -91,8 +91,55 @@ final class RewardLedgerTests: XCTestCase {
 
         XCTAssertEqual(progress.affordableCount, 1)
         XCTAssertTrue(progress.hasAffordableReward)
-        XCTAssertNil(progress.pointsToNext)
-        XCTAssertEqual(progress.fillRatio, 1)
+        XCTAssertEqual(progress.pointsToNext, 40)
+        XCTAssertEqual(progress.fillRatio, 0.2, accuracy: 0.0001)
+    }
+
+    /// 보상을 더 추가해도 가장 비싼 값이 그대로면 게이지가 떨어지지 않는다.
+    /// 합계를 기준으로 삼았다면 등록할수록 게이지가 내려가 손해처럼 느껴진다.
+    func testAddingCheaperRewardDoesNotDropTheGauge() {
+        let before = RewardLedger.progress(balance: 30, items: [RewardItemSnapshot(costPoints: 60)])
+        let after = RewardLedger.progress(
+            balance: 30,
+            items: [RewardItemSnapshot(costPoints: 60), RewardItemSnapshot(costPoints: 20)]
+        )
+
+        XCTAssertEqual(before.fillRatio, after.fillRatio, accuracy: 0.0001)
+    }
+
+    // MARK: - 눈금
+
+    func testMarksAreSortedByCostAndFlagWhatIsReached() {
+        let items = [
+            RewardItemSnapshot(emoji: "🎮", title: "게임", costPoints: 80),
+            RewardItemSnapshot(emoji: "👛", title: "지갑", costPoints: 10),
+            RewardItemSnapshot(emoji: "📱", title: "케이스", costPoints: 50),
+        ]
+        let marks = RewardLedger.progress(balance: 30, items: items).marks
+
+        XCTAssertEqual(marks.map(\.costPoints), [10, 50, 80])
+        XCTAssertEqual(marks.map(\.isReached), [true, false, false])
+        XCTAssertEqual(marks.map(\.emoji), ["👛", "📱", "🎮"])
+    }
+
+    /// 가장 비싼 보상이 눈금 꼭대기(1.0)에 놓인다.
+    func testMarkHeightsAreRelativeToTheMostExpensiveReward() {
+        let items = [
+            RewardItemSnapshot(costPoints: 20),
+            RewardItemSnapshot(costPoints: 80),
+        ]
+        let marks = RewardLedger.progress(balance: 0, items: items).marks
+
+        XCTAssertEqual(marks[0].heightRatio, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(marks[1].heightRatio, 1, accuracy: 0.0001)
+    }
+
+    func testMarksExcludeArchivedRewards() {
+        let items = [
+            RewardItemSnapshot(costPoints: 10, isArchived: true),
+            RewardItemSnapshot(costPoints: 50),
+        ]
+        XCTAssertEqual(RewardLedger.progress(balance: 0, items: items).marks.map(\.costPoints), [50])
     }
 
     /// 보상을 쓰고 잔액이 0이 되면 다시 가장 싼 보상을 목표로 잡는다.
