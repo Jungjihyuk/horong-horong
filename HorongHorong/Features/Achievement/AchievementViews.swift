@@ -7,18 +7,6 @@ import UniformTypeIdentifiers
 import FoundationModels
 #endif
 
-private enum AchievementRewardStatus {
-    case pending
-    case earned
-
-    var label: String {
-        switch self {
-        case .pending: return "대기"
-        case .earned: return "완료"
-        }
-    }
-}
-
 private enum AchievementTodoStatus {
     case done
     case pending
@@ -26,8 +14,10 @@ private enum AchievementTodoStatus {
 }
 
 private struct AchievementReward {
+    /// 보상 문구를 적지 않은 목표. 이 값이면 배지를 띄우지 않는다.
+    static let emptyAmount = "보상 없음"
+
     let amount: String
-    let status: AchievementRewardStatus
 }
 
 private struct AchievementTodo: Identifiable {
@@ -68,8 +58,12 @@ private struct AchievementGoal: Identifiable {
         return min(1, Double(done) / Double(total))
     }
 
+    /// 달성 여부.
+    ///
+    /// `total` 이 0 이면 연결된 할일이 없다는 뜻이라 달성이 아니다.
+    /// 가드가 없으면 `0 >= 0` 이 참이 되어 빈 목표가 달성으로 잡힌다.
     var isComplete: Bool {
-        done >= total
+        total > 0 && done >= total
     }
 
     /// 마감일을 지정했고, 그 날이 지났는데 아직 끝내지 못한 상태.
@@ -1650,7 +1644,6 @@ private enum AchievementDataBuilder {
             let goalProgress = progress(for: record)
             let done = goalProgress.total > 0 ? min(goalProgress.done, goalProgress.total) : 0
             let total = goalProgress.total
-            let rewardStatus: AchievementRewardStatus = total > 0 && done >= total ? .earned : .pending
             return AchievementGoal(
                 id: record.id,
                 emoji: record.emoji,
@@ -1659,7 +1652,9 @@ private enum AchievementDataBuilder {
                 rule: displayRule(for: record, total: total),
                 done: min(done, total),
                 total: total,
-                reward: AchievementReward(amount: record.rewardText.isEmpty ? "보상 없음" : record.rewardText, status: rewardStatus),
+                reward: AchievementReward(
+                    amount: record.rewardText.isEmpty ? AchievementReward.emptyAmount : record.rewardText
+                ),
                 color: color(from: record.colorHex),
                 todos: todos,
                 roleName: record.roleName,
@@ -1719,7 +1714,8 @@ private enum AchievementDataBuilder {
                     (timelineDate($0) ?? .distantFuture) < (timelineDate($1) ?? .distantFuture)
                 }
             let isLastDay = offset == 6
-            let hasReward = isLastDay && !goal.reward.amount.isEmpty && goal.reward.amount != "보상 없음"
+            let hasReward = isLastDay && !goal.reward.amount.isEmpty
+                && goal.reward.amount != AchievementReward.emptyAmount
             let isCompletedDay = dayMemos.contains(where: \.isCompletedValue)
             let isFutureDay = !isCompletedDay && calendar.startOfDay(for: day) > calendar.startOfDay(for: referenceDate)
             let topLabel: String?
@@ -2022,12 +2018,13 @@ struct AchievementSummaryView: View {
         Button {
             openAchievementDetail()
         } label: {
+            // 통계 탭의 «상세 보기», 뉴스 탭의 «모든 리포트» 와 같은 크기로 맞춘다.
             HStack(spacing: 3) {
                 Text(label)
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 7.5, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
             }
-            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(PopoverChrome.inkSecondary)
         }
         .buttonStyle(.plain)
@@ -2132,6 +2129,7 @@ private struct AchievementGoalSummaryCard: View {
                     .font(.system(size: scaled(14), weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PopoverChrome.ink)
+                AchievementGoalRewardAction(goal: goal, textScale: textScale)
             }
 
             if let todo = goal.nextTodo {
@@ -2165,24 +2163,52 @@ private struct AchievementGoalSummaryCard: View {
     }
 }
 
-private struct AchievementRewardBadge: View {
-    let reward: AchievementReward
+/// 목표 카드 오른쪽에 붙는 배지.
+/// 보상 문구·«보상 받기»·«받음» 이 모두 같은 모양을 쓴다.
+private struct AchievementRewardChip: View {
+    let systemImage: String
+    let text: String
     let color: Color
     var textScale: CGFloat = 1
+    /// 누를 수 있는 배지는 포인터를 올렸을 때만 살짝 진해진다. 평상시 모양은 같다.
+    var isHovering: Bool = false
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: "gift")
+            Image(systemName: systemImage)
                 .font(.system(size: 10 * textScale, weight: .bold))
-            Text("\(reward.amount) \(reward.status.label)")
+            Text(text)
                 .font(.system(size: 11.5 * textScale, weight: .bold, design: .rounded))
                 .lineLimit(1)
         }
         .foregroundStyle(color)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+        .background(
+            color.opacity(isHovering ? 0.32 : 0.18),
+            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous)
+        )
         .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct AchievementRewardBadge: View {
+    let reward: AchievementReward
+    let color: Color
+    var textScale: CGFloat = 1
+
+    var body: some View {
+        // 보상 문구를 적지 않았으면 배지를 아예 띄우지 않는다.
+        // "보상 없음 대기" 같은 문구는 알려주는 게 없다.
+        // 받았는지 여부는 옆의 «보상 받기» 배지가 말해준다.
+        if reward.amount != AchievementReward.emptyAmount {
+            AchievementRewardChip(
+                systemImage: "gift",
+                text: reward.amount,
+                color: color,
+                textScale: textScale
+            )
+        }
     }
 }
 
@@ -2218,6 +2244,7 @@ private enum AchievementDetailTab: String, CaseIterable, Identifiable {
     case progress = "진행"
     case journey = "여정"
     case records = "달성 기록"
+    case reward = "보상"
 
     var id: String { rawValue }
 
@@ -2229,6 +2256,8 @@ private enum AchievementDetailTab: String, CaseIterable, Identifiable {
             self = .journey
         case "records":
             self = .records
+        case "reward":
+            self = .reward
         default:
             return nil
         }
@@ -2242,10 +2271,176 @@ private enum AchievementPeriod: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 달성한 목표에서 보상을 수확하는 버튼.
+///
+/// 주간 목표는 눌러서 포인트를 쌓고, 월간 목표는 쌓인 포인트로 보상을 고른다.
+/// 달성 여부가 파생값이라 버튼 노출만으로는 중복을 못 막는다 — 실제 차단은 `RewardEngine`이 한다.
+private struct AchievementGoalRewardAction: View {
+    let goal: AchievementGoal
+    var textScale: CGFloat = 1
+    /// 보상 탭으로 데려다주는 동작. 성취 상세 창에서만 넘어온다.
+    /// nil 이면(팝오버) 받을 수 있다는 사실만 알린다.
+    var onOpenRewardTab: (() -> Void)?
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var entries: [RewardLedgerEntry]
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var weeklyPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+    @State private var isHovering = false
+    @State private var showRevokeConfirm = false
+    @State private var revokeErrorMessage: String?
+
+    private var claimable: RewardClaimableGoal {
+        RewardClaimableGoal(
+            id: goal.id,
+            title: goal.title,
+            emoji: goal.emoji,
+            cadence: goal.cadence,
+            isComplete: goal.isComplete
+        )
+    }
+
+    private var snapshots: [RewardEntrySnapshot] { entries.map(\.snapshot) }
+    private var balance: Int { RewardLedger.balance(snapshots) }
+    private var hasClaimed: Bool { RewardLedger.hasClaimed(goalID: goal.id, in: snapshots) }
+    private var hasRedeemed: Bool { RewardLedger.hasRedeemed(goalID: goal.id, in: snapshots) }
+
+    private func scaled(_ value: CGFloat) -> CGFloat { value * textScale }
+
+    var body: some View {
+        Group {
+            if claimable.isWeekly {
+                // 이미 받았으면 목표가 미완성으로 되돌아가도 계속 보여준다.
+                // 포인트는 그대로 남는데 표시만 사라지면 어디서 온 포인트인지 알 수 없다.
+                if hasClaimed {
+                    if goal.isComplete {
+                        receivedChip
+                    } else {
+                        // 할일을 잘못 체크해 잠깐 달성이 됐을 수 있다. 되돌릴 길을 열어둔다.
+                        revokeButton
+                    }
+                } else if goal.isComplete {
+                    claimButton
+                }
+            } else if claimable.isMonthly {
+                if hasRedeemed {
+                    receivedChip
+                } else if goal.isComplete {
+                    monthlyAction
+                }
+            }
+        }
+        .alert("받은 \(claimedPoints)P 를 되돌릴까요?", isPresented: $showRevokeConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("되돌리기", role: .destructive) { revokeClaim() }
+        } message: {
+            Text("목표가 다시 미달성 상태가 되었어요. 되돌리면 포인트를 회수하고, 다시 달성했을 때 새로 받을 수 있어요.")
+        }
+        .alert(
+            "되돌릴 수 없어요",
+            isPresented: Binding(get: { revokeErrorMessage != nil }, set: { if !$0 { revokeErrorMessage = nil } })
+        ) {
+            Button("확인", role: .cancel) { revokeErrorMessage = nil }
+        } message: {
+            Text(revokeErrorMessage ?? "")
+        }
+    }
+
+    /// 이 목표로 받아둔 포인트.
+    private var claimedPoints: Int {
+        entries.first { $0.kind == .earn && $0.sourceGoalID == goal.id }?.amount ?? weeklyPoints
+    }
+
+    private var revokeButton: some View {
+        Button {
+            showRevokeConfirm = true
+        } label: {
+            AchievementRewardChip(
+                systemImage: "exclamationmark.triangle.fill",
+                text: "받음",
+                color: goal.color,
+                textScale: textScale,
+                isHovering: isHovering
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("목표가 미달성으로 돌아갔어요. 눌러서 받은 포인트를 되돌립니다")
+    }
+
+    private func revokeClaim() {
+        switch RewardEngine.revokeClaim(goalID: goal.id, in: modelContext) {
+        case .success:
+            revokeErrorMessage = nil
+        case .failure(let error):
+            revokeErrorMessage = error.message
+        }
+    }
+
+    /// 월간 목표를 달성하면 보상을 받을 수 있게 된다. 실제 교환은 보상 탭에서 한다.
+    @ViewBuilder
+    private var monthlyAction: some View {
+        if let onOpenRewardTab {
+            Button(action: onOpenRewardTab) {
+                AchievementRewardChip(
+                    systemImage: "flame.fill",
+                    text: "보상 받기",
+                    color: goal.color,
+                    textScale: textScale,
+                    isHovering: isHovering
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovering = $0 }
+            .help("모은 \(balance)P로 보상 탭에서 보상을 받습니다")
+        } else {
+            AchievementRewardChip(
+                systemImage: "flame.fill",
+                text: "보상 받을 수 있어요",
+                color: goal.color,
+                textScale: textScale
+            )
+            .help("성취 창의 보상 탭에서 보상을 받을 수 있어요")
+        }
+    }
+
+    private var claimButton: some View {
+        Button {
+            RewardEngine.claim(
+                claimable,
+                policy: FixedWeeklyRewardPolicy(pointsPerGoal: weeklyPoints),
+                in: modelContext
+            )
+        } label: {
+            AchievementRewardChip(
+                systemImage: "gift",
+                text: "보상 받기 +\(weeklyPoints)P",
+                color: goal.color,
+                textScale: textScale,
+                isHovering: isHovering
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("이 목표의 포인트를 호롱불에 채웁니다")
+    }
+
+    private var receivedChip: some View {
+        AchievementRewardChip(
+            systemImage: "checkmark.circle.fill",
+            text: "받음",
+            color: goal.color,
+            textScale: textScale
+        )
+    }
+}
+
+/// 월간 목표 달성 시 뜨는 보상 선택 시트.
 private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
     case all = "전체"
     case goal = "목표별"
-    case reward = "보상만"
+    /// 아직 끝내지 못한 목표. 예전 이름은 «보상만» 이었는데 보상과는 상관이 없었다.
+    case remaining = "남은 것"
 
     var id: String { rawValue }
 
@@ -2255,8 +2450,8 @@ private enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
             self = .all
         case "goal":
             self = .goal
-        case "reward":
-            self = .reward
+        case "remaining", "reward":
+            self = .remaining
         default:
             return nil
         }
@@ -2282,6 +2477,9 @@ struct AchievementDetailWindow: View {
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
+    @Query private var rewardEntries: [RewardLedgerEntry]
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
     @State private var launchOptions = AchievementDetailLaunchOptions.shared
@@ -2290,7 +2488,7 @@ struct AchievementDetailWindow: View {
     @State private var displayedMonth = Date()
     @State private var displayedWeek = Date()
     @State private var selectedGoalID: UUID?
-    @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .goal
+    @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .all
     @State private var selectedRecordScope: AchievementRecordScope = .all
     @State private var selectedRoleID = ""
     @State private var showGoalComposer = false
@@ -2353,8 +2551,8 @@ struct AchievementDetailWindow: View {
             return weeklyGoals
         case .goal:
             return selectedWeekGoal.map { [$0] } ?? []
-        case .reward:
-            return weeklyGoals.filter { $0.reward.status == .pending }
+        case .remaining:
+            return weeklyGoals.filter { !$0.isComplete }
         }
     }
 
@@ -2364,8 +2562,8 @@ struct AchievementDetailWindow: View {
             return "전체 주간 목표 흐름"
         case .goal:
             return selectedWeekGoal.map { "\($0.title) 흐름" } ?? "주간 목표 흐름"
-        case .reward:
-            return "보상 대기 목표 흐름"
+        case .remaining:
+            return "남은 주간 목표 흐름"
         }
     }
 
@@ -2383,6 +2581,8 @@ struct AchievementDetailWindow: View {
                             recordsContent
                         case .journey:
                             journeyContent
+                        case .reward:
+                            RewardTabView(unlockedMonthlyGoals: unlockedMonthlyGoals)
                         }
                     }
                     .padding(appearanceDensity.informationMetric(18))
@@ -2402,9 +2602,13 @@ struct AchievementDetailWindow: View {
                         memos: AchievementDataBuilder.activeMemos(memos),
                         existingGoals: goals,
                         onClose: closeGoalComposer
-                    ) { record, childGoalIDs in
+                    ) { record, childGoalIDs, newChildTitles in
                         modelContext.insert(record)
                         connectChildGoals(childGoalIDs, to: record)
+                        // 컴포저에서 이름만 적어둔 하위 목표는 여기서 실제 레코드로 만든다.
+                        for childTitle in newChildTitles {
+                            addChildGoal(to: record, title: childTitle, emoji: "")
+                        }
                         try modelContext.save()
                         selectedGoalID = record.id
                         selectedRoleID = record.roleName
@@ -2434,9 +2638,7 @@ struct AchievementDetailWindow: View {
                     childCadence: childCadence(for: managingGoalRecord.cadence),
                     onSave: updateGoalRecord,
                     onDelete: deleteGoalRecord,
-                    onAddChild: addChildGoal,
-                    onUpdateChild: updateChildGoal,
-                    onDeleteChild: deleteGoalRecord
+                    onDetachChild: { detachChildGoal($0, from: managingGoalRecord) }
                 )
             } else {
                 AchievementEmptyDetailCard(message: "관리할 목표를 찾을 수 없습니다.")
@@ -2585,7 +2787,7 @@ struct AchievementDetailWindow: View {
             )
             HStack(spacing: 10) {
                 AchievementMetricCard(label: isDisplayingCurrentWeek ? "이번 주 성취" : "주간 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
-                AchievementMetricCard(label: "지급 대기", value: "\(weeklyPendingRewardCount)", icon: "gift")
+                AchievementMetricCard(label: "받을 포인트", value: "\(claimableRewardPoints)P", icon: "gift")
                 AchievementMetricCard(label: "연결된 메모", value: "\(weeklyLinkedMemoCount)", icon: "checkmark.seal")
             }
 
@@ -2614,7 +2816,8 @@ struct AchievementDetailWindow: View {
                     overdueMemosBanner
                     AchievementGoalTimelineView(
                         items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos, weekStarting: displayedWeekStart),
-                        onMoveTodo: moveTimelineMemo
+                        onMoveTodo: moveTimelineMemo,
+                        onToggleTodoCompletion: toggleTimelineMemoCompletion
                     )
                 } else {
                     AchievementEmptyDetailCard(message: "주간 목표를 추가하면 타임라인이 표시됩니다.")
@@ -2639,6 +2842,11 @@ struct AchievementDetailWindow: View {
                             },
                             onDelete: {
                             deleteGoal(goal)
+                            },
+                            onOpenRewardTab: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    selectedTab = .reward
+                                }
                             }
                         )
                     }
@@ -2784,6 +2992,44 @@ struct AchievementDetailWindow: View {
 
         let dayText = weekdayText(targetDay)
         syncLinkedRemindersIfNeeded([memo], successMessage: "할일을 \(dayText)요일로 이동했습니다.")
+    }
+
+    /// 타임라인에서 할일의 완료를 뒤집는다.
+    ///
+    /// 메모장에서 체크한 것과 같은 결과가 되도록 알림 정리와 미리알림 동기화까지 함께 한다.
+    private func toggleTimelineMemoCompletion(_ memoID: UUID) {
+        guard let memo = memos.first(where: { $0.id == memoID }) else { return }
+
+        overdueRescheduleMessage = ""
+        let previousCompleted = memo.isCompleted
+        let previousChangedAt = memo.completionStateChangedAt
+        let previousPinned = memo.isPinned
+
+        memo.isCompletedValue.toggle()
+        if memo.isCompletedValue {
+            // 끝낸 일을 계속 위에 붙여둘 이유가 없다.
+            memo.isPinned = false
+        }
+        memo.updatedAt = Date()
+        // 완료·완료 해제에 맞춰 마감 알림을 취소하거나 다시 잡는다.
+        scheduleLocalReminder(for: memo)
+
+        do {
+            try modelContext.save()
+        } catch {
+            // 화면과 저장소가 어긋나지 않도록 건드린 값을 전부 되돌린다.
+            memo.isCompleted = previousCompleted
+            memo.completionStateChangedAt = previousChangedAt
+            memo.isPinned = previousPinned
+            scheduleLocalReminder(for: memo)
+            overdueRescheduleMessage = "완료 표시에 실패했습니다: \(error.localizedDescription)"
+            return
+        }
+
+        syncLinkedRemindersIfNeeded(
+            [memo],
+            successMessage: memo.isCompletedValue ? "할일을 완료했습니다." : "완료를 해제했습니다."
+        )
     }
 
     private func rescheduleOverdueMemos(_ memos: [Memo], targetDays: [Date], messagePrefix: String) {
@@ -4243,6 +4489,12 @@ struct AchievementDetailWindow: View {
         goals.filter { $0.cadence == "월간" }
     }
 
+    /// 달성한 월간 목표는 호롱불에 불을 붙일 자격이 된다.
+    /// 이미 보상을 골랐는지는 원장을 보는 보상 탭이 걸러낸다.
+    private var unlockedMonthlyGoals: [RewardClaimableGoal] {
+        monthlyGoals.filter(\.isComplete).map(rewardClaimable)
+    }
+
     private var displayedWeekStart: Date {
         AchievementDataBuilder.weekStart(for: displayedWeek)
     }
@@ -4345,8 +4597,31 @@ struct AchievementDetailWindow: View {
         weeklyGoals.filter(\.isComplete).count
     }
 
-    private var weeklyPendingRewardCount: Int {
-        weeklyGoals.filter { $0.reward.status == .pending }.count
+    /// 달성했는데 아직 «보상 받기»를 누르지 않은 주간 목표.
+    private var unclaimedWeeklyGoals: [AchievementGoal] {
+        let snapshots = rewardEntries.map(\.snapshot)
+        return weeklyGoals.filter {
+            $0.isComplete && !RewardLedger.hasClaimed(goalID: $0.id, in: snapshots)
+        }
+    }
+
+    /// 지금 눌러서 받을 수 있는 포인트.
+    /// 개수에 설정값을 곱하지 않고 적립 정책을 거쳐, 규칙이 바뀌어도 한 곳만 고치면 되게 한다.
+    private var claimableRewardPoints: Int {
+        let policy = FixedWeeklyRewardPolicy(pointsPerGoal: rewardWeeklyGoalPoints)
+        return unclaimedWeeklyGoals.reduce(0) { total, goal in
+            total + policy.points(forWeeklyGoal: rewardClaimable(goal))
+        }
+    }
+
+    private func rewardClaimable(_ goal: AchievementGoal) -> RewardClaimableGoal {
+        RewardClaimableGoal(
+            id: goal.id,
+            title: goal.title,
+            emoji: goal.emoji,
+            cadence: goal.cadence,
+            isComplete: goal.isComplete
+        )
     }
 
     private var weeklyLinkedMemoCount: Int {
@@ -4600,22 +4875,6 @@ struct AchievementDetailWindow: View {
         try? modelContext.save()
     }
 
-    private func updateChildGoal(_ record: AchievementGoalRecord, title: String, emoji: String) {
-        let oldTitle = record.title
-        let newTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !newTitle.isEmpty {
-            record.title = newTitle
-        }
-        let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedEmoji.isEmpty {
-            record.emoji = String(trimmedEmoji.prefix(1))
-        }
-        record.updatedAt = Date()
-        syncGoalTitleReferences(oldTitle: oldTitle, newTitle: record.title, cadence: record.cadence)
-        connectDescendantGoals(of: record)
-        try? modelContext.save()
-    }
-
     private func defaultEmoji(for cadence: String) -> String {
         switch cadence {
         case "연간": return "🏁"
@@ -4676,6 +4935,20 @@ struct AchievementDetailWindow: View {
                 break
             }
         }
+    }
+
+    /// 부모에서 자식을 떼어낸다. 자식 목표 자체는 남는다.
+    private func detachChildGoal(_ child: AchievementGoalRecord, from parent: AchievementGoalRecord) {
+        switch parent.cadence {
+        case "연간":
+            child.yearGoal = nil
+        case "월간":
+            child.monthGoal = nil
+        default:
+            return
+        }
+        child.updatedAt = Date()
+        try? modelContext.save()
     }
 
     private func connectChildGoals(_ childGoalIDs: Set<UUID>, to parent: AchievementGoalRecord) {
@@ -5632,6 +5905,7 @@ private struct AchievementTimelineFilters: View {
 private struct AchievementGoalTimelineView: View {
     let items: [AchievementTimelineItem]
     let onMoveTodo: (UUID, Date) -> Void
+    let onToggleTodoCompletion: (UUID) -> Void
     @State private var expandedItemIDs = Set<UUID>()
     @State private var hoveredColumnID: UUID?
 
@@ -5689,6 +5963,7 @@ private struct AchievementGoalTimelineView: View {
                                 }
                             },
                             onMoveTodo: onMoveTodo,
+                            onToggleTodoCompletion: onToggleTodoCompletion,
                             onTodoHoverChange: { hovering in
                                 hoveredColumnID = hovering ? item.id : (hoveredColumnID == item.id ? nil : hoveredColumnID)
                             }
@@ -5728,6 +6003,7 @@ private struct AchievementTimelineColumn: View {
     let isLast: Bool
     let onToggleExpanded: () -> Void
     let onMoveTodo: (UUID, Date) -> Void
+    let onToggleTodoCompletion: (UUID) -> Void
     var onTodoHoverChange: (Bool) -> Void = { _ in }
     @State private var isDropTargeted = false
 
@@ -5775,7 +6051,8 @@ private struct AchievementTimelineColumn: View {
                         AchievementTimelineTodoBox(
                             todo: todo,
                             width: todoBoxContentWidth,
-                            onHoverChange: onTodoHoverChange
+                            onHoverChange: onTodoHoverChange,
+                            onToggleCompletion: { onToggleTodoCompletion(todo.memoID) }
                         )
                     }
 
@@ -5917,6 +6194,7 @@ private struct AchievementTimelineTodoBox: View {
     let todo: AchievementTimelineTodo
     var width: CGFloat = 94
     var onHoverChange: (Bool) -> Void = { _ in }
+    var onToggleCompletion: () -> Void = {}
 
     @State private var isHovering = false
     @State private var hoverTask: Task<Void, Never>?
@@ -5926,9 +6204,16 @@ private struct AchievementTimelineTodoBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .top, spacing: 5) {
-                Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                // 동그라미만 눌러 완료를 뒤집는다. 카드 전체를 버튼으로 만들면 끌어서 옮기기와 부딪힌다.
+                Button(action: onToggleCompletion) {
+                    Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle.dotted")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(todo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(todo.isCompleted ? "완료를 해제합니다" : "완료로 표시합니다")
                 Text(todo.title)
                     .font(.system(size: 11.5, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
@@ -6027,6 +6312,7 @@ private struct AchievementDetailGoalRow: View {
     let onAdd: () -> Void
     let onManage: () -> Void
     let onDelete: () -> Void
+    let onOpenRewardTab: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -6048,6 +6334,7 @@ private struct AchievementDetailGoalRow: View {
                 }
                 Spacer()
                 AchievementRewardBadge(reward: goal.reward, color: goal.color)
+                AchievementGoalRewardAction(goal: goal, onOpenRewardTab: onOpenRewardTab)
                 Menu {
                     Button {
                         onAdd()
@@ -6239,9 +6526,8 @@ private struct AchievementGoalManagementSheet: View {
     let childCadence: String?
     let onSave: (AchievementGoalRecord, AchievementGoalEditDraft) -> Void
     let onDelete: (AchievementGoalRecord) -> Void
-    let onAddChild: (AchievementGoalRecord, String, String) -> Void
-    let onUpdateChild: (AchievementGoalRecord, String, String) -> Void
-    let onDeleteChild: (AchievementGoalRecord) -> Void
+    /// 자식을 부모에서 떼어낸다. 자식 목표 자체를 고치거나 지우는 일은 그 목표의 관리 창이 맡는다.
+    let onDetachChild: (AchievementGoalRecord) -> Void
 
     @State private var title: String
     @State private var emoji: String
@@ -6251,8 +6537,6 @@ private struct AchievementGoalManagementSheet: View {
     @State private var selectedAvailableChildIDs: Set<UUID> = []
     @State private var dueDate: Date
     @State private var hasDueDate: Bool
-    @State private var newChildTitle = ""
-    @State private var newChildEmoji = "🎯"
     @State private var showsDeleteConfirmation = false
 
     init(
@@ -6264,9 +6548,7 @@ private struct AchievementGoalManagementSheet: View {
         childCadence: String? = nil,
         onSave: @escaping (AchievementGoalRecord, AchievementGoalEditDraft) -> Void,
         onDelete: @escaping (AchievementGoalRecord) -> Void,
-        onAddChild: @escaping (AchievementGoalRecord, String, String) -> Void = { _, _, _ in },
-        onUpdateChild: @escaping (AchievementGoalRecord, String, String) -> Void = { _, _, _ in },
-        onDeleteChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
+        onDetachChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
     ) {
         self.record = record
         self.linkedMemoCount = linkedMemoCount
@@ -6276,9 +6558,7 @@ private struct AchievementGoalManagementSheet: View {
         self.childCadence = childCadence
         self.onSave = onSave
         self.onDelete = onDelete
-        self.onAddChild = onAddChild
-        self.onUpdateChild = onUpdateChild
-        self.onDeleteChild = onDeleteChild
+        self.onDetachChild = onDetachChild
         _title = State(initialValue: record.title)
         _emoji = State(initialValue: record.emoji)
         _rule = State(initialValue: record.rule)
@@ -6286,7 +6566,6 @@ private struct AchievementGoalManagementSheet: View {
         _selectedMemoIDs = State(initialValue: Set(record.linkedMemoIDs))
         _dueDate = State(initialValue: record.dueDate ?? Date())
         _hasDueDate = State(initialValue: record.dueDate != nil)
-        _newChildEmoji = State(initialValue: AchievementGoalManagementSheet.defaultEmoji(for: childCadence))
     }
 
     var body: some View {
@@ -6341,18 +6620,6 @@ private struct AchievementGoalManagementSheet: View {
 
                 field(label: "달성 기준") {
                     TextField("예: 메모 3개 완료", text: $rule)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .padding(10)
-                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
-                                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
-                        )
-                }
-
-                field(label: "보상") {
-                    TextField("보상 없음", text: $rewardText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .padding(10)
@@ -6463,45 +6730,6 @@ private struct AchievementGoalManagementSheet: View {
                     .monospacedDigit()
             }
 
-            HStack(spacing: 8) {
-                TextField("📅", text: Binding(
-                    get: { newChildEmoji },
-                    set: { value in
-                        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                        newChildEmoji = trimmed.isEmpty ? Self.defaultEmoji(for: childCadence) : String(trimmed.prefix(1))
-                    }
-                ))
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .frame(width: 38)
-                .padding(8)
-                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
-                TextField("\(childCadence ?? "") 목표 추가", text: $newChildTitle)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .padding(8)
-                    .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
-
-                Button {
-                    onAddChild(record, newChildTitle, newChildEmoji)
-                    newChildTitle = ""
-                    newChildEmoji = Self.defaultEmoji(for: childCadence)
-                } label: {
-                    Text("추가")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.accentInk)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 9)
-                        .background(PopoverChrome.primaryButtonFill, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(newChildTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(newChildTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-            }
-
             if childRecords.isEmpty {
                 Text("아직 연결된 \(childCadence ?? "") 목표가 없습니다.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -6515,8 +6743,7 @@ private struct AchievementGoalManagementSheet: View {
                         ForEach(childRecords, id: \.id) { child in
                             AchievementChildGoalEditorRow(
                                 record: child,
-                                onSave: onUpdateChild,
-                                onDelete: onDeleteChild
+                                onDetach: onDetachChild
                             )
                         }
                     }
@@ -6584,7 +6811,8 @@ private struct AchievementGoalManagementSheet: View {
                     }
                     .padding(8)
                 }
-                .frame(maxHeight: availableChildRecords.count > 3 ? 140 : nil)
+                // 보상 입력칸을 없애며 생긴 자리를 여기에 준다. 한 번에 더 많은 목표를 훑을 수 있다.
+                .frame(maxHeight: availableChildRecords.count > 3 ? 205 : nil)
                 .popoverScrollbar()
                 .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
@@ -6649,15 +6877,6 @@ private struct AchievementGoalManagementSheet: View {
         .background(PopoverChrome.surfaceAlt.opacity(0.42), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous))
     }
 
-    private static func defaultEmoji(for cadence: String?) -> String {
-        switch cadence {
-        case "연간": return "🏁"
-        case "월간": return "📅"
-        case "주간": return "🎯"
-        default: return "🎯"
-        }
-    }
-
     private func field<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
@@ -6668,76 +6887,44 @@ private struct AchievementGoalManagementSheet: View {
     }
 }
 
+/// 부모 목표에 딸린 하위 목표 한 줄.
+///
+/// 이름·이모지 수정과 삭제는 그 목표 자신의 관리 창이 맡는다.
+/// 여기서는 부모와의 연결만 다룬다 — 실수로 남의 목표를 통째로 지우는 일이 없도록.
 private struct AchievementChildGoalEditorRow: View {
     let record: AchievementGoalRecord
-    let onSave: (AchievementGoalRecord, String, String) -> Void
-    let onDelete: (AchievementGoalRecord) -> Void
-
-    @State private var title: String
-    @State private var emoji: String
-
-    init(
-        record: AchievementGoalRecord,
-        onSave: @escaping (AchievementGoalRecord, String, String) -> Void,
-        onDelete: @escaping (AchievementGoalRecord) -> Void
-    ) {
-        self.record = record
-        self.onSave = onSave
-        self.onDelete = onDelete
-        _title = State(initialValue: record.title)
-        _emoji = State(initialValue: record.emoji)
-    }
+    let onDetach: (AchievementGoalRecord) -> Void
 
     var body: some View {
-        HStack(spacing: 7) {
-            TextField("📅", text: Binding(
-                get: { emoji },
-                set: { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    emoji = trimmed.isEmpty ? "🎯" : String(trimmed.prefix(1))
-                }
-            ))
-            .textFieldStyle(.plain)
-            .font(.system(size: 15))
-            .frame(width: 34)
-            .padding(7)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+        HStack(spacing: 8) {
+            Text(record.emoji)
+                .font(.system(size: 15))
+                .frame(width: 24)
 
-            TextField("목표명", text: $title)
-                .textFieldStyle(.plain)
+            Text(record.title)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                .padding(7)
-                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+
+            Spacer(minLength: 6)
 
             Button {
-                onSave(record, title, emoji)
+                onDetach(record)
             } label: {
-                Text("저장")
-                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.accent)
-                    .frame(minWidth: 44)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 7)
-                    .background(PopoverChrome.accentSoft.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                Text("연결 해제")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(PopoverChrome.card, in: Capsule())
+                    .overlay(Capsule().stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
             }
             .buttonStyle(.plain)
-            .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            Button(role: .destructive) {
-                onDelete(record)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(Color.red)
-                    .frame(width: 28, height: 28)
-                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .help("하위 목표 삭제")
+            .help("이 목표를 상위 목표에서 떼어냅니다. 목표 자체는 남습니다.")
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
     }
 }
 
@@ -7139,7 +7326,8 @@ private struct AchievementGoalComposerSheet: View {
     let memos: [Memo]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
-    let onSave: (AchievementGoalRecord, Set<UUID>) throws -> Void
+    /// 저장한 목표, 이어붙일 기존 하위 목표, 함께 새로 만들 하위 목표 제목들.
+    let onSave: (AchievementGoalRecord, Set<UUID>, [String]) throws -> Void
 
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
     private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
@@ -7175,10 +7363,16 @@ private struct AchievementGoalComposerSheet: View {
     @State private var selectedPeriodDate = Date()
     @State private var hasDueDate = false
     @State private var expandedSuggestionKeys = Set<String>()
+    /// 하위 목표를 찾거나 새로 만들 때 쓰는 한 줄 입력.
+    @State private var childSearchText = ""
+    /// 아직 존재하지 않아 저장할 때 함께 만들 하위 목표 제목들.
+    @State private var newChildTitles: [String] = []
+    @State private var memoSearchText = ""
     @FocusState private var isEmojiInputFocused: Bool
 
     private let inputModes = ["AI 추천", "직접 입력"]
-    private let targetLevels = ["역할", "비전", "월간", "주간"]
+    /// 자주 만드는 월간·주간이 앞줄에 오도록 둔다.
+    private let targetLevels = ["월간", "주간", "역할", "비전"]
     private let colors = ["#E87333", "#2F5BEA", "#7A52D4", "#D94F73", "#2F9E73"]
 
     var body: some View {
@@ -7521,7 +7715,10 @@ private struct AchievementGoalComposerSheet: View {
                     .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
             }
 
-            fieldLabel("\(selectedTargetLevel) 목표")
+            fieldLabel("어떤 목표인가요?")
+            targetLevelGrid
+
+            fieldLabel("목표 이름")
             TextField(goalPlaceholder, text: $title)
                 .textFieldStyle(.plain)
                 .padding(10)
@@ -7541,7 +7738,7 @@ private struct AchievementGoalComposerSheet: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 11, weight: .bold))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("고급 설정")
+                        Text("세부 설정")
                             .font(.system(size: 12.5, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.ink)
                         Text("비워두면 앱이 자동으로 채웁니다.")
@@ -7576,9 +7773,6 @@ private struct AchievementGoalComposerSheet: View {
 
     private var advancedSettingsForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            fieldLabel("만들 대상")
-            targetLevelGrid
-
             fieldLabel("이모지")
             emojiPicker
 
@@ -7649,7 +7843,7 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private var targetLevelGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
             ForEach(targetLevels, id: \.self) { level in
                 Button {
                     selectedTargetLevel = level
@@ -7746,52 +7940,208 @@ private struct AchievementGoalComposerSheet: View {
         }
     }
 
+    /// 하위 목표를 고르는 자리.
+    ///
+    /// 한 입력창이 찾기와 만들기를 겸한다. 사용자가 위에서 아래로 짜는지 아래에서 위로 짜는지
+    /// 의식하지 않아도 되도록, 떠오르는 이름을 치면 있으면 잇고 없으면 만들어 준다.
     private var childGoalPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let level = childGoalLevel {
-                fieldLabel("하위 \(level) 목표")
+                HStack(spacing: 6) {
+                    fieldLabel("하위 \(level) 목표")
+                    Text("선택")
+                        .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(PopoverChrome.surfaceAlt, in: Capsule())
+                    Spacer()
+                }
 
-                if childGoalCandidates.isEmpty {
-                    Text("연결할 수 있는 \(level) 목표가 없습니다.")
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkSecondary)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(childGoalCandidates) { goal in
-                                Toggle(isOn: Binding(
-                                    get: { selectedChildGoalIDs.contains(goal.id) },
-                                    set: { isSelected in
-                                        if isSelected {
-                                            selectedChildGoalIDs.insert(goal.id)
-                                            validationMessage = nil
-                                        } else {
-                                            selectedChildGoalIDs.remove(goal.id)
-                                        }
-                                    }
-                                )) {
-                                    AchievementChildGoalPickerRow(goal: goal)
+                searchField(
+                    text: $childSearchText,
+                    placeholder: "찾거나 새로 입력…"
+                )
+
+                childGoalSuggestionList(level: level)
+                pickedChildChips(level: level)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func childGoalSuggestionList(level: String) -> some View {
+        let matches = matchingChildGoalCandidates
+        let canCreate = !trimmedChildSearch.isEmpty && !childTitleAlreadyUsed(trimmedChildSearch)
+
+        if matches.isEmpty && !canCreate {
+            Text(childGoalCandidates.isEmpty
+                 ? "연결할 수 있는 \(level) 목표가 없습니다. 이름을 입력하면 새로 만들 수 있어요."
+                 : "찾는 목표가 없습니다.")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(matches) { goal in
+                        Toggle(isOn: Binding(
+                            get: { selectedChildGoalIDs.contains(goal.id) },
+                            set: { isSelected in
+                                if isSelected {
+                                    selectedChildGoalIDs.insert(goal.id)
+                                    validationMessage = nil
+                                } else {
+                                    selectedChildGoalIDs.remove(goal.id)
                                 }
-                                .toggleStyle(.checkbox)
                             }
+                        )) {
+                            AchievementChildGoalPickerRow(goal: goal)
                         }
-                        .padding(10)
+                        .toggleStyle(.checkbox)
                     }
-                    .frame(maxHeight: childGoalCandidates.count > 5 ? 230 : nil)
-                    .popoverScrollbar()
-                    .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+
+                    if canCreate {
+                        if !matches.isEmpty {
+                            Divider().overlay(PopoverChrome.divider)
+                        }
+                        Button {
+                            newChildTitles.append(trimmedChildSearch)
+                            childSearchText = ""
+                            validationMessage = nil
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("«\(trimmedChildSearch)» 새로 만들기")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(PopoverChrome.accent)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(10)
+            }
+            .frame(maxHeight: matches.count > 5 ? 230 : nil)
+            .popoverScrollbar()
+            .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+        }
+    }
+
+    /// 담아둔 하위 목표. 기존 것과 새로 만들 것을 한 줄에 나란히 보여준다.
+    @ViewBuilder
+    private func pickedChildChips(level: String) -> some View {
+        let picked = childGoalCandidates.filter { selectedChildGoalIDs.contains($0.id) }
+
+        if !picked.isEmpty || !newChildTitles.isEmpty {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 240), spacing: 6)], alignment: .leading, spacing: 6) {
+                ForEach(picked) { goal in
+                    pickedChip(emoji: goal.emoji, title: goal.title, isNew: false) {
+                        selectedChildGoalIDs.remove(goal.id)
+                    }
+                }
+                ForEach(Array(newChildTitles.enumerated()), id: \.offset) { index, title in
+                    pickedChip(emoji: emoji(for: level), title: title, isNew: true) {
+                        newChildTitles.remove(at: index)
+                    }
                 }
             }
         }
     }
 
+    private func pickedChip(emoji: String, title: String, isNew: Bool, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text(emoji)
+                .font(.system(size: 10))
+            Text(title)
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .lineLimit(1)
+            if isNew {
+                Text("새로")
+                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.accentInk)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(PopoverChrome.accent, in: Capsule())
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(PopoverChrome.accent)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(PopoverChrome.accentSoft.opacity(0.28), in: Capsule())
+    }
+
+    private func searchField(text: Binding<String>, placeholder: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+            if !text.wrappedValue.isEmpty {
+                Button {
+                    text.wrappedValue = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(9)
+        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+    }
+
+    private var trimmedChildSearch: String {
+        childSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var matchingChildGoalCandidates: [AchievementGoal] {
+        guard !trimmedChildSearch.isEmpty else { return childGoalCandidates }
+        return childGoalCandidates.filter { $0.title.localizedCaseInsensitiveContains(trimmedChildSearch) }
+    }
+
+    /// 이미 담았거나 같은 이름이 있으면 새로 만들자고 권하지 않는다.
+    private func childTitleAlreadyUsed(_ title: String) -> Bool {
+        if newChildTitles.contains(where: { $0.caseInsensitiveCompare(title) == .orderedSame }) {
+            return true
+        }
+        return childGoalCandidates.contains { $0.title.caseInsensitiveCompare(title) == .orderedSame }
+    }
+
     private var memoPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            fieldLabel("연결할 할일")
+            HStack(spacing: 6) {
+                fieldLabel("연결할 할일")
+                Text("선택")
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(PopoverChrome.surfaceAlt, in: Capsule())
+                Spacer()
+            }
+
+            if !linkableMemos.isEmpty {
+                searchField(text: $memoSearchText, placeholder: "할일 찾기…")
+            }
 
             if linkableMemos.isEmpty {
                 Text("연결할 수 있는 미완료 할일이 없습니다. 먼저 메모장에서 할일을 추가해 주세요.")
@@ -7925,9 +8275,18 @@ private struct AchievementGoalComposerSheet: View {
             .sorted(by: isMemoOrderedBefore)
     }
 
+    /// 검색어로 좁힌 할일. 이미 고른 것은 사라지지 않도록 남긴다.
+    private var visibleLinkableMemos: [Memo] {
+        let query = memoSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return linkableMemos }
+        return linkableMemos.filter {
+            $0.content.localizedCaseInsensitiveContains(query) || selectedMemoIDs.contains($0.id)
+        }
+    }
+
     private var memoPickerSections: [AchievementMemoPickerSection] {
         let iconRanks = Dictionary(uniqueKeysWithValues: MemoIcon.options.enumerated().map { ($0.element, $0.offset) })
-        return Dictionary(grouping: linkableMemos, by: { $0.icon ?? MemoIcon.defaultIcon })
+        return Dictionary(grouping: visibleLinkableMemos, by: { $0.icon ?? MemoIcon.defaultIcon })
             .map { icon, memos in
                 AchievementMemoPickerSection(
                     icon: icon,
@@ -8322,18 +8681,15 @@ private struct AchievementGoalComposerSheet: View {
         return "비슷한 할일을 묶어 주간 목표 초안을 만들었습니다."
     }
 
+    /// 제목만 있으면 만들 수 있다.
+    /// 할일·하위 목표 연결은 지금 해도 되고 나중에 목표 관리에서 이어도 된다.
     private var canSave: Bool {
         selectedInputMode == "직접 입력"
             && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && (allowsSavingWithoutLinkedSource || !selectedLinkableMemoIDs.isEmpty || !selectedChildGoalIDs.isEmpty)
     }
 
     private var supportsPersonaVisionGroup: Bool {
         ["비전", "월간", "주간"].contains(selectedTargetLevel)
-    }
-
-    private var allowsSavingWithoutLinkedSource: Bool {
-        ["역할", "비전"].contains(selectedTargetLevel)
     }
 
     private var shouldShowMemoPicker: Bool {
@@ -8402,7 +8758,12 @@ private struct AchievementGoalComposerSheet: View {
         if shouldShowMemoPicker {
             return selectedLinkableMemoIDs.count
         }
-        return selectedChildGoalIDs.count
+        return selectedChildGoalIDs.count + pendingNewChildTitles.count
+    }
+
+    /// 저장할 때 함께 만들 하위 목표. 현재 단계에 하위가 없으면 비운다.
+    private var pendingNewChildTitles: [String] {
+        childGoalLevel == nil ? [] : newChildTitles
     }
 
     private var selectedLinkableMemoIDs: Set<UUID> {
@@ -8499,10 +8860,6 @@ private struct AchievementGoalComposerSheet: View {
             validationMessage = "\(selectedTargetLevel) 목표를 입력해 주세요."
             return
         }
-        guard allowsSavingWithoutLinkedSource || !selectedLinkableMemoIDs.isEmpty || !selectedChildGoalIDs.isEmpty else {
-            validationMessage = "연결할 하위 목표나 할 일을 하나 이상 선택해 주세요."
-            return
-        }
         let trimmedTitle = AchievementDataBuilder.shortText(title, limit: 40)
         let childGoals = existingGoals.filter { selectedChildGoalIDs.contains($0.id) }
         let linkedMemoIDs = Array(selectedLinkableMemoIDs.union(childGoals.flatMap(\.sourceMemoIDs)))
@@ -8512,7 +8869,7 @@ private struct AchievementGoalComposerSheet: View {
         let resolvedCriterion = optionalText(criterion) ?? defaultCriterionText(
             for: selectedTargetLevel,
             linkedMemoCount: linkedMemoIDs.count,
-            childGoalCount: selectedChildGoalIDs.count
+            childGoalCount: selectedChildGoalIDs.count + pendingNewChildTitles.count
         )
         let record = AchievementGoalRecord(
             title: trimmedTitle,
@@ -8533,7 +8890,7 @@ private struct AchievementGoalComposerSheet: View {
             linkedMemoIDs: linkedMemoIDs
         )
         do {
-            try onSave(record, selectedChildGoalIDs)
+            try onSave(record, selectedChildGoalIDs, pendingNewChildTitles)
             onClose()
         } catch {
             validationMessage = "목표 저장에 실패했습니다: \(error.localizedDescription)"
