@@ -79,10 +79,55 @@ private struct LanternMetalShape: Shape {
 
         // 굽
         path.addRoundedRect(
-            in: CGRect(x: w * 0.24, y: y(LanternMetrics.stemBottom), width: w * 0.52, height: h * 0.07),
+            in: CGRect(x: w * 0.24, y: y(LanternMetrics.stemBottom), width: w * 0.52, height: h * 0.056),
             cornerSize: CGSize(width: 4, height: 4)
         )
 
+        return path
+    }
+}
+
+/// 기름 표면의 물결.
+///
+/// 채움 높이와 물결을 한 도형에 넣으면 두 애니메이션이 서로를 끌어당겨 수위가 튄다.
+/// 그래서 표면만 별도의 띠로 그리고, 띠 아래는 평평한 사각형이 채운다.
+private struct OilSurfaceWave: Shape {
+    /// 0…1 을 한 주기로 도는 값.
+    var phase: CGFloat
+    /// 띠 안에 담을 물결 개수.
+    var waveCount: CGFloat = 1.35
+    /// 닫힌 도형이면 아래를 채우고, 열린 곡선이면 표면 선만 그린다.
+    var isClosed: Bool = true
+
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let amplitude = rect.height / 2
+        let midY = rect.minY + amplitude
+
+        func surfaceY(at x: CGFloat) -> CGFloat {
+            let relative = (x - rect.minX) / max(1, rect.width)
+            return midY + amplitude * sin((relative * waveCount + phase) * 2 * .pi)
+        }
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: surfaceY(at: rect.minX)))
+
+        var x = rect.minX + 2
+        while x < rect.maxX {
+            path.addLine(to: CGPoint(x: x, y: surfaceY(at: x)))
+            x += 2
+        }
+        path.addLine(to: CGPoint(x: rect.maxX, y: surfaceY(at: rect.maxX)))
+
+        guard isClosed else { return path }
+
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
         return path
     }
 }
@@ -127,11 +172,15 @@ struct LanternOilJarView: View {
 
     /// 지금 보상을 받을 수 있으면 불빛이 천천히 밝아졌다 어두워진다.
     @State private var isPulsing = false
+    /// 기름 표면이 끊임없이 흐르도록 0 → 1 을 반복한다.
+    @State private var wavePhase: CGFloat = 0
 
     private static let lanternWidth: CGFloat = 130
     private static let lanternHeight: CGFloat = 230
     private static let markRowHeight: CGFloat = 19
     private static let markColumnWidth: CGFloat = 176
+    /// 기름 표면 물결이 오르내리는 폭. 절반이 마루, 절반이 골이다.
+    private static let waveBandHeight: CGFloat = 8
 
     private var isPixel: Bool { PopoverChrome.isGamePixel }
     private var balance: Int { progress.balance }
@@ -176,8 +225,19 @@ struct LanternOilJarView: View {
         .animation(.easeOut(duration: 0.45), value: fillRatio)
         .animation(.easeOut(duration: 0.45), value: balance)
         .animation(.easeOut(duration: 0.5), value: isLit)
-        .onAppear { syncPulse() }
+        .onAppear {
+            syncPulse()
+            startWave()
+        }
         .onChange(of: canRedeemNow) { _, _ in syncPulse() }
+    }
+
+    /// 물결은 수위와 무관하게 계속 흐른다.
+    /// 위상만 애니메이션하므로 채움 높이 변화와 서로 간섭하지 않는다.
+    private func startWave() {
+        withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) {
+            wavePhase = 1
+        }
     }
 
     private func syncPulse() {
@@ -288,10 +348,18 @@ struct LanternOilJarView: View {
                     .fill(oilGradient)
                     .frame(width: Self.lanternWidth, height: glassHeight * fillRatio)
                     .overlay(alignment: .top) {
-                        // 기름 표면. 수위를 눈에 띄게 한다.
-                        Rectangle()
-                            .fill(Color.white.opacity(isPixel ? 0.45 : 0.55))
-                            .frame(height: isPixel ? 2 : 1.5)
+                        // 표면 물결. 띠의 아래쪽 절반은 기름과 이어지고 마루만 위로 솟는다.
+                        ZStack {
+                            OilSurfaceWave(phase: wavePhase)
+                                .fill(oilGradient)
+                            OilSurfaceWave(phase: wavePhase, isClosed: false)
+                                .stroke(
+                                    Color.white.opacity(isPixel ? 0.45 : 0.55),
+                                    style: StrokeStyle(lineWidth: isPixel ? 2 : 1.5, lineJoin: .round)
+                                )
+                        }
+                        .frame(height: Self.waveBandHeight)
+                        .offset(y: -Self.waveBandHeight)
                     }
                     .offset(y: glassBottomY - glassHeight * fillRatio)
 
