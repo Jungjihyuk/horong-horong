@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-08-11
+
 ### 추가
 
 - 주간 목표를 달성할 때마다 «보상 받기»로 포인트를 적립하고, 월간 목표를 달성하면 그 포인트로 미리 정해 둔 보상을 골라 받는 보상 시스템을 추가했습니다. 성취 창에 «보상» 탭이 생겼습니다.
@@ -199,7 +201,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.8
 [0.2.7]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.7
 [0.2.6]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.6
 [0.2.5]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.5
