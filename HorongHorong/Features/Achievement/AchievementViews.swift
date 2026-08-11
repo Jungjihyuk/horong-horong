@@ -2440,7 +2440,7 @@ struct AchievementDetailWindow: View {
     @State private var displayedMonth = Date()
     @State private var displayedWeek = Date()
     @State private var selectedGoalID: UUID?
-    @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .goal
+    @State private var selectedWeekGoalFilter: AchievementWeekGoalFilter = .all
     @State private var selectedRecordScope: AchievementRecordScope = .all
     @State private var selectedRoleID = ""
     @State private var showGoalComposer = false
