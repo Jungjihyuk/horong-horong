@@ -887,6 +887,7 @@ enum Constants {
         static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
         static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
+        static let rewardWeeklyGoalPoints = "reward.weeklyGoalPoints"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
         static let achievementVisionOrder = "achievement.visionOrder"
@@ -1012,6 +1013,10 @@ enum Constants {
     static let achievementMonthlySuggestionCountRange = 1...6
     static let defaultAchievementJourneyMaxFlagCount = 5
     static let achievementJourneyMaxFlagCountRange = 1...8
+
+    // MARK: - 보상 포인트
+    static let defaultRewardWeeklyGoalPoints = 10
+    static let rewardWeeklyGoalPointsRange = 1...100
     /// 비전 선택 목록의 행 높이·간격. 드래그 재정렬이 이동 거리를 계산할 때 함께 쓴다.
     static let achievementVisionRowHeight: CGFloat = 34
     static let achievementVisionRowSpacing: CGFloat = 8
