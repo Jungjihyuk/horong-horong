@@ -2484,6 +2484,9 @@ struct AchievementDetailWindow: View {
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
+    @Query private var rewardEntries: [RewardLedgerEntry]
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
     @State private var launchOptions = AchievementDetailLaunchOptions.shared
@@ -2791,7 +2794,7 @@ struct AchievementDetailWindow: View {
             )
             HStack(spacing: 10) {
                 AchievementMetricCard(label: isDisplayingCurrentWeek ? "이번 주 성취" : "주간 성취", value: "\(completedWeeklyGoalCount)/\(weeklyGoals.count)", icon: "target")
-                AchievementMetricCard(label: "지급 대기", value: "\(weeklyPendingRewardCount)", icon: "gift")
+                AchievementMetricCard(label: "받을 포인트", value: "\(claimableRewardPoints)P", icon: "gift")
                 AchievementMetricCard(label: "연결된 메모", value: "\(weeklyLinkedMemoCount)", icon: "checkmark.seal")
             }
 
@@ -4496,15 +4499,7 @@ struct AchievementDetailWindow: View {
     /// 달성한 월간 목표는 호롱불에 불을 붙일 자격이 된다.
     /// 이미 보상을 골랐는지는 원장을 보는 보상 탭이 걸러낸다.
     private var unlockedMonthlyGoals: [RewardClaimableGoal] {
-        monthlyGoals.filter(\.isComplete).map { goal in
-            RewardClaimableGoal(
-                id: goal.id,
-                title: goal.title,
-                emoji: goal.emoji,
-                cadence: goal.cadence,
-                isComplete: goal.isComplete
-            )
-        }
+        monthlyGoals.filter(\.isComplete).map(rewardClaimable)
     }
 
     private var displayedWeekStart: Date {
@@ -4609,8 +4604,31 @@ struct AchievementDetailWindow: View {
         weeklyGoals.filter(\.isComplete).count
     }
 
-    private var weeklyPendingRewardCount: Int {
-        weeklyGoals.filter { $0.reward.status == .pending }.count
+    /// 달성했는데 아직 «보상 받기»를 누르지 않은 주간 목표.
+    private var unclaimedWeeklyGoals: [AchievementGoal] {
+        let snapshots = rewardEntries.map(\.snapshot)
+        return weeklyGoals.filter {
+            $0.isComplete && !RewardLedger.hasClaimed(goalID: $0.id, in: snapshots)
+        }
+    }
+
+    /// 지금 눌러서 받을 수 있는 포인트.
+    /// 개수에 설정값을 곱하지 않고 적립 정책을 거쳐, 규칙이 바뀌어도 한 곳만 고치면 되게 한다.
+    private var claimableRewardPoints: Int {
+        let policy = FixedWeeklyRewardPolicy(pointsPerGoal: rewardWeeklyGoalPoints)
+        return unclaimedWeeklyGoals.reduce(0) { total, goal in
+            total + policy.points(forWeeklyGoal: rewardClaimable(goal))
+        }
+    }
+
+    private func rewardClaimable(_ goal: AchievementGoal) -> RewardClaimableGoal {
+        RewardClaimableGoal(
+            id: goal.id,
+            title: goal.title,
+            emoji: goal.emoji,
+            cadence: goal.cadence,
+            isComplete: goal.isComplete
+        )
     }
 
     private var weeklyLinkedMemoCount: Int {
