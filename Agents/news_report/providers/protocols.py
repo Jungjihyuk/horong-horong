@@ -11,6 +11,11 @@ from pydantic import BaseModel
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
 
 
+class RateLimitError(Exception):
+    """Provider의 사용량 한도(rate limit) 초과로 더 이상 진행할 수 없음을 나타낸다."""
+    pass
+
+
 @dataclass(frozen=True)
 class ProviderOptions:
     """provider 호출에 공통으로 전달할 생성 옵션."""

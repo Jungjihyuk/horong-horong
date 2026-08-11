@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 import os
 from typing import Any, Iterable
 
@@ -52,6 +54,8 @@ def load_or_build(
             ontology.source = "llm"
             write_cache(cache_path, ontology, log)
             return ontology, "regenerated_llm"
+        except RateLimitError:
+            raise
         except Exception as error:
             log(f"  ontology LLM 실패 ({type(error).__name__}), seed fallback: {error}")
 
@@ -74,5 +78,7 @@ def migrate_legacy_cache(legacy_path: str, target_path: str, log_fn=None) -> Non
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         os.replace(legacy_path, target_path)
         log(f"  ontology 파일 이동: {legacy_path} → {target_path}")
+    except RateLimitError:
+        raise
     except Exception as error:
         log(f"  ontology 파일 이동 실패: {error}")

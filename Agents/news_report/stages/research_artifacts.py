@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from hashlib import sha1
@@ -202,6 +204,8 @@ def build_source_insights(
         prompt = build_source_insight_prompt(candidate, article)
         try:
             generated = provider.generate_json(prompt, SourceInsight)
+        except RateLimitError:
+            raise
         except Exception as error:
             warning = (
                 f"source insight 생성 실패: {candidate.title} "
@@ -326,6 +330,8 @@ def build_trend_insights(
         prompt = build_trend_prompt(bundle, source_insights_by_id)
         try:
             generated = provider.generate_json(prompt, TrendInsight)
+        except RateLimitError:
+            raise
         except Exception as error:
             warning = (
                 f"trend insight 생성 실패: {bundle.title} "

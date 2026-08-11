@@ -9,6 +9,7 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from providers.protocols import ProviderOptions
+from providers.usage import UsageRecord
 
 
 StructuredModel = TypeVar("StructuredModel", bound=BaseModel)
@@ -24,9 +25,27 @@ class BaseCliProvider(ABC):
     # 주의: 호출 사이에 유지되는 상태라 순차 호출(현재 파이프라인 구조)에서만 정확하다.
     _last_repair_attempted: bool = False
 
+    # 직전 generate_json 호출에서 누적된 토큰/비용 소모량. repair가 발생하면
+    # 두 호출이 합산된다. usage를 보고하지 않는 CLI는 None으로 남는다.
+    # TracedStructuredProvider가 호출 직후 읽어 trace payload에 싣는다.
+    _last_usage: UsageRecord | None = None
+
+    # 이 provider 인스턴스로 수행한 모든 호출의 누적 소모량. reset하지 않는다.
+    # TracedStructuredProvider는 trace가 있을 때만 감싸이고 ontology 단계는
+    # 그 wrapper를 우회하므로, 누적은 wrapper가 아니라 여기서 해야 빠짐이 없다.
+    _run_usage: UsageRecord | None = None
+
     @abstractmethod
     def _build_command(self, prompt: str) -> list[str]:
         pass
+
+    def parse_output(self, stdout: str) -> tuple[str, UsageRecord | None]:
+        """CLI stdout에서 (답변 텍스트, 소모량)을 분리한다.
+
+        기본값은 stdout 전체가 답변이고 소모량은 알 수 없는 경우다.
+        usage를 보고하는 CLI(claude/codex)만 재정의한다.
+        """
+        return stdout.strip(), None
 
     def run(self, prompt: str) -> str:
         cmd = self._build_command(prompt)
@@ -37,10 +56,20 @@ class BaseCliProvider(ABC):
             # 동일 작업의 정상 호출은 timeout보다 훨씬 짧으므로 1회만 재시도한다.
             result = self._run_subprocess(cmd)
         if result.returncode != 0:
+            err_msg = result.stderr[:200]
+            lower_err = err_msg.lower()
+            if any(k in lower_err for k in ["rate limit", "usage limit", "429", "exceeded"]):
+                from providers.protocols import RateLimitError
+                raise RateLimitError(f"{self.__class__.__name__} 사용량 한도 초과: {err_msg}")
             raise RuntimeError(
-                f"{self.__class__.__name__} 실행 실패 (exit {result.returncode}): {result.stderr[:200]}"
+                f"{self.__class__.__name__} 실행 실패 (exit {result.returncode}): {err_msg}"
             )
-        return result.stdout.strip()
+        text, usage = self.parse_output(result.stdout)
+        if usage is not None:
+            # repair 재시도가 있으면 두 호출의 소모량을 합산한다.
+            self._last_usage = (self._last_usage or UsageRecord()).merge(usage)
+            self._run_usage = (self._run_usage or UsageRecord()).merge(usage)
+        return text
 
     def _run_subprocess(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -67,6 +96,7 @@ class BaseCliProvider(ABC):
     ) -> StructuredModel:
         """CLI agent 응답을 JSON으로 파싱하고 Pydantic 모델로 검증한다."""
         self._last_repair_attempted = False
+        self._last_usage = None
         raw = self.generate_text(
             build_structured_prompt(prompt, schema_model),
             options=options,
