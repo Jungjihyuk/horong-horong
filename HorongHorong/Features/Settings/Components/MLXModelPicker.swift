@@ -126,7 +126,7 @@ struct MLXModelPicker: View {
         var opts = options
         let hardcodedNames = Set(opts.map(\.name))
         
-        let preparedModels = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels") ?? []
+        let preparedModels = UserDefaults.standard.stringArray(forKey: Constants.AppStorageKey.companionMLXPreparedModels) ?? []
         let customInstalled = preparedModels.filter { !hardcodedNames.contains($0) }.sorted()
         
         for name in customInstalled {
@@ -226,11 +226,10 @@ struct MLXModelPicker: View {
 
     private func optionRow(_ option: Constants.CompanionMLXModelOption) -> some View {
         let isSelected = model == option.name
-        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
+        let isPrepared = UserDefaults.standard.stringArray(forKey: Constants.AppStorageKey.companionMLXPreparedModels)?.contains(option.name) == true
         let isTooLarge = option.minimumMemoryGB > memoryGB
-        let isDownloadingThis = isDownloading && downloadTarget == option.name
         let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
-        
+
         return HStack(spacing: 8) {
             Button {
                 guard !isTooLarge else {
@@ -297,7 +296,7 @@ struct MLXModelPicker: View {
 
     private func downloadButton(for option: Constants.CompanionMLXModelOption) -> some View {
         let isDownloadingThis = isDownloading && downloadTarget == option.name
-        let isPrepared = UserDefaults.standard.stringArray(forKey: "companion.mlx.preparedModels")?.contains(option.name) == true
+        let isPrepared = UserDefaults.standard.stringArray(forKey: Constants.AppStorageKey.companionMLXPreparedModels)?.contains(option.name) == true
         let isCustomUnverified = !isPrepared && !options.contains(where: { $0.name == option.name }) && !verifiedModelExists && !isVerifying
 
         return Button {
