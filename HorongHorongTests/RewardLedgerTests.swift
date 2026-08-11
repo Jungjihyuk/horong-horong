@@ -50,6 +50,22 @@ final class RewardLedgerTests: XCTestCase {
         XCTAssertFalse(RewardLedger.hasRedeemed(goalID: goal, in: [earn(10, goal: goal)]))
     }
 
+    // MARK: - 되돌리기 가능 여부
+
+    /// 받은 뒤 아직 쓰지 않았으면 잔액이 적립액을 덮으므로 되돌릴 수 있다.
+    func testUnspentClaimCanBeRevoked() {
+        let goal = UUID()
+        let entries = [earn(10, goal: goal), earn(10)]
+        XCTAssertGreaterThanOrEqual(RewardLedger.balance(entries), 10)
+    }
+
+    /// 그 포인트로 이미 보상을 받았으면 되돌릴 때 잔액이 음수가 된다.
+    func testSpentClaimWouldPushBalanceNegative() {
+        let goal = UUID()
+        let entries = [earn(10, goal: goal), spend(10)]
+        XCTAssertLessThan(RewardLedger.balance(entries), 10)
+    }
+
     // MARK: - 구매 가능 판정
 
     /// 가격이 잔액과 정확히 같으면 살 수 있다.

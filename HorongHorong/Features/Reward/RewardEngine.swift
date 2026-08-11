@@ -21,6 +21,22 @@ enum RewardRedeemError: Error, Equatable {
     }
 }
 
+enum RewardRevokeError: Error, Equatable {
+    /// 이 목표로 받은 적이 없다.
+    case notClaimed
+    /// 이미 그 포인트로 보상을 받아 되돌릴 수 없다.
+    case alreadySpent(shortBy: Int)
+
+    var message: String {
+        switch self {
+        case .notClaimed:
+            return "이 목표로 받은 포인트가 없어요."
+        case .alreadySpent(let shortBy):
+            return "이미 이 포인트로 보상을 받아서 되돌릴 수 없어요. (\(shortBy)P 모자람)"
+        }
+    }
+}
+
 /// 원장을 읽고 쓰는 자리. 계산은 전부 `RewardLedger`에 맡기고 여기서는 저장만 다룬다.
 @MainActor
 enum RewardEngine {
@@ -79,6 +95,30 @@ enum RewardEngine {
         context.insert(entry)
         try? context.save()
         return entry
+    }
+
+    /// 주간 목표 적립을 되돌린다.
+    ///
+    /// 할일을 잘못 체크해 목표가 잠깐 달성 상태가 됐을 때 쓴다.
+    /// 이미 그 포인트로 보상을 받았으면 잔액이 음수가 되므로 거절한다.
+    static func revokeClaim(
+        goalID: UUID,
+        in context: ModelContext
+    ) -> Result<Int, RewardRevokeError> {
+        let all = entries(in: context)
+        guard let entry = all.first(where: { $0.kind == .earn && $0.sourceGoalID == goalID }) else {
+            return .failure(.notClaimed)
+        }
+
+        let current = RewardLedger.balance(all.map(\.snapshot))
+        guard current >= entry.amount else {
+            return .failure(.alreadySpent(shortBy: entry.amount - current))
+        }
+
+        let revoked = entry.amount
+        context.delete(entry)
+        try? context.save()
+        return .success(revoked)
     }
 
     // MARK: - 사용

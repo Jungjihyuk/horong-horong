@@ -2295,6 +2295,8 @@ private struct AchievementGoalRewardAction: View {
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var weeklyPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @State private var isHovering = false
+    @State private var showRevokeConfirm = false
+    @State private var revokeErrorMessage: String?
 
     private var claimable: RewardClaimableGoal {
         RewardClaimableGoal(
@@ -2319,7 +2321,12 @@ private struct AchievementGoalRewardAction: View {
                 // 이미 받았으면 목표가 미완성으로 되돌아가도 계속 보여준다.
                 // 포인트는 그대로 남는데 표시만 사라지면 어디서 온 포인트인지 알 수 없다.
                 if hasClaimed {
-                    receivedChip
+                    if goal.isComplete {
+                        receivedChip
+                    } else {
+                        // 할일을 잘못 체크해 잠깐 달성이 됐을 수 있다. 되돌릴 길을 열어둔다.
+                        revokeButton
+                    }
                 } else if goal.isComplete {
                     claimButton
                 }
@@ -2330,6 +2337,51 @@ private struct AchievementGoalRewardAction: View {
                     monthlyAction
                 }
             }
+        }
+        .alert("받은 \(claimedPoints)P 를 되돌릴까요?", isPresented: $showRevokeConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("되돌리기", role: .destructive) { revokeClaim() }
+        } message: {
+            Text("목표가 다시 미달성 상태가 되었어요. 되돌리면 포인트를 회수하고, 다시 달성했을 때 새로 받을 수 있어요.")
+        }
+        .alert(
+            "되돌릴 수 없어요",
+            isPresented: Binding(get: { revokeErrorMessage != nil }, set: { if !$0 { revokeErrorMessage = nil } })
+        ) {
+            Button("확인", role: .cancel) { revokeErrorMessage = nil }
+        } message: {
+            Text(revokeErrorMessage ?? "")
+        }
+    }
+
+    /// 이 목표로 받아둔 포인트.
+    private var claimedPoints: Int {
+        entries.first { $0.kind == .earn && $0.sourceGoalID == goal.id }?.amount ?? weeklyPoints
+    }
+
+    private var revokeButton: some View {
+        Button {
+            showRevokeConfirm = true
+        } label: {
+            AchievementRewardChip(
+                systemImage: "exclamationmark.triangle.fill",
+                text: "받음",
+                color: goal.color,
+                textScale: textScale,
+                isHovering: isHovering
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("목표가 미달성으로 돌아갔어요. 눌러서 받은 포인트를 되돌립니다")
+    }
+
+    private func revokeClaim() {
+        switch RewardEngine.revokeClaim(goalID: goal.id, in: modelContext) {
+        case .success:
+            revokeErrorMessage = nil
+        case .failure(let error):
+            revokeErrorMessage = error.message
         }
     }
 
