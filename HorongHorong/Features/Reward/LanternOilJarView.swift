@@ -72,13 +72,14 @@ private struct LanternJarShape: Shape {
 /// 모은 포인트를 호롱불의 기름으로 보여준다.
 /// 기름이 차오를수록 심지 불빛이 밝아진다.
 struct LanternOilJarView: View {
-    let balance: Int
-    /// 다음 보상까지 남은 포인트. 다 살 수 있거나 목록이 비면 nil.
-    let pointsToNext: Int?
-    /// 0…1. `RewardLedger.fillRatio` 로 구한 값.
-    let fillRatio: Double
+    let progress: RewardProgress
+
+    /// 받을 수 있는 보상이 생기면 불빛이 천천히 밝아졌다 어두워진다.
+    @State private var isPulsing = false
 
     private var isPixel: Bool { PopoverChrome.isGamePixel }
+    private var balance: Int { progress.balance }
+    private var fillRatio: Double { progress.fillRatio }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -86,7 +87,7 @@ struct LanternOilJarView: View {
                 .frame(width: 108, height: 132)
                 .accessibilityLabel("모은 포인트 \(balance)")
 
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(PopoverChrome.accent)
@@ -97,18 +98,49 @@ struct LanternOilJarView: View {
                         .contentTransition(.numericText())
                 }
 
-                Text(captionText)
-                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkSecondary)
+                if progress.hasAffordableReward {
+                    readyBadge
+                } else {
+                    Text(captionText)
+                        .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                }
             }
         }
         .animation(.easeOut(duration: 0.45), value: fillRatio)
         .animation(.easeOut(duration: 0.45), value: balance)
+        .onAppear { syncPulse() }
+        .onChange(of: progress.hasAffordableReward) { _, _ in syncPulse() }
+    }
+
+    private func syncPulse() {
+        guard progress.hasAffordableReward, !isPixel else {
+            isPulsing = false
+            return
+        }
+        withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+            isPulsing = true
+        }
+    }
+
+    /// 받을 수 있는 보상이 생겼다는 것을 눈에 띄게 알린다.
+    private var readyBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "gift.fill")
+                .font(.system(size: 10, weight: .bold))
+            Text("받을 수 있는 보상 \(progress.affordableCount)개")
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(PopoverChrome.accentInk)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(PopoverChrome.accent, in: Capsule())
+        .transition(.scale.combined(with: .opacity))
     }
 
     private var captionText: String {
-        guard let pointsToNext else {
-            return balance > 0 ? "고를 수 있는 보상이 있어요" : "주간 목표를 달성하면 기름이 차올라요"
+        guard let pointsToNext = progress.pointsToNext else {
+            return "보상 목록에 받고 싶은 걸 먼저 정해보세요"
         }
         return "다음 보상까지 \(pointsToNext)P"
     }
@@ -178,6 +210,8 @@ struct LanternOilJarView: View {
                     .fill(PopoverChrome.accent.opacity(0.30 * intensity))
                     .frame(width: 44, height: 44)
                     .blur(radius: 11)
+                    .scaleEffect(isPulsing ? 1.35 : 1)
+                    .opacity(isPulsing ? 1 : 0.75)
             }
 
             VStack(spacing: 0) {
