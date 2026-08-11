@@ -1776,19 +1776,22 @@ final class ConstantsDefaultsTests: XCTestCase {
                 id: goalLinked.id,
                 title: "통계 회고 결과 표시",
                 isToday: false,
-                isGoalLinked: true
+                isGoalLinked: true,
+                durationMinutes: nil
             ),
             PomodoroTaskCandidate(
                 id: todayOnly.id,
                 title: "오늘 시작할 일",
                 isToday: true,
-                isGoalLinked: false
+                isGoalLinked: false,
+                durationMinutes: nil
             ),
             PomodoroTaskCandidate(
                 id: todayAndGoalLinked.id,
                 title: "오늘의 목표 할 일",
                 isToday: true,
-                isGoalLinked: true
+                isGoalLinked: true,
+                durationMinutes: nil
             )
         ])
     }
