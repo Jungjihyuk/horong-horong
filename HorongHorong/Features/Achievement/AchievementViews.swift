@@ -2022,12 +2022,13 @@ struct AchievementSummaryView: View {
         Button {
             openAchievementDetail()
         } label: {
+            // 통계 탭의 «상세 보기», 뉴스 탭의 «모든 리포트» 와 같은 크기로 맞춘다.
             HStack(spacing: 3) {
                 Text(label)
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 7.5, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
             }
-            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(PopoverChrome.inkSecondary)
         }
         .buttonStyle(.plain)
