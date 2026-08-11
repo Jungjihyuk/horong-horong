@@ -6575,18 +6575,6 @@ private struct AchievementGoalManagementSheet: View {
                         )
                 }
 
-                field(label: "보상") {
-                    TextField("보상 없음", text: $rewardText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .padding(10)
-                        .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
-                                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
-                        )
-                }
-
                 field(label: "마감일") {
                     HStack(spacing: 8) {
                         Toggle("", isOn: $hasDueDate)
@@ -6808,7 +6796,8 @@ private struct AchievementGoalManagementSheet: View {
                     }
                     .padding(8)
                 }
-                .frame(maxHeight: availableChildRecords.count > 3 ? 140 : nil)
+                // 보상 입력칸을 없애며 생긴 자리를 여기에 준다. 한 번에 더 많은 목표를 훑을 수 있다.
+                .frame(maxHeight: availableChildRecords.count > 3 ? 205 : nil)
                 .popoverScrollbar()
                 .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
