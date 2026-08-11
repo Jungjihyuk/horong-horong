@@ -317,6 +317,8 @@ enum HorongHorongModelSchema {
             AppCategoryRule.self,
             NewsJob.self,
             NewsReportIndex.self,
+            RewardLedgerEntry.self,
+            RewardCatalogItem.self,
         ])
     }
 }
