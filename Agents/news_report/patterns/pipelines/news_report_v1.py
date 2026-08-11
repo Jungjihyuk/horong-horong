@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import cast
 
 from connectors.collector import collect_sources
+from contracts.research_artifact import GenerationContext, ReportContent
+from exporters.artifact_exporter import build_artifacts_dict, write_artifacts
 from exporters.meta_exporter import build_artifact_report_meta, write_meta
 from exporters.report_exporter import write_report
 from ontology import load_or_build_for_output_dir
@@ -125,6 +127,36 @@ class NewsReportV1Pipeline:
         today_str = now.strftime("%Y-%m-%d")
         generated_at_human = now.strftime("%Y-%m-%d %H:%M")
         artifact_paths = build_report_artifact_paths(output_dir, now)
+
+        report_content = ReportContent(
+            report_id=request.job_id,
+            title=f"{today_str} 뉴스 리포트",
+            generated_at=generated_at_human,
+            interest_keywords=interest_keywords,
+            bundle_ids=[b.bundle_id for b in research_result.insight_bundles],
+            keyword_insight_ids=[k.keyword_insight_id for k in research_result.keyword_insights],
+            trend_insight_ids=[t.trend_id for t in research_result.trend_insights],
+        )
+
+        generation_context = GenerationContext(
+            provider=request.provider,
+            model=request.provider_options.model,
+        )
+
+        artifacts_dict = build_artifacts_dict(
+            job_id=request.job_id,
+            report_date=today_str,
+            generation_context=generation_context,
+            taxonomy=research_result.category_taxonomy,
+            candidates=research_result.source_candidates,
+            assignments=research_result.category_assignments,
+            source_insights=research_result.source_insights,
+            keyword_insights=research_result.keyword_insights,
+            trends=research_result.trend_insights,
+            bundles=research_result.insight_bundles,
+            report_content=report_content,
+        )
+        write_artifacts(artifact_paths, artifacts_dict)
 
         markdown = render_artifact_markdown_report(
             research_result,
