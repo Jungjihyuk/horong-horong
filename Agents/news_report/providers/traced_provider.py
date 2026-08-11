@@ -9,6 +9,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 from providers.protocols import ProviderOptions, StructuredModel, StructuredProvider
+from providers.usage import UsageRecord
 from tracing.events import TraceEventName
 
 
@@ -78,6 +79,8 @@ class TracedStructuredProvider:
                 payload={
                     **payload,
                     **self._repair_payload(),
+                    # 실패한 호출도 토큰을 소모하므로 함께 기록한다.
+                    **self._usage_payload(),
                     "error_type": type(error).__name__,
                     "error_message": str(error)[:500],
                 },
@@ -91,10 +94,23 @@ class TracedStructuredProvider:
             payload={
                 **payload,
                 **self._repair_payload(),
+                **self._usage_payload(),
                 "result_model": result.__class__.__name__,
             },
         )
         return result
+
+    def _usage_payload(self) -> dict[str, object]:
+        """wrapped provider가 직전 호출의 소모량을 노출하면 payload에 싣는다.
+
+        실행 전체 누적은 provider 자신이 관리하므로(`_run_usage`) 여기서는
+        기록만 한다. usage를 보고하지 않는 CLI(antigravity/opencode/hermes)와
+        Ollama는 None이므로 usage 키를 생략한다.
+        """
+        usage = getattr(self._provider, "_last_usage", None)
+        if isinstance(usage, UsageRecord):
+            return {"usage": usage.to_payload()}
+        return {}
 
     def _repair_payload(self) -> dict[str, object]:
         """wrapped provider가 repair 여부를 노출하면 payload에 싣는다.
