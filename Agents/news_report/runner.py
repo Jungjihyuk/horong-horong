@@ -71,6 +71,7 @@ def main():
         from exporters.result_exporter import build_success_result, write_result
         from patterns import PipelineContext, create_pattern, default_pattern_name
         from providers.factory import create_provider
+        from providers.usage import total_usage_of
 
         pattern = create_pattern(default_pattern_name())
         llm = create_provider(provider, request.provider_options)
@@ -113,6 +114,7 @@ def main():
             source_stats=pattern_result.source_stats,
             items=pattern_result.items,
             warnings=pattern_result.warnings,
+            usage=total_usage_of(llm),
         )
         write_result(args.result, result)
         status = result["status"]

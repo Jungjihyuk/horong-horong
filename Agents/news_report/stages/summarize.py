@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from providers.protocols import RateLimitError
+
 import json
 import re
 
@@ -29,6 +31,8 @@ def summarize_transcripts(
                 if summary:
                     item["llmSummary"] = summary
                     log_fn(f"  transcript 요약 완료: {item.get('title', '')[:40]}")
+        except RateLimitError:
+            raise
         except Exception as error:
             log_fn(
                 f"  transcript 요약 배치 실패, 단건 fallback 적용: {batch_start // batch_size + 1} - {error}"
@@ -41,6 +45,8 @@ def summarize_transcripts(
                     if result:
                         item["llmSummary"] = result
                         log_fn(f"  transcript 요약 완료: {item.get('title', '')[:40]}")
+                except RateLimitError:
+                    raise
                 except Exception as single_error:
                     log_fn(f"  transcript 요약 실패: {single_error}")
     return items
@@ -168,6 +174,8 @@ def summarize_items(
             log_fn(
                 f"  요약 배치 {batch_start // batch_size + 1}: {len(batch)} 처리"
             )
+        except RateLimitError:
+            raise
         except Exception as error:
             log_fn(f"LLM 요약 배치 실패, fallback 적용: {error}")
 

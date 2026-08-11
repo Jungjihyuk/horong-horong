@@ -20,13 +20,16 @@ struct NewsView: View {
     @State private var newChannelInput = ""
     @State private var showExecutionEnvironmentAlert = false
     @State private var executionEnvironmentAlertMessage = ""
+    @State private var showRateLimitAlert = false
     @State private var showOllamaInstallAlert = false
     @State private var ollamaInstallAlertMessage = ""
     @State private var isPreparingOllama = false
     @State private var ollamaInstallStatus = ""
     @State private var ollamaInstallProgress: Double?
     @State private var isRunButtonHovered = false
+    @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource = Constants.defaultNewsMaxItemsPerSource
     @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
+    @Query(sort: \NewsJob.requestedAt, order: .reverse) private var recentJobs: [NewsJob]
     @State private var selectedReport: NewsReportIndex?
     @State private var hostWindow: NSWindow?
 
@@ -44,6 +47,15 @@ struct NewsView: View {
                     }
 
                     runButton
+
+                    // 실행 중에는 예측 대신 진행 상황(statusSection)을 보여준다.
+                    if !pipelineService.isRunning, let usageEstimate {
+                        NewsUsageEstimateLabel(estimate: usageEstimate)
+                    }
+
+                    if let lastFinishedJob {
+                        NewsUsageActualLabel(job: lastFinishedJob)
+                    }
 
                     if let nextCollectionText {
                         HStack(spacing: 4) {
@@ -76,6 +88,9 @@ struct NewsView: View {
             if showExecutionEnvironmentAlert {
                 popoverAlertOverlay
             }
+            if showRateLimitAlert {
+                rateLimitAlertOverlay
+            }
             if showOllamaInstallAlert {
                 ollamaInstallConfirmOverlay
             }
@@ -85,6 +100,14 @@ struct NewsView: View {
         }
         .configureHostWindow { window in
             hostWindow = window
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newsPipelineJobFinished)) { _ in
+            if pipelineService.lastJobStatus == "failed", let err = pipelineService.lastErrorMessage {
+                let lowerErr = err.lowercased()
+                if lowerErr.contains("rate limit") || lowerErr.contains("usage limit") || lowerErr.contains("429") || lowerErr.contains("exceeded") || err.contains("한도") || err.contains("제한") {
+                    showRateLimitAlert = true
+                }
+            }
         }
     }
 
@@ -423,6 +446,35 @@ struct NewsView: View {
         }
     }
 
+    private var rateLimitAlertOverlay: some View {
+        popoverModalOverlay {
+            VStack(alignment: .leading, spacing: 12) {
+                modalTitleRow(icon: "exclamationmark.triangle.fill", title: "토큰 사용량 제한 초과")
+                Text("구독제 Provider의 사용량 한도(5시간당 한도 또는 주간 한도 등)를 초과하여 더 이상 리포트를 생성할 수 없습니다. 한도가 초기화된 후 다시 시도해주세요.")
+                    .font(.caption)
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                if let msg = pipelineService.lastErrorMessage {
+                    ScrollView {
+                        Text(msg)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
+                    .frame(maxHeight: 60)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("확인") {
+                        showRateLimitAlert = false
+                    }
+                    .buttonStyle(LanternPrimaryButtonStyle())
+                }
+            }
+        }
+    }
+
     private var ollamaInstallConfirmOverlay: some View {
         popoverModalOverlay {
             VStack(alignment: .leading, spacing: 12) {
@@ -581,6 +633,39 @@ struct NewsView: View {
 
     private var youtubeChannelIds: [String] {
         youtubeChannelIdsRaw
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// 소모량이 기록된 가장 최근 실행.
+    ///
+    /// 소모량을 보고하지 않는 provider로 돌린 실행은 건너뛰어, provider를 바꿔
+    /// 한 번 돌렸다고 직전 실측치가 사라지지 않게 한다.
+    private var lastFinishedJob: NewsJob? {
+        recentJobs.first { $0.usageCallCount != nil }
+    }
+
+    /// 현재 설정으로 실행했을 때의 예상 소모량.
+    private var usageEstimate: NewsUsageEstimate? {
+        guard selectedProvider != "ollama" else { return nil }
+
+        let sources = NewsPipelineService.resolvedSources(
+            interestKeywords: interestKeywordList,
+            youtubeChannelIds: youtubeChannelIds
+        )
+        let plannedItems = sources.count * max(1, maxItemsPerSource)
+        guard plannedItems > 0 else { return nil }
+
+        return NewsUsageEstimator.estimate(
+            provider: selectedProvider,
+            plannedItems: plannedItems,
+            jobs: recentJobs
+        )
+    }
+
+    private var interestKeywordList: [String] {
+        interestKeywords
             .components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
