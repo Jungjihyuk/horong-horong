@@ -4,6 +4,10 @@ import SwiftData
 /// 성취 창의 "보상" 탭.
 /// 모은 포인트를 호롱불로 보여주고, 보상 목록을 관리하고, 적립·사용 이력을 훑는다.
 struct RewardTabView: View {
+    /// 달성했지만 아직 보상을 고르지 않은 월간 목표. 한 장이 보상 하나를 바꿀 권리다.
+    /// `AchievementGoal`이 file-private 타입이라 성취 화면에서 만들어 넘겨받는다.
+    var vouchers: [RewardClaimableGoal] = []
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Query(sort: \RewardCatalogItem.sortOrder) private var catalogItems: [RewardCatalogItem]
@@ -12,6 +16,17 @@ struct RewardTabView: View {
     @State private var showComposer = false
     @State private var editingItem: RewardCatalogItem?
     @State private var pendingDeletion: RewardCatalogItem?
+    @State private var unboxing: UnboxedReward?
+    @State private var failureMessage = ""
+
+    /// 개봉 연출에 넘길 결과. 원장은 이미 기록된 뒤다.
+    private struct UnboxedReward: Identifiable {
+        let id = UUID()
+        let emoji: String
+        let title: String
+        let costPoints: Int
+        let remainingBalance: Int
+    }
 
     private var balance: Int {
         RewardLedger.balance(entries.map(\.snapshot))
@@ -25,14 +40,37 @@ struct RewardTabView: View {
         catalogItems.filter { !$0.isArchived }
     }
 
+    /// 아직 쓰지 않은 보상권.
+    private var openVouchers: [RewardClaimableGoal] {
+        let snapshots = entries.map(\.snapshot)
+        return vouchers.filter { !RewardLedger.hasRedeemed(goalID: $0.id, in: snapshots) }
+    }
+
+    /// 지금까지 받은 보상. 전리품 선반에 늘어놓는다.
+    private var receivedRewards: [RewardLedgerEntry] {
+        entries.filter { $0.kind == .spend }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(18)) {
             LanternOilJarView(progress: progress)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
 
+            voucherBanner
             catalogSection
+            trophySection
             historySection
+        }
+        .sheet(item: $unboxing) { reward in
+            RewardUnboxingOverlay(
+                emoji: reward.emoji,
+                title: reward.title,
+                costPoints: reward.costPoints,
+                remainingBalance: reward.remainingBalance
+            ) {
+                unboxing = nil
+            }
         }
         .sheet(isPresented: $showComposer) {
             RewardItemComposer(item: nil) { title, emoji, cost, note in
@@ -61,6 +99,70 @@ struct RewardTabView: View {
             }
         } message: {
             Text("지난 사용 이력은 그대로 남습니다.")
+        }
+    }
+
+    // MARK: - 보상권
+
+    @ViewBuilder
+    private var voucherBanner: some View {
+        if !openVouchers.isEmpty {
+            HStack(spacing: 9) {
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accentInk)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("보상권 \(openVouchers.count)장")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.accentInk)
+                    Text(openVouchers.map(\.title).joined(separator: " · "))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.accentInk.opacity(0.85))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text("보상 하나를 받을 수 있어요")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.accentInk.opacity(0.85))
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous)
+                    .fill(PopoverChrome.accent)
+            )
+        }
+
+        if !failureMessage.isEmpty {
+            Text(failureMessage)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+        }
+    }
+
+    /// 보상권 한 장을 써서 보상을 받는다. 원장에 사용 기록이 남고 포인트가 깎인다.
+    private func redeem(_ item: RewardCatalogItem) {
+        guard let voucher = openVouchers.first else {
+            failureMessage = "월간 목표를 달성하면 보상권이 생겨요."
+            return
+        }
+        // 차감 후 잔액은 직접 계산한다.
+        // @Query 는 다음 런루프에 갱신되므로 여기서 balance 를 다시 읽으면 옛 값이 나온다.
+        let remaining = balance - item.costPoints
+
+        switch RewardEngine.redeem(item: item, forMonthlyGoal: voucher, in: modelContext) {
+        case .success:
+            failureMessage = ""
+            withAnimation(.easeIn(duration: 0.2)) {
+                unboxing = UnboxedReward(
+                    emoji: item.emoji,
+                    title: item.title,
+                    costPoints: item.costPoints,
+                    remainingBalance: remaining
+                )
+            }
+        case .failure(let error):
+            failureMessage = error.message
         }
     }
 
@@ -119,7 +221,9 @@ struct RewardTabView: View {
                     }
                 }
                 if canAfford {
-                    Text("월간 목표를 달성하면 이 보상을 고를 수 있어요")
+                    Text(openVouchers.isEmpty
+                         ? "포인트는 충분해요. 월간 목표를 달성하면 받을 수 있어요"
+                         : "지금 받을 수 있어요")
                         .font(.system(size: 10.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .lineLimit(1)
@@ -149,6 +253,17 @@ struct RewardTabView: View {
                         .fill(canAfford ? PopoverChrome.accentSoft.opacity(0.25) : Color.clear)
                 )
 
+            if canAfford {
+                Button("받기") { redeem(item) }
+                    .buttonStyle(LanternPrimaryButtonStyle())
+                    .controlSize(.small)
+                    .fixedSize()
+                    .disabled(openVouchers.isEmpty)
+                    .help(openVouchers.isEmpty
+                          ? "월간 목표를 달성하면 보상권이 생겨요"
+                          : "보상권 한 장을 써서 이 보상을 받습니다")
+            }
+
             Menu {
                 Button("수정") { editingItem = item }
                 Button("지우기", role: .destructive) { pendingDeletion = item }
@@ -170,6 +285,78 @@ struct RewardTabView: View {
             }
         }
     }
+
+    // MARK: - 전리품
+
+    @ViewBuilder
+    private var trophySection: some View {
+        if !receivedRewards.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    sectionTitle("받은 보상", systemImage: "trophy")
+                    Text("\(receivedRewards.count)")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.accentInk)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(PopoverChrome.accent, in: Capsule())
+                }
+
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 116), spacing: 8)],
+                    spacing: 8
+                ) {
+                    ForEach(receivedRewards) { entry in
+                        trophyCard(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    private func trophyCard(_ entry: RewardLedgerEntry) -> some View {
+        VStack(spacing: 6) {
+            Text(Self.trophyEmoji(from: entry.note))
+                .font(.system(size: 26))
+            Text(Self.trophyTitle(from: entry.note))
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+            Text(Self.trophyDateFormatter.string(from: entry.occurredAt))
+                .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous)
+                .fill(PopoverChrome.card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous)
+                .stroke(PopoverChrome.accentSoft.opacity(0.55), lineWidth: 1)
+        )
+    }
+
+    /// 이력 문구는 "<이모지> <이름>" 형태로 저장된다. 원본 항목이 지워져도 여기서 복원한다.
+    private static func trophyEmoji(from note: String) -> String {
+        String(note.split(separator: " ", maxSplits: 1).first ?? "🎁")
+    }
+
+    private static func trophyTitle(from note: String) -> String {
+        let parts = note.split(separator: " ", maxSplits: 1)
+        guard parts.count == 2 else { return note }
+        return String(parts[1])
+    }
+
+    private static let trophyDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy. M. d."
+        return formatter
+    }()
 
     // MARK: - 이력
 
