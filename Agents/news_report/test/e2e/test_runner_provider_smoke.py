@@ -87,6 +87,7 @@ def test_runner_provider_smoke__e2e__creates_report_artifacts(
     assert result["status"] in {"success", "partial_success"}
     assert result["reportPath"]
     assert result["metaPath"]
+    assert_usage_reported(provider, result)
 
     output_dir = tmp_path / f"{provider}-output"
     report_rel = str(result["reportPath"])
@@ -109,6 +110,50 @@ def test_runner_provider_smoke__e2e__creates_report_artifacts(
     assert "provider_completed" in trace_text
     assert "structured_output" in trace_text
     assert "artifact_written" in trace_text
+
+
+def assert_usage_reported(provider: str, result: dict[str, object]) -> None:
+    """result.json의 소모량 보고가 provider 능력과 일치하는지 검증한다.
+
+    claude/codex만 usage를 노출한다. 나머지는 null이 정상이므로, 여기서는
+    "보고하는 provider가 실제로 보고했는지"만 확인한다.
+    """
+    usage = result.get("usage")
+    if provider not in {"claude", "codex"}:
+        return
+
+    assert isinstance(usage, dict), f"{provider}는 usage를 보고해야 한다: {usage!r}"
+    # 실행이 성공했다면 반드시 출력 토큰이 있다.
+    assert isinstance(usage["outputTokens"], int) and usage["outputTokens"] > 0
+    assert isinstance(usage["inputTokens"], int)
+    # 호출 횟수는 Swift 예측기가 호출당 단가를 뽑는 근거라 반드시 있어야 한다.
+    assert isinstance(usage["callCount"], int) and usage["callCount"] > 0
+
+    if provider == "claude":
+        # claude는 비용을 보고하고 요금제 잔여 한도는 노출하지 않는다.
+        assert isinstance(usage["totalCostUSD"], float)
+        assert usage["rateLimits"] == []
+        assert usage["rateLimitsFirst"] == []
+        return
+
+    # codex는 비용 대신 요금제 사용률을 노출한다.
+    assert usage["totalCostUSD"] is None
+    rate_limits = usage["rateLimits"]
+    assert isinstance(rate_limits, list) and rate_limits, "codex 사용률이 비었다"
+    for limit in rate_limits:
+        assert limit["scope"] in {"primary", "secondary"}
+        # 창 길이는 요금제마다 다르므로(pro 300/10080, free 43200)
+        # 특정 값을 단정하지 않고 존재와 타입만 확인한다.
+        assert isinstance(limit["windowMinutes"], int)
+        assert isinstance(limit["usedPercent"], float)
+
+    # 사용률은 누적 절대값이라, 차감량을 구하려면 최초 관측치가 함께 있어야 한다.
+    first = usage["rateLimitsFirst"]
+    assert isinstance(first, list) and first, "최초 사용률 스냅샷이 비었다"
+    first_primary = next(x for x in first if x["scope"] == "primary")
+    # 차감량 = last - first 를 계산할 수 있는 형태인지까지만 확인한다.
+    # 실행 도중 한도 창이 리셋되면 값이 되돌아갈 수 있어 대소 관계는 단정하지 않는다.
+    assert isinstance(first_primary["usedPercent"], float)
 
 
 def require_e2e_enabled() -> None:
