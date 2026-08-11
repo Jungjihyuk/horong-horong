@@ -2590,8 +2590,7 @@ struct AchievementDetailWindow: View {
                     childCadence: childCadence(for: managingGoalRecord.cadence),
                     onSave: updateGoalRecord,
                     onDelete: deleteGoalRecord,
-                    onUpdateChild: updateChildGoal,
-                    onDeleteChild: deleteGoalRecord
+                    onDetachChild: { detachChildGoal($0, from: managingGoalRecord) }
                 )
             } else {
                 AchievementEmptyDetailCard(message: "관리할 목표를 찾을 수 없습니다.")
@@ -4813,22 +4812,6 @@ struct AchievementDetailWindow: View {
         try? modelContext.save()
     }
 
-    private func updateChildGoal(_ record: AchievementGoalRecord, title: String, emoji: String) {
-        let oldTitle = record.title
-        let newTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !newTitle.isEmpty {
-            record.title = newTitle
-        }
-        let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedEmoji.isEmpty {
-            record.emoji = String(trimmedEmoji.prefix(1))
-        }
-        record.updatedAt = Date()
-        syncGoalTitleReferences(oldTitle: oldTitle, newTitle: record.title, cadence: record.cadence)
-        connectDescendantGoals(of: record)
-        try? modelContext.save()
-    }
-
     private func defaultEmoji(for cadence: String) -> String {
         switch cadence {
         case "연간": return "🏁"
@@ -4889,6 +4872,20 @@ struct AchievementDetailWindow: View {
                 break
             }
         }
+    }
+
+    /// 부모에서 자식을 떼어낸다. 자식 목표 자체는 남는다.
+    private func detachChildGoal(_ child: AchievementGoalRecord, from parent: AchievementGoalRecord) {
+        switch parent.cadence {
+        case "연간":
+            child.yearGoal = nil
+        case "월간":
+            child.monthGoal = nil
+        default:
+            return
+        }
+        child.updatedAt = Date()
+        try? modelContext.save()
     }
 
     private func connectChildGoals(_ childGoalIDs: Set<UUID>, to parent: AchievementGoalRecord) {
@@ -6466,8 +6463,8 @@ private struct AchievementGoalManagementSheet: View {
     let childCadence: String?
     let onSave: (AchievementGoalRecord, AchievementGoalEditDraft) -> Void
     let onDelete: (AchievementGoalRecord) -> Void
-    let onUpdateChild: (AchievementGoalRecord, String, String) -> Void
-    let onDeleteChild: (AchievementGoalRecord) -> Void
+    /// 자식을 부모에서 떼어낸다. 자식 목표 자체를 고치거나 지우는 일은 그 목표의 관리 창이 맡는다.
+    let onDetachChild: (AchievementGoalRecord) -> Void
 
     @State private var title: String
     @State private var emoji: String
@@ -6488,8 +6485,7 @@ private struct AchievementGoalManagementSheet: View {
         childCadence: String? = nil,
         onSave: @escaping (AchievementGoalRecord, AchievementGoalEditDraft) -> Void,
         onDelete: @escaping (AchievementGoalRecord) -> Void,
-        onUpdateChild: @escaping (AchievementGoalRecord, String, String) -> Void = { _, _, _ in },
-        onDeleteChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
+        onDetachChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
     ) {
         self.record = record
         self.linkedMemoCount = linkedMemoCount
@@ -6499,8 +6495,7 @@ private struct AchievementGoalManagementSheet: View {
         self.childCadence = childCadence
         self.onSave = onSave
         self.onDelete = onDelete
-        self.onUpdateChild = onUpdateChild
-        self.onDeleteChild = onDeleteChild
+        self.onDetachChild = onDetachChild
         _title = State(initialValue: record.title)
         _emoji = State(initialValue: record.emoji)
         _rule = State(initialValue: record.rule)
@@ -6685,8 +6680,7 @@ private struct AchievementGoalManagementSheet: View {
                         ForEach(childRecords, id: \.id) { child in
                             AchievementChildGoalEditorRow(
                                 record: child,
-                                onSave: onUpdateChild,
-                                onDelete: onDeleteChild
+                                onDetach: onDetachChild
                             )
                         }
                     }
@@ -6820,15 +6814,6 @@ private struct AchievementGoalManagementSheet: View {
         .background(PopoverChrome.surfaceAlt.opacity(0.42), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous))
     }
 
-    private static func defaultEmoji(for cadence: String?) -> String {
-        switch cadence {
-        case "연간": return "🏁"
-        case "월간": return "📅"
-        case "주간": return "🎯"
-        default: return "🎯"
-        }
-    }
-
     private func field<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
@@ -6839,76 +6824,44 @@ private struct AchievementGoalManagementSheet: View {
     }
 }
 
+/// 부모 목표에 딸린 하위 목표 한 줄.
+///
+/// 이름·이모지 수정과 삭제는 그 목표 자신의 관리 창이 맡는다.
+/// 여기서는 부모와의 연결만 다룬다 — 실수로 남의 목표를 통째로 지우는 일이 없도록.
 private struct AchievementChildGoalEditorRow: View {
     let record: AchievementGoalRecord
-    let onSave: (AchievementGoalRecord, String, String) -> Void
-    let onDelete: (AchievementGoalRecord) -> Void
-
-    @State private var title: String
-    @State private var emoji: String
-
-    init(
-        record: AchievementGoalRecord,
-        onSave: @escaping (AchievementGoalRecord, String, String) -> Void,
-        onDelete: @escaping (AchievementGoalRecord) -> Void
-    ) {
-        self.record = record
-        self.onSave = onSave
-        self.onDelete = onDelete
-        _title = State(initialValue: record.title)
-        _emoji = State(initialValue: record.emoji)
-    }
+    let onDetach: (AchievementGoalRecord) -> Void
 
     var body: some View {
-        HStack(spacing: 7) {
-            TextField("📅", text: Binding(
-                get: { emoji },
-                set: { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    emoji = trimmed.isEmpty ? "🎯" : String(trimmed.prefix(1))
-                }
-            ))
-            .textFieldStyle(.plain)
-            .font(.system(size: 15))
-            .frame(width: 34)
-            .padding(7)
-            .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+        HStack(spacing: 8) {
+            Text(record.emoji)
+                .font(.system(size: 15))
+                .frame(width: 24)
 
-            TextField("목표명", text: $title)
-                .textFieldStyle(.plain)
+            Text(record.title)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                .padding(7)
-                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+
+            Spacer(minLength: 6)
 
             Button {
-                onSave(record, title, emoji)
+                onDetach(record)
             } label: {
-                Text("저장")
-                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.accent)
-                    .frame(minWidth: 44)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 7)
-                    .background(PopoverChrome.accentSoft.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+                Text("연결 해제")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(PopoverChrome.card, in: Capsule())
+                    .overlay(Capsule().stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
             }
             .buttonStyle(.plain)
-            .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            Button(role: .destructive) {
-                onDelete(record)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11.5, weight: .bold))
-                    .foregroundStyle(Color.red)
-                    .frame(width: 28, height: 28)
-                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .help("하위 목표 삭제")
+            .help("이 목표를 상위 목표에서 떼어냅니다. 목표 자체는 남습니다.")
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
     }
 }
 
