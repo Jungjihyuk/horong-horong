@@ -6215,6 +6215,7 @@ private struct AchievementDetailGoalRow: View {
                 }
                 Spacer()
                 AchievementRewardBadge(reward: goal.reward, color: goal.color)
+                AchievementGoalRewardAction(goal: goal, onOpenRewardTab: onOpenRewardTab)
                 Menu {
                     Button {
                         onAdd()
@@ -6244,7 +6245,6 @@ private struct AchievementDetailGoalRow: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PopoverChrome.ink)
-                AchievementGoalRewardAction(goal: goal, onOpenRewardTab: onOpenRewardTab)
             }
 
             if !goal.todos.isEmpty {
