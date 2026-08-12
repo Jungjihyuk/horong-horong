@@ -222,7 +222,6 @@
 		B29EB188EB9DA958F8D7BBDA /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
 		B3528784509B495DC0B74EBF /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
 		B37012611F784B8746C60180 /* RewardLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23024A3A59FDBED2A95D852B /* RewardLedger.swift */; };
-		B3AF3A2264966171248624F3 /* OllamaChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1E8087D2D1EE690CC383E3 /* OllamaChat.swift */; };
 		B4111E6D89040B5552A11C09 /* CompanionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CA4446419C673DB86332AB /* CompanionController.swift */; };
 		B5350B35370991EF04FE8DC2 /* overview in Resources */ = {isa = PBXBuildFile; fileRef = EDB2AFEB48A4D9B3BE3A07ED /* overview */; };
 		B5A0621B33B842DCC14C7042 /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */; };
@@ -238,7 +237,6 @@
 		BD847A6912FC9DA6AAC5753F /* FocusPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655CFFAFA153975887808698 /* FocusPage.swift */; };
 		BD92C28637F51EEA0C8F2EF4 /* HuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = D7B6FAD40461D7E9CD19CB14 /* HuggingFace */; };
 		BDA7859CB509B2C1473EE6A8 /* CompanionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CA4446419C673DB86332AB /* CompanionController.swift */; };
-		BE19B235EAEDD1E8FF375381 /* OllamaChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1E8087D2D1EE690CC383E3 /* OllamaChat.swift */; };
 		BEC7D7006ED670128D51CF37 /* CompanionRegionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F8304E7734BEF0D16FEAE2 /* CompanionRegionPicker.swift */; };
 		BF961B03DAE6A4A1A631482A /* CompanionSpotlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C7E110FFAEB81D9F03EC3F /* CompanionSpotlight.swift */; };
 		BFAC5B2A7AFE0FDD5FEC0656 /* NewsSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */; };
@@ -367,7 +365,6 @@
 		35727BD3F08417C6C3821B41 /* TimerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPage.swift; sourceTree = "<group>"; };
 		3727A9B5A94FC100A696BC36 /* SwiftDataStoreLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStoreLocation.swift; sourceTree = "<group>"; };
 		387F464C45BF01C903A0D019 /* AttentionAnalyticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionAnalyticsTests.swift; sourceTree = "<group>"; };
-		3A1E8087D2D1EE690CC383E3 /* OllamaChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaChat.swift; sourceTree = "<group>"; };
 		3B31DB4E51995E349060A4BF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutPage.swift; sourceTree = "<group>"; };
 		3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXChat.swift; sourceTree = "<group>"; };
@@ -771,7 +768,6 @@
 				02A4B9254B4D8180FC3F6E6A /* FoundationModelsCompanionChat.swift */,
 				3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */,
 				EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */,
-				3A1E8087D2D1EE690CC383E3 /* OllamaChat.swift */,
 				C89509D5746D7671D093B2AC /* OllamaCompanionChat.swift */,
 			);
 			path = Companion;
@@ -1241,7 +1237,6 @@
 				2B8DEA8E72AC0CC016E86887 /* NewsView.swift in Sources */,
 				30D731ADD408AF38CC53CE5B /* NotificationManager.swift in Sources */,
 				87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */,
-				BE19B235EAEDD1E8FF375381 /* OllamaChat.swift in Sources */,
 				C3FAD103B95E5F7DD6B32DAB /* OllamaCompanionChat.swift in Sources */,
 				BFEE920D46CEE6C0DF9B490E /* OllamaGoalSuggestionProvider.swift in Sources */,
 				2A9C3273A02EB346AF57DCCD /* OllamaModelPicker.swift in Sources */,
@@ -1379,7 +1374,6 @@
 				E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */,
 				AA7A24CBAC88249FDEE03744 /* NotificationManager.swift in Sources */,
 				315AFD0EDCF1F229F02DEC9F /* NumberField.swift in Sources */,
-				B3AF3A2264966171248624F3 /* OllamaChat.swift in Sources */,
 				F65724EF23C872A0AD26B343 /* OllamaCompanionChat.swift in Sources */,
 				DB6B78FC7B50B1FE4A93F0CD /* OllamaGoalSuggestionProvider.swift in Sources */,
 				E15AFF18394A732618E4691D /* OllamaModelPicker.swift in Sources */,

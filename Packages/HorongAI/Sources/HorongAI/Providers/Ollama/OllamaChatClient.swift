@@ -4,13 +4,23 @@ import Foundation
 ///
 /// 모델 설치·목록 조회는 뉴스 기능(`NewsPipelineService`)에 이미 있고 CLI 배관에 묶여 있어 그대로 둔다.
 /// 여기서는 대화에 필요한 `/api/chat` 스트리밍과 서버 확인만 다룬다.
-struct OllamaChatClient: Sendable {
-    let endpoint: String
-    let model: String
+public struct OllamaChatClient: Sendable {
+    public let endpoint: String
+    public let model: String
 
-    struct Message: Codable, Sendable {
-        let role: String
-        let content: String
+    public init(endpoint: String, model: String) {
+        self.endpoint = endpoint
+        self.model = model
+    }
+
+    public struct Message: Codable, Sendable {
+        public let role: String
+        public let content: String
+
+        public init(role: String, content: String) {
+            self.role = role
+            self.content = content
+        }
     }
 
     private struct ChatRequest: Encodable {
@@ -34,7 +44,7 @@ struct OllamaChatClient: Sendable {
     }
 
     /// 서버가 떠 있는지. 꺼져 있으면 Apple 모델로 돌아가야 한다.
-    static func isReachable(endpoint: String) async -> Bool {
+    public static func isReachable(endpoint: String) async -> Bool {
         guard let url = url(endpoint: endpoint, path: "/api/tags") else { return false }
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
@@ -52,7 +62,7 @@ struct OllamaChatClient: Sendable {
 
     /// 모델을 메모리에서 즉시 내린다. `keep_alive: 0` 을 실어 보내면
     /// Ollama 가 유휴 타임아웃(기본 5분)을 기다리지 않고 바로 언로드한다.
-    static func unload(endpoint: String, model: String) async {
+    public static func unload(endpoint: String, model: String) async {
         guard let url = url(endpoint: endpoint, path: "/api/generate") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -66,7 +76,7 @@ struct OllamaChatClient: Sendable {
     }
 
     /// 모델을 미리 메모리에 올려둔다. `prompt` 없이 요청하면 텍스트를 만들지 않고 가중치만 로드한다.
-    static func preload(endpoint: String, model: String) async {
+    public static func preload(endpoint: String, model: String) async {
         guard let url = url(endpoint: endpoint, path: "/api/generate") else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -79,7 +89,7 @@ struct OllamaChatClient: Sendable {
     ///
     /// 콜백 대신 스트림을 돌려준다. 콜백은 백그라운드에서 불려 액터 경계를 넘어야 하는데,
     /// 스트림이면 받는 쪽이 자기 액터에서 그대로 소비할 수 있다.
-    func stream(
+    public func stream(
         messages: [Message],
         temperature: Double,
         maxTokens: Int
@@ -137,7 +147,7 @@ struct OllamaChatClient: Sendable {
         }
     }
 
-    static func url(endpoint: String, path: String) -> URL? {
+    public static func url(endpoint: String, path: String) -> URL? {
         let normalized = endpoint
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -146,12 +156,12 @@ struct OllamaChatClient: Sendable {
     }
 }
 
-enum OllamaChatError: LocalizedError {
+public enum OllamaChatError: LocalizedError {
     case invalidEndpoint(String)
     case serverUnavailable
     case emptyResponse
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidEndpoint(let endpoint):
             return "Ollama 주소가 올바르지 않습니다: \(endpoint)"

@@ -1,3 +1,4 @@
+import HorongAI
 import Foundation
 
 /// Ollama 로 돌아가는 대화 공급자.
