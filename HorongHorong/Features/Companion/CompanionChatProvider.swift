@@ -1,3 +1,4 @@
+import HorongAI
 import Foundation
 import SwiftData
 
@@ -42,15 +43,18 @@ enum CompanionChatProviderFactory {
 
         NSLog("[PROVIDER] selected=\(selected) ollamaReachable=\(ollamaReachable)")
         if selected == Constants.CompanionChatProviderKind.ollama.rawValue {
-            let provider = OllamaCompanionChatProvider(
+            let provider = PackageChatProvider(OllamaProvider(
                 endpoint: UserDefaults.standard.string(
                     forKey: Constants.NewsStorageKey.ollamaEndpoint
                 ) ?? Constants.defaultNewsOllamaEndpoint,
                 model: UserDefaults.standard.string(
                     forKey: Constants.AppStorageKey.companionOllamaModel
                 ) ?? Constants.defaultCompanionOllamaModel,
-                reachable: ollamaReachable
-            )
+                reachable: ollamaReachable,
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .ollama)
+                )
+            ))
             NSLog("[PROVIDER] Ollama 공급자 반환 model=\(provider.displayName)")
             return provider
         }
