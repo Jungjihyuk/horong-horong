@@ -27,6 +27,7 @@
 		0DA902D388B24F3F3018AE26 /* AppUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34189DB85F1FE3B22C4622E2 /* AppUpdateManager.swift */; };
 		0F922F270875249444EAB113 /* MLXGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990A7600A64BB07DDB670040 /* MLXGoalSuggestionProvider.swift */; };
 		0FC36B5C3A021D78F935965F /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214CF0D4CCCD0DC041B81763 /* CompanionView.swift */; };
+		100A2B283785D34171CB105C /* PromptSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 727A149D60047427F9249A50 /* PromptSnapshotTests.swift */; };
 		104BBE41D8FD7AB21B2995D7 /* CompanionPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40E30C422CA267221E628FB /* CompanionPage.swift */; };
 		10AD46A1EFDCDD8C4D43FDAA /* overview in Resources */ = {isa = PBXBuildFile; fileRef = EDB2AFEB48A4D9B3BE3A07ED /* overview */; };
 		1227FA9CD956D82EC098B2AB /* onboarding.md in Resources */ = {isa = PBXBuildFile; fileRef = 53453D33973DFCC4304BDE46 /* onboarding.md */; };
@@ -389,6 +390,7 @@
 		6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConsentStore.swift; sourceTree = "<group>"; };
 		6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearancePage.swift; sourceTree = "<group>"; };
 		6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = achievement_weekly_goal_suggestion.md; sourceTree = "<group>"; };
+		727A149D60047427F9249A50 /* PromptSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptSnapshotTests.swift; sourceTree = "<group>"; };
 		7295A6537FEB7087333AD889 /* TelemetryConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConfig.swift; sourceTree = "<group>"; };
 		74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionEditSheet.swift; sourceTree = "<group>"; };
 		755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleThresholdStore.swift; sourceTree = "<group>"; };
@@ -657,6 +659,7 @@
 				B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */,
 				42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */,
 				58ECF2ADC2ADD3798445571E /* NewsUsageEstimatorTests.swift */,
+				727A149D60047427F9249A50 /* PromptSnapshotTests.swift */,
 				C848AFFD27FE78B0F32159D0 /* RewardLedgerTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
 			);
@@ -1409,6 +1412,7 @@
 				45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */,
 				BFAC5B2A7AFE0FDD5FEC0656 /* NewsSchedulerTests.swift in Sources */,
 				C1607E5F8B80FAF53954DF3B /* NewsUsageEstimatorTests.swift in Sources */,
+				100A2B283785D34171CB105C /* PromptSnapshotTests.swift in Sources */,
 				D8527CE0A715C87A2289DB75 /* RewardLedgerTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
 			);
