@@ -1,36 +1,5 @@
 import Foundation
 
-/// 평가 결과 한 건을 나타내는 구조체 (JSONL 포맷과 1:1 매핑)
-public struct EvalResult: Codable {
-    public let caseId: String
-    public let input: String?
-    public let level: String
-    public let model: String?
-    public let output: String
-    public let scores: [String: Double]
-    public let latencyMs: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case caseId = "case_id"
-        case input
-        case level
-        case model
-        case output
-        case scores
-        case latencyMs = "latency_ms"
-    }
-    
-    public init(caseId: String, input: String? = nil, level: String, model: String? = nil, output: String, scores: [String: Double], latencyMs: Int) {
-        self.caseId = caseId
-        self.input = input
-        self.level = level
-        self.model = model
-        self.output = output
-        self.scores = scores
-        self.latencyMs = latencyMs
-    }
-}
-
 /// 채점 결과를 모아서 JSONL 파일로 떨궈주는 실행기(로거)
 public class EvalRunner {
     private let outputURL: URL
@@ -62,5 +31,14 @@ public class EvalRunner {
                 fileHandle.closeFile()
             }
         }
+    }
+
+    /// 큐에 밀어 넣은 기록이 전부 파일에 닿을 때까지 기다린다.
+    ///
+    /// `record` 는 비동기라 호출 직후 프로세스가 끝나면 마지막 결과가 유실된다.
+    /// 케이스가 늘거나 CI 에서 빨리 끝날수록 확률이 올라가는데, 조용히 한 줄이 사라지는
+    /// 종류라 나중에 원인을 찾기 어렵다. 런을 마칠 때 반드시 부른다.
+    public func flush() {
+        queue.sync {}
     }
 }
