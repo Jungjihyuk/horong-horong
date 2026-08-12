@@ -137,7 +137,6 @@
 		6C206EDE2C37A453BBEA18D8 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 76D70BAFD216660F52671512 /* MLXLLM */; };
 		7067CFF66B6206B3E78C1353 /* HotkeyRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FB4F2BB7BF9AD6A639806E /* HotkeyRecorderField.swift */; };
 		71F7538C217AFC97575FFF3A /* MemoReminderLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */; };
-		741E5301F53675649A8485C2 /* achievement_weekly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */; };
 		743204795E302BF902290E6E /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4FD90B5CD8FCFB8EFC9DB3 /* StatsSummaryView.swift */; };
 		760BEF844A5B3167F3E07AC4 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
 		7641D4BC7B7F96B2C070D40B /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 0C264682582A150CE5D1EA24 /* Tokenizers */; };
@@ -159,7 +158,6 @@
 		7FED0A1DF8C9C07CEFE4CFDF /* CompanionPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40E30C422CA267221E628FB /* CompanionPage.swift */; };
 		8004232786078535BE1E6842 /* AgentPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C07F54EF9D4748E93E3790 /* AgentPage.swift */; };
 		81038CFA865086286DADC683 /* GoalSuggestionEvalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C9F8C22F114231C1759AB9 /* GoalSuggestionEvalTests.swift */; };
-		810F835E1B1589060EBD5D67 /* achievement_weekly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */; };
 		83B687CB0885E2BBE0556C52 /* CompanionRoamingRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B424D056C56C9DB7A1B8AFD9 /* CompanionRoamingRegion.swift */; };
 		84AF15BE096573CD868B1BCC /* RewardUnboxingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A2871B9C50F593592BC32B /* RewardUnboxingOverlay.swift */; };
 		84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
@@ -184,7 +182,6 @@
 		946449EA22D62F0085AFBC3E /* AppearancePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */; };
 		94AE4AE6D9889FFFB1BB2323 /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D72EBBA4BB0B617918D300B /* AILabView.swift */; };
 		9539A27FD1F5F353F5AC3C03 /* Chips.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A6B136440DF771D0649296 /* Chips.swift */; };
-		954354FDEE60B43D24C4E25F /* achievement_monthly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 2B16359756288A77122E60DC /* achievement_monthly_goal_suggestion.md */; };
 		96894586C27182661336D09D /* HubTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC241F61F70F0B53E505E76C /* HubTab.swift */; };
 		9712EAE85911517158098C74 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
 		98F18FBAEF2642694DD2A2D9 /* companion_chat.md in Resources */ = {isa = PBXBuildFile; fileRef = 4B437AE498E52F90B40CEBC8 /* companion_chat.md */; };
@@ -212,7 +209,6 @@
 		A888B529EAEC4E7CDA370816 /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C509737BC3EE111F4612B /* CompanionCharacter.swift */; };
 		AA7A24CBAC88249FDEE03744 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */; };
 		AAF4B7ABFF4B44001F563D6E /* FocusPulseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA2CED721CEAA91CBAFBD1A /* FocusPulseCard.swift */; };
-		AB43A3BF4E1E2D27026D802B /* achievement_monthly_goal_suggestion.md in Resources */ = {isa = PBXBuildFile; fileRef = 2B16359756288A77122E60DC /* achievement_monthly_goal_suggestion.md */; };
 		AB85C576DC38001813D30B69 /* CompanionRoamingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34D5D4DE68AF38DD64CE649 /* CompanionRoamingEngine.swift */; };
 		ABCFAC777A6429C27CFDE63E /* CompanionOnboardingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7521BD98E14B3101B278FF5 /* CompanionOnboardingPresenter.swift */; };
 		AF3E184FEF65C636229D5247 /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C509737BC3EE111F4612B /* CompanionCharacter.swift */; };
@@ -347,7 +343,6 @@
 		290A4E8AA4D19FB5DC5BB3CF /* GeneralPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPage.swift; sourceTree = "<group>"; };
 		2A1848F6CABBB3507C7CF3A4 /* MainHubWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainHubWindow.swift; sourceTree = "<group>"; };
 		2A3803D628E9203EC096F3A7 /* FocusNudgeTrendCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeTrendCard.swift; sourceTree = "<group>"; };
-		2B16359756288A77122E60DC /* achievement_monthly_goal_suggestion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = achievement_monthly_goal_suggestion.md; sourceTree = "<group>"; };
 		2D6D5BA5101B147375D58C23 /* FocusNudgeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeCatalog.swift; sourceTree = "<group>"; };
 		2D72EBBA4BB0B617918D300B /* AILabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AILabView.swift; sourceTree = "<group>"; };
 		2F00A9B5A6A41301C3A275FF /* FocusNudgeEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeEvent.swift; sourceTree = "<group>"; };
@@ -390,7 +385,6 @@
 		6BFDB918694C1C7CA83E3B9C /* BrowserURLClassificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserURLClassificationTests.swift; sourceTree = "<group>"; };
 		6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConsentStore.swift; sourceTree = "<group>"; };
 		6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearancePage.swift; sourceTree = "<group>"; };
-		6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = achievement_weekly_goal_suggestion.md; sourceTree = "<group>"; };
 		727A149D60047427F9249A50 /* PromptSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptSnapshotTests.swift; sourceTree = "<group>"; };
 		7295A6537FEB7087333AD889 /* TelemetryConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConfig.swift; sourceTree = "<group>"; };
 		74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionEditSheet.swift; sourceTree = "<group>"; };
@@ -693,8 +687,6 @@
 		89CE7A8AF7D8F70235D829F8 /* Prompts */ = {
 			isa = PBXGroup;
 			children = (
-				2B16359756288A77122E60DC /* achievement_monthly_goal_suggestion.md */,
-				6F684BF238CD413BF5DEFD04 /* achievement_weekly_goal_suggestion.md */,
 				4B437AE498E52F90B40CEBC8 /* companion_chat.md */,
 			);
 			path = Prompts;
@@ -1065,8 +1057,6 @@
 			files = (
 				7676F5BE56FDF366D1FE8497 /* Assets.xcassets in Resources */,
 				D3468947082322E3F1D9A9EB /* USER_GUIDE.md in Resources */,
-				AB43A3BF4E1E2D27026D802B /* achievement_monthly_goal_suggestion.md in Resources */,
-				810F835E1B1589060EBD5D67 /* achievement_weekly_goal_suggestion.md in Resources */,
 				A532291A1CBD75640C0D3D78 /* companion in Resources */,
 				98F18FBAEF2642694DD2A2D9 /* companion_chat.md in Resources */,
 				7E3A9EE6437529D1AC4C8D19 /* onboarding.md in Resources */,
@@ -1080,8 +1070,6 @@
 			files = (
 				B7080BB41ACDB7FB3340B3CE /* Assets.xcassets in Resources */,
 				386DAB201AFBFCCDDB159746 /* USER_GUIDE.md in Resources */,
-				954354FDEE60B43D24C4E25F /* achievement_monthly_goal_suggestion.md in Resources */,
-				741E5301F53675649A8485C2 /* achievement_weekly_goal_suggestion.md in Resources */,
 				09A98D5F1062E14379916B06 /* companion in Resources */,
 				A45F7D2C6746DEFBA03BBD15 /* companion_chat.md in Resources */,
 				1227FA9CD956D82EC098B2AB /* onboarding.md in Resources */,
