@@ -933,6 +933,7 @@ enum Constants {
         static let companionOllamaModel = "companion.ollamaModel"
         static let companionMLXModel = "companion.mlxModel"
         /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
+        /// 실제로 읽고 쓰는 쪽은 `HorongAIMLX` 의 `MLXModelStore.preparedModelsDefaultsKey` 다. 값이 같아야 한다.
         static let companionMLXPreparedModels = "companion.mlxPreparedModels"
         static let companionBubbleSize = "companion.bubbleSize"
         /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.

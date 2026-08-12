@@ -1,3 +1,4 @@
+import HorongAIMLX
 import HorongAI
 import SwiftUI
 

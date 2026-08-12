@@ -1,4 +1,5 @@
 import Foundation
+import HorongAI
 
 #if canImport(MLXLLM)
 import MLXLLM
@@ -9,34 +10,43 @@ import MLXLMCommon
 /// Ollama 와 달리 사용자가 따로 설치할 프로그램이 없다. 모델 가중치만 한 번 내려받으면
 /// 앱이 직접 Metal 로 추론한다. 대신 그 가중치가 이 앱의 메모리를 그대로 차지한다.
 @MainActor
-final class MLXCompanionChatProvider: CompanionChatProvider {
+public final class MLXProvider: LLMProvider {
     private let model: String
+    private let modelLabel: String
 
-    init(model: String) {
+    public let capabilities: ProviderCapabilities
+
+    /// `modelLabel` 은 설정 화면에 보여줄 사람이 읽는 이름이다.
+    /// 그 표는 앱이 들고 있으므로(`Constants.companionMLXModelLabel`) 만들어서 넘겨준다.
+    public init(
+        model: String,
+        modelLabel: String? = nil,
+        capabilities: ProviderCapabilities = ProviderCapabilities(maxPromptCharacters: 16_000)
+    ) {
         self.model = model
+        self.modelLabel = modelLabel ?? model
+        self.capabilities = capabilities
     }
 
-    var displayName: String { "MLX · \(Constants.companionMLXModelLabel(for: model))" }
-    var isAvailable: Bool { MLXModelStore.isSupported }
+    public var id: String { "mlx" }
+    public var displayName: String { "MLX · \(modelLabel)" }
+    public var isAvailable: Bool { MLXModelStore.isSupported }
 
-    func makeSession(_ context: CompanionChatContext) -> CompanionChatSession {
-        MLXCompanionChatSession(
-            model: model,
-            instructions: CompanionPromptTemplate.instructions(
-                for: context.character,
-                profile: context.profile
-            )
-        )
+    public func makeSession(_ setup: SessionSetup) -> LLMSession {
+        MLXSession(model: model, instructions: setup.instructions)
     }
 }
 
 @MainActor
-private final class MLXCompanionChatSession: CompanionChatSession {
+private final class MLXSession: LLMSession {
     private let model: String
     private let instructions: String
     /// MLX 의 `ChatSession` 이 대화 문맥(KV 캐시)을 직접 들고 있어서 Ollama 쪽처럼
     /// 우리가 메시지 배열을 나를 필요가 없다. 첫 대화 때 모델을 올리며 만든다.
     private var session: ChatSession?
+
+    /// 답이 길어지면 말풍선을 넘친다.
+    private static let maxTokens = 300
 
     init(model: String, instructions: String) {
         self.model = model
@@ -45,35 +55,35 @@ private final class MLXCompanionChatSession: CompanionChatSession {
 
     func reply(
         to message: String,
-        precise: Bool,
-        onPartial: @escaping (CompanionChatReply) -> Void
-    ) async -> CompanionChatReply {
+        decoding: DecodingOptions,
+        onPartial: @escaping (LLMResponse) -> Void
+    ) async -> LLMResponse {
         do {
             let session = try await currentSession()
             session.generateParameters = GenerateParameters(
-                maxTokens: 300,
-                temperature: precise ? 0.2 : 0.4
+                maxTokens: decoding.maxTokens ?? Self.maxTokens,
+                temperature: Float(decoding.temperature)
             )
 
             var text = ""
             for try await piece in session.streamResponse(to: message) {
                 text += piece
-                onPartial(CompanionChatReply(text: text, mood: nil))
+                onPartial(LLMResponse(text: text))
             }
 
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { throw MLXChatError.emptyResponse }
-            return CompanionChatReply(text: trimmed, mood: nil)
+            return LLMResponse(text: trimmed)
         } catch is MLXChatError {
-            return CompanionChatReply(
+            return LLMResponse(
                 text: "아직 모델이 준비되지 않았어요. 설정 → 컴패니언 → AI 대화의 모델 목록에서 내려받기 아이콘을 눌러 주세요.",
-                mood: .concerned
+                mood: "concerned"
             )
         } catch {
             NSLog("[MLX] 실패: \(error)")
-            return CompanionChatReply(
+            return LLMResponse(
                 text: "모델을 불러오지 못했어요. 설정에서 모델이 다 내려받아졌는지 확인해 주세요.",
-                mood: .concerned
+                mood: "concerned"
             )
         }
     }

@@ -13,8 +13,8 @@ import Tokenizers
 /// Ollama 는 모델이 남의 프로세스에 살아서 `keep_alive: 0` 한 줄로 내릴 수 있었다.
 /// MLX 는 가중치가 이 앱의 메모리에 그대로 올라오므로, 올린 컨테이너를 여기 한 곳에만
 /// 두고 직접 붙잡았다 놓는다. 놓을 때 MLX 가 잡아둔 버퍼 캐시까지 비워야 실제로 메모리가 준다.
-actor MLXModelStore {
-    static let shared = MLXModelStore()
+public actor MLXModelStore {
+    public static let shared = MLXModelStore()
 
     private var loadedModel: String?
     private var container: ModelContainer?
@@ -22,7 +22,7 @@ actor MLXModelStore {
     private var loading: Task<ModelContainer, Error>?
 
     /// MLX 는 Metal GPU 백엔드로 돈다. Intel 맥에는 없다.
-    static var isSupported: Bool {
+    public static var isSupported: Bool {
         #if arch(arm64)
         return true
         #else
@@ -32,19 +32,19 @@ actor MLXModelStore {
 
     /// 내려받은 양. 비율만 주면 큰 파일 여러 개를 순서대로 받을 때 멈춘 것처럼 보여서
     /// 바이트를 그대로 넘긴다. 화면이 "3.3GB / 4.9GB" 와 속도를 직접 그린다.
-    struct DownloadProgress: Sendable {
-        let received: Int64
-        let total: Int64
+    public struct DownloadProgress: Sendable {
+        public let received: Int64
+        public let total: Int64
     }
 
     /// 이미 메모리에 올라와 있으면 그것만 돌려준다. 없으면 `nil` — **여기서는 내려받지 않는다.**
     /// 대화 도중에 수 GB 다운로드가 조용히 시작되는 걸 막는 관문이다.
-    func loadedContainer(for model: String) -> ModelContainer? {
+    public func loadedContainer(for model: String) -> ModelContainer? {
         loadedModel == model ? container : nil
     }
 
     /// 모델을 메모리에 올린다. 처음 쓰는 모델이면 가중치를 먼저 내려받는다.
-    func container(
+    public func container(
         for model: String,
         onProgress: @Sendable @escaping (DownloadProgress) -> Void = { _ in }
     ) async throws -> ModelContainer {
@@ -126,7 +126,7 @@ actor MLXModelStore {
     /// 기준은 언제나 디스크다. UserDefaults 기록은 캐시를 뒤지는 수고를 아끼는 힌트일 뿐이라,
     /// 파일이 사라졌는데 기록만 남아 있으면 그 기록을 걷어낸다. 기록을 그대로 믿으면
     /// «받음» 으로 보이는 모델이 실제로는 없어서, 답할 때가 되어서야 조용히 몇 GB 를 다시 받게 된다.
-    static func isKnownPrepared(_ model: String) -> Bool {
+    public static func isKnownPrepared(_ model: String) -> Bool {
         if hasCachedWeights(model) { return true }
         forgetPrepared(model)
         return false
@@ -147,7 +147,7 @@ actor MLXModelStore {
     }
 
     /// 이 모델의 가중치가 담긴 캐시 폴더.
-    static func cacheDirectory(for model: String) -> URL {
+    public static func cacheDirectory(for model: String) -> URL {
         cacheRoot.appendingPathComponent("models--" + model.replacingOccurrences(of: "/", with: "--"))
     }
 
@@ -167,7 +167,7 @@ actor MLXModelStore {
     /// 받아 둔 가중치가 차지하는 크기. 지우기 전에 얼마나 비는지 보여주는 데 쓴다.
     ///
     /// `snapshots` 는 `blobs` 를 가리키는 심볼릭 링크라 따라가면 같은 파일을 두 번 센다. 실체인 `blobs` 만 잰다.
-    static func cachedWeightsSize(for model: String) -> Int64? {
+    public static func cachedWeightsSize(for model: String) -> Int64? {
         let blobs = cacheDirectory(for: model).appendingPathComponent("blobs")
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: blobs, includingPropertiesForKeys: [.fileSizeKey]
@@ -180,7 +180,7 @@ actor MLXModelStore {
 
     /// 받아 둔 가중치를 지운다. 메모리에 올라와 있으면 먼저 내린다 —
     /// 쓰고 있는 파일을 밑에서 걷어내면 다음 응답이 어떻게 될지 알 수 없다.
-    func removeCachedWeights(for model: String) throws {
+    public func removeCachedWeights(for model: String) throws {
         if loadedModel == model { unload() }
         let directory = Self.cacheDirectory(for: model)
         if FileManager.default.fileExists(atPath: directory.path) {
@@ -189,29 +189,36 @@ actor MLXModelStore {
         Self.forgetPrepared(model)
     }
 
+    /// 한 번이라도 끝까지 준비된 모델 목록을 저장하는 키.
+    ///
+    /// 공급자 자신의 상태(내려받기를 마쳤는가)라 여기서 관리한다.
+    /// 앱의 `preparedModelsDefaultsKey` 와 **같은 값**이어야 한다 —
+    /// 값이 갈리면 이미 받아둔 모델을 못 알아보고 대화 중에 다시 받으려 든다.
+    public static let preparedModelsDefaultsKey = "companion.mlxPreparedModels"
+
     private static func preparedModels() -> [String] {
-        UserDefaults.standard.stringArray(forKey: Constants.AppStorageKey.companionMLXPreparedModels) ?? []
+        UserDefaults.standard.stringArray(forKey: preparedModelsDefaultsKey) ?? []
     }
 
     private static func rememberPrepared(_ model: String) {
         var models = preparedModels()
         guard !models.contains(model) else { return }
         models.append(model)
-        UserDefaults.standard.set(models, forKey: Constants.AppStorageKey.companionMLXPreparedModels)
+        UserDefaults.standard.set(models, forKey: preparedModelsDefaultsKey)
     }
 
     private static func forgetPrepared(_ model: String) {
         var models = preparedModels()
         guard let index = models.firstIndex(of: model) else { return }
         models.remove(at: index)
-        UserDefaults.standard.set(models, forKey: Constants.AppStorageKey.companionMLXPreparedModels)
+        UserDefaults.standard.set(models, forKey: preparedModelsDefaultsKey)
     }
 
     /// 받는 중인 것만 멈춘다. 이미 올라와 있는 모델은 그대로 둔다.
     ///
     /// 받다 만 가중치는 버려지지 않는다 — HuggingFace 쪽이 `.incomplete` 파일과 Range 요청으로
     /// 이어받기 때문에, 다시 시작하면 멈춘 지점부터 이어진다.
-    func cancelLoading() {
+    public func cancelLoading() {
         loading?.cancel()
         loading = nil
         if container == nil { loadedModel = nil }
@@ -219,7 +226,7 @@ actor MLXModelStore {
 
     /// 모델을 메모리에서 내린다. 컨테이너 참조를 놓기만 하면 MLX 가 잡아둔 버퍼가 남으므로
     /// 캐시까지 비운다.
-    func unload() {
+    public func unload() {
         loading?.cancel()
         loading = nil
         container = nil
@@ -228,16 +235,16 @@ actor MLXModelStore {
     }
 
     /// 지금 메모리에 올라와 있는 모델. 설정 화면 표시용.
-    var residentModel: String? { container == nil ? nil : loadedModel }
+    public var residentModel: String? { container == nil ? nil : loadedModel }
 }
 #endif
 
-enum MLXChatError: LocalizedError {
+public enum MLXChatError: LocalizedError {
     case unsupportedHardware
     case notPrepared
     case emptyResponse
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unsupportedHardware:
             return "MLX 는 Apple Silicon 맥에서만 쓸 수 있습니다."

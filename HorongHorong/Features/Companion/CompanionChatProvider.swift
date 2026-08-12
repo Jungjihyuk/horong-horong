@@ -1,4 +1,5 @@
 import HorongAI
+import HorongAIMLX
 import Foundation
 import SwiftData
 
@@ -61,11 +62,16 @@ enum CompanionChatProviderFactory {
 
         #if canImport(MLXLLM)
         if selected == Constants.CompanionChatProviderKind.mlx.rawValue {
-            let provider = MLXCompanionChatProvider(
-                model: UserDefaults.standard.string(
-                    forKey: Constants.AppStorageKey.companionMLXModel
-                ) ?? Constants.defaultCompanionMLXModel
-            )
+            let model = UserDefaults.standard.string(
+                forKey: Constants.AppStorageKey.companionMLXModel
+            ) ?? Constants.defaultCompanionMLXModel
+            let provider = PackageChatProvider(MLXProvider(
+                model: model,
+                modelLabel: Constants.companionMLXModelLabel(for: model),
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .mlx)
+                )
+            ))
             if provider.isAvailable {
                 NSLog("[PROVIDER] MLX 공급자 반환 model=\(provider.displayName)")
                 return provider
