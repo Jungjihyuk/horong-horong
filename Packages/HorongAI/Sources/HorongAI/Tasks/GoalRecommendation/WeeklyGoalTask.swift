@@ -108,6 +108,94 @@ public enum WeeklyGoalTask {
         )
     }
 
+    // MARK: - 응답 읽기
+
+    /// 파싱 결과와 진단값. 로그 문구는 앱이 정하므로 여기서는 숫자만 돌려준다 —
+    /// 패키지가 앱의 `OSLog` 카테고리를 알면 안 되기 때문이다.
+    public struct ParseOutcome: Sendable {
+        public let drafts: [GoalSuggestionDraft]
+        public let diagnostics: Diagnostics
+
+        public enum Diagnostics: Sendable {
+            /// JSON 을 읽지 못했다. `characters` 는 다듬은 응답 길이 — 잘림인지 형식 문제인지 가른다.
+            case decodeFailed(characters: Int)
+            /// 모델이 낸 개수(`modelReturned`)와 파서가 살린 개수(`kept`)를 구분해야
+            /// "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
+            /// `kept` 는 개수 상한으로 자르기 **전** 값이다.
+            case decoded(
+                modelReturned: Int,
+                kept: Int,
+                requestedIDs: Int,
+                badID: Int,
+                alreadyUsed: Int,
+                overMaxMemo: Int,
+                tooFewIDs: Int
+            )
+        }
+    }
+
+    /// 모델 응답을 후보 목록으로 바꾼다. 모델을 믿지 않고 다섯 갈래로 방어한다 —
+    /// 없는 id · 이미 쓴 id · 개수 초과 · 2개 미만 · JSON 깨짐.
+    public static func parse(
+        _ text: String,
+        allowedIDs: Set<UUID>,
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) -> ParseOutcome {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let payload = GoalSuggestionPayload(responseText: trimmed) else {
+            return ParseOutcome(drafts: [], diagnostics: .decodeFailed(characters: trimmed.count))
+        }
+
+        var badID = 0
+        var alreadyUsed = 0
+        var overMaxMemo = 0
+        var tooFewIDs = 0
+        var requestedIDs = 0
+        var used = Set<UUID>()
+        let result = payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
+            let raw = item.memoIDs ?? []
+            requestedIDs += raw.count
+            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
+            badID += raw.count - parsedIDs.count
+            let unused = parsedIDs.filter { !used.contains($0) }
+            alreadyUsed += parsedIDs.count - unused.count
+            let ids = unused.prefix(maxMemoCount)
+            overMaxMemo += unused.count - ids.count
+            guard ids.count >= 2 else {
+                tooFewIDs += 1
+                return nil
+            }
+            used.formUnion(ids)
+            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
+            return GoalSuggestionDraft(
+                title: title.isEmpty ? "추천 목표" : title,
+                reason: item.reason,
+                memoIDs: Array(ids),
+                scheduleText: item.scheduleText.isEmpty ? "이번 주에 나눠 진행" : item.scheduleText,
+                criterion: criterion.isEmpty ? "연결한 할일 \(ids.count)개 완료" : criterion,
+                targetValueText: "\(ids.count)개",
+                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "🎯"
+            )
+        }
+
+        return ParseOutcome(
+            drafts: Array(result.prefix(suggestionCount)),
+            diagnostics: .decoded(
+                modelReturned: payload.suggestions.count,
+                kept: result.count,
+                requestedIDs: requestedIDs,
+                badID: badID,
+                alreadyUsed: alreadyUsed,
+                overMaxMemo: overMaxMemo,
+                tooFewIDs: tooFewIDs
+            )
+        )
+    }
+
+    // MARK: - 직렬화
+
     private static func dateText(_ date: Date?) -> String {
         guard let date else { return "없음" }
         let formatter = DateFormatter()
