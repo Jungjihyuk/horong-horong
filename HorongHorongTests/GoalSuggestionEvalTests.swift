@@ -1,3 +1,4 @@
+import HorongAI
 import XCTest
 @testable import 호롱호롱
 
@@ -72,6 +73,9 @@ final class GoalSuggestionEvalTests: XCTestCase {
             let goldenCase = try JSONDecoder().decode(GoldenCase.self, from: Data(contentsOf: file))
             await run(goldenCase, runner: runner)
         }
+
+        // 비동기 기록이 전부 파일에 닿은 뒤에 런을 마친다. 없으면 마지막 결과가 유실될 수 있다.
+        runner.flush()
 
         print("[eval] \(caseFiles.count)개 케이스 → \(outputFile.path)")
     }
