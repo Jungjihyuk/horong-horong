@@ -86,6 +86,7 @@
 		3CBF43D40623337B5738D178 /* MemoBrowserWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */; };
 		40F02AE17D455450916E22B2 /* RewardEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5EDFA03DFDA5A1F91F7991 /* RewardEngine.swift */; };
 		4107C8B44179E63E0BA2351D /* CompanionOnboardingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7521BD98E14B3101B278FF5 /* CompanionOnboardingPresenter.swift */; };
+		412CB0A8A15592A1BFEFB4A5 /* GoalSuggestionParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */; };
 		43B78417AB8E270AAFC92D5C /* FocusScoreMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA980B169A5C2F9099E7DDE /* FocusScoreMonitor.swift */; };
 		44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */; };
 		4430C7455BABB9BE90F240D0 /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */; };
@@ -466,6 +467,7 @@
 		E69150F503765EA7B6D21B41 /* FocusScore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScore.swift; sourceTree = "<group>"; };
 		E770C560F075B1D388B9C7C3 /* FocusScoreHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreHistory.swift; sourceTree = "<group>"; };
 		E8310F1C93CF6B64106DEBF0 /* CompanionGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionGuide.swift; sourceTree = "<group>"; };
+		E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalSuggestionParserTests.swift; sourceTree = "<group>"; };
 		E9588CFF18EF00481F40F06B /* NewsUsageEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsUsageEstimator.swift; sourceTree = "<group>"; };
 		EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeSettingsStore.swift; sourceTree = "<group>"; };
 		EDB2AFEB48A4D9B3BE3A07ED /* overview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = overview; path = assets/overview; sourceTree = SOURCE_ROOT; };
@@ -655,6 +657,7 @@
 				1BDF8123B9CEEA21DE7E0CC4 /* FocusNudgeEngineTests.swift */,
 				B136EEFAACA04AA87AC7C891 /* FocusScoreTests.swift */,
 				C3C9F8C22F114231C1759AB9 /* GoalSuggestionEvalTests.swift */,
+				E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */,
 				06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */,
 				B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */,
 				42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */,
@@ -1408,6 +1411,7 @@
 				BAA52319ADE2AD6A2E5CAEEE /* FocusNudgeEngineTests.swift in Sources */,
 				BFD8E08F0C311F79268F7ADD /* FocusScoreTests.swift in Sources */,
 				81038CFA865086286DADC683 /* GoalSuggestionEvalTests.swift in Sources */,
+				412CB0A8A15592A1BFEFB4A5 /* GoalSuggestionParserTests.swift in Sources */,
 				6BFB097785CBEA0B19A95973 /* GoalSuggestionRegressionTests.swift in Sources */,
 				45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */,
 				BFAC5B2A7AFE0FDD5FEC0656 /* NewsSchedulerTests.swift in Sources */,
