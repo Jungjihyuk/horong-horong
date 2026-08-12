@@ -75,7 +75,11 @@ enum CompanionChatProviderFactory {
 
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
-            let provider = FoundationModelsCompanionChatProvider()
+            let provider = PackageChatProvider(AppleFoundationModelsProvider(
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .appleFoundation)
+                )
+            ))
             if provider.isAvailable { return provider }
         }
         #endif
