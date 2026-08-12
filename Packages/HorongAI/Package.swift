@@ -28,6 +28,12 @@ let package = Package(
         // 무거운 의존이 없는 코어. 평가는 여기까지만 링크해 초 단위로 돈다.
         .target(
             name: "HorongAI",
+            // 프롬프트 `.md` 는 태스크 폴더 안에 둔다 — 파서를 고치면 프롬프트도 함께 고치기 때문이다.
+            // 소스와 같은 폴더라 디렉터리째가 아니라 파일 단위로 선언한다.
+            resources: [
+                .process("Tasks/GoalRecommendation/weekly_goal.md"),
+                .process("Tasks/GoalRecommendation/monthly_goal.md"),
+            ],
             swiftSettings: swiftSettings
         ),
         // 소스를 내려받아 컴파일하는 의존이 붙는 유일한 자리.

@@ -1,4 +1,5 @@
 import AppKit
+import HorongAI
 import OSLog
 import SwiftData
 import SwiftUI
@@ -1115,106 +1116,38 @@ enum AchievementFoundationGoalSuggestionProvider {
     }
 }
 
-enum AchievementPromptTemplate {
-    static func weeklyGoalSuggestion(
-        suggestionCount: Int,
-        maxMemoCount: Int,
-        items: String
-    ) -> String {
-        render(
-            fileName: "achievement_weekly_goal_suggestion",
-            fallback: weeklyGoalSuggestionFallback,
-            values: [
-                "suggestionCount": "\(suggestionCount)",
-                "maxMemoCount": "\(maxMemoCount)",
-                "items": items,
-            ]
+/// 앱 도메인 타입을 패키지 태스크의 입력으로 바꾼다.
+///
+/// 패키지는 `AchievementMemoSnapshot` 을 알면 안 되므로 경계에서 앱이 변환한다.
+/// 아이콘 기본값처럼 **앱이 정하는 값**도 여기서 채운다.
+private extension AchievementMemoSnapshot {
+    var taskMemo: WeeklyGoalTask.Memo {
+        WeeklyGoalTask.Memo(
+            id: id,
+            content: content,
+            icon: icon ?? MemoIcon.defaultIcon,
+            date: date,
+            startDate: startDate,
+            deadline: deadline,
+            isCompleted: isCompleted
         )
     }
+}
 
-    static func monthlyGoalSuggestion(
-        suggestionCount: Int,
-        items: String
-    ) -> String {
-        render(
-            fileName: "achievement_monthly_goal_suggestion",
-            fallback: monthlyGoalSuggestionFallback,
-            values: [
-                "suggestionCount": "\(suggestionCount)",
-                "items": items,
-            ]
+private extension AchievementGoalSnapshot {
+    var taskGoal: MonthlyGoalTask.Goal {
+        MonthlyGoalTask.Goal(
+            id: id,
+            title: title,
+            emoji: emoji,
+            rule: rule,
+            done: done,
+            total: total,
+            sourceMemoIDs: sourceMemoIDs,
+            roleName: roleName,
+            vision: vision
         )
     }
-
-    private static func render(
-        fileName: String,
-        fallback: String,
-        values: [String: String]
-    ) -> String {
-        var result = load(fileName: fileName) ?? fallback
-        for (key, value) in values {
-            result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
-        }
-        return result
-    }
-
-    private static func load(fileName: String) -> String? {
-        guard let url = Bundle.main.url(forResource: fileName, withExtension: "md") else {
-            return nil
-        }
-        return try? String(contentsOf: url, encoding: .utf8)
-    }
-
-    private static let weeklyGoalSuggestionFallback = """
-    아래 할일들을 의미, 아이콘, 시작일, 마감일, 완료 상태를 함께 보고 주간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    목표 후보 하나에는 할일을 최대 {{maxMemoCount}}개까지만 넣어.
-    각 후보는 사용자가 수정할 수 있는 초안이어야 하고, 같은 할일을 여러 후보에 중복해서 넣지 마.
-    존재하는 id만 memoIDs에 넣어.
-    scheduleText는 실제 startDate, deadline, date를 고려해 짧게 작성해.
-
-    JSON 형식:
-    {
-      "suggestions": [
-        {
-          "title": "목표명",
-          "reason": "묶은 이유",
-          "memoIDs": ["UUID"],
-          "scheduleText": "월/수/금에 나눠 진행",
-          "criterion": "연결한 할일 3개 완료",
-          "emoji": "🎯"
-        }
-      ]
-    }
-
-    할일:
-    {{items}}
-    """
-
-    private static let monthlyGoalSuggestionFallback = """
-    아래 주간 목표들을 의미, 달성 기준, 페르소나, 비전, 연결된 할일 수를 함께 보고 월간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    월간 목표 하나에는 주간 목표를 2개 이상 4개 이하로 넣어.
-    title은 입력된 주간 목표들의 실제 내용에서만 추론해 새로 작성해.
-    입력에 없는 구체적인 숫자, 회사 수, 횟수, 마감 조건은 만들지 마.
-    같은 주간 목표를 여러 월간 후보에 중복해서 넣지 마.
-    존재하는 id만 goalIDs에 넣어.
-
-    JSON 형식:
-    {
-      "suggestions": [
-        {
-          "title": "월간 목표명",
-          "reason": "묶은 이유",
-          "goalIDs": ["UUID"],
-          "scheduleText": "이번 달에 주간 목표 3개로 나눠 진행",
-          "criterion": "연결한 주간 목표 3개 달성",
-          "emoji": "📅"
-        }
-      ]
-    }
-
-    주간 목표:
-    {{items}}
-    """
 }
 
 #if canImport(FoundationModels)
@@ -1337,26 +1270,21 @@ struct FoundationModelsGoalSuggestionProvider {
     }
 
     /// 프롬프트가 문자 예산을 넘지 않는 선까지만 메모를 담는다.
-    /// 메모 길이는 사용자마다 제각각이라 "개수" 상한만으로는 크기를 보장할 수 없다.
+    /// 계산은 `WeeklyGoalTask` 가 하고, 여기서는 앱 타입으로 돌려주기만 한다 —
+    /// 태스크는 뒤에서부터만 자르므로 남은 개수만큼 앞에서 취하면 같은 결과다.
     func memosWithinPromptBudget(
         _ memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
         maxMemoCount: Int,
         budget: Int = achievementPromptCharacterBudget
     ) -> [AchievementMemoSnapshot] {
-        // 묶으려면 최소 2개는 있어야 하므로 예산을 넘더라도 2개는 유지한다.
-        let minimumCount = min(2, memos.count)
-        var selected = memos
-        while selected.count > minimumCount {
-            let size = prompt(
-                for: selected,
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
-            ).count
-            if size <= budget { break }
-            selected.removeLast()
-        }
-        return selected
+        let kept = WeeklyGoalTask.memosWithinPromptBudget(
+            memos.map(\.taskMemo),
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            budget: budget
+        )
+        return Array(memos.prefix(kept.count))
     }
 
     func prompt(
@@ -1364,32 +1292,10 @@ struct FoundationModelsGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> String {
-        // 프롬프트 크기가 추론 성패를 가르므로(인시던트 2026-07-31) 값이 없는 필드는 생략한다.
-        // "없음"으로 채우면 메모당 30자 이상을 정보 없이 소비한다.
-        let lines = memos.map { memo in
-            var fields = [
-                "- id: \(memo.id.uuidString)",
-                "  text: \(memo.content)",
-                "  icon: \(memo.icon ?? MemoIcon.defaultIcon)",
-                "  date: \(dateText(memo.date))",
-            ]
-            if memo.startDate != nil {
-                fields.append("  startDate: \(dateText(memo.startDate))")
-            }
-            if memo.deadline != nil {
-                fields.append("  deadline: \(dateText(memo.deadline))")
-            }
-            // 미완료 할일만 입력으로 들어오므로 기본값일 때는 생략한다.
-            if memo.isCompleted {
-                fields.append("  completed: true")
-            }
-            return fields.joined(separator: "\n")
-        }.joined(separator: "\n")
-
-        return AchievementPromptTemplate.weeklyGoalSuggestion(
+        WeeklyGoalTask.prompt(
+            for: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount,
-            items: lines
+            maxMemoCount: maxMemoCount
         )
     }
 
@@ -1397,22 +1303,9 @@ struct FoundationModelsGoalSuggestionProvider {
         for goals: [AchievementGoalSnapshot],
         suggestionCount: Int
     ) -> String {
-        let lines = goals.map { goal in
-            [
-                "- id: \(goal.id.uuidString)",
-                "  title: \(goal.title)",
-                "  emoji: \(goal.emoji)",
-                "  rule: \(goal.rule)",
-                "  progress: \(goal.done)/\(goal.total)",
-                "  role: \(goal.roleName.isEmpty ? "없음" : goal.roleName)",
-                "  vision: \(goal.vision.isEmpty ? "없음" : goal.vision)",
-                "  linkedTodoCount: \(goal.sourceMemoIDs.count)",
-            ].joined(separator: "\n")
-        }.joined(separator: "\n")
-
-        return AchievementPromptTemplate.monthlyGoalSuggestion(
-            suggestionCount: suggestionCount,
-            items: lines
+        MonthlyGoalTask.prompt(
+            for: goals.map(\.taskGoal),
+            suggestionCount: suggestionCount
         )
     }
 
@@ -1523,14 +1416,6 @@ struct FoundationModelsGoalSuggestionProvider {
             return text
         }
         return String(text[start...end])
-    }
-
-    private func dateText(_ date: Date?) -> String {
-        guard let date else { return "없음" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy-MM-dd E HH:mm"
-        return formatter.string(from: date)
     }
 }
 #endif
