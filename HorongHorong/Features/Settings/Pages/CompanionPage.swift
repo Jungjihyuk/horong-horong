@@ -1,3 +1,4 @@
+import HorongAI
 import SwiftUI
 
 struct CompanionPage: View {

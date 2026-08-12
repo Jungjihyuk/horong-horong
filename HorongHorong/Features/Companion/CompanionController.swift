@@ -1,3 +1,4 @@
+import HorongAI
 import AppKit
 import Combine
 import SwiftData
