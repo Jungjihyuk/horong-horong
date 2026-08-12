@@ -15,16 +15,33 @@ let package = Package(
         .library(name: "HorongAIMLX", targets: ["HorongAIMLX"]),
         .library(name: "HorongAITestSupport", targets: ["HorongAITestSupport"]),
     ],
+    // 버전은 앱(`project.yml`)과 같은 범위를 쓴다. 두 주문서의 요구가 어긋나면
+    // 해석 결과가 달라져 API 가 바뀌고 빌드가 깨진다.
+    // `mlx-swift` 는 앱이 선언하지 않았지만 `import MLX` 가 쓰고 있어(전이 의존) 여기서는 명시한다.
+    dependencies: [
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.31.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.31.6"),
+        .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.9.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
+    ],
     targets: [
         // 무거운 의존이 없는 코어. 평가는 여기까지만 링크해 초 단위로 돈다.
         .target(
             name: "HorongAI",
             swiftSettings: swiftSettings
         ),
-        // mlx-swift-lm 이 붙는 유일한 자리. 의존은 S3 에서 MLXTransport 와 함께 추가한다.
+        // 소스를 내려받아 컴파일하는 의존이 붙는 유일한 자리.
         .target(
             name: "HorongAIMLX",
-            dependencies: ["HorongAI"],
+            dependencies: [
+                "HorongAI",
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+                .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+                .product(name: "Tokenizers", package: "swift-transformers"),
+            ],
             swiftSettings: swiftSettings
         ),
         // 제품에 포함되지 않는다. 패키지 테스트와 앱 테스트가 함께 쓰는 가짜 공급자·픽스처.
