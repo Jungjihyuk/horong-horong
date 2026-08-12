@@ -111,7 +111,6 @@
 		533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */; };
 		551E54ED93091D6338E60980 /* RewardRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33546B9C0761EC5EB97F7ED /* RewardRecords.swift */; };
 		5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */; };
-		583A85EF2009295F14DB2637 /* MLXChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */; };
 		59473582E6A58C3CB519A58D /* AppUsageSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */; };
 		5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
 		5B567534BB2A122BA107A303 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 76FD2DA36946E510A88203D6 /* MLXHuggingFace */; };
@@ -206,7 +205,6 @@
 		A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */; };
 		A5A899F873928691D361DCEE /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
 		A64256F8AE4DEEA8FB2B2C8D /* PackageChatProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */; };
-		A6E4C72F56B42CCEA76A68EB /* MLXCompanionChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */; };
 		A73FED9294678DA40C11F8DA /* CompanionChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45FC6E04454D75F832FB7DF3 /* CompanionChatComposer.swift */; };
 		A80C053F7415CA29695F7B8A /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
 		A888B529EAEC4E7CDA370816 /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C509737BC3EE111F4612B /* CompanionCharacter.swift */; };
@@ -257,7 +255,6 @@
 		CCB9DE55F5502038F5321174 /* NewsPipelineLaunchConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA80CB813084951E57A396F /* NewsPipelineLaunchConfiguration.swift */; };
 		CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
 		CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
-		CE8BBB10CF43B3C8E7D998BD /* MLXCompanionChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */; };
 		CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */; };
 		CFD3A2790B1ACD9A6E3FA2F4 /* CompanionAppFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922D40CD9D1BF83B6C912DB0 /* CompanionAppFacts.swift */; };
 		D0AB5D07C20C25FCED53B382 /* CompanionOverlayPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10543053C431650475FC7CAB /* CompanionOverlayPanel.swift */; };
@@ -288,7 +285,6 @@
 		E31A23BC39CC496DE6A0AC67 /* AttentionAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB95F028C60D0DD5F0EEC47 /* AttentionAnalytics.swift */; };
 		E31A54EE84EC9A62F4FA971C /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 249ADDF9DA45E15FEBDF62D3 /* HotKey */; };
 		E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC8779891445802AEFEEDE5 /* NewsView.swift */; };
-		E537A11FA58D6194B688341A /* MLXChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */; };
 		E66989622DD4CF4E1A1E623E /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
 		E8C7E21EF40437EB94DCA161 /* FocusNudgeSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */; };
 		E959B94296644B9C3AF5AA8C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 99C698B2D6E31BC55CA99E28 /* Sparkle */; };
@@ -364,7 +360,6 @@
 		387F464C45BF01C903A0D019 /* AttentionAnalyticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionAnalyticsTests.swift; sourceTree = "<group>"; };
 		3B31DB4E51995E349060A4BF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutPage.swift; sourceTree = "<group>"; };
-		3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXChat.swift; sourceTree = "<group>"; };
 		3ED39392E7BAC9C07C4D8C81 /* CompanionChatProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionChatProvider.swift; sourceTree = "<group>"; };
 		4039F724B01AC70BC29A5AD6 /* HorongAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HorongAI; path = Packages/HorongAI; sourceTree = SOURCE_ROOT; };
 		41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSidebar.swift; sourceTree = "<group>"; };
@@ -471,7 +466,6 @@
 		E8310F1C93CF6B64106DEBF0 /* CompanionGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionGuide.swift; sourceTree = "<group>"; };
 		E9588CFF18EF00481F40F06B /* NewsUsageEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsUsageEstimator.swift; sourceTree = "<group>"; };
 		EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeSettingsStore.swift; sourceTree = "<group>"; };
-		EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXCompanionChat.swift; sourceTree = "<group>"; };
 		EDB2AFEB48A4D9B3BE3A07ED /* overview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = overview; path = assets/overview; sourceTree = SOURCE_ROOT; };
 		EDE1DBB9705778C054D58377 /* StatsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPage.swift; sourceTree = "<group>"; };
 		EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickMemoView.swift; sourceTree = "<group>"; };
@@ -762,8 +756,6 @@
 				E770C560F075B1D388B9C7C3 /* FocusScoreHistory.swift */,
 				BFA980B169A5C2F9099E7DDE /* FocusScoreMonitor.swift */,
 				8D0D6724228BCA301EECBFEC /* FocusTrend.swift */,
-				3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */,
-				EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */,
 				43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */,
 			);
 			path = Companion;
@@ -1205,8 +1197,6 @@
 				238B891522C7CEB45D85FAA8 /* IdlePromptPanel.swift in Sources */,
 				00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */,
 				8D8AC3134395938061C6D48F /* LanternOilJarView.swift in Sources */,
-				583A85EF2009295F14DB2637 /* MLXChat.swift in Sources */,
-				A6E4C72F56B42CCEA76A68EB /* MLXCompanionChat.swift in Sources */,
 				A2F05E50922514EAD713165E /* MLXGoalSuggestionProvider.swift in Sources */,
 				043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */,
 				785236243EA27B543C8746A1 /* MainHubWindow.swift in Sources */,
@@ -1341,8 +1331,6 @@
 				3A1DAABFEF3A8028ADD4CD79 /* IdlePromptPanel.swift in Sources */,
 				CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */,
 				86FFA4D3D5C222867E3BCA28 /* LanternOilJarView.swift in Sources */,
-				E537A11FA58D6194B688341A /* MLXChat.swift in Sources */,
-				CE8BBB10CF43B3C8E7D998BD /* MLXCompanionChat.swift in Sources */,
 				0F922F270875249444EAB113 /* MLXGoalSuggestionProvider.swift in Sources */,
 				CBC2870A5ECA2D2DC5BDCF45 /* MLXModelPicker.swift in Sources */,
 				642FEC07572D2F634E399383 /* MainHubWindow.swift in Sources */,
