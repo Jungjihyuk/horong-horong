@@ -73,6 +73,49 @@ public enum MonthlyGoalTask {
         )
     }
 
+    // MARK: - 응답 읽기
+
+    /// 주간과 달리 진단 로그가 없어 후보 목록만 돌려준다.
+    ///
+    /// `sourceGoals` 가 필요한 이유는 월간 후보가 **묶은 주간 목표들의 할일까지 끌어올리기** 때문이다.
+    public static func parse(
+        _ text: String,
+        allowedIDs: Set<UUID>,
+        sourceGoals: [Goal],
+        suggestionCount: Int
+    ) -> [GoalSuggestionDraft] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let payload = GoalSuggestionPayload(responseText: trimmed) else {
+            return []
+        }
+
+        let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
+        var used = Set<UUID>()
+        return payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
+            let ids = (item.goalIDs ?? []).compactMap(UUID.init(uuidString:))
+                .filter { allowedIDs.contains($0) && !used.contains($0) }
+                .prefix(4)
+            guard ids.count >= 2 else { return nil }
+            used.formUnion(ids)
+            let goals = ids.compactMap { goalByID[$0] }
+            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
+            let scheduleText = item.scheduleText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return GoalSuggestionDraft(
+                title: title.isEmpty ? "추천 월간 목표" : title,
+                reason: item.reason,
+                memoIDs: Array(Set(goals.flatMap(\.sourceMemoIDs))),
+                childGoalIDs: Array(ids),
+                scheduleText: scheduleText.isEmpty ? "이번 달에 주간 목표 \(ids.count)개로 나눠 진행" : scheduleText,
+                criterion: criterion.isEmpty ? "연결한 주간 목표 \(ids.count)개 달성" : criterion,
+                targetValueText: "\(ids.count)개",
+                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅"
+            )
+        }
+        .prefix(suggestionCount)
+        .map { $0 }
+    }
+
     private static let promptFallback = """
     아래 주간 목표들을 의미, 달성 기준, 페르소나, 비전, 연결된 할일 수를 함께 보고 월간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
     월간 목표 하나에는 주간 목표를 2개 이상 4개 이하로 넣어.

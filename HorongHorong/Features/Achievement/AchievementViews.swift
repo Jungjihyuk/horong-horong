@@ -985,20 +985,6 @@ enum AchievementGoalSuggestionBuilder {
     }
 }
 
-private struct AchievementFoundationSuggestionPayload: Codable {
-    let suggestions: [Item]
-
-    struct Item: Codable {
-        let title: String
-        let reason: String
-        let memoIDs: [String]?
-        let goalIDs: [String]?
-        let scheduleText: String
-        let criterion: String
-        let emoji: String?
-    }
-}
-
 enum AchievementFoundationGoalSuggestionProvider {
     /// 설정에서 고른 공급자로 추천을 만든다. 실패하면 다음 단계로 내려간다.
     ///
@@ -1130,6 +1116,26 @@ private extension AchievementMemoSnapshot {
             startDate: startDate,
             deadline: deadline,
             isCompleted: isCompleted
+        )
+    }
+}
+
+/// 패키지가 만든 초안을 앱 도메인 값으로 바꾼다.
+///
+/// `reason` 을 여기서 줄이는 이유는 72자 제한이 **화면 사정**이기 때문이다 — 파서가 정할 일이 아니다.
+private extension GoalSuggestionDraft {
+    func suggestion(cadence: AchievementGoalCadence) -> AchievementGoalSuggestion {
+        AchievementGoalSuggestion(
+            title: title,
+            reason: AchievementDataBuilder.shortText(reason, limit: 72),
+            memoIDs: memoIDs,
+            childGoalIDs: childGoalIDs,
+            scheduleText: scheduleText,
+            criterion: criterion,
+            targetValueText: targetValueText,
+            emoji: emoji,
+            cadence: cadence,
+            source: .foundationModel
         )
     }
 }
@@ -1309,63 +1315,36 @@ struct FoundationModelsGoalSuggestionProvider {
         )
     }
 
+    /// 파싱은 `WeeklyGoalTask` 가 하고, 여기서는 진단값을 로그로 옮긴다.
+    /// 로그 문구를 앱에 남기는 이유는 패키지가 앱의 `OSLog` 카테고리를 알면 안 되기 때문이다.
     func parse(
         _ text: String,
         allowedIDs: Set<UUID>,
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> [AchievementGoalSuggestion] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let jsonText = extractJSONObject(from: trimmed)
-        guard let data = jsonText.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
-            achievementSuggestionLog.error("weekly parse failure=decode chars=\(trimmed.count, privacy: .public)")
-            return []
-        }
+        let outcome = WeeklyGoalTask.parse(
+            text,
+            allowedIDs: allowedIDs,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
 
-        // 모델이 낸 개수와 파서가 살린 개수를 구분해야 "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
-        var badID = 0
-        var alreadyUsed = 0
-        var overMaxMemo = 0
-        var tooFewIDs = 0
-        var requestedIDs = 0
-        var used = Set<UUID>()
-        let result = payload.suggestions.compactMap { item -> AchievementGoalSuggestion? in
-            let raw = item.memoIDs ?? []
-            requestedIDs += raw.count
-            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
-            badID += raw.count - parsedIDs.count
-            let unused = parsedIDs.filter { !used.contains($0) }
-            alreadyUsed += parsedIDs.count - unused.count
-            let ids = unused.prefix(maxMemoCount)
-            overMaxMemo += unused.count - ids.count
-            guard ids.count >= 2 else {
-                tooFewIDs += 1
-                return nil
-            }
-            used.formUnion(ids)
-            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
-            return AchievementGoalSuggestion(
-                title: title.isEmpty ? "추천 목표" : title,
-                reason: AchievementDataBuilder.shortText(item.reason, limit: 72),
-                memoIDs: Array(ids),
-                scheduleText: item.scheduleText.isEmpty ? "이번 주에 나눠 진행" : item.scheduleText,
-                criterion: criterion.isEmpty ? "연결한 할일 \(ids.count)개 완료" : criterion,
-                targetValueText: "\(ids.count)개",
-                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "🎯",
-                source: .foundationModel
+        switch outcome.diagnostics {
+        case .decodeFailed(let characters):
+            achievementSuggestionLog.error("weekly parse failure=decode chars=\(characters, privacy: .public)")
+        case let .decoded(modelReturned, kept, requestedIDs, badID, alreadyUsed, overMaxMemo, tooFewIDs):
+            achievementSuggestionLog.info(
+                """
+                weekly parse modelReturned=\(modelReturned, privacy: .public) \
+                kept=\(kept, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
+                badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
+                overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
+                """
             )
         }
-        achievementSuggestionLog.info(
-            """
-            weekly parse modelReturned=\(payload.suggestions.count, privacy: .public) \
-            kept=\(result.count, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
-            badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
-            overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
-            """
-        )
-        return Array(result.prefix(suggestionCount))
+
+        return outcome.drafts.map { $0.suggestion(cadence: .weekly) }
     }
 
     private func parseMonthly(
@@ -1374,48 +1353,12 @@ struct FoundationModelsGoalSuggestionProvider {
         sourceGoals: [AchievementGoalSnapshot],
         suggestionCount: Int
     ) -> [AchievementGoalSuggestion] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let jsonText = extractJSONObject(from: trimmed)
-        guard let data = jsonText.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
-            return []
-        }
-
-        let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
-        var used = Set<UUID>()
-        return payload.suggestions.compactMap { item in
-            let ids = (item.goalIDs ?? []).compactMap(UUID.init(uuidString:))
-                .filter { allowedIDs.contains($0) && !used.contains($0) }
-                .prefix(4)
-            guard ids.count >= 2 else { return nil }
-            used.formUnion(ids)
-            let goals = ids.compactMap { goalByID[$0] }
-            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
-            let scheduleText = item.scheduleText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return AchievementGoalSuggestion(
-                title: title.isEmpty ? "추천 월간 목표" : title,
-                reason: AchievementDataBuilder.shortText(item.reason, limit: 72),
-                memoIDs: Array(Set(goals.flatMap(\.sourceMemoIDs))),
-                childGoalIDs: Array(ids),
-                scheduleText: scheduleText.isEmpty ? "이번 달에 주간 목표 \(ids.count)개로 나눠 진행" : scheduleText,
-                criterion: criterion.isEmpty ? "연결한 주간 목표 \(ids.count)개 달성" : criterion,
-                targetValueText: "\(ids.count)개",
-                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅",
-                cadence: .monthly,
-                source: .foundationModel
-            )
-        }
-        .prefix(suggestionCount)
-        .map { $0 }
-    }
-
-    func extractJSONObject(from text: String) -> String {
-        guard let start = text.firstIndex(of: "{"),
-              let end = text.lastIndex(of: "}") else {
-            return text
-        }
-        return String(text[start...end])
+        MonthlyGoalTask.parse(
+            text,
+            allowedIDs: allowedIDs,
+            sourceGoals: sourceGoals.map(\.taskGoal),
+            suggestionCount: suggestionCount
+        ).map { $0.suggestion(cadence: .monthly) }
     }
 }
 #endif
