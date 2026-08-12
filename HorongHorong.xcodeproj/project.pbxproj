@@ -271,7 +271,6 @@
 		D3A7AF1B5C2F2BFA3827CE1B /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214CF0D4CCCD0DC041B81763 /* CompanionView.swift */; };
 		D3A9B0E1BC89A9372DEBDA71 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 35D04CBF0379115D83507E57 /* MLXLMCommon */; };
 		D45010C8795E2A349C1C6226 /* NewsUsageEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9588CFF18EF00481F40F06B /* NewsUsageEstimator.swift */; };
-		D567213DD211114F724AF461 /* FoundationModelsCompanionChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A4B9254B4D8180FC3F6E6A /* FoundationModelsCompanionChat.swift */; };
 		D7282E6EE4EE7518C643767E /* HotkeyPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41F124D194AD141C45AD373 /* HotkeyPage.swift */; };
 		D73B107FF69D256E8EB3818C /* NewsSourceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */; };
 		D7AC6BC9D65AE62285D791EA /* DataPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C3B4093C76333C488BBFBF /* DataPage.swift */; };
@@ -291,7 +290,6 @@
 		E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC8779891445802AEFEEDE5 /* NewsView.swift */; };
 		E537A11FA58D6194B688341A /* MLXChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */; };
 		E66989622DD4CF4E1A1E623E /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
-		E782AAF09840A0F285CF6439 /* FoundationModelsCompanionChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A4B9254B4D8180FC3F6E6A /* FoundationModelsCompanionChat.swift */; };
 		E8C7E21EF40437EB94DCA161 /* FocusNudgeSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */; };
 		E959B94296644B9C3AF5AA8C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 99C698B2D6E31BC55CA99E28 /* Sparkle */; };
 		EA80346AF95E33D253BC6571 /* StatsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE1DBB9705778C054D58377 /* StatsPage.swift */; };
@@ -327,7 +325,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		02A4B9254B4D8180FC3F6E6A /* FoundationModelsCompanionChat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsCompanionChat.swift; sourceTree = "<group>"; };
 		0327985821E5D309FC544549 /* AttentionThresholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionThresholdStore.swift; sourceTree = "<group>"; };
 		0424CD9D3311EDFEC29D3EC7 /* AchievementViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementViews.swift; sourceTree = "<group>"; };
 		06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalSuggestionRegressionTests.swift; sourceTree = "<group>"; };
@@ -765,7 +762,6 @@
 				E770C560F075B1D388B9C7C3 /* FocusScoreHistory.swift */,
 				BFA980B169A5C2F9099E7DDE /* FocusScoreMonitor.swift */,
 				8D0D6724228BCA301EECBFEC /* FocusTrend.swift */,
-				02A4B9254B4D8180FC3F6E6A /* FoundationModelsCompanionChat.swift */,
 				3CEE4F3FA1E7990550BAE0B1 /* MLXChat.swift */,
 				EB4C706D6390F8136BD01070 /* MLXCompanionChat.swift */,
 				43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */,
@@ -1199,7 +1195,6 @@
 				5C133D6869A17AC0EF866C0A /* FocusScoreMonitor.swift in Sources */,
 				44D9797D84B677ADC0CDFF21 /* FocusSession.swift in Sources */,
 				F6B88F3E1063A778E745ACAF /* FocusTrend.swift in Sources */,
-				D567213DD211114F724AF461 /* FoundationModelsCompanionChat.swift in Sources */,
 				1A6C7DA23BA0F48C7DEFCC48 /* GeneralPage.swift in Sources */,
 				44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */,
 				CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */,
@@ -1336,7 +1331,6 @@
 				43B78417AB8E270AAFC92D5C /* FocusScoreMonitor.swift in Sources */,
 				853DD6929C384C8932D1626E /* FocusSession.swift in Sources */,
 				D267A1F7EE53DE6896C4AF36 /* FocusTrend.swift in Sources */,
-				E782AAF09840A0F285CF6439 /* FoundationModelsCompanionChat.swift in Sources */,
 				6255BEFEB2A8D1DE41BD3A09 /* GeneralPage.swift in Sources */,
 				46A453BF1EF4944AB3ABC7D7 /* HorongHorongApp.swift in Sources */,
 				A350A5EAE13EA123D76BFB02 /* HotKeyManager.swift in Sources */,

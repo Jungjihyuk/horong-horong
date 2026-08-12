@@ -55,7 +55,7 @@ private final class PackageChatSession: CompanionChatSession {
     private static func convert(_ response: LLMResponse) -> CompanionChatReply {
         CompanionChatReply(
             text: response.text,
-            mood: response.mood.flatMap(CompanionMood.init(rawValue:))
+            mood: response.mood.flatMap(CompanionMood.init(modelValue:))
         )
     }
 }
