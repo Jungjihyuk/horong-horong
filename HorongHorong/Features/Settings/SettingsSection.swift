@@ -15,6 +15,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case memo
     case data
     case about
+    case ailab
 
     var id: String { rawValue }
 
@@ -34,6 +35,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .memo:       return "메모"
         case .data:       return "데이터"
         case .about:      return "정보"
+        case .ailab:      return "AI 실험실"
         }
     }
 
@@ -54,6 +56,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .memo:       return "퀵 메모 동작을 설정합니다."
         case .data:       return "백업·복원과 데이터 초기화를 관리합니다."
         case .about:      return "호롱호롱 소개와 버전 정보."
+        case .ailab:      return "앱 내부 평가 파이프라인 결과를 시각적으로 분석합니다."
         }
     }
 
@@ -73,6 +76,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .memo:       return "note.text"
         case .data:       return "externaldrive"
         case .about:      return "info.circle"
+        case .ailab:      return "flask"
         }
     }
 
@@ -129,12 +133,34 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .about:
             return ["호롱호롱", "버전", "GitHub", "사용 가이드", "라이선스",
                     "Apache", "제3자 컴포넌트", "HotKey", "Pretendard", "크레딧"]
+        case .ailab:
+            return ["AI", "실험실", "평가", "채점", "대시보드", "테스트", "LLM"]
         }
     }
 
     /// label / subtitle / searchKeywords 합쳐서 검색에 쓰이는 텍스트 풀.
     var searchableHaystack: String {
         ([label, subtitle] + searchKeywords).joined(separator: " ")
+    }
+
+    /// 개발자만 보는 탭. 일반 사용자에게는 사이드바·검색·호로롱 답변 어디에도 나오지 않는다.
+    var isDeveloperOnly: Bool {
+        self == .ailab
+    }
+
+    /// Debug 빌드에서는 항상 보이고, Release 빌드에서는 숨김 플래그를 켠 경우에만 보인다.
+    /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
+    static var showsDeveloperTabs: Bool {
+        #if DEBUG
+        return true
+        #else
+        return UserDefaults.standard.bool(forKey: Constants.AppStorageKey.aiLabEnabled)
+        #endif
+    }
+
+    /// 실제로 노출할 탭 목록. 사이드바·검색·호로롱 안내가 모두 이 목록을 근거로 삼는다.
+    static var visibleCases: [SettingsTab] {
+        showsDeveloperTabs ? allCases : allCases.filter { !$0.isDeveloperOnly }
     }
 }
 
@@ -146,7 +172,12 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 개발자 전용 탭은 노출 조건을 만족할 때만 남긴다.
     var tabs: [SettingsTab] {
+        allTabs.filter { !$0.isDeveloperOnly || SettingsTab.showsDeveloperTabs }
+    }
+
+    private var allTabs: [SettingsTab] {
         switch self {
         case .preferences:
             return [.general, .appearance, .hotkey]
@@ -155,7 +186,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
         case .insightsAndAction:
             return [.news, .memo, .agent, .achievement, .companion]
         case .system:
-            return [.data, .about]
+            return [.data, .about, .ailab]
         }
     }
 }

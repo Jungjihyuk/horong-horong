@@ -66,7 +66,8 @@ struct SettingsRoot: View {
             // 온보딩이 설명하는 페이지로 옮겨준다.
             guard let action = notification.object as? String,
                   action.hasPrefix("settings.show:"),
-                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count)))
+                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count))),
+                  SettingsTab.visibleCases.contains(tab)
             else { return }
             selection = tab
         }
@@ -142,6 +143,7 @@ struct SettingsRoot: View {
         case .memo:       MemoPage()
         case .data:       DataPage()
         case .about:      AboutPage()
+        case .ailab:      AILabView()
         }
     }
 

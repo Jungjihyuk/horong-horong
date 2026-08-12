@@ -34,15 +34,7 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let shouldNotGroup: [[String]]?
     }
 
-    private struct EvalResult: Encodable {
-        let caseName: String
-        let promptCharacters: Int
-        let memosInPrompt: Int
-        let modelReturned: Int
-        let predictedGroups: [[String]]
-        let titles: [String]
-        let source: String
-    }
+// EvalResult 구조체는 HorongHorong/AI/Evals/EvalRunner.swift의 공용 모델을 사용합니다.
 
     // MARK: - 실행
 
@@ -68,25 +60,25 @@ final class GoalSuggestionEvalTests: XCTestCase {
 
         XCTAssertFalse(caseFiles.isEmpty, "골든셋 케이스가 없습니다.")
 
-        var lines: [String] = []
-        for file in caseFiles {
-            let goldenCase = try JSONDecoder().decode(GoldenCase.self, from: Data(contentsOf: file))
-            let result = await run(goldenCase)
-            lines.append(String(data: try JSONEncoder().encode(result), encoding: .utf8) ?? "")
-        }
-
         let outputDirectory = repositoryRoot.appendingPathComponent("Evals/results", isDirectory: true)
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let outputFile = outputDirectory.appendingPathComponent("\(stamp).jsonl")
-        try lines.joined(separator: "\n").write(to: outputFile, atomically: true, encoding: .utf8)
+        
+        // 새로 도입한 EvalRunner를 사용합니다.
+        let runner = EvalRunner(outputURL: outputFile)
+
+        for file in caseFiles {
+            let goldenCase = try JSONDecoder().decode(GoldenCase.self, from: Data(contentsOf: file))
+            await run(goldenCase, runner: runner)
+        }
 
         print("[eval] \(caseFiles.count)개 케이스 → \(outputFile.path)")
     }
 
     // MARK: - 한 케이스 실행
 
-    private func run(_ goldenCase: GoldenCase) async -> EvalResult {
+    private func run(_ goldenCase: GoldenCase, runner: EvalRunner) async {
         // 골든셋의 짧은 id(m1)를 결정적 UUID로 바꾼다.
         // 같은 id는 항상 같은 UUID가 되어야 실행 간 비교가 가능하다.
         var uuidByShortID: [String: UUID] = [:]
@@ -116,25 +108,42 @@ final class GoalSuggestionEvalTests: XCTestCase {
             ?? Constants.defaultAchievementSuggestionProvider
         UserDefaults.standard.set(requested, forKey: Constants.AppStorageKey.achievementSuggestionProvider)
 
+        let startTime = Date()
         let suggestions = await AchievementFoundationGoalSuggestionProvider.suggestions(
             from: snapshots,
             suggestionCount: Constants.defaultAchievementSuggestionCount,
             maxMemoCount: Constants.defaultAchievementSuggestionMaxTodoCount
         )
+        let latencyMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
         let predicted = suggestions.map { suggestion in
             suggestion.memoIDs.compactMap { shortIDByUUID[$0] }
         }
 
-        return EvalResult(
-            caseName: goldenCase.caseName,
-            promptCharacters: 0,   // 프롬프트 크기는 provider 내부 로그로 확인한다
-            memosInPrompt: snapshots.count,
-            modelReturned: suggestions.count,
+        // 🚀 새롭게 이식한 Swift 기반 PairEvaluator로 앱 내부에서 즉시 채점!
+        let f1Score = PairEvaluator.score(
+            expectedGroups: goldenCase.expectedGroups,
             predictedGroups: predicted,
-            titles: suggestions.map(\.title),
-            source: suggestions.first?.source.rawValue ?? "none"
+            shouldNotGroup: goldenCase.shouldNotGroup ?? []
+        ).f1
+        
+        let outputText = suggestions.map { "- \($0.title)" }.joined(separator: "\n")
+
+        let result = EvalResult(
+            caseId: goldenCase.caseName,
+            input: goldenCase.note,
+            level: "L0", // 기존 할일 추천은 문맥 주입이 없는 순수 프롬프팅이므로 L0
+            model: requested, // 평가에 사용된 모델(또는 제공자) 기록
+            output: outputText,
+            scores: [
+                "pairF1": f1Score,
+                "honorific": DeterministicCheckers.checkHonorific(outputText),
+                "sentenceCount": DeterministicCheckers.checkSentenceCount(outputText, maxCount: 3)
+            ],
+            latencyMs: latencyMs
         )
+        
+        runner.record(result)
     }
 
     // MARK: - 보조

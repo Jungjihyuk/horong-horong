@@ -45,7 +45,7 @@ enum CompanionAppFacts {
             ),
             Fact(
                 keywords: ["설정", "설정 창", "설정창"],
-                line: "설정 페이지: " + SettingsTab.allCases
+                line: "설정 페이지: " + SettingsTab.visibleCases
                     .map(\.label)
                     .joined(separator: ", ")
             ),

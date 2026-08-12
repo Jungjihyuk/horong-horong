@@ -935,6 +935,11 @@ enum Constants {
         /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
         static let companionMLXPreparedModels = "companion.mlxPreparedModels"
         static let companionBubbleSize = "companion.bubbleSize"
+        /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.
+        static let aiLabRatings = "ailab.ratings"
+        /// 개발자 전용 탭(AI 실험실) 노출 여부. Release 빌드에서 직접 켤 때만 쓰는 숨김 플래그.
+        /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
+        static let aiLabEnabled = "ailab.enabled"
     }
 
     // MARK: - 메뉴바 표시 형식

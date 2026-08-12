@@ -106,3 +106,11 @@ run-metrics:
 	echo "meta : $$META"; \
 	echo "trace: $$TRACE"; \
 	cd Agents/news_report && uv run python -m evals.research_run_metrics --meta "$$META" --trace "$$TRACE"
+
+# Generate static HTML matrix dashboard from evaluation JSONL
+eval-report:
+	@if [ -z "$(INPUT)" ]; then \
+		echo "Usage: make eval-report INPUT=Evals/results.jsonl"; \
+		exit 1; \
+	fi
+	uv run python Evals/eval-report.py --input "$(INPUT)" --output Evals/eval-report.html
