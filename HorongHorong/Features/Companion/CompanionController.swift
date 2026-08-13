@@ -791,18 +791,18 @@ final class CompanionController {
         let session = chatSessionForCurrentCharacter()
         let isTaskQuestion = CompanionTaskQuestion.matches(message)
         let items = isTaskQuestion ? todayBriefingItems() : []
-        let evidence = isTaskQuestion ? [] : appEvidence(for: message)
-        let guide = isTaskQuestion ? nil : guideEvidence(for: message)
+        // 순서가 곧 프롬프트 순서다 — 앱 사실 · 설정 위치 · 설명서.
+        let evidence = isTaskQuestion
+            ? []
+            : appEvidence(for: message) + [guideEvidence(for: message)].compactMap { $0 }
         // 근거가 있으면 창의성이 필요 없다. 낮은 온도가 지어내는 걸 줄인다.
-        let hasEvidence = !evidence.isEmpty || guide != nil
-        let modelInput = CompanionChatComposer.modelInput(
+        let hasEvidence = !evidence.isEmpty
+        let modelInput = CompanionChatTask.modelInput(
             userMessage: message,
             taskDigest: isTaskQuestion
                 ? CompanionTaskDigest.format(items: items, now: Date())
                 : nil,
-            // 조각을 잇는 방식은 지금 그대로다. 어떻게 실을지는 S5d 에서 조립기가 정한다.
-            appFacts: evidence.isEmpty ? nil : evidence.map(\.text).joined(separator: "\n"),
-            guideSection: guide?.text
+            evidence: evidence
         )
         // 일정은 모델의 문장이 아니라 저장된 데이터로 그린다.
         pendingSchedule = isTaskQuestion
