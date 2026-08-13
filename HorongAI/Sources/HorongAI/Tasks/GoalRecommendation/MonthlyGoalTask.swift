@@ -86,6 +86,10 @@ public enum MonthlyGoalTask {
         /// 생성이 실패했으면 그 에러. **문자열이 아니라 에러 그대로** 돌려주는 이유는
         /// 릴리스에서 타입 이름만 남길지가 앱 정책이기 때문이다(`WeeklyGoalTask.RunOutcome` 과 같다).
         public let failure: Error?
+        /// 실제로 프롬프트에 실린 주간 목표의 id.
+        public let selectedIDs: [UUID]
+        public let promptCharacters: Int
+        public let timings: [String: Int]
     }
 
     /// 개수 자르기 → 프롬프트 → 생성 → 파싱.
@@ -98,13 +102,26 @@ public enum MonthlyGoalTask {
         inputLimit: Int,
         generate: (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> RunOutcome {
-        let prompt = prompt(
-            for: Array(goals.prefix(inputLimit)),
-            suggestionCount: suggestionCount
-        )
+        let clock = StepClock()
+        let selected = Array(goals.prefix(inputLimit))
+        clock.mark("select_input")
+
+        let prompt = prompt(for: selected, suggestionCount: suggestionCount)
+        clock.mark("render_prompt")
+
+        func outcome(drafts: [GoalSuggestionDraft], failure: Error?) -> RunOutcome {
+            RunOutcome(
+                drafts: drafts,
+                failure: failure,
+                selectedIDs: selected.map(\.id),
+                promptCharacters: prompt.count,
+                timings: clock.elapsed
+            )
+        }
 
         do {
             let text = try await generate(prompt, instructions)
+            clock.mark("generate")
             // 허용 id 와 원본 목표는 **자르기 전 전체**다. 잘린 목표의 할일까지 끌어올려야 하는
             // 경우가 생기면 좁혀 둔 쪽이 조용히 후보를 잃는다.
             let drafts = parse(
@@ -113,9 +130,11 @@ public enum MonthlyGoalTask {
                 sourceGoals: goals,
                 suggestionCount: suggestionCount
             )
-            return RunOutcome(drafts: drafts, failure: nil)
+            clock.mark("parse")
+            return outcome(drafts: drafts, failure: nil)
         } catch {
-            return RunOutcome(drafts: [], failure: error)
+            clock.mark("generate")
+            return outcome(drafts: [], failure: error)
         }
     }
 

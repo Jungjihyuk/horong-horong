@@ -205,6 +205,12 @@ public enum WeeklyGoalTask {
     public struct RunOutcome {
         public let drafts: [GoalSuggestionDraft]
         public let diagnostics: Diagnostics
+        /// 실제로 프롬프트에 실린 입력의 id. **무엇을 보여줬는지**를 되짚는 축이다.
+        /// 원문은 담지 않는다 — 필요하면 앱이 저장소에서 붙인다.
+        public let selectedIDs: [UUID]
+        public let promptCharacters: Int
+        /// 단계별 소요(ms). 총합만 보면 58초 중 무엇이 오래 걸렸는지 알 수 없다.
+        public let timings: [String: Int]
 
         public enum Diagnostics {
             case parsed(ParseOutcome.Diagnostics)
@@ -239,32 +245,53 @@ public enum WeeklyGoalTask {
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
         generate: (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> RunOutcome {
+        let clock = StepClock()
+
         let selected = memosWithinPromptBudget(
             Array(memos.prefix(inputLimit)),
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount,
             budget: budget
         )
+        clock.mark("select_input")
+
         let prompt = prompt(
             for: selected,
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount
         )
+        clock.mark("render_prompt")
         onPromptBuilt(prompt.count, selected.count)
+
+        func outcome(
+            drafts: [GoalSuggestionDraft],
+            diagnostics: RunOutcome.Diagnostics
+        ) -> RunOutcome {
+            RunOutcome(
+                drafts: drafts,
+                diagnostics: diagnostics,
+                selectedIDs: selected.map(\.id),
+                promptCharacters: prompt.count,
+                timings: clock.elapsed
+            )
+        }
 
         do {
             let text = try await generate(prompt, instructions)
+            clock.mark("generate")
             // 허용 id 는 **자르기 전 전체**다. 예산에 밀려 프롬프트에 안 들어간 id 를 모델이
             // 지어내는 일은 없지만, 좁히면 재시도·캐시 같은 걸 붙일 때 조용히 후보를 잃는다.
-            let outcome = parse(
+            let parsed = parse(
                 text,
                 allowedIDs: Set(memos.map(\.id)),
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount
             )
-            return RunOutcome(drafts: outcome.drafts, diagnostics: .parsed(outcome.diagnostics))
+            clock.mark("parse")
+            return outcome(drafts: parsed.drafts, diagnostics: .parsed(parsed.diagnostics))
         } catch {
-            return RunOutcome(drafts: [], diagnostics: .generationFailed(error))
+            clock.mark("generate")
+            return outcome(drafts: [], diagnostics: .generationFailed(error))
         }
     }
 
