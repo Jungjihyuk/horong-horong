@@ -993,17 +993,30 @@ enum AchievementFoundationGoalSuggestionProvider {
     ///
     /// MLX가 실패하는 경우는 대체로 모델 미준비이거나 Intel 맥이다. 둘 다 사용자가
     /// 당장 손쓸 수 없으므로 조용히 AFM으로 내려가는 편이 낫다.
+    /// - Parameters:
+    ///   - runID: 버튼 한 번에 붙는 id. 주간·월간이 같은 값을 받아 한 실행으로 묶인다.
+    ///   - candidateCount: 필터를 통과한 **전체** 후보 수. 태스크는 이 값을 모른다 —
+    ///     `memos` 는 이미 걸러진 뒤라, 얼마나 걸러졌는지는 앱만 안다.
     static func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        runID: String = AIRunLog.newRunID(),
+        candidateCount: Int? = nil
     ) async -> [AchievementGoalSuggestion] {
+        let context = RunContext(
+            runID: runID,
+            task: "weekly_goal",
+            candidateCount: candidateCount ?? memos.count
+        )
+
         switch selectedProvider {
         case .mlx:
             let fromMLX = await mlxSuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context.attempt(1)
             )
             if !fromMLX.isEmpty { return fromMLX }
             achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
@@ -1011,17 +1024,21 @@ enum AchievementFoundationGoalSuggestionProvider {
             let fromOllama = await ollamaSuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context.attempt(1)
             )
             if !fromOllama.isEmpty { return fromOllama }
             achievementSuggestionLog.info("weekly provider fallback=ollama→afm")
         case .appleFoundation:
             break
         }
+        // AFM 이 첫 시도인지 폴백인지에 따라 순번이 달라진다. 그래야 기록에서
+        // "Ollama 가 실패해 내려온 AFM"과 "처음부터 AFM"이 구분된다.
         return await appleFoundationSuggestions(
             from: memos,
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
+            maxMemoCount: maxMemoCount,
+            context: context.attempt(selectedProvider == .appleFoundation ? 1 : 2)
         )
     }
 
@@ -1034,7 +1051,8 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func mlxSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         #if canImport(MLXLLM)
         if #available(macOS 26.0, *) {
@@ -1048,6 +1066,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 provider: .mlx,
                 model: model,
                 source: .mlx,
+                context: context,
                 generate: { prompt, instructions in
                     try await generator.generate(
                         prompt: prompt,
@@ -1066,7 +1085,8 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func ollamaSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         if #available(macOS 26.0, *) {
             let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
@@ -1081,6 +1101,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 provider: .ollama,
                 model: model,
                 source: .ollama,
+                context: context,
                 // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
                 precondition: { await generator.isReachable() },
                 generate: { prompt, instructions in
@@ -1112,13 +1133,23 @@ enum AchievementFoundationGoalSuggestionProvider {
         provider: Constants.AchievementSuggestionProviderKind,
         model: String,
         source: AchievementGoalSuggestionSource,
+        context: RunContext,
         precondition: () async -> Bool = { true },
         generate: (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> [AchievementGoalSuggestion] {
         let label = provider.rawValue
+        let startedAt = Date()
 
         guard await precondition() else {
             achievementSuggestionLog.error("weekly \(label, privacy: .public) failure=serverUnavailable")
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: "serverUnavailable"
+                )
+            )
             return []
         }
 
@@ -1138,6 +1169,8 @@ enum AchievementFoundationGoalSuggestionProvider {
             },
             generate: generate
         )
+
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly).retagged(as: source) }
 
         switch outcome.diagnostics {
         case .parsed(let diagnostics):
@@ -1160,8 +1193,22 @@ enum AchievementFoundationGoalSuggestionProvider {
             )
         }
 
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: label,
+                model: model,
+                outcome: outcome.diagnostics.recordedOutcome(hasDrafts: !outcome.drafts.isEmpty),
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: outcome.diagnostics.parseSummary,
+                timings: outcome.timings
+            )
+        )
+
         // 태스크는 어느 공급자가 답했는지 모른다. 실제 공급자로 태깅해 폴백 비율 집계를 맞춘다.
-        return outcome.drafts.map { $0.suggestion(cadence: .weekly).retagged(as: source) }
+        return suggestions
     }
 
     /// 파서 진단을 로그 한 줄로. AFM 경로(`FoundationModelsGoalSuggestionProvider.parse`)와 같은 문구를 쓴다.
@@ -1184,14 +1231,16 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func appleFoundationSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await FoundationModelsGoalSuggestionProvider().suggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context
             )
         }
         #endif
@@ -1200,13 +1249,20 @@ enum AchievementFoundationGoalSuggestionProvider {
 
     static func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
+        suggestionCount: Int,
+        runID: String = AIRunLog.newRunID(),
+        candidateCount: Int? = nil
     ) async -> [AchievementGoalSuggestion] {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await FoundationModelsGoalSuggestionProvider().monthlySuggestions(
                 from: goals,
-                suggestionCount: suggestionCount
+                suggestionCount: suggestionCount,
+                context: RunContext(
+                    runID: runID,
+                    task: "monthly_goal",
+                    candidateCount: candidateCount ?? goals.count
+                )
             )
         }
         #endif
@@ -1275,12 +1331,22 @@ struct FoundationModelsGoalSuggestionProvider {
     func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        context: RunContext
     ) async -> [AchievementGoalSuggestion] {
+        let startedAt = Date()
         let generator = AppleFoundationModelsTextGenerator()
         guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "weekly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "modelUnavailable"
+                )
             )
             return []
         }
@@ -1329,17 +1395,41 @@ struct FoundationModelsGoalSuggestionProvider {
             achievementSuggestionLog.error("\(promptSummary, privacy: .public)")
         }
 
-        return outcome.drafts.map { $0.suggestion(cadence: .weekly) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly) }
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: "appleFoundation",
+                model: nil,
+                outcome: outcome.diagnostics.recordedOutcome(hasDrafts: !outcome.drafts.isEmpty),
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: outcome.diagnostics.parseSummary,
+                timings: outcome.timings
+            )
+        )
+        return suggestions
     }
 
     func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
+        suggestionCount: Int,
+        context: RunContext
     ) async -> [AchievementGoalSuggestion] {
+        let startedAt = Date()
         let generator = AppleFoundationModelsTextGenerator()
         guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "monthly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "modelUnavailable"
+                )
             )
             return []
         }
@@ -1365,6 +1455,17 @@ struct FoundationModelsGoalSuggestionProvider {
                 error=\(achievementModelErrorDescription(error), privacy: .public)
                 """
             )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "generationFailed",
+                    selectedIDs: outcome.selectedIDs,
+                    promptCharacters: outcome.promptCharacters,
+                    timings: outcome.timings
+                )
+            )
             return []
         }
         if outcome.drafts.isEmpty {
@@ -1372,7 +1473,20 @@ struct FoundationModelsGoalSuggestionProvider {
                 "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
             )
         }
-        return outcome.drafts.map { $0.suggestion(cadence: .monthly) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly) }
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: "appleFoundation",
+                model: nil,
+                outcome: outcome.drafts.isEmpty ? "parsedEmpty" : "ok",
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                timings: outcome.timings
+            )
+        )
+        return suggestions
     }
 
 }
@@ -8256,16 +8370,23 @@ private struct AchievementGoalComposerSheet: View {
         isLoadingSuggestions = true
         didLoadSuggestions = true
 
+        // 버튼 한 번에 붙는 id. 주간·월간이 이 값을 공유해야 기록에서 한 실행으로 묶인다.
+        let runID = AIRunLog.newRunID()
+
         Task {
             async let modelSuggestions = AchievementFoundationGoalSuggestionProvider.suggestions(
                 from: snapshots,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxTodoCount
+                maxMemoCount: maxTodoCount,
+                runID: runID,
+                candidateCount: snapshots.count
             )
             async let monthlyModelSuggestions = shouldSuggestMonthly
                 ? AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
                     from: weeklyGoalSnapshots,
-                    suggestionCount: monthlySuggestionCount
+                    suggestionCount: monthlySuggestionCount,
+                    runID: runID,
+                    candidateCount: weeklyGoalSnapshots.count
                 )
                 : []
             let (weeklyModelValues, monthlyModelValues) = await (modelSuggestions, monthlyModelSuggestions)

@@ -43,6 +43,7 @@
 		1F56E73BFE279638ECA2FD17 /* CategoryPairStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD693E0101EAD4D9051D34FD /* CategoryPairStore.swift */; };
 		1FE70F3D5DFF6E050FD5F65B /* HorongAI in Frameworks */ = {isa = PBXBuildFile; productRef = 55793B935F9A4AD2EE496387 /* HorongAI */; };
 		20D4C350080049D6DC2D7E4E /* NewsPipelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A98093A84397D93D2E0190A /* NewsPipelineService.swift */; };
+		21B3A8E71E87F64187DAB88F /* AIRunLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B26226EB1C35C0C49F368472 /* AIRunLog.swift */; };
 		2275F3124391E92F8E83E501 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 802AEE6A7D12725CB82EDA4C /* MLXHuggingFace */; };
 		2309ADBB13960AB6A04BF5C4 /* NewsScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A9230D1F9E109257970686 /* NewsScheduler.swift */; };
 		238B891522C7CEB45D85FAA8 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */; };
@@ -157,6 +158,7 @@
 		7F1BC18A9C50425940C70DEC /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */; };
 		7FED0A1DF8C9C07CEFE4CFDF /* CompanionPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40E30C422CA267221E628FB /* CompanionPage.swift */; };
 		8004232786078535BE1E6842 /* AgentPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C07F54EF9D4748E93E3790 /* AgentPage.swift */; };
+		8065C22379D6A844C1FB80E0 /* AIRunLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B26226EB1C35C0C49F368472 /* AIRunLog.swift */; };
 		81038CFA865086286DADC683 /* GoalSuggestionEvalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C9F8C22F114231C1759AB9 /* GoalSuggestionEvalTests.swift */; };
 		83B687CB0885E2BBE0556C52 /* CompanionRoamingRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B424D056C56C9DB7A1B8AFD9 /* CompanionRoamingRegion.swift */; };
 		84AF15BE096573CD868B1BCC /* RewardUnboxingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A2871B9C50F593592BC32B /* RewardUnboxingOverlay.swift */; };
@@ -423,6 +425,7 @@
 		B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoBrowserWindow.swift; sourceTree = "<group>"; };
 		B07A535A9CDE7A856AF5AD5F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B136EEFAACA04AA87AC7C891 /* FocusScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreTests.swift; sourceTree = "<group>"; };
+		B26226EB1C35C0C49F368472 /* AIRunLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRunLog.swift; sourceTree = "<group>"; };
 		B2CA4446419C673DB86332AB /* CompanionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionController.swift; sourceTree = "<group>"; };
 		B2D622C8DA96DA9DBCBAA400 /* LanternOilJarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanternOilJarView.swift; sourceTree = "<group>"; };
 		B424D056C56C9DB7A1B8AFD9 /* CompanionRoamingRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionRoamingRegion.swift; sourceTree = "<group>"; };
@@ -613,6 +616,7 @@
 		70939391556BCCF973D3BE42 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				B26226EB1C35C0C49F368472 /* AIRunLog.swift */,
 				9AD2B9A40F64AE287864546C /* AppIconManager.swift */,
 				AA25DD516AA5500C0E0491CE /* Constants.swift */,
 				58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */,
@@ -1108,6 +1112,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				048CC6DBF3A20A7A124DABFA /* AILabView.swift in Sources */,
+				21B3A8E71E87F64187DAB88F /* AIRunLog.swift in Sources */,
 				09CA990DEC583F533576BEEF /* AboutPage.swift in Sources */,
 				4489E2BAA5A45734059C8C3E /* AchievementGoalRecord.swift in Sources */,
 				FCF61CDE25B4A3C4E6965FC3 /* AchievementViews.swift in Sources */,
@@ -1239,6 +1244,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DAA33925C36732F50DDBE51 /* AILabView.swift in Sources */,
+				8065C22379D6A844C1FB80E0 /* AIRunLog.swift in Sources */,
 				2B7D0194C22B17AC0DB756EB /* AboutPage.swift in Sources */,
 				78AAA0FBAE47B61AB2C8C4F6 /* AchievementGoalRecord.swift in Sources */,
 				9F078A825024A0C21A665F45 /* AchievementViews.swift in Sources */,
