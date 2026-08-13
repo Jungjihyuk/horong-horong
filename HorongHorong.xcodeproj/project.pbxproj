@@ -358,7 +358,7 @@
 		3B31DB4E51995E349060A4BF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		3B3B86872E3ED4ED1938AE2B /* AboutPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutPage.swift; sourceTree = "<group>"; };
 		3ED39392E7BAC9C07C4D8C81 /* CompanionChatProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionChatProvider.swift; sourceTree = "<group>"; };
-		4039F724B01AC70BC29A5AD6 /* HorongAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HorongAI; path = Packages/HorongAI; sourceTree = SOURCE_ROOT; };
+		4039F724B01AC70BC29A5AD6 /* HorongAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HorongAI; path = HorongAI; sourceTree = SOURCE_ROOT; };
 		41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSidebar.swift; sourceTree = "<group>"; };
 		42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSchedulerTests.swift; sourceTree = "<group>"; };
 		43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageChatProviderAdapter.swift; sourceTree = "<group>"; };
@@ -697,7 +697,7 @@
 			children = (
 				4039F724B01AC70BC29A5AD6 /* HorongAI */,
 			);
-			path = Packages;
+			name = Packages;
 			sourceTree = "<group>";
 		};
 		8FE6EAB0B532AF56F183C23A = {
@@ -1037,7 +1037,7 @@
 				463EDE77FB8E7B50F1ECF377 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				A85D3963D82A9533A56D872D /* XCRemoteSwiftPackageReference "swift-huggingface" */,
 				F1B76EFCB8A72CE83250AFE2 /* XCRemoteSwiftPackageReference "swift-transformers" */,
-				5710758023B69963FF031EF8 /* XCLocalSwiftPackageReference "Packages/HorongAI" */,
+				BF296E0C9C56D0C249CD5ABB /* XCLocalSwiftPackageReference "HorongAI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
@@ -1722,9 +1722,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		5710758023B69963FF031EF8 /* XCLocalSwiftPackageReference "Packages/HorongAI" */ = {
+		BF296E0C9C56D0C249CD5ABB /* XCLocalSwiftPackageReference "HorongAI" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/HorongAI;
+			relativePath = HorongAI;
 		};
 /* End XCLocalSwiftPackageReference section */
 
