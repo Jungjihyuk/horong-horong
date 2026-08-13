@@ -76,7 +76,9 @@ final class OllamaSession: LLMSession {
             messages.append(.init(role: "assistant", content: trimmed))
             return LLMResponse(text: trimmed)
         } catch {
-            NSLog("[OLLAMA] 실패: \(error)")
+            AILog.providers.error(
+                "ollama failure=reply error=\(String(describing: error), privacy: .private)"
+            )
             messages.removeLast()
             return LLMResponse(
                 text: "Ollama 에 연결하지 못했어요. 서버가 켜져 있는지, 모델이 설치돼 있는지 확인해 주세요.",

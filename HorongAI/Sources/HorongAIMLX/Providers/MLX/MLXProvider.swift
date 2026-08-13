@@ -80,7 +80,9 @@ private final class MLXSession: LLMSession {
                 mood: "concerned"
             )
         } catch {
-            NSLog("[MLX] 실패: \(error)")
+            AILog.providers.error(
+                "mlx failure=reply error=\(String(describing: error), privacy: .private)"
+            )
             return LLMResponse(
                 text: "모델을 불러오지 못했어요. 설정에서 모델이 다 내려받아졌는지 확인해 주세요.",
                 mood: "concerned"
