@@ -6,6 +6,33 @@ import json
 import os
 from collections import defaultdict
 
+def load_golden_notes():
+    """케이스 설명(note)의 원본은 골든셋 JSON 이다.
+
+    기록(JSONL)에는 담지 않는다 — 실행마다 같은 문장을 되풀이해 저장할 이유가 없고,
+    문구를 고치면 옛 기록과 어긋난다. 보여줄 때 여기서 읽는다.
+    """
+    notes = {}
+    here = os.path.dirname(os.path.abspath(__file__))
+    for folder in ("golden/cases", "golden/drafts"):
+        directory = os.path.join(here, folder)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if not name.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(directory, name), encoding="utf-8") as f:
+                    case = json.load(f)
+                notes[case.get("caseName", "")] = case.get("note") or ""
+            except (OSError, ValueError):
+                continue
+    return notes
+
+
+GOLDEN_NOTES = load_golden_notes()
+
+
 METRIC_DESC = {
     "honorific": "존댓말 비율",
     "sentenceCount": "문장 수 제한",
@@ -256,7 +283,7 @@ def column_summary(data_dict, column):
         if isinstance(v, (int, float))
     ]
     avg_score = sum(scores) / len(scores) if scores else 0
-    avg_latency = sum(r.get("latency_ms", 0) for r in results) // len(results)
+    avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for r in results) // len(results)
     return f"평균 {avg_score:.2f} · {avg_latency}ms"
 
 
@@ -284,11 +311,8 @@ def render_table(data_dict, table_id, is_level=True):
         warn = is_warning(case_data)
         warning_count += 1 if warn else 0
 
-        input_text = ""
-        for result in case_data.values():
-            if result.get("input"):
-                input_text = result["input"]
-                break
+        # 케이스 설명은 기록이 아니라 골든셋 JSON 이 원본이다(중복 저장하지 않는다).
+        input_text = GOLDEN_NOTES.get(case_id, "")
 
         question = f"<div class='case-q'>{input_text}</div>" if input_text else ""
         row = [
@@ -405,7 +429,7 @@ def main():
             try:
                 row = json.loads(line)
                 case_id = row.get("case_id", "unknown")
-                level = row.get("level", "L0")
+                level = row.get("recipe", row.get("level", "promptOnly"))
                 model = row.get("model", "unknown")
 
                 # 레벨별 표: 행=case, 열=level

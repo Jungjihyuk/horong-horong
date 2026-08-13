@@ -33,10 +33,13 @@ final class GoalSuggestionEvalTests: XCTestCase {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let outputFile = outputDirectory.appendingPathComponent("\(stamp).jsonl")
-        let runner = EvalRunner(outputURL: outputFile)
+        let runner = RunLogger(outputURL: outputFile)
+        // 스위트 한 바퀴가 실행 하나다. 케이스 6개가 같은 runID 를 달고 나간다 —
+        // "언제 돌렸나"(runID)와 "어떤 문제를 풀었나"(caseID)는 층이 다르다.
+        let runID = "G-\(stamp)"
 
         for goldenCase in goldenCases {
-            await run(goldenCase, runner: runner)
+            await run(goldenCase, runner: runner, runID: runID)
         }
 
         // 비동기 기록이 전부 파일에 닿은 뒤에 런을 마친다. 없으면 마지막 결과가 유실될 수 있다.
@@ -47,7 +50,7 @@ final class GoalSuggestionEvalTests: XCTestCase {
 
     // MARK: - 한 케이스 실행
 
-    private func run(_ goldenCase: GoldenSet.Case, runner: EvalRunner) async {
+    private func run(_ goldenCase: GoldenSet.Case, runner: RunLogger, runID: String) async {
         let shortIDByUUID = goldenCase.identifiers.shortIDByUUID
         let snapshots = goldenCase.memos.map { memo in
             AchievementMemoSnapshot(
@@ -91,18 +94,25 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let outputText = suggestions.map { "- \($0.title)" }.joined(separator: "\n")
 
         runner.record(
-            EvalResult(
+            RunRecord(
                 caseId: goldenCase.caseName,
-                input: goldenCase.note,
-                level: "L0", // 문맥 주입이 없는 순수 프롬프팅
                 model: requested,
                 output: outputText,
                 scores: [
                     "pairF1": f1Score,
+                    // `honorific`·`sentenceCount` 는 **대화용 자**다. 목표 추천 출력은 명사구 제목이라
+                    // 존댓말로 끝날 이유가 없어 전 케이스 0.00 이 나온다. 스위트별 채점자를 도입할 때
+                    // 뗀다 — 지금 빼면 보관된 기준선과 열이 어긋난다.
                     "honorific": DeterministicCheckers.checkHonorific(outputText),
                     "sentenceCount": DeterministicCheckers.checkSentenceCount(outputText, maxCount: 3),
                 ],
-                latencyMs: latencyMs
+                totalMs: latencyMs,
+                runId: runID,
+                startedAt: startTime,
+                task: "weekly_goal",
+                source: "golden",
+                recipe: "promptOnly", // 문맥 주입이 없는 순수 프롬프팅
+                provider: requested
             )
         )
     }
