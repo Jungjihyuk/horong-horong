@@ -1150,12 +1150,12 @@ enum AchievementFoundationGoalSuggestionProvider {
                     """
                 )
             }
-        case .generationFailed(let description):
+        case .generationFailed(let error):
             achievementSuggestionLog.error(
                 """
                 weekly \(label, privacy: .public) \
                 failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
-                error=\(description.prefix(300), privacy: .public)
+                error=\(String(describing: error).prefix(300), privacy: .public)
                 """
             )
         }
@@ -1276,65 +1276,59 @@ struct FoundationModelsGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int
     ) async -> [AchievementGoalSuggestion] {
-        let model = SystemLanguageModel.default
-        guard model.isAvailable else {
+        let generator = AppleFoundationModelsTextGenerator()
+        guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "weekly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
             )
             return []
         }
 
-        let session = LanguageModelSession(
-            model: model,
-            instructions: WeeklyGoalTask.instructions
-        )
-        let inputLimit = max(8, min(40, suggestionCount * maxMemoCount * 2))
-        // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
-        // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
-        let selectedMemos = memosWithinPromptBudget(
-            Array(memos.prefix(inputLimit)),
+        // 추론이 거부되면 그 자리를 다시 남긴다. 로그 문구는 인시던트 2026-07-31 의 진단 서명이라 유지한다.
+        var promptSummary = ""
+        let outcome = await WeeklyGoalTask.run(
+            memos: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
-        )
-        let prompt = prompt(
-            for: selectedMemos,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
+            maxMemoCount: maxMemoCount,
+            // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
+            // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
+            inputLimit: max(8, min(40, suggestionCount * maxMemoCount * 2)),
+            budget: achievementPromptCharacterBudget,
+            onPromptBuilt: { characters, memoCount in
+                promptSummary = "weekly prompt chars=\(characters) memos=\(memoCount)"
+                achievementSuggestionLog.info(
+                    "weekly prompt chars=\(characters, privacy: .public) memos=\(memoCount, privacy: .public)"
+                )
+            },
+            generate: { prompt, instructions in
+                try await generator.generate(
+                    prompt: prompt,
+                    instructions: instructions,
+                    temperature: 0.2,
+                    maxTokens: 900
+                )
+            }
         )
 
-        achievementSuggestionLog.info(
-            "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
-        )
-
-        do {
-            let response = try await session.respond(
-                to: prompt,
-                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 900)
-            )
-            let parsed = Array(parse(
-                response.content,
-                allowedIDs: Set(memos.map(\.id)),
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
-            ).prefix(suggestionCount))
-            if parsed.isEmpty {
+        switch outcome.diagnostics {
+        case .parsed(let diagnostics):
+            AchievementFoundationGoalSuggestionProvider.logWeeklyParse(diagnostics)
+            if outcome.drafts.isEmpty {
                 achievementSuggestionLog.error(
                     "weekly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
                 )
             }
-            return parsed
-        } catch {
+        case .generationFailed(let error):
             achievementSuggestionLog.error(
                 """
                 weekly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
                 error=\(achievementModelErrorDescription(error), privacy: .public)
                 """
             )
-            achievementSuggestionLog.error(
-                "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
-            )
-            return []
+            achievementSuggestionLog.error("\(promptSummary, privacy: .public)")
         }
+
+        return outcome.drafts.map { $0.suggestion(cadence: .weekly) }
     }
 
     func monthlySuggestions(

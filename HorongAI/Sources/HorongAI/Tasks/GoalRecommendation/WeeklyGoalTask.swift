@@ -202,15 +202,19 @@ public enum WeeklyGoalTask {
     // MARK: - 한 번 돌리기
 
     /// 한 번의 추천에서 일어난 일. 로그 문구는 앱이 정하므로 여기서는 값만 돌려준다.
-    public struct RunOutcome: Sendable {
+    public struct RunOutcome {
         public let drafts: [GoalSuggestionDraft]
         public let diagnostics: Diagnostics
 
-        public enum Diagnostics: Sendable {
+        public enum Diagnostics {
             case parsed(ParseOutcome.Diagnostics)
-            /// 모델을 부르다 실패했다. `description` 은 앱이 로그에 실을 설명이다 —
-            /// `Error` 를 그대로 넘기면 패키지가 앱의 에러 타입을 알게 된다.
-            case generationFailed(description: String)
+            /// 모델을 부르다 실패했다.
+            ///
+            /// 문자열이 아니라 `Error` 를 그대로 돌려주는 이유는 **에러를 어떻게 적을지가 앱 정책**이기
+            /// 때문이다. 앱은 릴리스 빌드에서 타입 이름만 남긴다 — 에러 설명에 프롬프트가 섞여 나오면
+            /// 사용자의 할 일 제목이 로그에 남는다. 여기서 `String(describing:)` 로 바꿔 버리면
+            /// 그 판단을 앱이 되돌릴 수 없다.
+            case generationFailed(Error)
         }
     }
 
@@ -260,10 +264,7 @@ public enum WeeklyGoalTask {
             )
             return RunOutcome(drafts: outcome.drafts, diagnostics: .parsed(outcome.diagnostics))
         } catch {
-            return RunOutcome(
-                drafts: [],
-                diagnostics: .generationFailed(description: String(describing: error))
-            )
+            return RunOutcome(drafts: [], diagnostics: .generationFailed(error))
         }
     }
 

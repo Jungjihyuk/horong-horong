@@ -138,10 +138,11 @@ final class GoldenSetHarnessTests: XCTestCase {
         )
 
         XCTAssertTrue(outcome.drafts.isEmpty)
-        guard case .generationFailed(let description) = outcome.diagnostics else {
+        guard case .generationFailed(let error) = outcome.diagnostics else {
             return XCTFail("생성 실패가 진단에 안 남았다")
         }
-        XCTAssertTrue(description.contains("서버 없음"))
+        // 에러를 문자열이 아니라 그대로 돌려줘야 앱이 릴리스에서 타입 이름만 남길 수 있다.
+        XCTAssertEqual(error as? ReplayGenerationFailure, ReplayGenerationFailure(reason: "서버 없음"))
     }
 
     /// 모델에게 나간 프롬프트에 지시문과 할일이 실제로 실렸는지.
