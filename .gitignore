@@ -79,9 +79,6 @@ xcuserdata/
 ## Swift Package Manager
 .swiftpm/
 .build/
-Packages/*
-# 1st-party 로컬 패키지는 추적한다 (SPM 체크아웃 아티팩트만 무시)
-!Packages/HorongAI/
 
 ## CocoaPods / Carthage (사용 시 대비)
 Pods/
