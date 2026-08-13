@@ -199,6 +199,74 @@ public enum WeeklyGoalTask {
         )
     }
 
+    // MARK: - 한 번 돌리기
+
+    /// 한 번의 추천에서 일어난 일. 로그 문구는 앱이 정하므로 여기서는 값만 돌려준다.
+    public struct RunOutcome: Sendable {
+        public let drafts: [GoalSuggestionDraft]
+        public let diagnostics: Diagnostics
+
+        public enum Diagnostics: Sendable {
+            case parsed(ParseOutcome.Diagnostics)
+            /// 모델을 부르다 실패했다. `description` 은 앱이 로그에 실을 설명이다 —
+            /// `Error` 를 그대로 넘기면 패키지가 앱의 에러 타입을 알게 된다.
+            case generationFailed(description: String)
+        }
+    }
+
+    /// 입력 고르기 → 프롬프트 → 생성 → 파싱을 한 줄기로 잇는다.
+    ///
+    /// **평가가 제품과 같은 경로를 타야 의미가 있다.** 앱이 이 순서를 따로 들고 있으면
+    /// 한쪽만 바뀌었을 때 평가 결과가 제품을 더 이상 반영하지 않는데, 그건 조용히 일어난다.
+    ///
+    /// 모델을 부르는 일은 `generate` 로 주입받는다 — 그래야 실모델과 고정 응답이 같은 줄기를 탄다.
+    ///
+    /// - Parameters:
+    ///   - inputLimit: 예산을 재기 전에 개수로 먼저 자르는 상한. 공급자마다 다르다(AFM 은 좁다).
+    ///   - budget: 프롬프트 문자 상한. 공급자가 아는 값이라 태스크는 받아 쓰기만 한다.
+    ///   - onPromptBuilt: 프롬프트를 만든 **직후** 불린다. 모델이 영영 안 돌아올 때
+    ///     "프롬프트까지는 만들어졌다"를 남기려면 생성 전에 기록해야 한다(인시던트 2026-07-31).
+    public static func run(
+        memos: [Memo],
+        suggestionCount: Int,
+        maxMemoCount: Int,
+        inputLimit: Int,
+        budget: Int,
+        onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
+        generate: (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> RunOutcome {
+        let selected = memosWithinPromptBudget(
+            Array(memos.prefix(inputLimit)),
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            budget: budget
+        )
+        let prompt = prompt(
+            for: selected,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+        onPromptBuilt(prompt.count, selected.count)
+
+        do {
+            let text = try await generate(prompt, instructions)
+            // 허용 id 는 **자르기 전 전체**다. 예산에 밀려 프롬프트에 안 들어간 id 를 모델이
+            // 지어내는 일은 없지만, 좁히면 재시도·캐시 같은 걸 붙일 때 조용히 후보를 잃는다.
+            let outcome = parse(
+                text,
+                allowedIDs: Set(memos.map(\.id)),
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            )
+            return RunOutcome(drafts: outcome.drafts, diagnostics: .parsed(outcome.diagnostics))
+        } catch {
+            return RunOutcome(
+                drafts: [],
+                diagnostics: .generationFailed(description: String(describing: error))
+            )
+        }
+    }
+
     // MARK: - 직렬화
 
     private static func dateText(_ date: Date?) -> String {

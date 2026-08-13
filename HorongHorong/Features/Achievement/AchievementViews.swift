@@ -1116,40 +1116,33 @@ enum AchievementFoundationGoalSuggestionProvider {
         generate: (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> [AchievementGoalSuggestion] {
         let label = provider.rawValue
-        let shared = FoundationModelsGoalSuggestionProvider()
-        let inputLimit = max(8, min(60, suggestionCount * maxMemoCount * 3))
-        let selected = shared.memosWithinPromptBudget(
-            Array(memos.prefix(inputLimit)),
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount,
-            budget: Constants.achievementPromptCharacterBudget(for: provider)
-        )
-        let prompt = shared.prompt(
-            for: selected,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
-        )
-
-        achievementSuggestionLog.info(
-            """
-            weekly \(label, privacy: .public) prompt chars=\(prompt.count, privacy: .public) \
-            memos=\(selected.count, privacy: .public) model=\(model, privacy: .public)
-            """
-        )
 
         guard await precondition() else {
             achievementSuggestionLog.error("weekly \(label, privacy: .public) failure=serverUnavailable")
             return []
         }
 
-        do {
-            let parsed = Array(shared.parse(
-                try await generate(prompt, WeeklyGoalTask.instructions),
-                allowedIDs: Set(memos.map(\.id)),
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
-            ).prefix(suggestionCount))
-            if parsed.isEmpty {
+        let outcome = await WeeklyGoalTask.run(
+            memos: memos.map(\.taskMemo),
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            inputLimit: max(8, min(60, suggestionCount * maxMemoCount * 3)),
+            budget: Constants.achievementPromptCharacterBudget(for: provider),
+            onPromptBuilt: { characters, memoCount in
+                achievementSuggestionLog.info(
+                    """
+                    weekly \(label, privacy: .public) prompt chars=\(characters, privacy: .public) \
+                    memos=\(memoCount, privacy: .public) model=\(model, privacy: .public)
+                    """
+                )
+            },
+            generate: generate
+        )
+
+        switch outcome.diagnostics {
+        case .parsed(let diagnostics):
+            logWeeklyParse(diagnostics)
+            if outcome.drafts.isEmpty {
                 achievementSuggestionLog.error(
                     """
                     weekly \(label, privacy: .public) \
@@ -1157,17 +1150,34 @@ enum AchievementFoundationGoalSuggestionProvider {
                     """
                 )
             }
-            // 파서를 AFM 경로와 공유하므로 source 가 .foundationModel 로 붙는다. 실제 공급자로 다시 태깅한다.
-            return parsed.map { $0.retagged(as: source) }
-        } catch {
+        case .generationFailed(let description):
             achievementSuggestionLog.error(
                 """
                 weekly \(label, privacy: .public) \
                 failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
-                error=\(String(describing: error).prefix(300), privacy: .public)
+                error=\(description.prefix(300), privacy: .public)
                 """
             )
-            return []
+        }
+
+        // 태스크는 어느 공급자가 답했는지 모른다. 실제 공급자로 태깅해 폴백 비율 집계를 맞춘다.
+        return outcome.drafts.map { $0.suggestion(cadence: .weekly).retagged(as: source) }
+    }
+
+    /// 파서 진단을 로그 한 줄로. AFM 경로(`FoundationModelsGoalSuggestionProvider.parse`)와 같은 문구를 쓴다.
+    fileprivate static func logWeeklyParse(_ diagnostics: WeeklyGoalTask.ParseOutcome.Diagnostics) {
+        switch diagnostics {
+        case .decodeFailed(let characters):
+            achievementSuggestionLog.error("weekly parse failure=decode chars=\(characters, privacy: .public)")
+        case let .decoded(modelReturned, kept, requestedIDs, badID, alreadyUsed, overMaxMemo, tooFewIDs):
+            achievementSuggestionLog.info(
+                """
+                weekly parse modelReturned=\(modelReturned, privacy: .public) \
+                kept=\(kept, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
+                badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
+                overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
+                """
+            )
         }
     }
 
@@ -1432,19 +1442,7 @@ struct FoundationModelsGoalSuggestionProvider {
             maxMemoCount: maxMemoCount
         )
 
-        switch outcome.diagnostics {
-        case .decodeFailed(let characters):
-            achievementSuggestionLog.error("weekly parse failure=decode chars=\(characters, privacy: .public)")
-        case let .decoded(modelReturned, kept, requestedIDs, badID, alreadyUsed, overMaxMemo, tooFewIDs):
-            achievementSuggestionLog.info(
-                """
-                weekly parse modelReturned=\(modelReturned, privacy: .public) \
-                kept=\(kept, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
-                badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
-                overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
-                """
-            )
-        }
+        AchievementFoundationGoalSuggestionProvider.logWeeklyParse(outcome.diagnostics)
 
         return outcome.drafts.map { $0.suggestion(cadence: .weekly) }
     }
