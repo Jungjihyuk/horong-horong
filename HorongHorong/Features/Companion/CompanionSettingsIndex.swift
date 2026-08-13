@@ -1,4 +1,5 @@
 import Foundation
+import HorongAI
 
 /// 설정 항목을 찾아주는 색인.
 ///
@@ -22,7 +23,7 @@ enum CompanionSettingsIndex {
         for question: String,
         tabs: [SettingsTab] = SettingsTab.visibleCases
     ) -> Match? {
-        let tokens = CompanionGuide.searchTokens(in: question)
+        let tokens = SearchTokens.from(question)
         guard !tokens.isEmpty else { return nil }
 
         var best: Match?

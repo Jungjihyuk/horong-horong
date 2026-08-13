@@ -1,4 +1,5 @@
 import AppKit
+import HorongAI
 import SwiftUI
 import XCTest
 import SwiftData
@@ -1418,40 +1419,40 @@ final class CompanionGuideTests: XCTestCase {
     """
 
     func testSectionsAreSplitByHeading() {
-        let sections = CompanionGuide.sections(from: sample)
+        let sections = GuideRetriever.sections(from: sample)
 
         XCTAssertEqual(sections.map(\.title), ["4. 타이머 탭", "5. 메모 탭"])
     }
 
     func testEmptySectionIsDropped() {
-        let sections = CompanionGuide.sections(from: "## 빈 섹션\n\n## 내용 있음\n본문")
+        let sections = GuideRetriever.sections(from: "## 빈 섹션\n\n## 내용 있음\n본문")
 
         XCTAssertEqual(sections.map(\.title), ["내용 있음"])
     }
 
     func testBestMatchPrefersTitleHit() {
-        let sections = CompanionGuide.sections(from: sample)
-        let match = CompanionGuide.bestMatch(for: "메모 탭이 뭐야?", in: sections)
+        let sections = GuideRetriever.sections(from: sample)
+        let match = GuideRetriever.bestMatch(for: "메모 탭이 뭐야?", in: sections)
 
         XCTAssertEqual(match?.title, "5. 메모 탭")
     }
 
     /// 조사가 붙어도 걸려야 한다.
     func testKoreanParticlesAreStripped() {
-        let tokens = CompanionGuide.searchTokens(in: "테마를 바꾸려면?")
+        let tokens = SearchTokens.from("테마를 바꾸려면?")
 
         XCTAssertTrue(tokens.contains("테마"))
     }
 
     /// 근거가 없으면 아무것도 주지 않아 모델이 지어내지 않게 한다.
     func testNoMatchReturnsNil() {
-        let sections = CompanionGuide.sections(from: sample)
+        let sections = GuideRetriever.sections(from: sample)
 
-        XCTAssertNil(CompanionGuide.bestMatch(for: "김치찌개 끓이는 법", in: sections))
+        XCTAssertNil(GuideRetriever.bestMatch(for: "김치찌개 끓이는 법", in: sections))
     }
 
     func testLongSectionIsClipped() {
-        let clipped = CompanionGuide.clipped(String(repeating: "가", count: 900), limit: 100)
+        let clipped = GuideRetriever.clipped(String(repeating: "가", count: 900), limit: 100)
 
         XCTAssertTrue(clipped.count < 200)
         XCTAssertTrue(clipped.hasSuffix("(이하 생략)"))
@@ -1566,7 +1567,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 카드마다 식별자를 손으로 달지 않고, 제목이 가장 잘 맞는 카드가 스스로 강조돼야 한다.
     func testBestMatchingCardWins() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "휴가 때 기록 안 남기려면?"))
+        center.beginCardSearch(tokens: SearchTokens.from("휴가 때 기록 안 남기려면?"))
 
         center.registerCard("타임라인 표시")
         center.registerCard("보관")
@@ -1580,7 +1581,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 등록 순서와 무관하게 같은 카드가 뽑혀야 한다.
     func testOrderDoesNotChangeTheWinner() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "미리알림 연동"))
+        center.beginCardSearch(tokens: SearchTokens.from("미리알림 연동"))
 
         center.registerCard("미리알림 가져오기")
         center.registerCard("퀵 메모")
@@ -1593,7 +1594,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 맞는 카드가 없으면 아무것도 강조하지 않는다.
     func testNoMatchLeavesNothingHighlighted() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "김치찌개 끓이는 법"))
+        center.beginCardSearch(tokens: SearchTokens.from("김치찌개 끓이는 법"))
 
         center.registerCard("타임라인 표시")
         center.registerCard("보관")

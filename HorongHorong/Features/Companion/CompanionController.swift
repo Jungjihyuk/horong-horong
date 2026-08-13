@@ -972,7 +972,7 @@ final class CompanionController {
             CompanionOnboardingPresenter.openSettings(
                 tab: match.tab,
                 highlight: nil,
-                questionTokens: CompanionGuide.searchTokens(in: message)
+                questionTokens: SearchTokens.from(message)
             )
         }
     }
@@ -983,15 +983,15 @@ final class CompanionController {
         if guideSections.isEmpty {
             guideSections = CompanionGuide.loadFromBundle()
         }
-        guard let section = CompanionGuide.bestMatch(for: message, in: guideSections) else {
+        guard let section = GuideRetriever.bestMatch(for: message, in: guideSections) else {
             return nil
         }
-        return CompanionGuide.clipped(section.injectedText)
+        return GuideRetriever.clipped(section.injectedText)
     }
 
     /// 답변에 붙일 일정. 스트리밍이 끝난 뒤 마지막 말풍선에 실린다.
     private var pendingSchedule: [CompanionScheduleEntry] = []
-    private var guideSections: [CompanionGuideSection] = []
+    private var guideSections: [GuideSection] = []
 
     private func attachPendingSchedule() {
         defer { pendingSchedule = [] }
