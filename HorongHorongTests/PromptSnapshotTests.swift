@@ -65,6 +65,41 @@ final class PromptSnapshotTests: XCTestCase {
         try assertSnapshot(rendered, named: "companion_chat_instructions_with_profile")
     }
 
+    // MARK: - 컴패니언 모델 입력 (근거 조립)
+
+    // S5 에서 `modelInput` 이 `Tasks/CompanionChat/` 으로 나가고 인자가 `String?` 둘에서
+    // `[Evidence]` 로 바뀐다. 지금 이걸 지키는 테스트는 전부 `contains(...)` 라
+    // **지시 문구가 통째로 바뀌어도 통과한다** — 빈 줄 하나, 구분자 `\n\n`, 문장 순서도 안 본다.
+    // 근거를 넣었을 때의 "이 안에서만 답하라" 지시는 한 글자만 달라져도 답이 흔들리는 자리다.
+
+    /// 할일 질문 경로. 목록을 나열하지 말라는 지시가 붙는다.
+    func testCompanionModelInputWithTaskDigestSnapshot() throws {
+        let rendered = CompanionChatComposer.modelInput(
+            userMessage: "오늘 할일 뭐 있어?",
+            taskDigest: "오늘 등록된 할일:\n- 주간 보고서 초안\n- 러닝 30분"
+        )
+        try assertSnapshot(rendered, named: "companion_model_input_task_digest")
+    }
+
+    /// 앱 사실만 근거로 들어간 경로.
+    func testCompanionModelInputWithAppFactsSnapshot() throws {
+        let rendered = CompanionChatComposer.modelInput(
+            userMessage: "무슨 테마가 있어?",
+            appFacts: "팝오버 테마: 따뜻한 등불, 게임 픽셀\n지금 쓰는 테마: 따뜻한 등불"
+        )
+        try assertSnapshot(rendered, named: "companion_model_input_app_facts")
+    }
+
+    /// 앱 사실과 설명서 섹션이 함께 들어간 경로. 둘을 잇는 구분자가 이 스냅샷의 핵심이다.
+    func testCompanionModelInputWithFactsAndGuideSnapshot() throws {
+        let rendered = CompanionChatComposer.modelInput(
+            userMessage: "테마 어떻게 바꿔?",
+            appFacts: "관련 설정은 설정 → 외관 에 있다.",
+            guideSection: "7. 설정 창\n외관 탭에서 테마를 바꿉니다."
+        )
+        try assertSnapshot(rendered, named: "companion_model_input_facts_and_guide")
+    }
+
     // MARK: - 주간 목표 추천
 
     /// AFM 구현체가 프롬프트·파서를 겸하고 있어 `@available` 이 여기까지 따라온다.
