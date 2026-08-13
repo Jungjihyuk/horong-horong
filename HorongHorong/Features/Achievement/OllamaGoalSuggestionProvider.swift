@@ -68,7 +68,9 @@ struct OllamaGoalSuggestionProvider {
                 temperature: 0.2,
                 maxTokens: 1_200
             ) {
-                text += piece
+                // `stream` 은 조각이 아니라 **매번 지금까지의 전문**을 준다. 더하면
+                // "A" + "AB" + "ABC" 가 되어 JSON 이 깨지고 조용히 AFM 으로 폴백한다.
+                text = piece
             }
 
             let parsed = Array(shared.parse(
