@@ -791,17 +791,18 @@ final class CompanionController {
         let session = chatSessionForCurrentCharacter()
         let isTaskQuestion = CompanionTaskQuestion.matches(message)
         let items = isTaskQuestion ? todayBriefingItems() : []
-        let evidence = isTaskQuestion ? nil : appEvidence(for: message)
-        let guide = isTaskQuestion ? nil : guideSection(for: message)
+        let evidence = isTaskQuestion ? [] : appEvidence(for: message)
+        let guide = isTaskQuestion ? nil : guideEvidence(for: message)
         // 근거가 있으면 창의성이 필요 없다. 낮은 온도가 지어내는 걸 줄인다.
-        let hasEvidence = evidence != nil || guide != nil
+        let hasEvidence = !evidence.isEmpty || guide != nil
         let modelInput = CompanionChatComposer.modelInput(
             userMessage: message,
             taskDigest: isTaskQuestion
                 ? CompanionTaskDigest.format(items: items, now: Date())
                 : nil,
-            appFacts: evidence,
-            guideSection: guide
+            // 조각을 잇는 방식은 지금 그대로다. 어떻게 실을지는 S5d 에서 조립기가 정한다.
+            appFacts: evidence.isEmpty ? nil : evidence.map(\.text).joined(separator: "\n"),
+            guideSection: guide?.text
         )
         // 일정은 모델의 문장이 아니라 저장된 데이터로 그린다.
         pendingSchedule = isTaskQuestion
@@ -943,17 +944,18 @@ final class CompanionController {
         setAnimation(.waiting)
     }
 
-    /// 코드에서 만든 사실 + 설정 색인을 합쳐 근거로 준다.
+    /// 코드에서 만든 사실 + 설정 색인을 근거 조각으로 모은다.
     /// 설정 페이지 목록을 함께 넣어 없는 페이지 이름을 지어내지 못하게 한다.
-    private func appEvidence(for message: String) -> String? {
-        var parts: [String] = []
-        if let facts = CompanionAppFacts.matching(message) { parts.append(facts) }
+    ///
+    /// 조각으로 돌려주는 이유는 합쳐 놓으면 **어느 근거가 걸렸는지 되짚을 수 없기** 때문이다.
+    /// 프롬프트에 실을 때는 `send()` 가 지금까지와 똑같이 줄바꿈으로 잇는다.
+    private func appEvidence(for message: String) -> [Evidence] {
+        var parts = CompanionAppFacts.evidence(for: message)
         if CompanionGuideQuestion.matches(message),
            let match = CompanionSettingsIndex.bestMatch(for: message) {
-            parts.append(match.evidence)
+            parts.append(match.evidenceItem)
         }
-        guard !parts.isEmpty else { return nil }
-        return parts.joined(separator: "\n")
+        return parts
     }
 
     /// 답한 내용을 화면으로도 보여준다. 설정 경로를 말했으면 그 자리를 열어 잠깐 강조한다.
@@ -978,15 +980,12 @@ final class CompanionController {
     }
 
     /// 사용법 질문이면 설명서에서 근거가 될 섹션 하나를 찾아 준다.
-    private func guideSection(for message: String) -> String? {
+    private func guideEvidence(for message: String) -> Evidence? {
         guard CompanionGuideQuestion.matches(message) else { return nil }
         if guideSections.isEmpty {
             guideSections = CompanionGuide.loadFromBundle()
         }
-        guard let section = GuideRetriever.bestMatch(for: message, in: guideSections) else {
-            return nil
-        }
-        return GuideRetriever.clipped(section.injectedText)
+        return GuideRetriever.evidence(for: message, in: guideSections)
     }
 
     /// 답변에 붙일 일정. 스트리밍이 끝난 뒤 마지막 말풍선에 실린다.
