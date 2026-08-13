@@ -59,6 +59,30 @@ public enum GuideRetriever {
         for question: String,
         in sections: [GuideSection]
     ) -> GuideSection? {
+        scored(for: question, in: sections)?.section
+    }
+
+    /// 프롬프트에 바로 실을 수 있는 근거 한 조각. 길이 제한도 여기서 적용한다.
+    ///
+    /// `bestMatch` 와 달리 **점수를 달고 나온다.** 점수를 버리면 "검색이 잘 찾았는데 모델이 못 쓴 것"과
+    /// "검색이 애초에 엉뚱한 걸 준 것"을 나중에 가릴 수 없다.
+    public static func evidence(
+        for question: String,
+        in sections: [GuideSection]
+    ) -> Evidence? {
+        guard let match = scored(for: question, in: sections) else { return nil }
+        return Evidence(
+            id: "guide.\(match.section.title)",
+            source: "guide",
+            text: clipped(match.section.injectedText),
+            score: Double(match.score)
+        )
+    }
+
+    private static func scored(
+        for question: String,
+        in sections: [GuideSection]
+    ) -> (section: GuideSection, score: Int)? {
         let tokens = SearchTokens.from(question)
         guard !tokens.isEmpty else { return nil }
 
@@ -77,7 +101,7 @@ public enum GuideRetriever {
                 best = (section, score)
             }
         }
-        return best?.section
+        return best
     }
 
     /// 길면 앞부분만 쓴다. 근거가 길어지면 오히려 답이 흐트러진다.
