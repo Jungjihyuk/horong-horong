@@ -1,3 +1,4 @@
+import HorongAI
 import XCTest
 @testable import 호롱호롱
 
@@ -72,9 +73,13 @@ final class PromptSnapshotTests: XCTestCase {
     // **지시 문구가 통째로 바뀌어도 통과한다** — 빈 줄 하나, 구분자 `\n\n`, 문장 순서도 안 본다.
     // 근거를 넣었을 때의 "이 안에서만 답하라" 지시는 한 글자만 달라져도 답이 흔들리는 자리다.
 
+    private func evidence(_ text: String, source: String) -> Evidence {
+        Evidence(id: "\(source).snapshot", source: source, text: text)
+    }
+
     /// 할일 질문 경로. 목록을 나열하지 말라는 지시가 붙는다.
     func testCompanionModelInputWithTaskDigestSnapshot() throws {
-        let rendered = CompanionChatComposer.modelInput(
+        let rendered = CompanionChatTask.modelInput(
             userMessage: "오늘 할일 뭐 있어?",
             taskDigest: "오늘 등록된 할일:\n- 주간 보고서 초안\n- 러닝 30분"
         )
@@ -83,21 +88,41 @@ final class PromptSnapshotTests: XCTestCase {
 
     /// 앱 사실만 근거로 들어간 경로.
     func testCompanionModelInputWithAppFactsSnapshot() throws {
-        let rendered = CompanionChatComposer.modelInput(
+        let rendered = CompanionChatTask.modelInput(
             userMessage: "무슨 테마가 있어?",
-            appFacts: "팝오버 테마: 따뜻한 등불, 게임 픽셀\n지금 쓰는 테마: 따뜻한 등불"
+            evidence: [
+                evidence("팝오버 테마: 따뜻한 등불, 게임 픽셀\n지금 쓰는 테마: 따뜻한 등불", source: "appFacts")
+            ]
         )
         try assertSnapshot(rendered, named: "companion_model_input_app_facts")
     }
 
     /// 앱 사실과 설명서 섹션이 함께 들어간 경로. 둘을 잇는 구분자가 이 스냅샷의 핵심이다.
     func testCompanionModelInputWithFactsAndGuideSnapshot() throws {
-        let rendered = CompanionChatComposer.modelInput(
+        let rendered = CompanionChatTask.modelInput(
             userMessage: "테마 어떻게 바꿔?",
-            appFacts: "관련 설정은 설정 → 외관 에 있다.",
-            guideSection: "7. 설정 창\n외관 탭에서 테마를 바꿉니다."
+            evidence: [
+                evidence("관련 설정은 설정 → 외관 에 있다.", source: "settingsIndex"),
+                evidence("7. 설정 창\n외관 탭에서 테마를 바꿉니다.", source: "guide"),
+            ]
         )
         try assertSnapshot(rendered, named: "companion_model_input_facts_and_guide")
+    }
+
+    /// 출처 셋이 한 번에 걸린 경로. **S5d 에서 이음새가 바뀐 자리가 여기다** —
+    /// 예전에는 앱 사실과 설정 위치가 `\n` 으로 붙어 있었고 이제 빈 줄로 띄운다.
+    /// 조각이 하나뿐이면 차이가 안 드러나므로 여러 조각이 걸리는 경우를 따로 둔다.
+    func testCompanionModelInputWithThreeSourcesSnapshot() throws {
+        let rendered = CompanionChatTask.modelInput(
+            userMessage: "테마 어떻게 바꿔?",
+            evidence: [
+                evidence("팝오버 테마: 따뜻한 등불, 게임 픽셀\n바꾸는 곳: 설정 → 외관 → 테마", source: "appFacts"),
+                evidence("화면 모드: 라이트, 다크, 시스템", source: "appFacts"),
+                evidence("관련 설정은 설정 → 외관 에 있다.", source: "settingsIndex"),
+                evidence("7. 설정 창\n외관 탭에서 테마를 바꿉니다.", source: "guide"),
+            ]
+        )
+        try assertSnapshot(rendered, named: "companion_model_input_three_sources")
     }
 
     // MARK: - 주간 목표 추천
