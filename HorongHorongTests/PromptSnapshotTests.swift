@@ -24,10 +24,10 @@ final class PromptSnapshotTests: XCTestCase {
     private func memo(
         _ shortID: String,
         _ content: String,
-        icon: String? = nil,
+        icon: String,
         completed: Bool = false
-    ) -> AchievementMemoSnapshot {
-        AchievementMemoSnapshot(
+    ) -> WeeklyGoalTask.Memo {
+        WeeklyGoalTask.Memo(
             id: Self.deterministicUUID(for: shortID),
             content: content,
             icon: icon,
@@ -38,7 +38,7 @@ final class PromptSnapshotTests: XCTestCase {
         )
     }
 
-    private var sampleMemos: [AchievementMemoSnapshot] {
+    private var sampleMemos: [WeeklyGoalTask.Memo] {
         [
             memo("m1", "주간 보고서 초안 작성", icon: "doc"),
             memo("m2", "주간 보고서 검토 요청", icon: "doc"),
@@ -127,11 +127,11 @@ final class PromptSnapshotTests: XCTestCase {
 
     // MARK: - 주간 목표 추천
 
-    /// AFM 구현체가 프롬프트·파서를 겸하고 있어 `@available` 이 여기까지 따라온다.
-    /// S4 에서 프롬프트가 `Tasks/` 로 나오면 이 제약도 사라진다.
-    @available(macOS 26.0, *)
+    /// 프롬프트는 패키지가 만든다. 스냅샷은 **여기 모아 둔다** —
+    /// 컴패니언·목표 추천 프롬프트를 한 자리에서 눈으로 대조할 수 있어야 하고,
+    /// 픽스처(`Evals/fixtures/prompts/`)도 한 폴더에 있다.
     func testWeeklyGoalPromptSnapshot() throws {
-        let rendered = FoundationModelsGoalSuggestionProvider().prompt(
+        let rendered = WeeklyGoalTask.prompt(
             for: sampleMemos,
             suggestionCount: 3,
             maxMemoCount: 3

@@ -77,6 +77,48 @@ public enum MonthlyGoalTask {
         )
     }
 
+    // MARK: - 한 번 돌리기
+
+    /// 한 번의 월간 추천 결과. 주간(`WeeklyGoalTask.RunOutcome`)보다 단출한 이유는
+    /// 이 경로에 진단 로그가 없어서다 — 없는 값을 만들어 내지 않는다.
+    public struct RunOutcome {
+        public let drafts: [GoalSuggestionDraft]
+        /// 생성이 실패했으면 그 에러. **문자열이 아니라 에러 그대로** 돌려주는 이유는
+        /// 릴리스에서 타입 이름만 남길지가 앱 정책이기 때문이다(`WeeklyGoalTask.RunOutcome` 과 같다).
+        public let failure: Error?
+    }
+
+    /// 개수 자르기 → 프롬프트 → 생성 → 파싱.
+    ///
+    /// 주간과 달리 **문자 예산 컷이 없다.** 월간은 주간 목표 몇 개만 넣으므로 프롬프트가
+    /// 크게 자라지 않는다. 필요해지면 주간 쪽과 같은 방식으로 붙인다.
+    public static func run(
+        goals: [Goal],
+        suggestionCount: Int,
+        inputLimit: Int,
+        generate: (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> RunOutcome {
+        let prompt = prompt(
+            for: Array(goals.prefix(inputLimit)),
+            suggestionCount: suggestionCount
+        )
+
+        do {
+            let text = try await generate(prompt, instructions)
+            // 허용 id 와 원본 목표는 **자르기 전 전체**다. 잘린 목표의 할일까지 끌어올려야 하는
+            // 경우가 생기면 좁혀 둔 쪽이 조용히 후보를 잃는다.
+            let drafts = parse(
+                text,
+                allowedIDs: Set(goals.map(\.id)),
+                sourceGoals: goals,
+                suggestionCount: suggestionCount
+            )
+            return RunOutcome(drafts: drafts, failure: nil)
+        } catch {
+            return RunOutcome(drafts: [], failure: error)
+        }
+    }
+
     // MARK: - 응답 읽기
 
     /// 주간과 달리 진단 로그가 없어 후보 목록만 돌려준다.

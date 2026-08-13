@@ -1235,7 +1235,8 @@ private extension AchievementMemoSnapshot {
 /// 패키지가 만든 초안을 앱 도메인 값으로 바꾼다.
 ///
 /// `reason` 을 여기서 줄이는 이유는 72자 제한이 **화면 사정**이기 때문이다 — 파서가 정할 일이 아니다.
-private extension GoalSuggestionDraft {
+/// 추천 카드가 이유를 2줄까지만 보여준다(`AchievementViews.swift` 의 `lineLimit(2)`).
+extension GoalSuggestionDraft {
     func suggestion(cadence: AchievementGoalCadence) -> AchievementGoalSuggestion {
         AchievementGoalSuggestion(
             title: title,
@@ -1335,42 +1336,29 @@ struct FoundationModelsGoalSuggestionProvider {
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int
     ) async -> [AchievementGoalSuggestion] {
-        let model = SystemLanguageModel.default
-        guard model.isAvailable else {
+        let generator = AppleFoundationModelsTextGenerator()
+        guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "monthly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
             )
             return []
         }
 
-        let session = LanguageModelSession(
-            model: model,
-            instructions: MonthlyGoalTask.instructions
-        )
-        let inputLimit = max(3, min(30, suggestionCount * 6))
-        let prompt = monthlyPrompt(
-            for: Array(goals.prefix(inputLimit)),
-            suggestionCount: suggestionCount
-        )
-
-        do {
-            let response = try await session.respond(
-                to: prompt,
-                options: GenerationOptions(temperature: 0.25, maximumResponseTokens: 900)
-            )
-            let parsed = Array(parseMonthly(
-                response.content,
-                allowedIDs: Set(goals.map(\.id)),
-                sourceGoals: goals,
-                suggestionCount: suggestionCount
-            ).prefix(suggestionCount))
-            if parsed.isEmpty {
-                achievementSuggestionLog.error(
-                    "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
+        let outcome = await MonthlyGoalTask.run(
+            goals: goals.map(\.taskGoal),
+            suggestionCount: suggestionCount,
+            inputLimit: max(3, min(30, suggestionCount * 6)),
+            generate: { prompt, instructions in
+                try await generator.generate(
+                    prompt: prompt,
+                    instructions: instructions,
+                    temperature: 0.25,
+                    maxTokens: 900
                 )
             }
-            return parsed
-        } catch {
+        )
+
+        if let error = outcome.failure {
             achievementSuggestionLog.error(
                 """
                 monthly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
@@ -1379,81 +1367,14 @@ struct FoundationModelsGoalSuggestionProvider {
             )
             return []
         }
+        if outcome.drafts.isEmpty {
+            achievementSuggestionLog.error(
+                "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
+            )
+        }
+        return outcome.drafts.map { $0.suggestion(cadence: .monthly) }
     }
 
-    /// 프롬프트가 문자 예산을 넘지 않는 선까지만 메모를 담는다.
-    /// 계산은 `WeeklyGoalTask` 가 하고, 여기서는 앱 타입으로 돌려주기만 한다 —
-    /// 태스크는 뒤에서부터만 자르므로 남은 개수만큼 앞에서 취하면 같은 결과다.
-    func memosWithinPromptBudget(
-        _ memos: [AchievementMemoSnapshot],
-        suggestionCount: Int,
-        maxMemoCount: Int,
-        budget: Int = achievementPromptCharacterBudget
-    ) -> [AchievementMemoSnapshot] {
-        let kept = WeeklyGoalTask.memosWithinPromptBudget(
-            memos.map(\.taskMemo),
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount,
-            budget: budget
-        )
-        return Array(memos.prefix(kept.count))
-    }
-
-    func prompt(
-        for memos: [AchievementMemoSnapshot],
-        suggestionCount: Int,
-        maxMemoCount: Int
-    ) -> String {
-        WeeklyGoalTask.prompt(
-            for: memos.map(\.taskMemo),
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
-        )
-    }
-
-    private func monthlyPrompt(
-        for goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) -> String {
-        MonthlyGoalTask.prompt(
-            for: goals.map(\.taskGoal),
-            suggestionCount: suggestionCount
-        )
-    }
-
-    /// 파싱은 `WeeklyGoalTask` 가 하고, 여기서는 진단값을 로그로 옮긴다.
-    /// 로그 문구를 앱에 남기는 이유는 패키지가 앱의 `OSLog` 카테고리를 알면 안 되기 때문이다.
-    func parse(
-        _ text: String,
-        allowedIDs: Set<UUID>,
-        suggestionCount: Int,
-        maxMemoCount: Int
-    ) -> [AchievementGoalSuggestion] {
-        let outcome = WeeklyGoalTask.parse(
-            text,
-            allowedIDs: allowedIDs,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
-        )
-
-        AchievementFoundationGoalSuggestionProvider.logWeeklyParse(outcome.diagnostics)
-
-        return outcome.drafts.map { $0.suggestion(cadence: .weekly) }
-    }
-
-    private func parseMonthly(
-        _ text: String,
-        allowedIDs: Set<UUID>,
-        sourceGoals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) -> [AchievementGoalSuggestion] {
-        MonthlyGoalTask.parse(
-            text,
-            allowedIDs: allowedIDs,
-            sourceGoals: sourceGoals.map(\.taskGoal),
-            suggestionCount: suggestionCount
-        ).map { $0.suggestion(cadence: .monthly) }
-    }
 }
 #endif
 
