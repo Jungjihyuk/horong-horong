@@ -102,17 +102,8 @@ private final class MLXSession: LLMSession {
         return created
     }
 
-    /// 대화 도중에는 **내려받지 않는다.** 이미 메모리에 있으면 그걸 쓰고,
-    /// 예전에 끝까지 준비해 둔 모델이면 디스크에서 올리는 것까지만 허용한다.
-    /// 한 번도 준비한 적 없는 모델은 설정 화면으로 안내한다 — 말 한마디에 수 GB 가 받아지면 안 된다.
     private func container() async throws -> ModelContainer {
-        if let loaded = await MLXModelStore.shared.loadedContainer(for: model) {
-            return loaded
-        }
-        guard MLXModelStore.isKnownPrepared(model) else {
-            throw MLXChatError.notPrepared
-        }
-        return try await MLXModelStore.shared.container(for: model)
+        try await MLXModelStore.preparedContainer(for: model)
     }
 }
 #endif

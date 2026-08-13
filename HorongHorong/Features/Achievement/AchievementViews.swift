@@ -1,5 +1,6 @@
 import AppKit
 import HorongAI
+import HorongAIMLX
 import OSLog
 import SwiftData
 import SwiftUI
@@ -1039,10 +1040,22 @@ enum AchievementFoundationGoalSuggestionProvider {
         if #available(macOS 26.0, *) {
             let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
                 ?? Constants.defaultAchievementSuggestionMLXModel
-            return await MLXGoalSuggestionProvider(model: model).suggestions(
+            let generator = MLXTextGenerator(model: model)
+            return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                provider: .mlx,
+                model: model,
+                source: .mlx,
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: 0.2,
+                        maxTokens: 1_200
+                    )
+                }
             )
         }
         #endif
@@ -1060,13 +1073,102 @@ enum AchievementFoundationGoalSuggestionProvider {
                 ?? Constants.defaultAchievementSuggestionOllamaModel
             let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
                 ?? Constants.defaultNewsOllamaEndpoint
-            return await OllamaGoalSuggestionProvider(model: model, endpoint: endpoint).suggestions(
+            let generator = OllamaTextGenerator(endpoint: endpoint, model: model)
+            return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                provider: .ollama,
+                model: model,
+                source: .ollama,
+                // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
+                precondition: { await generator.isReachable() },
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: 0.2,
+                        maxTokens: 1_200
+                    )
+                }
             )
         }
         return []
+    }
+
+    /// MLX·Ollama 가 공유하는 주간 추천 흐름.
+    ///
+    /// 두 공급자의 고유 코드는 `generate` 한 덩어리뿐이고 나머지(입력 고르기 · 프롬프트 ·
+    /// 파싱 · 로그 · 재태깅)는 완전히 같았다. 두 파일로 나눠 두면 한쪽만 고치는 실수가 난다.
+    /// AFM 은 세션 생성 방식이 달라(`LanguageModelSession`) 아직 합치지 않았다.
+    ///
+    /// `@available` 은 프롬프트·파서를 AFM 구현체에서 빌려 쓰기 때문에 따라온 것이다.
+    /// 삭제한 두 파일도 같은 이유로 같은 제약을 달고 있었다.
+    @available(macOS 26.0, *)
+    private static func weeklySuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int,
+        provider: Constants.AchievementSuggestionProviderKind,
+        model: String,
+        source: AchievementGoalSuggestionSource,
+        precondition: () async -> Bool = { true },
+        generate: (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> [AchievementGoalSuggestion] {
+        let label = provider.rawValue
+        let shared = FoundationModelsGoalSuggestionProvider()
+        let inputLimit = max(8, min(60, suggestionCount * maxMemoCount * 3))
+        let selected = shared.memosWithinPromptBudget(
+            Array(memos.prefix(inputLimit)),
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            budget: Constants.achievementPromptCharacterBudget(for: provider)
+        )
+        let prompt = shared.prompt(
+            for: selected,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+
+        achievementSuggestionLog.info(
+            """
+            weekly \(label, privacy: .public) prompt chars=\(prompt.count, privacy: .public) \
+            memos=\(selected.count, privacy: .public) model=\(model, privacy: .public)
+            """
+        )
+
+        guard await precondition() else {
+            achievementSuggestionLog.error("weekly \(label, privacy: .public) failure=serverUnavailable")
+            return []
+        }
+
+        do {
+            let parsed = Array(shared.parse(
+                try await generate(prompt, WeeklyGoalTask.instructions),
+                allowedIDs: Set(memos.map(\.id)),
+                suggestionCount: suggestionCount,
+                maxMemoCount: maxMemoCount
+            ).prefix(suggestionCount))
+            if parsed.isEmpty {
+                achievementSuggestionLog.error(
+                    """
+                    weekly \(label, privacy: .public) \
+                    failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)
+                    """
+                )
+            }
+            // 파서를 AFM 경로와 공유하므로 source 가 .foundationModel 로 붙는다. 실제 공급자로 다시 태깅한다.
+            return parsed.map { $0.retagged(as: source) }
+        } catch {
+            achievementSuggestionLog.error(
+                """
+                weekly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(String(describing: error).prefix(300), privacy: .public)
+                """
+            )
+            return []
+        }
     }
 
     private static func appleFoundationSuggestions(
@@ -1174,7 +1276,7 @@ struct FoundationModelsGoalSuggestionProvider {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: "너는 사용자의 할일을 목표 지향적으로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
+            instructions: WeeklyGoalTask.instructions
         )
         let inputLimit = max(8, min(40, suggestionCount * maxMemoCount * 2))
         // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
@@ -1239,7 +1341,7 @@ struct FoundationModelsGoalSuggestionProvider {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: "너는 사용자의 주간 목표를 더 큰 월간 목표로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
+            instructions: MonthlyGoalTask.instructions
         )
         let inputLimit = max(3, min(30, suggestionCount * 6))
         let prompt = monthlyPrompt(

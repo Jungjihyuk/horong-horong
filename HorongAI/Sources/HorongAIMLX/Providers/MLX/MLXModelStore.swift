@@ -236,6 +236,22 @@ public actor MLXModelStore {
 
     /// 지금 메모리에 올라와 있는 모델. 설정 화면 표시용.
     public var residentModel: String? { container == nil ? nil : loadedModel }
+
+    /// 추론 중에는 **내려받지 않는다.** 이미 메모리에 있으면 그걸 쓰고,
+    /// 예전에 끝까지 준비해 둔 모델이면 디스크에서 올리는 것까지만 허용한다.
+    /// 한 번도 준비한 적 없는 모델은 `notPrepared` 로 거절한다 —
+    /// 말 한마디나 버튼 한 번에 수 GB 가 받아지면 안 된다.
+    ///
+    /// 대화와 목표 추천이 같은 정책을 쓰므로 한 곳에 둔다. 두 벌이면 한쪽만 느슨해진다.
+    public static func preparedContainer(for model: String) async throws -> ModelContainer {
+        if let loaded = await shared.loadedContainer(for: model) {
+            return loaded
+        }
+        guard isKnownPrepared(model) else {
+            throw MLXChatError.notPrepared
+        }
+        return try await shared.container(for: model)
+    }
 }
 #endif
 

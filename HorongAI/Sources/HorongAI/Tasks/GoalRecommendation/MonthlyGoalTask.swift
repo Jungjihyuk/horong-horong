@@ -44,6 +44,10 @@ public enum MonthlyGoalTask {
         }
     }
 
+    /// 세션 지시문. 주간과 문장이 다른 이유는 묶는 대상이 다르기 때문이다.
+    public static let instructions =
+        "너는 사용자의 주간 목표를 더 큰 월간 목표로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
+
     // MARK: - 프롬프트
 
     public static func prompt(
