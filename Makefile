@@ -109,8 +109,15 @@ run-metrics:
 
 # Generate static HTML matrix dashboard from evaluation JSONL
 eval-report:
-	@if [ -z "$(INPUT)" ]; then \
-		echo "Usage: make eval-report INPUT=Evals/results.jsonl"; \
-		exit 1; \
-	fi
-	uv run python Evals/eval-report.py --input "$(INPUT)" --output Evals/eval-report.html
+	python3 Evals/eval-report.py $(if $(INPUT),--input "$(INPUT)",) --output Evals/eval-report.html
+
+# 실사용(Release) DB를 디버그(Debug) DB로 복사
+copy-prod-db:
+	@mkdir -p "$$HOME/Library/Application Support/HorongHorong-Debug/Stores"
+	@cp -f "$$HOME/Library/Application Support/HorongHorong/Stores/default.store"* "$$HOME/Library/Application Support/HorongHorong-Debug/Stores/" 2>/dev/null || true
+	@cp -rf "$$HOME/Library/Application Support/HorongHorong/JourneyImages" "$$HOME/Library/Application Support/HorongHorong-Debug/" 2>/dev/null || true
+	@echo "✅ 릴리스 DB 및 이미지를 디버그 저장소(HorongHorong-Debug)로 복사했습니다."
+
+
+
+

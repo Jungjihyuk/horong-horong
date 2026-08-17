@@ -80,26 +80,30 @@ public enum WeeklyGoalTask {
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> String {
-        // 프롬프트 크기가 추론 성패를 가르므로(인시던트 2026-07-31) 값이 없는 필드는 생략한다.
-        // "없음"으로 채우면 메모당 30자 이상을 정보 없이 소비한다.
-        let lines = memos.map { memo in
-            var fields = [
-                "- id: \(memo.id.uuidString)",
-                "  text: \(memo.content)",
-                "  icon: \(memo.icon)",
-                "  date: \(dateText(memo.date))",
-            ]
-            if memo.startDate != nil {
-                fields.append("  startDate: \(dateText(memo.startDate))")
+        let lines = memos.enumerated().map { index, memo in
+            let number = index + 1
+            // 첫 줄 한 문장만 추출 (최대 80자)
+            let firstLine = memo.content
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first(where: { !$0.isEmpty }) ?? memo.content
+            let cleanTitle = String(firstLine.prefix(80))
+
+            var meta: [String] = []
+            if let deadline = memo.deadline {
+                meta.append("~\(dateText(deadline)) 마감")
+            } else if let startDate = memo.startDate {
+                meta.append("\(dateText(startDate)) 시작")
             }
-            if memo.deadline != nil {
-                fields.append("  deadline: \(dateText(memo.deadline))")
-            }
-            // 미완료 할일만 입력으로 들어오므로 기본값일 때는 생략한다.
             if memo.isCompleted {
-                fields.append("  completed: true")
+                meta.append("완료됨")
             }
-            return fields.joined(separator: "\n")
+
+            if meta.isEmpty {
+                return "[\(number)] \(cleanTitle)"
+            } else {
+                return "[\(number)] \(cleanTitle) (\(meta.joined(separator: ", ")))"
+            }
         }.joined(separator: "\n")
 
         return PromptRenderer.render(
@@ -123,7 +127,8 @@ public enum WeeklyGoalTask {
 
         public enum Diagnostics: Sendable {
             /// JSON 을 읽지 못했다. `characters` 는 다듬은 응답 길이 — 잘림인지 형식 문제인지 가른다.
-            case decodeFailed(characters: Int)
+            /// `reason` 은 왜 못 읽었나(`noJSON` · `missingKey:criterion` 등).
+            case decodeFailed(characters: Int, reason: String)
             /// 모델이 낸 개수(`modelReturned`)와 파서가 살린 개수(`kept`)를 구분해야
             /// "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
             /// `kept` 는 개수 상한으로 자르기 **전** 값이다.
@@ -140,16 +145,24 @@ public enum WeeklyGoalTask {
     }
 
     /// 모델 응답을 후보 목록으로 바꾼다. 모델을 믿지 않고 다섯 갈래로 방어한다 —
-    /// 없는 id · 이미 쓴 id · 개수 초과 · 2개 미만 · JSON 깨짐.
+    /// 없는 id/번호 · 이미 쓴 id · 개수 초과 · 2개 미만 · JSON 깨짐.
     public static func parse(
         _ text: String,
+        memos: [Memo] = [],
         allowedIDs: Set<UUID>,
         suggestionCount: Int,
         maxMemoCount: Int
     ) -> ParseOutcome {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let payload = GoalSuggestionPayload(responseText: trimmed) else {
-            return ParseOutcome(drafts: [], diagnostics: .decodeFailed(characters: trimmed.count))
+        let payload: GoalSuggestionPayload
+        switch GoalSuggestionPayload.decode(from: trimmed) {
+        case .success(let decoded):
+            payload = decoded
+        case .failure(let failure):
+            return ParseOutcome(
+                drafts: [],
+                diagnostics: .decodeFailed(characters: trimmed.count, reason: failure.reason)
+            )
         }
 
         var badID = 0
@@ -159,10 +172,33 @@ public enum WeeklyGoalTask {
         var requestedIDs = 0
         var used = Set<UUID>()
         let result = payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
-            let raw = item.memoIDs ?? []
-            requestedIDs += raw.count
-            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
-            badID += raw.count - parsedIDs.count
+            let rawValues: [GoalSuggestionPayload.IDValue] = item.items ?? item.memoIDs ?? item.goalIDs ?? []
+            requestedIDs += rawValues.count
+            
+            var parsedIDs: [UUID] = []
+            for idVal in rawValues {
+                switch idVal {
+                case .int(let idx):
+                    // 1-based index 매핑 ([1] -> memos[0].id)
+                    if idx >= 1 && idx <= memos.count {
+                        let id = memos[idx - 1].id
+                        if allowedIDs.contains(id) {
+                            parsedIDs.append(id)
+                        } else {
+                            badID += 1
+                        }
+                    } else {
+                        badID += 1
+                    }
+                case .string(let str):
+                    if let uuid = UUID(uuidString: str), allowedIDs.contains(uuid) {
+                        parsedIDs.append(uuid)
+                    } else {
+                        badID += 1
+                    }
+                }
+            }
+
             let unused = parsedIDs.filter { !used.contains($0) }
             alreadyUsed += parsedIDs.count - unused.count
             let ids = unused.prefix(maxMemoCount)
@@ -173,12 +209,13 @@ public enum WeeklyGoalTask {
             }
             used.formUnion(ids)
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
+            let criterion = item.criterion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let scheduleText = item.scheduleText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return GoalSuggestionDraft(
                 title: title.isEmpty ? "추천 목표" : title,
                 reason: item.reason,
                 memoIDs: Array(ids),
-                scheduleText: item.scheduleText.isEmpty ? "이번 주에 나눠 진행" : item.scheduleText,
+                scheduleText: scheduleText.isEmpty ? "이번 주에 나눠 진행" : scheduleText,
                 criterion: criterion.isEmpty ? "연결한 할일 \(ids.count)개 완료" : criterion,
                 targetValueText: "\(ids.count)개",
                 emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "🎯"
@@ -199,7 +236,32 @@ public enum WeeklyGoalTask {
         )
     }
 
+    public static func parse(
+        _ text: String,
+        allowedIDs: Set<UUID>,
+        suggestionCount: Int,
+        maxMemoCount: Int
+    ) -> ParseOutcome {
+        parse(
+            text,
+            memos: [],
+            allowedIDs: allowedIDs,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount
+        )
+    }
+
     // MARK: - 한 번 돌리기
+
+    public struct GenerationOutput: Sendable {
+        public let text: String
+        public let usage: RunRecord.UsageSummary?
+
+        public init(text: String, usage: RunRecord.UsageSummary? = nil) {
+            self.text = text
+            self.usage = usage
+        }
+    }
 
     /// 한 번의 추천에서 일어난 일. 로그 문구는 앱이 정하므로 여기서는 값만 돌려준다.
     public struct RunOutcome {
@@ -211,6 +273,23 @@ public enum WeeklyGoalTask {
         public let promptCharacters: Int
         /// 단계별 소요(ms). 총합만 보면 58초 중 무엇이 오래 걸렸는지 알 수 없다.
         public let timings: [String: Int]
+        public let usage: RunRecord.UsageSummary?
+
+        public init(
+            drafts: [GoalSuggestionDraft],
+            diagnostics: Diagnostics,
+            selectedIDs: [UUID],
+            promptCharacters: Int,
+            timings: [String: Int],
+            usage: RunRecord.UsageSummary? = nil
+        ) {
+            self.drafts = drafts
+            self.diagnostics = diagnostics
+            self.selectedIDs = selectedIDs
+            self.promptCharacters = promptCharacters
+            self.timings = timings
+            self.usage = usage
+        }
 
         public enum Diagnostics {
             case parsed(ParseOutcome.Diagnostics)
@@ -242,8 +321,10 @@ public enum WeeklyGoalTask {
         maxMemoCount: Int,
         inputLimit: Int,
         budget: Int,
+        timeoutInterval: TimeInterval = 60.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
-        generate: (_ prompt: String, _ instructions: String) async throws -> String
+        // 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> GenerationOutput
     ) async -> RunOutcome {
         let clock = StepClock()
 
@@ -265,34 +346,78 @@ public enum WeeklyGoalTask {
 
         func outcome(
             drafts: [GoalSuggestionDraft],
-            diagnostics: RunOutcome.Diagnostics
+            diagnostics: RunOutcome.Diagnostics,
+            usage: RunRecord.UsageSummary?
         ) -> RunOutcome {
             RunOutcome(
                 drafts: drafts,
                 diagnostics: diagnostics,
                 selectedIDs: selected.map(\.id),
                 promptCharacters: prompt.count,
-                timings: clock.elapsed
+                timings: clock.elapsed,
+                usage: usage
             )
         }
 
         do {
-            let text = try await generate(prompt, instructions)
+            let genOutput = try await withThrowingTaskGroup(of: GenerationOutput.self) { group in
+                group.addTask {
+                    try await generate(prompt, instructions)
+                }
+                group.addTask {
+                    // 생성 60초 타임아웃: 실측(2026-08-14)에서 Ollama 무한 루프/지연 발생 시
+                    // 107초 이상 사용자가 대기하는 문제를 방지하기 위해 60초 상한 설정.
+                    // 초과 시 빠른 폴백(AFM/룰)을 유도한다.
+                    let nanoseconds = UInt64(max(0.001, timeoutInterval) * 1_000_000_000)
+                    try await Task.sleep(nanoseconds: nanoseconds)
+                    throw CancellationError()
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
             clock.mark("generate")
             // 허용 id 는 **자르기 전 전체**다. 예산에 밀려 프롬프트에 안 들어간 id 를 모델이
             // 지어내는 일은 없지만, 좁히면 재시도·캐시 같은 걸 붙일 때 조용히 후보를 잃는다.
             let parsed = parse(
-                text,
+                genOutput.text,
+                memos: selected,
                 allowedIDs: Set(memos.map(\.id)),
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount
             )
             clock.mark("parse")
-            return outcome(drafts: parsed.drafts, diagnostics: .parsed(parsed.diagnostics))
+            return outcome(drafts: parsed.drafts, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
         } catch {
             clock.mark("generate")
-            return outcome(drafts: [], diagnostics: .generationFailed(error))
+            return outcome(drafts: [], diagnostics: .generationFailed(error), usage: nil)
         }
+    }
+
+    /// 단순 문자열 반환 generate 클로저를 위한 편의 오버로드.
+    public static func run(
+        memos: [Memo],
+        suggestionCount: Int,
+        maxMemoCount: Int,
+        inputLimit: Int,
+        budget: Int,
+        timeoutInterval: TimeInterval = 60.0,
+        onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> RunOutcome {
+        await run(
+            memos: memos,
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            inputLimit: inputLimit,
+            budget: budget,
+            timeoutInterval: timeoutInterval,
+            onPromptBuilt: onPromptBuilt,
+            generate: { prompt, instructions in
+                let text = try await generate(prompt, instructions)
+                return GenerationOutput(text: text, usage: nil)
+            }
+        )
     }
 
     // MARK: - 직렬화
@@ -301,26 +426,43 @@ public enum WeeklyGoalTask {
         guard let date else { return "없음" }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy-MM-dd E HH:mm"
+        formatter.dateFormat = "M/d(E)"
         return formatter.string(from: date)
     }
 
     private static let promptFallback = """
-    아래 할일들을 의미, 아이콘, 시작일, 마감일, 완료 상태를 함께 보고 주간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    목표 후보 하나에는 할일을 최대 {{maxMemoCount}}개까지만 넣어.
-    각 후보는 사용자가 수정할 수 있는 초안이어야 하고, 같은 할일을 여러 후보에 중복해서 넣지 마.
-    존재하는 id만 memoIDs에 넣어.
-    scheduleText는 실제 startDate, deadline, date를 고려해 짧게 작성해.
+    너는 사용자가 등록한 할일들을 분석해서, 이번 주에 추진할 "의미 있는 주간 목표"로 묶어주는 어시스턴트야.
+
+    [가장 중요한 묶는 기준]
+    - 할일의 목적, 즉 "무엇을 이루려는가"가 같거나 하나의 결과물로 이어지는 것끼리만 묶어.
+    - 같은 단어, 해시태그, 도구명, 앱 이름, 채널명, 파일명, URL 패턴이 겹친다는 이유로 묶지 마.
+    - 표면적인 키워드 일치는 묶는 근거가 될 수 없어.
+    - "이 할일들을 다 끝내면 하나의 결과나 진전이 생기는가?"에 yes일 때만 한 목표로 묶어.
+
+    [목표 품질 규칙]
+    - 최대 {{suggestionCount}}개까지 제안할 수 있지만, 반드시 {{suggestionCount}}개를 만들 필요는 없어.
+    - 의미 있게 묶이는 후보가 적으면 적게 내고, 없으면 "suggestions": []로 비워도 돼.
+    - 한 목표에는 서로 직접 관련된 할일을 2개 이상, {{maxMemoCount}}개 이하로 넣어.
+    - {{maxMemoCount}}개를 초과해서 넣으면 초과분은 그냥 버려진다. 절대 한 목표에 몰아넣지 마.
+    - 관련된 할일이 {{maxMemoCount}}개를 넘으면 목적별로 더 잘게 나눠서 서로 다른 목표 여러 개로 제안해.
+    - 어느 목표에도 자연스럽게 속하지 않는 할일은 어디에도 넣지 말고 제외해.
+    - 같은 할일을 여러 후보에 중복해서 넣지 마.
+    - 존재하는 할일 번호([1], [2] 등)만 items에 넣어.
+    - 입력에 없는 구체적인 숫자, 결과, 마감 조건을 만들지 마.
+
+    [필드 작성 규칙]
+    - title: 도구명이나 키워드가 아니라, 이루려는 결과를 담은 구체적인 문장으로 써.
+    - reason: 어떤 공통 목적이나 결과물 때문에 묶었는지 구체적으로 써.
+    - items: 묶은 할일의 번호 배열 (예: [1, 2])
+    - emoji: 목표의 결과나 행동을 대표하는 아이콘 하나를 골라 (예: "🎯")
 
     JSON 형식:
     {
       "suggestions": [
         {
-          "title": "목표명",
-          "reason": "묶은 이유",
-          "memoIDs": ["UUID"],
-          "scheduleText": "월/수/금에 나눠 진행",
-          "criterion": "연결한 할일 3개 완료",
+          "title": "결과를 담은 목표명",
+          "reason": "묶은 공통 목적",
+          "items": [1, 2],
           "emoji": "🎯"
         }
       ]

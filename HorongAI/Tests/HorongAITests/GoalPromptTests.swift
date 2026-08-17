@@ -65,18 +65,21 @@ final class GoalPromptTests: XCTestCase {
 
     /// 예산을 넘으면 뒤에서부터 자르되 2개는 남긴다 — 1개짜리는 묶을 수 없기 때문이다.
     func testBudgetTrimsFromTailButKeepsTwo() {
-        let long = (0..<20).map {
+        let items = (0..<20).map {
             WeeklyGoalTask.Memo(
                 id: UUID(),
-                content: String(repeating: "긴 본문 ", count: 200) + "\($0)",
+                content: "할일 본문 \($0)",
                 icon: "📝",
                 date: Date(timeIntervalSince1970: 1_770_000_000)
             )
         }
+        let twoMemosBudget = WeeklyGoalTask.prompt(
+            for: Array(items.prefix(2)), suggestionCount: 4, maxMemoCount: 5
+        ).count + 5
         let selected = WeeklyGoalTask.memosWithinPromptBudget(
-            long, suggestionCount: 4, maxMemoCount: 5, budget: 4_000
+            items, suggestionCount: 4, maxMemoCount: 5, budget: twoMemosBudget
         )
         XCTAssertEqual(selected.count, 2)
-        XCTAssertEqual(selected.map(\.id), Array(long.prefix(2)).map(\.id), "앞에서부터 남긴다")
+        XCTAssertEqual(selected.map(\.id), Array(items.prefix(2)).map(\.id), "앞에서부터 남긴다")
     }
 }

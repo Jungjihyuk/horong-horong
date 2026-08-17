@@ -100,7 +100,9 @@ public enum MonthlyGoalTask {
         goals: [Goal],
         suggestionCount: Int,
         inputLimit: Int,
-        generate: (_ prompt: String, _ instructions: String) async throws -> String
+        timeoutInterval: TimeInterval = 60.0,
+        // 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> RunOutcome {
         let clock = StepClock()
         let selected = Array(goals.prefix(inputLimit))
@@ -120,7 +122,20 @@ public enum MonthlyGoalTask {
         }
 
         do {
-            let text = try await generate(prompt, instructions)
+            let text = try await withThrowingTaskGroup(of: String.self) { group in
+                group.addTask {
+                    try await generate(prompt, instructions)
+                }
+                group.addTask {
+                    // 생성 60초 타임아웃: 무한 루프/지연 발생 시 상한을 설정해 빠른 폴백 유도
+                    let nanoseconds = UInt64(max(0.001, timeoutInterval) * 1_000_000_000)
+                    try await Task.sleep(nanoseconds: nanoseconds)
+                    throw CancellationError()
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
             clock.mark("generate")
             // 허용 id 와 원본 목표는 **자르기 전 전체**다. 잘린 목표의 할일까지 끌어올려야 하는
             // 경우가 생기면 좁혀 둔 쪽이 조용히 후보를 잃는다.
@@ -150,22 +165,33 @@ public enum MonthlyGoalTask {
         suggestionCount: Int
     ) -> [GoalSuggestionDraft] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let payload = GoalSuggestionPayload(responseText: trimmed) else {
+        guard case .success(let payload) = GoalSuggestionPayload.decode(from: trimmed) else {
             return []
         }
 
         let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
         var used = Set<UUID>()
         return payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
-            let ids = (item.goalIDs ?? []).compactMap(UUID.init(uuidString:))
-                .filter { allowedIDs.contains($0) && !used.contains($0) }
-                .prefix(4)
+            let rawIDs: [GoalSuggestionPayload.IDValue] = item.goalIDs ?? item.items ?? item.memoIDs ?? []
+            let ids = rawIDs.compactMap { val -> UUID? in
+                switch val {
+                case .int(let idx):
+                    if idx >= 1 && idx <= sourceGoals.count {
+                        return sourceGoals[idx - 1].id
+                    }
+                    return nil
+                case .string(let str):
+                    return UUID(uuidString: str)
+                }
+            }
+            .filter { allowedIDs.contains($0) && !used.contains($0) }
+            .prefix(4)
             guard ids.count >= 2 else { return nil }
             used.formUnion(ids)
             let goals = ids.compactMap { goalByID[$0] }
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
-            let scheduleText = item.scheduleText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let criterion = item.criterion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let scheduleText = item.scheduleText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return GoalSuggestionDraft(
                 title: title.isEmpty ? "추천 월간 목표" : title,
                 reason: item.reason,

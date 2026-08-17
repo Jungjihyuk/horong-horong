@@ -76,11 +76,14 @@ struct RunContext {
         provider: String,
         model: String?,
         outcome: String,
+        outcomeDetail: String? = nil,
         titles: [String] = [],
         selectedIDs: [UUID] = [],
         promptCharacters: Int = 0,
         parse: RunRecord.ParseSummary? = nil,
-        timings: [String: Int] = [:]
+        usage: RunRecord.UsageSummary? = nil,
+        timings: [String: Int] = [:],
+        parameters: [String: Double]? = nil
     ) -> RunRecord {
         RunRecord(
             model: model,
@@ -101,9 +104,50 @@ struct RunContext {
                 promptCharacters: promptCharacters
             ),
             outcome: outcome,
+            outcomeDetail: outcomeDetail,
             parse: parse,
-            timings: timings
+            usage: usage,
+            timings: timings,
+            parameters: parameters
         )
+    }
+}
+
+extension Error {
+    /// 발생한 에러를 분석하여 타임아웃, 연결 거부, 네트워크 단절 등 구체적인 원인을 반환한다.
+    var detailedFailureReason: String {
+        if self is CancellationError {
+            return "timeout"
+        }
+        if let urlError = self as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return "timeout"
+            case .cannotConnectToHost, .cannotFindHost:
+                return "connectionRefused"
+            case .networkConnectionLost, .notConnectedToInternet:
+                return "networkDisconnected"
+            default:
+                return "networkError"
+            }
+        }
+        let nsError = self as NSError
+        if nsError.domain == NSURLErrorDomain {
+            if nsError.code == NSURLErrorTimedOut { return "timeout" }
+            if nsError.code == NSURLErrorCannotConnectToHost { return "connectionRefused" }
+            return "networkError"
+        }
+        if nsError.code == 61 { // ECONNREFUSED
+            return "connectionRefused"
+        }
+        let desc = String(describing: self).lowercased()
+        if desc.contains("timed out") || desc.contains("timeout") || desc.contains("cancelled") {
+            return "timeout"
+        }
+        if desc.contains("connection refused") {
+            return "connectionRefused"
+        }
+        return "inferenceError"
     }
 }
 
@@ -116,6 +160,27 @@ extension WeeklyGoalTask.RunOutcome.Diagnostics {
         case .parsed(let diagnostics):
             if case .decodeFailed = diagnostics { return "decodeFailed" }
             return hasDrafts ? "ok" : "parsedEmpty"
+        }
+    }
+
+    /// 한 겹 더 들여다본 구체적 이유.
+    /// 생성 실패는 타임아웃/연결실패 등을, 파싱/검증 실패는 noJSON/가짜ID환각/메모부족 등을 기록한다.
+    var outcomeDetail: String? {
+        switch self {
+        case .generationFailed(let error):
+            return error.detailedFailureReason
+        case .parsed(let diagnostics):
+            switch diagnostics {
+            case .decodeFailed(_, let reason):
+                return reason
+            case let .decoded(modelReturned, kept, _, badID, alreadyUsed, _, tooFewIDs):
+                if kept > 0 { return nil }
+                if modelReturned == 0 { return "emptyList" }
+                if badID > 0 { return "hallucinatedIDs" }
+                if tooFewIDs > 0 { return "tooFewMemos" }
+                if alreadyUsed > 0 { return "duplicateMemos" }
+                return "validationFailed"
+            }
         }
     }
 

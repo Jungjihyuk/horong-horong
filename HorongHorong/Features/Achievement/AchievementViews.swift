@@ -1059,6 +1059,8 @@ enum AchievementFoundationGoalSuggestionProvider {
             let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
                 ?? Constants.defaultAchievementSuggestionMLXModel
             let generator = MLXTextGenerator(model: model)
+            let temperature = 0.2
+            let maxTokens = 1_200
             return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
@@ -1067,13 +1069,18 @@ enum AchievementFoundationGoalSuggestionProvider {
                 model: model,
                 source: .mlx,
                 context: context,
+                parameters: [
+                    "temperature": temperature,
+                    "max_tokens": Double(maxTokens)
+                ],
                 generate: { prompt, instructions in
-                    try await generator.generate(
+                    let text = try await generator.generate(
                         prompt: prompt,
                         instructions: instructions,
-                        temperature: 0.2,
-                        maxTokens: 1_200
+                        temperature: temperature,
+                        maxTokens: maxTokens
                     )
+                    return WeeklyGoalTask.GenerationOutput(text: text, usage: nil)
                 }
             )
         }
@@ -1094,6 +1101,13 @@ enum AchievementFoundationGoalSuggestionProvider {
             let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
                 ?? Constants.defaultNewsOllamaEndpoint
             let generator = OllamaTextGenerator(endpoint: endpoint, model: model)
+            
+            let temperature = 0.3
+            let repeatPenalty = 1.15
+            let presencePenalty = 0.0
+            let frequencyPenalty = 0.0
+            let maxTokens = 1_200
+            
             return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
@@ -1102,15 +1116,26 @@ enum AchievementFoundationGoalSuggestionProvider {
                 model: model,
                 source: .ollama,
                 context: context,
+                parameters: [
+                    "temperature": temperature,
+                    "repeat_penalty": repeatPenalty,
+                    "presence_penalty": presencePenalty,
+                    "frequency_penalty": frequencyPenalty,
+                    "max_tokens": Double(maxTokens)
+                ],
                 // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
                 precondition: { await generator.isReachable() },
                 generate: { prompt, instructions in
-                    try await generator.generate(
+                    let output = try await generator.generateWithUsage(
                         prompt: prompt,
                         instructions: instructions,
-                        temperature: 0.2,
-                        maxTokens: 1_200
+                        temperature: temperature,
+                        maxTokens: maxTokens,
+                        repeatPenalty: repeatPenalty,
+                        presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty
                     )
+                    return WeeklyGoalTask.GenerationOutput(text: output.text, usage: output.usage)
                 }
             )
         }
@@ -1134,8 +1159,10 @@ enum AchievementFoundationGoalSuggestionProvider {
         model: String,
         source: AchievementGoalSuggestionSource,
         context: RunContext,
+        parameters: [String: Double] = [:],
         precondition: () async -> Bool = { true },
-        generate: (_ prompt: String, _ instructions: String) async throws -> String
+        // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> WeeklyGoalTask.GenerationOutput
     ) async -> [AchievementGoalSuggestion] {
         let label = provider.rawValue
         let startedAt = Date()
@@ -1147,7 +1174,8 @@ enum AchievementFoundationGoalSuggestionProvider {
                     startedAt: startedAt,
                     provider: label,
                     model: model,
-                    outcome: "serverUnavailable"
+                    outcome: "serverUnavailable",
+                    parameters: parameters
                 )
             )
             return []
@@ -1157,7 +1185,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             memos: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount,
-            inputLimit: max(8, min(60, suggestionCount * maxMemoCount * 3)),
+            inputLimit: max(8, min(provider == .ollama || provider == .appleFoundation ? 15 : 24, suggestionCount * maxMemoCount * 2)),
             budget: Constants.achievementPromptCharacterBudget(for: provider),
             onPromptBuilt: { characters, memoCount in
                 achievementSuggestionLog.info(
@@ -1199,11 +1227,14 @@ enum AchievementFoundationGoalSuggestionProvider {
                 provider: label,
                 model: model,
                 outcome: outcome.diagnostics.recordedOutcome(hasDrafts: !outcome.drafts.isEmpty),
+                outcomeDetail: outcome.diagnostics.outcomeDetail,
                 titles: suggestions.map(\.title),
                 selectedIDs: outcome.selectedIDs,
                 promptCharacters: outcome.promptCharacters,
                 parse: outcome.diagnostics.parseSummary,
-                timings: outcome.timings
+                usage: outcome.usage,
+                timings: outcome.timings,
+                parameters: parameters
             )
         )
 
@@ -1214,8 +1245,13 @@ enum AchievementFoundationGoalSuggestionProvider {
     /// 파서 진단을 로그 한 줄로. AFM 경로(`FoundationModelsGoalSuggestionProvider.parse`)와 같은 문구를 쓴다.
     fileprivate static func logWeeklyParse(_ diagnostics: WeeklyGoalTask.ParseOutcome.Diagnostics) {
         switch diagnostics {
-        case .decodeFailed(let characters):
-            achievementSuggestionLog.error("weekly parse failure=decode chars=\(characters, privacy: .public)")
+        case let .decodeFailed(characters, reason):
+            achievementSuggestionLog.error(
+                """
+                weekly parse failure=decode chars=\(characters, privacy: .public) \
+                reason=\(reason, privacy: .public)
+                """
+            )
         case let .decoded(modelReturned, kept, requestedIDs, badID, alreadyUsed, overMaxMemo, tooFewIDs):
             achievementSuggestionLog.info(
                 """
@@ -1359,7 +1395,7 @@ struct FoundationModelsGoalSuggestionProvider {
             maxMemoCount: maxMemoCount,
             // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
             // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
-            inputLimit: max(8, min(40, suggestionCount * maxMemoCount * 2)),
+            inputLimit: max(8, min(15, suggestionCount * maxMemoCount * 2)),
             budget: achievementPromptCharacterBudget,
             onPromptBuilt: { characters, memoCount in
                 promptSummary = "weekly prompt chars=\(characters) memos=\(memoCount)"
@@ -1402,11 +1438,14 @@ struct FoundationModelsGoalSuggestionProvider {
                 provider: "appleFoundation",
                 model: nil,
                 outcome: outcome.diagnostics.recordedOutcome(hasDrafts: !outcome.drafts.isEmpty),
+                outcomeDetail: outcome.diagnostics.outcomeDetail,
                 titles: suggestions.map(\.title),
                 selectedIDs: outcome.selectedIDs,
                 promptCharacters: outcome.promptCharacters,
                 parse: outcome.diagnostics.parseSummary,
-                timings: outcome.timings
+                usage: outcome.usage,
+                timings: outcome.timings,
+                parameters: ["temperature": 0.2, "max_tokens": 900]
             )
         )
         return suggestions
@@ -1428,7 +1467,8 @@ struct FoundationModelsGoalSuggestionProvider {
                     startedAt: startedAt,
                     provider: "appleFoundation",
                     model: nil,
-                    outcome: "modelUnavailable"
+                    outcome: "modelUnavailable",
+                    parameters: ["temperature": 0.25, "max_tokens": 900]
                 )
             )
             return []
@@ -1461,9 +1501,11 @@ struct FoundationModelsGoalSuggestionProvider {
                     provider: "appleFoundation",
                     model: nil,
                     outcome: "generationFailed",
+                    outcomeDetail: error.detailedFailureReason,
                     selectedIDs: outcome.selectedIDs,
                     promptCharacters: outcome.promptCharacters,
-                    timings: outcome.timings
+                    timings: outcome.timings,
+                    parameters: ["temperature": 0.25, "max_tokens": 900]
                 )
             )
             return []
@@ -1480,10 +1522,12 @@ struct FoundationModelsGoalSuggestionProvider {
                 provider: "appleFoundation",
                 model: nil,
                 outcome: outcome.drafts.isEmpty ? "parsedEmpty" : "ok",
+                outcomeDetail: outcome.drafts.isEmpty ? "emptyList" : nil,
                 titles: suggestions.map(\.title),
                 selectedIDs: outcome.selectedIDs,
                 promptCharacters: outcome.promptCharacters,
-                timings: outcome.timings
+                timings: outcome.timings,
+                parameters: ["temperature": 0.25, "max_tokens": 900]
             )
         )
         return suggestions

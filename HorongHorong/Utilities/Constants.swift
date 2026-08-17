@@ -824,13 +824,14 @@ enum Constants {
 
     /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
     /// AFM 값은 실측(3,424자 통과 / 5,203자 실패)에 여유를 둔 것이다.
+    /// Ollama 실측: 10,815자 주입 시 60초 타임아웃/noJSON 실패 발생 -> 4,500자로 다이어트하여 5~10초 내 생성 유도.
     static func achievementPromptCharacterBudget(
         for provider: AchievementSuggestionProviderKind
     ) -> Int {
         switch provider {
         case .appleFoundation: return 4_000
-        case .mlx: return 16_000
-        case .ollama: return 16_000
+        case .mlx: return 6_000
+        case .ollama: return 4_500
         }
     }
 

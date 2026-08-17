@@ -37,6 +37,7 @@ struct CompanionChatMessage: Identifiable {
     /// 값이 있으면 메모 저장 완료 말풍선이며 메모 탭으로 가는 버튼을 보여준다.
     var memoDestinationID: UUID?
     var allowsMemoSave = true
+    var isHovered = false
 }
 
 /// 오버레이 창이 그리는 내용. 컨트롤러가 값을 밀어 넣고 뷰는 표시·입력 전달만 한다.
@@ -542,7 +543,7 @@ private struct CompanionChatMessageRow: View {
             }
             .buttonStyle(.plain)
             .disabled(message.savedMemoID != nil || isStreaming)
-            .opacity(isHovering || isShowingMemoOptions ? 1 : 0)
+            .opacity(isHovering || isShowingMemoOptions || message.isHovered ? 1 : 0)
             .onHover(perform: updateHover)
             .help(message.savedMemoID == nil ? "메모로 저장" : "이미 메모로 저장됨")
             .popover(isPresented: $isShowingMemoOptions, arrowEdge: .bottom) {
