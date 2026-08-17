@@ -101,6 +101,8 @@ public enum MonthlyGoalTask {
         suggestionCount: Int,
         inputLimit: Int,
         timeoutInterval: TimeInterval = 60.0,
+        /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
+        trace: TraceCollector? = nil,
         // 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> RunOutcome {
@@ -110,6 +112,9 @@ public enum MonthlyGoalTask {
 
         let prompt = prompt(for: selected, suggestionCount: suggestionCount)
         clock.mark("render_prompt")
+        trace?.add(.input, selected.map { "- \($0.id): \($0.title)" }.joined(separator: "\n"),
+                   facts: ["selected": selected.count, "candidates": goals.count])
+        trace?.add(.prompt, prompt, facts: ["characters": prompt.count])
 
         func outcome(drafts: [GoalSuggestionDraft], failure: Error?) -> RunOutcome {
             RunOutcome(
@@ -137,6 +142,8 @@ public enum MonthlyGoalTask {
                 return result
             }
             clock.mark("generate")
+            trace?.add(.rawResponse, text, facts: ["characters": text.count])
+            trace?.add(.extractedJSON, GoalSuggestionPayload.extractJSONObject(from: text))
             // 허용 id 와 원본 목표는 **자르기 전 전체**다. 잘린 목표의 할일까지 끌어올려야 하는
             // 경우가 생기면 좁혀 둔 쪽이 조용히 후보를 잃는다.
             let drafts = parse(
@@ -146,9 +153,12 @@ public enum MonthlyGoalTask {
                 suggestionCount: suggestionCount
             )
             clock.mark("parse")
+            trace?.add(.parsed, drafts.map { "- \($0.title)" }.joined(separator: "\n"),
+                       facts: ["kept": drafts.count])
             return outcome(drafts: drafts, failure: nil)
         } catch {
             clock.mark("generate")
+            trace?.add(.failure, String(describing: error))
             return outcome(drafts: [], failure: error)
         }
     }

@@ -1181,6 +1181,13 @@ enum AchievementFoundationGoalSuggestionProvider {
             return []
         }
 
+        // 원문 기록. 개발자 모드가 아니면 nil 이라 아무 비용도 들지 않는다.
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: label,
+            model: model
+        )
         let outcome = await WeeklyGoalTask.run(
             memos: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
@@ -1195,8 +1202,10 @@ enum AchievementFoundationGoalSuggestionProvider {
                     """
                 )
             },
+            trace: trace,
             generate: generate
         )
+        if let trace { TraceRecorder.shared?.record(trace) }
 
         let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly).retagged(as: source) }
 
@@ -1389,6 +1398,11 @@ struct FoundationModelsGoalSuggestionProvider {
 
         // 추론이 거부되면 그 자리를 다시 남긴다. 로그 문구는 인시던트 2026-07-31 의 진단 서명이라 유지한다.
         var promptSummary = ""
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: "appleFoundation"
+        )
         let outcome = await WeeklyGoalTask.run(
             memos: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
@@ -1403,6 +1417,7 @@ struct FoundationModelsGoalSuggestionProvider {
                     "weekly prompt chars=\(characters, privacy: .public) memos=\(memoCount, privacy: .public)"
                 )
             },
+            trace: trace,
             generate: { prompt, instructions in
                 try await generator.generate(
                     prompt: prompt,
@@ -1412,6 +1427,7 @@ struct FoundationModelsGoalSuggestionProvider {
                 )
             }
         )
+        if let trace { TraceRecorder.shared?.record(trace) }
 
         switch outcome.diagnostics {
         case .parsed(let diagnostics):
@@ -1474,10 +1490,16 @@ struct FoundationModelsGoalSuggestionProvider {
             return []
         }
 
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: "appleFoundation"
+        )
         let outcome = await MonthlyGoalTask.run(
             goals: goals.map(\.taskGoal),
             suggestionCount: suggestionCount,
             inputLimit: max(3, min(30, suggestionCount * 6)),
+            trace: trace,
             generate: { prompt, instructions in
                 try await generator.generate(
                     prompt: prompt,
@@ -1487,6 +1509,7 @@ struct FoundationModelsGoalSuggestionProvider {
                 )
             }
         )
+        if let trace { TraceRecorder.shared?.record(trace) }
 
         if let error = outcome.failure {
             achievementSuggestionLog.error(

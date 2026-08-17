@@ -22,4 +22,7 @@ public enum AILog {
 
     /// 모델을 부르다 생긴 일. 어느 공급자인지는 메시지 앞머리에 붙인다.
     public static let providers = Logger(subsystem: subsystem, category: "providers")
+
+    /// 기록 자체가 실패한 일. 기록은 부수 작업이라 본래 하려던 일을 죽이지 않고 여기로 남긴다.
+    public static let recording = Logger(subsystem: subsystem, category: "recording")
 }

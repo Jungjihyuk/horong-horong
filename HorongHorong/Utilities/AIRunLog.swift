@@ -40,6 +40,28 @@ enum AIRunLog {
         logger.flush()
     }
 
+    /// 원문(trace) 기록기를 세운다. 앱이 시작할 때 한 번 부른다.
+    ///
+    /// **개발자 모드에서만 켜진다.** 원문에는 프롬프트 전문과 사용자의 할 일이 그대로 들어가므로
+    /// 기본은 꺼짐이다. 켜는 법은 AI 실험실 탭을 켜는 것과 같다 —
+    /// Debug 빌드는 자동, Release 는 `defaults write com.horonghorong.app ailab.enabled -bool YES`.
+    ///
+    /// 패키지는 `UserDefaults` 를 읽지 않으므로 그 판단을 여기서 해 주입한다.
+    static func installTraceRecorder(now: Date = Date()) {
+        guard let directory = try? SwiftDataStoreLocation.applicationDirectoryURL()
+            .appendingPathComponent("runs", isDirectory: true)
+            .appendingPathComponent("traces", isDirectory: true) else {
+            return
+        }
+        let recorder = TraceRecorder(
+            directory: directory,
+            isEnabled: SettingsTab.showsDeveloperTabs
+        )
+        TraceRecorder.shared = recorder
+        // 켜 둔 것을 잊는 일이 실제로 있다. 끄는 것에 기대지 않고 스스로 줄어들게 한다.
+        recorder.purgeExpired(now: now)
+    }
+
     /// 버튼 한 번에 붙는 id. 주간·월간이 이 값을 공유해 한 실행으로 묶인다.
     static func newRunID(now: Date = Date()) -> String {
         let formatter = DateFormatter()
