@@ -441,6 +441,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         timerManager.setModelContext(context)
 
+        // AI 실행 원문 기록. 개발자 모드에서만 켜지고, 보존 기한이 지난 것은 여기서 정리된다.
+        AIRunLog.installTraceRecorder()
+
         if let screenshotConfig = ScreenshotCaptureConfiguration.current {
             presentScreenshotWindow(config: screenshotConfig)
             return

@@ -323,6 +323,9 @@ public enum WeeklyGoalTask {
         budget: Int,
         timeoutInterval: TimeInterval = 60.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
+        /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
+        /// `RunOutcome` 에 원문을 싣지 않기로 한 결정을 지키면서 원문을 꺼내는 통로다.
+        trace: TraceCollector? = nil,
         // 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> GenerationOutput
     ) async -> RunOutcome {
@@ -343,6 +346,9 @@ public enum WeeklyGoalTask {
         )
         clock.mark("render_prompt")
         onPromptBuilt(prompt.count, selected.count)
+        trace?.add(.input, selected.map { "- \($0.id): \($0.content)" }.joined(separator: "\n"),
+                   facts: ["selected": selected.count, "candidates": memos.count])
+        trace?.add(.prompt, prompt, facts: ["characters": prompt.count])
 
         func outcome(
             drafts: [GoalSuggestionDraft],
@@ -377,6 +383,11 @@ public enum WeeklyGoalTask {
                 return result
             }
             clock.mark("generate")
+            // 원문이 없어서 `typeMismatch:Index 0` 를 못 쫓았던 자리다(2026-08-17).
+            // 추출 결과도 함께 남긴다 — `<think>` 제거·코드펜스 처리가 실제로 일했는지는
+            // 이 둘을 나란히 놓아야만 알 수 있다.
+            trace?.add(.rawResponse, genOutput.text, facts: ["characters": genOutput.text.count])
+            trace?.add(.extractedJSON, GoalSuggestionPayload.extractJSONObject(from: genOutput.text))
             // 허용 id 는 **자르기 전 전체**다. 예산에 밀려 프롬프트에 안 들어간 id 를 모델이
             // 지어내는 일은 없지만, 좁히면 재시도·캐시 같은 걸 붙일 때 조용히 후보를 잃는다.
             let parsed = parse(
@@ -387,9 +398,12 @@ public enum WeeklyGoalTask {
                 maxMemoCount: maxMemoCount
             )
             clock.mark("parse")
+            trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
+                       facts: ["kept": parsed.drafts.count])
             return outcome(drafts: parsed.drafts, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
         } catch {
             clock.mark("generate")
+            trace?.add(.failure, String(describing: error))
             return outcome(drafts: [], diagnostics: .generationFailed(error), usage: nil)
         }
     }
@@ -403,6 +417,7 @@ public enum WeeklyGoalTask {
         budget: Int,
         timeoutInterval: TimeInterval = 60.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
+        trace: TraceCollector? = nil,
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> RunOutcome {
         await run(
@@ -413,6 +428,7 @@ public enum WeeklyGoalTask {
             budget: budget,
             timeoutInterval: timeoutInterval,
             onPromptBuilt: onPromptBuilt,
+            trace: trace,
             generate: { prompt, instructions in
                 let text = try await generate(prompt, instructions)
                 return GenerationOutput(text: text, usage: nil)
