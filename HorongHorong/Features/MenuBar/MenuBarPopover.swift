@@ -45,11 +45,13 @@ struct MenuBarPopover: View {
     @State private var showFocusEndPrompt = false
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
+    private let referenceDate: Date
     var timerManager: TimerManager
 
-    init(timerManager: TimerManager, initialTab: PopoverTab = .timer) {
+    init(timerManager: TimerManager, initialTab: PopoverTab = .timer, referenceDate: Date = Date()) {
         self.timerManager = timerManager
         _selectedTab = State(initialValue: initialTab)
+        self.referenceDate = referenceDate
     }
 
     var body: some View {
@@ -341,7 +343,7 @@ struct MenuBarPopover: View {
         case .achievement:
             AchievementSummaryView()
         case .stats:
-            StatsSummaryView()
+            StatsSummaryView(referenceDate: referenceDate)
         case .news:
             NewsView()
         case .agent:

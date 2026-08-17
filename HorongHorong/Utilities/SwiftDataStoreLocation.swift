@@ -157,6 +157,22 @@ enum SwiftDataStoreLocation {
                     isDirectory: false
                 )
             )
+        } else if scope == .development {
+            // 디버그 빌드 최초 실행 시: 실사용(Production) 저장소가 존재하면 1회 복사(Seed)해온다.
+            let prodAppDirectory = applicationSupportDirectory
+                .appendingPathComponent(Scope.production.directoryName, isDirectory: true)
+
+            candidates.append(
+                prodAppDirectory
+                    .appendingPathComponent(storesDirectoryName, isDirectory: true)
+                    .appendingPathComponent(storeFileName, isDirectory: false)
+            )
+            candidates.append(
+                prodAppDirectory.appendingPathComponent(storeFileName, isDirectory: false)
+            )
+            candidates.append(
+                applicationSupportDirectory.appendingPathComponent(storeFileName, isDirectory: false)
+            )
         }
 
         guard let sourceStoreURL = candidates.first(where: {
@@ -170,6 +186,34 @@ enum SwiftDataStoreLocation {
             to: targetStoreURL,
             fileManager: fileManager
         )
+
+        // 디버그 빌드인 경우, 실사용 runs 기록도 비어있다면 함께 시드 복사
+        if scope == .development {
+            seedRunsDirectoryIfNeeded(
+                applicationSupportDirectory: applicationSupportDirectory,
+                appDirectory: appDirectory,
+                fileManager: fileManager
+            )
+        }
+    }
+
+    private static func seedRunsDirectoryIfNeeded(
+        applicationSupportDirectory: URL,
+        appDirectory: URL,
+        fileManager: FileManager
+    ) {
+        let prodRunsDir = applicationSupportDirectory
+            .appendingPathComponent(Scope.production.directoryName, isDirectory: true)
+            .appendingPathComponent("runs", isDirectory: true)
+        let debugRunsDir = appDirectory
+            .appendingPathComponent("runs", isDirectory: true)
+
+        guard fileManager.fileExists(atPath: prodRunsDir.path),
+              !fileManager.fileExists(atPath: debugRunsDir.path) else {
+            return
+        }
+
+        try? fileManager.copyItem(at: prodRunsDir, to: debugRunsDir)
     }
 
     private static func backupStoreIfNeeded(

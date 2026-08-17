@@ -34,6 +34,31 @@ public struct OllamaChatClient: Sendable {
         struct Options: Encodable {
             let temperature: Double
             let num_predict: Int
+            let repeat_penalty: Double?
+            let presence_penalty: Double?
+            let frequency_penalty: Double?
+        }
+    }
+
+    public struct Usage: Sendable, Equatable {
+        public let promptTokens: Int?
+        public let completionTokens: Int?
+
+        public init(promptTokens: Int? = nil, completionTokens: Int? = nil) {
+            self.promptTokens = promptTokens
+            self.completionTokens = completionTokens
+        }
+    }
+
+    public struct StreamUpdate: Sendable {
+        public let text: String
+        public let usage: Usage?
+        public let isDone: Bool
+
+        public init(text: String, usage: Usage? = nil, isDone: Bool = false) {
+            self.text = text
+            self.usage = usage
+            self.isDone = isDone
         }
     }
 
@@ -41,6 +66,15 @@ public struct OllamaChatClient: Sendable {
     private struct ChatChunk: Decodable {
         let message: Message?
         let done: Bool?
+        let promptEvalCount: Int?
+        let evalCount: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case done
+            case promptEvalCount = "prompt_eval_count"
+            case evalCount = "eval_count"
+        }
     }
 
     /// 서버가 떠 있는지. 꺼져 있으면 Apple 모델로 돌아가야 한다.
@@ -85,15 +119,15 @@ public struct OllamaChatClient: Sendable {
         _ = try? await URLSession.shared.data(for: request)
     }
 
-    /// 말이 만들어지는 대로 누적 텍스트를 흘려보낸다.
-    ///
-    /// 콜백 대신 스트림을 돌려준다. 콜백은 백그라운드에서 불려 액터 경계를 넘어야 하는데,
-    /// 스트림이면 받는 쪽이 자기 액터에서 그대로 소비할 수 있다.
-    public func stream(
+    /// 말이 만들어지는 대로 누적 텍스트와 완료 시의 토큰 사용량(Usage)을 흘려보낸다.
+    public func streamUpdates(
         messages: [Message],
         temperature: Double,
-        maxTokens: Int
-    ) -> AsyncThrowingStream<String, Error> {
+        maxTokens: Int,
+        repeatPenalty: Double? = nil,
+        presencePenalty: Double? = nil,
+        frequencyPenalty: Double? = nil
+    ) -> AsyncThrowingStream<StreamUpdate, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -110,7 +144,13 @@ public struct OllamaChatClient: Sendable {
                             messages: messages,
                             stream: true,
                             think: false,
-                            options: .init(temperature: temperature, num_predict: maxTokens)
+                            options: .init(
+                                temperature: temperature,
+                                num_predict: maxTokens,
+                                repeat_penalty: repeatPenalty,
+                                presence_penalty: presencePenalty,
+                                frequency_penalty: frequencyPenalty
+                            )
                         )
                     )
 
@@ -122,6 +162,7 @@ public struct OllamaChatClient: Sendable {
 
                     // 응답은 줄마다 하나의 JSON(NDJSON) 이다.
                     var accumulated = ""
+                    var lastUsage: Usage? = nil
                     for try await line in bytes.lines {
                         guard !line.isEmpty,
                               let data = line.data(using: .utf8),
@@ -130,13 +171,60 @@ public struct OllamaChatClient: Sendable {
                         }
                         if let piece = chunk.message?.content, !piece.isEmpty {
                             accumulated += piece
-                            continuation.yield(accumulated)
+                            continuation.yield(StreamUpdate(text: accumulated, isDone: false))
                         }
-                        if chunk.done == true { break }
+                        if chunk.promptEvalCount != nil || chunk.evalCount != nil {
+                            lastUsage = Usage(
+                                promptTokens: chunk.promptEvalCount,
+                                completionTokens: chunk.evalCount
+                            )
+                        }
+                        if chunk.done == true {
+                            continuation.yield(StreamUpdate(text: accumulated, usage: lastUsage, isDone: true))
+                            break
+                        }
                     }
 
                     guard !accumulated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         throw OllamaChatError.emptyResponse
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// 말이 만들어지는 대로 누적 텍스트를 흘려보낸다.
+    ///
+    /// 콜백 대신 스트림을 돌려준다. 콜백은 백그라운드에서 불려 액터 경계를 넘어야 하는데,
+    /// 스트림이면 받는 쪽이 자기 액터에서 그대로 소비할 수 있다.
+    public func stream(
+        messages: [Message],
+        temperature: Double,
+        maxTokens: Int,
+        repeatPenalty: Double? = nil,
+        presencePenalty: Double? = nil,
+        frequencyPenalty: Double? = nil
+    ) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var lastYielded = ""
+                    for try await update in self.streamUpdates(
+                        messages: messages,
+                        temperature: temperature,
+                        maxTokens: maxTokens,
+                        repeatPenalty: repeatPenalty,
+                        presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty
+                    ) {
+                        if update.text != lastYielded {
+                            lastYielded = update.text
+                            continuation.yield(update.text)
+                        }
                     }
                     continuation.finish()
                 } catch {

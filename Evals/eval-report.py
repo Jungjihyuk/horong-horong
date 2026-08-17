@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""JSONL 평가 결과를 읽어 사람이 읽기 쉬운 정적 HTML 매트릭스(히트맵)로 변환한다."""
+"""JSONL 평가 결과 및 실사용(Live) 기록을 읽어 사람이 읽기 쉬운 정적 HTML 대시보드로 변환한다."""
 
 import argparse
 import json
 import os
+import glob
 from collections import defaultdict
 
 def load_golden_notes():
@@ -133,6 +134,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .chip b { font-weight: 600; }
         .chip.is-warn b { color: var(--warn-fg); }
+        .chip.is-pass b { color: var(--pass-fg); }
+        .chip.is-fail b { color: var(--fail-fg); }
         .toolbar .spacer { flex: 1; }
         .filter { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
         .filter button {
@@ -166,7 +169,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         thead th .lvl-desc { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
         thead th .col-agg { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
 
-        .case-col { position: sticky; left: 0; z-index: 2; background: var(--panel); width: 200px; min-width: 200px; }
+        .case-col { position: sticky; left: 0; z-index: 2; background: var(--panel); width: 230px; min-width: 230px; }
         thead .case-col { z-index: 4; background: var(--panel-alt); }
         tbody tr:nth-child(even) td { background: var(--panel-alt); }
         tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
@@ -196,31 +199,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .badge.fail { background: var(--fail-bg); color: var(--fail-fg); }
         .meta { font-size: 11px; color: var(--faint); margin-top: 8px; text-align: right; }
         .empty { color: var(--faint); text-align: center; font-size: 12px; }
+
+        /* 실사용 카드 스타일 */
+        .live-card {
+            background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+        }
+        .live-card-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+        }
+        .live-provider { font-weight: 700; font-size: 13px; }
+        .live-model { font-size: 11px; color: var(--muted); }
+        .live-params {
+            background: var(--bubble); padding: 4px 6px; border-radius: 4px; font-size: 11px;
+            color: var(--muted); font-family: monospace;
+        }
+        .live-stat-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
     </style>
     <script>
         function openTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+            const content = document.getElementById(tabId);
+            if (content) content.classList.add('active');
+            const btn = document.querySelector(`[data-tab="${tabId}"]`);
+            if (btn) btn.classList.add('active');
         }
 
-        /** 표 안의 행을 '전체 / 주의' 로 걸러낸다. 주의 = 0.5 미만 점수가 하나라도 있는 케이스. */
+        /** 표 안의 행을 '전체 / 주의' 로 걸러낸다. 주의 = 0.5 미만 점수 또는 실패가 있는 케이스. */
         function filterRows(button, tableId, mode) {
             button.parentElement.querySelectorAll('button').forEach(el => el.classList.remove('active'));
             button.classList.add('active');
             document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr => {
-                tr.style.display = (mode === 'warn' && tr.dataset.warn !== '1') ? 'none' : '';
+                if (mode === 'all') {
+                    tr.style.display = '';
+                } else if (mode === 'warn') {
+                    tr.style.display = (tr.dataset.warn === '1') ? '' : 'none';
+                } else if (mode === 'fail') {
+                    tr.style.display = (tr.dataset.fail === '1') ? '' : 'none';
+                } else if (mode === 'ok') {
+                    tr.style.display = (tr.dataset.fail !== '1') ? '' : 'none';
+                }
             });
         }
     </script>
 </head>
 <body>
     <h1>AI 실험실 · 평가 매트릭스</h1>
-    <p class="subtitle">행은 테스트 케이스, 열은 비교 축입니다. 0.5 미만 점수는 주황/빨강으로 표시됩니다.</p>
+    <p class="subtitle">행은 테스트 케이스/실행, 열은 비교 축입니다. 0.5 미만 점수 또는 실패는 주황/빨강으로 표시됩니다.</p>
     <div class="tabs">
-        <button class="tab-button active" data-tab="tab-level" onclick="openTab('tab-level')">1. 컨텍스트 주입 레벨별 비교</button>
-        <button class="tab-button" data-tab="tab-model" onclick="openTab('tab-model')">2. LLM 모델별 비교</button>
+        {tab_buttons}
     </div>
     {rows}
 </body>
@@ -271,6 +299,16 @@ def worst_class(case_data):
     return score_class(min(values)) if values else "pass"
 
 
+def format_seconds(ms):
+    if ms is None:
+        return "-"
+    sec = ms / 1000.0
+    if sec >= 10:
+        return f"{sec:.1f}s"
+    else:
+        return f"{sec:.2f}s"
+
+
 def column_summary(data_dict, column):
     """열 머리에 붙는 요약: 평균 점수 · 평균 지연."""
     results = [case_data[column] for case_data in data_dict.values() if column in case_data]
@@ -284,7 +322,7 @@ def column_summary(data_dict, column):
     ]
     avg_score = sum(scores) / len(scores) if scores else 0
     avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for r in results) // len(results)
-    return f"평균 {avg_score:.2f} · {avg_latency}ms"
+    return f"평균 {avg_score:.2f} · {format_seconds(avg_latency)}"
 
 
 def render_table(data_dict, table_id, is_level=True):
@@ -326,13 +364,13 @@ def render_table(data_dict, table_id, is_level=True):
                 result = case_data[col]
                 output = result.get("output", "")
                 scores = result.get("scores", {})
-                latency = result.get("latency_ms", 0)
+                latency = result.get("total_ms", result.get("latency_ms", 0))
                 score_html = "".join(format_score(k, v) for k, v in sorted(scores.items()))
                 row.append(
                     f"<td>"
                     f"<div class='cell-content'>{output}</div>"
                     f"<div class='score-row'>{score_html}</div>"
-                    f"<div class='meta'>⏱ {latency}ms</div>"
+                    f"<div class='meta'>⏱ {format_seconds(latency)}</div>"
                     f"</td>"
                 )
             else:
@@ -370,84 +408,347 @@ def render_table(data_dict, table_id, is_level=True):
     """
 
 
-def generate_html(data_by_level, data_by_model):
-    table_level = render_table(data_by_level, "table-level", is_level=True)
-    table_model = render_table(data_by_model, "table-model", is_level=False)
+def get_outcome_info(outcome, detail):
+    if outcome == "ok":
+        return "성공 (ok)", "목표 초안이 정상적으로 생성 및 파싱되었습니다."
+    elif outcome == "generationFailed":
+        if detail == "timeout":
+            return "타임아웃 (timeout)", "60초 동안 모델이 응답하지 않아 시간 초과되었습니다."
+        elif detail == "connectionRefused":
+            return "서버 연결 실패 (connectionRefused)", "로컬 Ollama 데몬이 꺼져 있거나 포트에 접속할 수 없습니다."
+        elif detail == "networkDisconnected":
+            return "네트워크 단절", "네트워크 연결이 끊겼습니다."
+        elif detail == "networkError":
+            return "네트워크 오류", "모델 통신 중 네트워크 오류가 발생했습니다."
+        elif detail:
+            return f"생성 실패 ({detail})", f"LLM 추론 실패: {detail}"
+        return "생성 실패 (generationFailed)", "LLM 추론 실패 또는 60초 타임아웃이 발생했습니다."
+    elif outcome == "serverUnavailable":
+        return "서버 불가 (serverUnavailable)", "Ollama 데몬이 꺼져 있거나 서버에 연결할 수 없습니다."
+    elif outcome == "modelUnavailable":
+        return "모델 불가 (modelUnavailable)", "해당 기기에서 지원하지 않거나 모델 파일이 없습니다."
+    elif outcome == "decodeFailed":
+        if detail == "noJSON":
+            return "JSON 누락 (noJSON)", "모델 응답 안에 JSON 객체({})가 전혀 없습니다. (자연어로만 답변)"
+        elif detail == "malformed":
+            return "문법 오류 (malformed)", "JSON 형식이 깨져 파싱할 수 없습니다."
+        elif detail == "missingKeys":
+            return "필수 키 누락 (missingKeys)", "JSON에 title, memos 등 필수 필드가 빠졌습니다."
+        elif detail == "truncated":
+            return "응답 잘림 (truncated)", "최대 토큰 길이에 도달해 JSON이 중간에 잘렸습니다."
+        elif detail:
+            return f"해석 실패 ({detail})", f"JSON 디코딩 실패: {detail}"
+        return "JSON 해석 실패", "모델 출력을 JSON으로 파싱하지 못했습니다."
+    elif outcome in ("parsedEmpty", "validationFailed"):
+        if detail == "emptyList":
+            return "초안 목록 비어있음 (emptyList)", "모델이 빈 목록([])을 반환했습니다."
+        elif detail == "hallucinatedIDs":
+            return "가짜 ID 환각 (hallucinatedIDs)", "입력에 없는 가짜 메모 ID를 생성하여 비즈니스 검증에서 모두 탈락했습니다."
+        elif detail == "tooFewMemos":
+            return "메모 개수 부족 (tooFewMemos)", "목표당 최소 메모 묶음 기준에 미달하여 제외되었습니다."
+        elif detail == "duplicateMemos":
+            return "중복 메모 (duplicateMemos)", "이미 사용된 메모를 중복 재사용하여 제외되었습니다."
+        elif detail:
+            return f"검증 탈락 ({detail})", f"비즈니스 규칙 검증 실패: {detail}"
+        return "유효 결과 없음 (parsedEmpty)", "JSON은 읽었으나 메모 ID 불일치/환각 등으로 쓸 수 있는 초안이 0개입니다."
+    else:
+        text = f"{outcome}:{detail}" if detail else outcome
+        return text, text
 
-    html_body = f"""
-    <div id="tab-level" class="tab-content active">
-        <p class="hint">동일한 모델 환경에서 문맥(Context)을 얼마나 제공했는지에 따른 답변 차이를 비교합니다.</p>
-        {table_level}
-    </div>
 
-    <div id="tab-model" class="tab-content">
-        <p class="hint">동일한 컨텍스트 환경에서 모델(Provider)에 따른 답변 퀄리티와 속도 차이를 비교합니다.</p>
-        {table_model}
+def render_live_table(live_runs_by_key):
+    """실사용(Live) 기록을 렌더링한다: 행=실행(run_id + task), 열=시도(attempt 1, 2, ...)."""
+    if not live_runs_by_key:
+        return "<p class='hint'>실사용(Live) 기록이 없습니다.</p>"
+
+    # 최대 시도 횟수 확인
+    max_attempts = 1
+    for attempts in live_runs_by_key.values():
+        if attempts:
+            max_attempts = max(max_attempts, max(attempts.keys()))
+
+    headers = "".join(f"<th>시도 {i} (Attempt {i})</th>" for i in range(1, max_attempts + 1))
+
+    rows = []
+    total_runs = len(live_runs_by_key)
+    success_count = 0
+    fail_count = 0
+
+    # 최신 실행 순 정렬 (run_id 역순)
+    for run_key, attempts in sorted(live_runs_by_key.items(), key=lambda x: x[0], reverse=True):
+        last_attempt_idx = max(attempts.keys()) if attempts else 1
+        last_record = attempts.get(last_attempt_idx, {})
+        is_fail = (last_record.get("outcome") != "ok")
+        if is_fail:
+            fail_count += 1
+        else:
+            success_count += 1
+
+        run_id = last_record.get("run_id", run_key)
+        task = last_record.get("task", "")
+        started_at = last_record.get("started_at", "")
+
+        row = [
+            f"<td class='case-col'>"
+            f"<div class='case-id'><span class='dot {'fail' if is_fail else 'pass'}'></span>{run_id}</div>"
+            f"<div class='case-q'><b>{task}</b><br><span style='font-size:11px;color:var(--faint);'>{started_at}</span></div>"
+            f"</td>"
+        ]
+
+        for att_idx in range(1, max_attempts + 1):
+            if att_idx in attempts:
+                rec = attempts[att_idx]
+                outcome = rec.get("outcome", "unknown")
+                outcome_detail = rec.get("outcome_detail")
+                provider = rec.get("provider", "unknown")
+                model = rec.get("model", "")
+                total_ms = rec.get("total_ms", 0)
+                timings = rec.get("timings", {})
+                gen_ms = timings.get("generate", total_ms)
+                input_sum = rec.get("input_summary", {})
+                cand_cnt = input_sum.get("candidate_count", "-")
+                item_cnt = input_sum.get("item_count", "-")
+                prompt_chars = input_sum.get("prompt_characters", 0)
+                output = rec.get("output", "")
+                parse_sum = rec.get("parse")
+                params = rec.get("parameters")
+
+                badge_cls = "pass" if outcome == "ok" else ("warn" if outcome == "parsedEmpty" else "fail")
+                badge_text, badge_tooltip = get_outcome_info(outcome, outcome_detail)
+
+                params_html = ""
+                if params:
+                    params_str = ", ".join(f"{k}:{v:g}" for k, v in params.items())
+                    params_html = f"<div class='live-params' title='Hyperparameters'>⚙️ {params_str}</div>"
+
+                parse_html = ""
+                if parse_sum:
+                    m_ret = parse_sum.get('model_returned', 0)
+                    kept = parse_sum.get('kept', 0)
+                    parse_html = (
+                        f"<div class='live-stat-row' title='모델이 제안한 추천 목표 총 {m_ret}개 중 유효성 검증을 통과한 최종 추천 목표 {kept}개'><span>추천 목표</span>"
+                        f"<span>총 <b>{m_ret}</b>개 중 최종 <b>{kept}</b>개 채택</span></div>"
+                    )
+
+                usage_html = ""
+                usage_dict = rec.get("usage")
+                if usage_dict and (usage_dict.get("tokens_in") is not None or usage_dict.get("tokens_out") is not None):
+                    t_in = usage_dict.get("tokens_in", 0)
+                    t_out = usage_dict.get("tokens_out", 0)
+                    usage_html = (
+                        f"<div class='live-stat-row'><span>토큰</span>"
+                        f"<span>in:<b>{t_in}</b> / out:<b>{t_out}</b></span></div>"
+                    )
+
+                output_html = ""
+                if output:
+                    output_html = (
+                        f"<div style='margin-bottom:4px;background:rgba(128,128,128,0.06);padding:6px;border-radius:6px;'>"
+                        f"<div style='font-size:10px;font-weight:bold;color:var(--faint);margin-bottom:2px;'>💬 출력 (추천 결과)</div>"
+                        f"<div class='cell-content'>{output}</div>"
+                        f"</div>"
+                    )
+
+                card = f"""
+                <div class="live-card">
+                    <div class="live-card-header">
+                        <span class="live-provider">{provider}</span>
+                        <span class="badge {badge_cls}" title="{badge_tooltip}"><b>{badge_text}</b></span>
+                    </div>
+                    {f"<div class='live-model'>{model}</div>" if model else ""}
+                    {params_html}
+                    <div class="live-stat-row">
+                        <span>후보 → 입력</span>
+                        <span><b>{cand_cnt}</b> → <b>{item_cnt}</b> ({prompt_chars}자)</span>
+                    </div>
+                    {parse_html}
+                    {usage_html}
+                    {output_html}
+                    <div class="live-stat-row meta" style="margin-top:2px;">
+                        <span>생성 {format_seconds(gen_ms)}</span>
+                        <span>총 <b>{format_seconds(total_ms)}</b></span>
+                    </div>
+                </div>
+                """
+                row.append(f"<td>{card}</td>")
+            else:
+                row.append("<td class='empty'>-</td>")
+
+        rows.append(f"<tr data-fail='{1 if is_fail else 0}'>{''.join(row)}</tr>")
+
+    toolbar = f"""
+    <div class="toolbar">
+        <span class="chip">총 실행 <b>{total_runs}</b></span>
+        <span class="chip is-pass">최종 성공 <b>{success_count}</b></span>
+        <span class="chip{' is-fail' if fail_count else ''}">최종 실패 <b>{fail_count}</b></span>
+        <span class="chip">최대 폴백 시도 <b>{max_attempts}회</b></span>
+        <span class="spacer"></span>
+        <span class="filter">
+            <button class="active" onclick="filterRows(this, 'table-live', 'all')">전체</button>
+            <button onclick="filterRows(this, 'table-live', 'fail')">실패만</button>
+            <button onclick="filterRows(this, 'table-live', 'ok')">성공만</button>
+        </span>
     </div>
     """
 
-    return HTML_TEMPLATE.replace("{rows}", html_body)
+    return f"""
+    {toolbar}
+    <div class="table-wrap">
+        <table id="table-live">
+            <thead>
+                <tr>
+                    <th class="case-col">실행 ID / 태스크</th>
+                    {headers}
+                </tr>
+            </thead>
+            <tbody>
+                {"".join(rows)}
+            </tbody>
+        </table>
+    </div>
+    """
+
+
+def generate_html(data_by_level, data_by_model, live_runs):
+    has_golden = bool(data_by_level or data_by_model)
+    has_live = bool(live_runs)
+
+    tab_buttons = []
+    tab_contents = []
+
+    # 1. 실사용 기록 탭
+    if has_live:
+        tab_buttons.append('<button class="tab-button active" data-tab="tab-live" onclick="openTab(\'tab-live\')">1. 실사용 실행 기록 (Live)</button>')
+        table_live = render_live_table(live_runs)
+        tab_contents.append(f"""
+        <div id="tab-live" class="tab-content active">
+            <p class="hint">실제 앱 구동 중 수집된 실행 기록(`RunRecord`)입니다. 행은 실행 단위(`run_id`), 열은 폴백 사슬 시도(`attempt`)입니다.</p>
+            {table_live}
+        </div>
+        """)
+
+    # 2 & 3. 골든셋 평가 탭
+    if has_golden:
+        active_cls_level = " active" if not has_live else ""
+        btn_num_level = "2." if has_live else "1."
+        btn_num_model = "3." if has_live else "2."
+
+        tab_buttons.append(f'<button class="tab-button{active_cls_level}" data-tab="tab-level" onclick="openTab(\'tab-level\')">{btn_num_level} 골든셋: 컨텍스트 레벨별 비교</button>')
+        tab_buttons.append(f'<button class="tab-button" data-tab="tab-model" onclick="openTab(\'tab-model\')">{btn_num_model} 골든셋: LLM 모델별 비교</button>')
+
+        table_level = render_table(data_by_level, "table-level", is_level=True)
+        table_model = render_table(data_by_model, "table-model", is_level=False)
+
+        tab_contents.append(f"""
+        <div id="tab-level" class="tab-content{active_cls_level}">
+            <p class="hint">동일한 모델 환경에서 문맥(Context)을 얼마나 제공했는지에 따른 답변 차이를 비교합니다.</p>
+            {table_level}
+        </div>
+        """)
+
+        tab_contents.append(f"""
+        <div id="tab-model" class="tab-content">
+            <p class="hint">동일한 컨텍스트 환경에서 모델(Provider)에 따른 답변 퀄리티와 속도 차이를 비교합니다.</p>
+            {table_model}
+        </div>
+        """)
+
+    return HTML_TEMPLATE.replace("{tab_buttons}", "".join(tab_buttons)).replace("{rows}", "".join(tab_contents))
+
+
+def load_records_from_path(input_path):
+    """파일 또는 디렉터리 경로에서 모든 JSONL 레코드를 읽어온다."""
+    records = []
+    files_to_read = []
+
+    expanded_path = os.path.expanduser(input_path)
+
+    if os.path.isdir(expanded_path):
+        files_to_read = sorted(glob.glob(os.path.join(expanded_path, "*.jsonl")))
+    elif os.path.isfile(expanded_path):
+        files_to_read = [expanded_path]
+    elif os.path.exists(expanded_path):
+        files_to_read = [expanded_path]
+    else:
+        # 혹시 글롭 패턴일 경우
+        files_to_read = sorted(glob.glob(expanded_path))
+
+    for filepath in files_to_read:
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                        records.append(record)
+                    except json.JSONDecodeError:
+                        continue
+        except OSError as e:
+            print(f"경고: 파일 읽기 실패 ({filepath}) - {e}")
+
+    return records
+
 
 def main():
-    parser = argparse.ArgumentParser(description="JSONL 평가 결과를 정적 HTML 대시보드로 변환합니다.")
-    parser.add_argument("--input", "-i", type=str, required=True, help="입력 JSONL 파일 경로")
+    parser = argparse.ArgumentParser(description="JSONL 평가 결과 및 실사용 기록을 정적 HTML 대시보드로 변환합니다.")
+    parser.add_argument(
+        "--input", "-i",
+        nargs="*",
+        default=None,
+        help="입력 JSONL 파일 또는 디렉터리 경로 (미지정 시 Application Support runs 및 Evals/results 자동 로드)"
+    )
     parser.add_argument("--output", "-o", type=str, default="eval-report.html", help="출력 HTML 파일 경로")
     args = parser.parse_args()
 
-    if not os.path.exists(args.input):
-        print(f"Error: 입력 파일을 찾을 수 없습니다 - {args.input}")
-        # 테스트를 위한 더미 데이터 생성
-        print("테스트용 더미 데이터를 생성합니다...")
-        with open(args.input, "w", encoding="utf-8") as f:
-            cases = [
-                ("tone-01", "테마 어디서 바꿔?", "설정에서 바꿀 수 있어요.", "설정 → 외관에서 바꾸실 수 있어요."),
-                ("tone-02", "야 설정가서 바꿔라", "야, 설정가서 바꿔라", "외관 설정 탭에서 변경이 가능합니다. 감사합니다."),
-                ("qa-01", "야", "네?", "네, 호롱호롱입니다. 무엇을 도와드릴까요?"),
-                ("qa-02", "너는 누구야", "저는 AI 어시스턴트입니다.", "저는 호롱호롱 앱의 AI 컴패니언 '루미롱'입니다."),
-                ("qa-03", "너는 무슨 모델이야?", "저는 언어 모델입니다.", "저는 설정하신 Apple 온디바이스(또는 MLX/Ollama) 모델로 구동되고 있습니다."),
-                ("qa-04", "카테고리 매핑 하는 법 설명해줘", "카테고리는 설정에서 매핑합니다.", "설정 → 카테고리 매핑 탭에서 특정 앱이나 웹사이트를 원하시는 카테고리에 연결하실 수 있습니다."),
-                ("qa-05", "몰입 기능 설명해줘", "몰입은 집중하는 기능입니다.", "몰입 기능은 세션마다 몰입도를 재고, 기준선 아래로 떨어지면 루미롱이 말을 걸어주는 집중 넛지 기능입니다."),
-                ("qa-06", "몰입에서 집중 넛지는 뭐야?", "집중하라고 알림을 주는 것입니다.", "집중 넛지는 몰입도가 설정된 기준선 밑으로 떨어졌을 때, 화면 위에서 루미롱이 동기를 부여하는 잔소리를 해주는 기능입니다."),
-                ("qa-07", "뉴스 리포트 생성 기능 설명해줘", "뉴스를 모아서 리포트로 줍니다.", "설정 → 뉴스 탭에서 관심사 키워드를 등록해두면, 정해진 수집 간격마다 요약 에이전트가 뉴스를 모아 일일 리포트를 자동 생성해 줍니다."),
-                ("qa-08", "미리알림 연동하는 법 설명해줘", "미리알림 앱을 켜서 연결하세요.", "설정 → 메모 탭에서 '미리알림 가져오기'를 켜고 연동할 캘린더를 선택하시면 됩니다."),
-                ("qa-09", "AI Agent 기능이 뭐야?", "AI가 작업을 대신 해줍니다.", "AI Agent 기능은 Codex, Claude, Antigravity 등의 모델을 활용해 터미널 명령을 실행하거나 자동화된 실험을 수행할 수 있게 해주는 기능입니다."),
-                ("qa-10", "성취 설정에서 모델 설정 하는 법 알려줘", "성취 설정에서 모델을 선택하세요.", "설정 → 성취 탭의 '추천 엔진'에서 Apple 온디바이스, MLX, Ollama 중 하나를 선택하실 수 있습니다."),
-                ("qa-11", "루미롱 활용법 알려줘", "루미롱은 비서입니다.", "루미롱은 화면 위에 띄워두고 대화를 나누거나, 집중 모드일 때 숨기기, 오늘 일정 브리핑 받기 등 설정 → 루미롱 탭에서 다양하게 커스텀하여 활용할 수 있습니다."),
-                ("qa-12", "Apple 온디바이스, MLX, Ollama 이거 차이가 뭐야?", "각각 다른 모델 제공자입니다.", "Apple 온디바이스는 빠르고 준비가 필요 없지만, MLX는 더 많은 할 일을 묶을 수 있는 대신 메모리를 쓰고, Ollama는 앱 외부 프로세스로 큰 모델을 구동할 수 있습니다.")
-            ]
-            for cid, q, l0, l1 in cases:
-                f.write(f'{{"case_id": "{cid}", "input": "{q}", "level": "L0", "model": "mlx-llama3", "output": "{l0}", "scores": {{"honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2}}, "latency_ms": 400}}\n')
-                f.write(f'{{"case_id": "{cid}", "input": "{q}", "level": "L1", "model": "gpt-4o-mini", "output": "{l1}", "scores": {{"honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9}}, "latency_ms": 800}}\n')
+    records = []
+    if args.input:
+        for p in args.input:
+            records.extend(load_records_from_path(p))
+    else:
+        here = os.path.dirname(os.path.abspath(__file__))
+        default_paths = [
+            os.path.expanduser("~/Library/Application Support/HorongHorong/runs"),
+            os.path.expanduser("~/Library/Application Support/HorongHorong-Debug/runs"),
+            os.path.join(here, "results"),
+        ]
+        for p in default_paths:
+            if os.path.exists(p):
+                records.extend(load_records_from_path(p))
 
     data_by_level = defaultdict(dict)
     data_by_model = defaultdict(dict)
+    live_runs = defaultdict(dict)
 
-    with open(args.input, "r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-                case_id = row.get("case_id", "unknown")
-                level = row.get("recipe", row.get("level", "promptOnly"))
-                model = row.get("model", "unknown")
+    for row in records:
+        case_id = row.get("case_id")
+        source = row.get("source")
 
-                # 레벨별 표: 행=case, 열=level
-                data_by_level[case_id][level] = row
+        # 실사용(Live) 기록 판별: case_id가 없거나 source가 "live"
+        if not case_id or source == "live":
+            run_id = row.get("run_id") or "UNKNOWN_RUN"
+            task = row.get("task") or "weekly_goal"
+            run_key = f"{run_id} ({task})"
+            attempt = row.get("attempt", 1)
+            live_runs[run_key][attempt] = row
+        else:
+            # 골든셋/평가 레코드
+            level = row.get("recipe", row.get("level", "promptOnly"))
+            model = row.get("model", "unknown")
 
-                # 모델별 표: 행=case, 열=model
-                if model:
-                    data_by_model[case_id][model] = row
-            except json.JSONDecodeError:
-                continue
+            data_by_level[case_id][level] = row
+            if model:
+                data_by_model[case_id][model] = row
 
-    html = generate_html(data_by_level, data_by_model)
+    html = generate_html(data_by_level, data_by_model, live_runs)
 
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)
 
     print(f"✅ HTML 대시보드 생성 완료: {os.path.abspath(args.output)}")
     print(f"터미널에서 'open {args.output}' 명령어를 실행하여 브라우저에서 확인하세요.")
+
 
 if __name__ == "__main__":
     main()

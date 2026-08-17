@@ -1,18 +1,53 @@
 import SwiftUI
+import SwiftData
+import HorongAI
 
-/// 앱 내부에서 평가 결과를 시각적으로 확인하는 AI 실험실 뷰 (Phase 6 목표 선행 구현)
-///
-/// `Evals/eval-report.py` 가 만드는 정적 HTML 매트릭스와 같은 구조(행=케이스, 열=레벨/모델)를
-/// 앱 안에 옮겨오되, 각 셀에서 바로 👍 / 👎 / 메모로 사람 평가를 남길 수 있게 한다.
+/// 앱 내부에서 실제 AI 실행 기록(`RunRecord`) 및 평가 결과를 시각적으로 확인하는 AI 실험실 뷰
 public struct AILabView: View {
-    // 임시 더미 데이터 모델 (실제 연동 전 레이아웃 확인용)
-    struct LabCase: Identifiable {
+    @Query private var allMemos: [Memo]
+    @Query private var allGoals: [AchievementGoalRecord]
+
+    /// 실사용 실행을 run_id + task 단위로 묶은 구조
+    struct LiveRunGroup: Identifiable {
         let id: String
-        let title: String
-        let levels: [LabLevel]
+        let runId: String
+        let task: String
+        let startedAt: Date?
+        let attempts: [RunRecord]
+
+        var lastAttempt: RunRecord? {
+            attempts.last
+        }
+
+        var isSuccess: Bool {
+            lastAttempt?.outcome == "ok"
+        }
+
+        var hasFailure: Bool {
+            attempts.contains { $0.outcome != "ok" }
+        }
+
+        var candidateCount: Int? {
+            attempts.first?.inputSummary?.candidateCount
+        }
+
+        var itemCount: Int {
+            attempts.first?.inputSummary?.itemCount ?? 0
+        }
+
+        var itemIDs: [String] {
+            attempts.first?.inputSummary?.itemIDs ?? []
+        }
     }
 
-    struct LabLevel: Identifiable {
+    /// 골든셋 케이스 (레거시/실험실 비교용)
+    struct GoldenCase: Identifiable {
+        let id: String
+        let title: String
+        let levels: [GoldenLevel]
+    }
+
+    struct GoldenLevel: Identifiable {
         let id = UUID()
         let name: String
         let model: String?
@@ -21,7 +56,7 @@ public struct AILabView: View {
         let latency: Int
     }
 
-    /// 사람이 남긴 평가. 케이스 + 레벨 단위로 저장한다.
+    /// 사람이 남긴 평가 (key = "runId|attempt" 또는 "caseId|level")
     struct LabRating: Codable, Equatable {
         var verdict: String?   // "up" | "down"
         var note: String
@@ -36,99 +71,34 @@ public struct AILabView: View {
         }
     }
 
-    /// 열을 무엇으로 나눌지. eval-report.py 의 두 탭과 같은 축이다.
-    enum CompareAxis: String, CaseIterable, Identifiable {
-        case level, model
+    enum TabMode: String, CaseIterable, Identifiable {
+        case live = "실사용 기록"
+        case golden = "골든셋 매트릭스"
         var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .level: return "컨텍스트 레벨"
-            case .model: return "모델"
-            }
-        }
     }
 
-    enum CaseFilter: String, CaseIterable, Identifiable {
-        case all, warning, unrated
+    enum LiveFilter: String, CaseIterable, Identifiable {
+        case all = "전체"
+        case failed = "실패 포함"
+        case ok = "성공만"
+        case unrated = "미평가"
         var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .all: return "전체"
-            case .warning: return "주의"
-            case .unrated: return "미평가"
-            }
-        }
     }
 
-    @State private var cases: [LabCase] = [
-        LabCase(id: "tone-01", title: "테마 어디서 바꿔?", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "설정에서 바꿀 수 있어요.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 379),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "설정 → 외관에서 바꾸실 수 있어요.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 640)
-        ]),
-        LabCase(id: "tone-02", title: "야 설정가서 바꿔라", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "야, 설정가서 바꿔라", scores: ["honorific": 0.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "외관 설정 탭에서 변경이 가능합니다. 감사합니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-01", title: "야", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "네?", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "네, 호롱호롱입니다. 무엇을 도와드릴까요?", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-02", title: "너는 누구야", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "저는 AI 어시스턴트입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "저는 호롱호롱 앱의 AI 컴패니언 '루미롱'입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-03", title: "너는 무슨 모델이야?", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "저는 언어 모델입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "저는 설정하신 Apple 온디바이스(또는 MLX/Ollama) 모델로 구동되고 있습니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-04", title: "카테고리 매핑 하는 법 설명해줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "카테고리는 설정에서 매핑합니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "설정 → 카테고리 매핑 탭에서 특정 앱이나 웹사이트를 원하시는 카테고리에 연결하실 수 있습니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-05", title: "몰입 기능 설명해줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "몰입은 집중하는 기능입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "몰입 기능은 세션마다 몰입도를 재고, 기준선 아래로 떨어지면 루미롱이 말을 걸어주는 집중 넛지 기능입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-06", title: "몰입에서 집중 넛지는 뭐야?", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "집중하라고 알림을 주는 것입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "집중 넛지는 몰입도가 설정된 기준선 밑으로 떨어졌을 때, 화면 위에서 루미롱이 동기를 부여하는 잔소리를 해주는 기능입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-07", title: "뉴스 리포트 생성 기능 설명해줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "뉴스를 모아서 리포트로 줍니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "설정 → 뉴스 탭에서 관심사 키워드를 등록해두면, 정해진 수집 간격마다 요약 에이전트가 뉴스를 모아 일일 리포트를 자동 생성해 줍니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-08", title: "미리알림 연동하는 법 설명해줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "미리알림 앱을 켜서 연결하세요.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "설정 → 메모 탭에서 '미리알림 가져오기'를 켜고 연동할 캘린더를 선택하시면 됩니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-09", title: "AI Agent 기능이 뭐야?", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "AI가 작업을 대신 해줍니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "AI Agent 기능은 Codex, Claude, Antigravity 등의 모델을 활용해 터미널 명령을 실행하거나 자동화된 실험을 수행할 수 있게 해주는 기능입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-10", title: "성취 설정에서 모델 설정 하는 법 알려줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "성취 설정에서 모델을 선택하세요.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "설정 → 성취 탭의 '추천 엔진'에서 Apple 온디바이스, MLX, Ollama 중 하나를 선택하실 수 있습니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-11", title: "루미롱 활용법 알려줘", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "루미롱은 비서입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "루미롱은 화면 위에 띄워두고 대화를 나누거나, 집중 모드일 때 숨기기, 오늘 일정 브리핑 받기 등 설정 → 루미롱 탭에서 다양하게 커스텀하여 활용할 수 있습니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ]),
-        LabCase(id: "qa-12", title: "Apple 온디바이스, MLX, Ollama 이거 차이가 뭐야?", levels: [
-            LabLevel(name: "L0", model: "mlx-llama3", output: "각각 다른 모델 제공자입니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.2], latency: 400),
-            LabLevel(name: "L1", model: "gpt-4o-mini", output: "Apple 온디바이스는 빠르고 준비가 필요 없지만, MLX는 더 많은 할 일을 묶을 수 있는 대신 메모리를 쓰고, Ollama는 앱 외부 프로세스로 큰 모델을 구동할 수 있습니다.", scores: ["honorific": 1.0, "sentenceCount": 1.0, "groundedness": 0.9], latency: 800)
-        ])
-    ]
+    @State private var tabMode: TabMode = .live
+    @State private var liveFilter: LiveFilter = .all
+    @State private var taskFilter: String = "전체"
+    @State private var liveRunGroups: [LiveRunGroup] = []
+    @State private var goldenCases: [GoldenCase] = []
+    @State private var isLoading = false
+    @State private var selectedInputItemIDs: [String]? = nil
+    @State private var ratings: [String: LabRating] = [:]
 
-    @State private var axis: CompareAxis = .level
-    @State private var filter: CaseFilter = .all
-    @State private var expandedCases: Set<String> = []
-
-    /// 평가는 JSON 한 덩어리로 저장한다. 키는 "케이스ID|레벨".
     @AppStorage(Constants.AppStorageKey.aiLabRatings)
     private var ratingsJSON: String = "{}"
 
-    private let caseColumnWidth: CGFloat = 168
-    private let minCellWidth: CGFloat = 210
+    private let caseColumnWidth: CGFloat = 200
+    private let minCellWidth: CGFloat = 260
 
     public init() {}
 
@@ -136,7 +106,24 @@ public struct AILabView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            matrix
+            if tabMode == .live {
+                liveMatrix
+            } else {
+                goldenMatrix
+            }
+        }
+        .onAppear {
+            loadRecords()
+        }
+        .sheet(item: Binding(
+            get: { selectedInputItemIDs.map { ItemIDsWrapper(ids: $0) } },
+            set: { selectedInputItemIDs = $0?.ids }
+        )) { wrapper in
+            InputItemsDetailSheet(
+                itemIDs: wrapper.ids,
+                memos: allMemos,
+                goals: allGoals
+            )
         }
     }
 
@@ -148,37 +135,79 @@ public struct AILabView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI 실험실")
                         .font(.title2.bold())
-                    Text("케이스별 응답을 나란히 놓고 비교하면서 바로 평가를 남깁니다.")
+                    Text("실제 앱 구동 중 수집된 실행 기록(RunRecord)과 모델 응답을 분석하고 평가합니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Picker("", selection: $axis) {
-                    ForEach(CompareAxis.allCases) { Text($0.label).tag($0) }
+                Picker("", selection: $tabMode) {
+                    ForEach(TabMode.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
             }
 
-            HStack(spacing: 8) {
-                summaryChip(label: "케이스", value: "\(cases.count)", tint: .secondary)
-                summaryChip(label: "주의", value: "\(warningCount)", tint: warningCount > 0 ? .orange : .secondary)
-                summaryChip(label: "평가", value: "\(ratedCount)/\(totalResultCount)", tint: ratedCount == totalResultCount ? .green : .secondary)
-                Spacer()
-                Picker("", selection: $filter) {
-                    ForEach(CaseFilter.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                Button("평가 초기화") { ratingsJSON = "{}" }
-                    .controlSize(.small)
-                    .disabled(ratedCount == 0)
+            if tabMode == .live {
+                liveToolbar
+            } else {
+                goldenToolbar
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    private var liveToolbar: some View {
+        HStack(spacing: 8) {
+            summaryChip(label: "총 실행", value: "\(liveRunGroups.count)", tint: .secondary)
+            summaryChip(label: "최종 성공", value: "\(liveRunGroups.filter(\.isSuccess).count)", tint: .green)
+            let failCount = liveRunGroups.filter { !$0.isSuccess }.count
+            summaryChip(label: "실패", value: "\(failCount)", tint: failCount > 0 ? .red : .secondary)
+            
+            let allTasks = ["전체"] + Array(Set(liveRunGroups.map(\.task))).sorted()
+            if allTasks.count > 2 {
+                Picker("태스크", selection: $taskFilter) {
+                    ForEach(allTasks, id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+            }
+
+            Spacer()
+
+            Picker("", selection: $liveFilter) {
+                ForEach(LiveFilter.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            Button {
+                loadRecords()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .controlSize(.small)
+            .help("기록 다시 불러오기")
+
+            Button {
+                revealRunsFolder()
+            } label: {
+                Image(systemName: "folder")
+            }
+            .controlSize(.small)
+            .help("Finder에서 기록 폴더 열기")
+        }
+    }
+
+    private var goldenToolbar: some View {
+        HStack(spacing: 8) {
+            summaryChip(label: "케이스", value: "\(goldenCases.count)", tint: .secondary)
+            Spacer()
+            Button("평가 초기화") { ratingsJSON = "{}" }
+                .controlSize(.small)
+        }
     }
 
     private func summaryChip(label: String, value: String, tint: Color) -> some View {
@@ -195,25 +224,28 @@ public struct AILabView: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
     }
 
-    // MARK: - 매트릭스
+    // MARK: - 실사용(Live) 매트릭스
 
     @ViewBuilder
-    private var matrix: some View {
-        if filteredCases.isEmpty {
-            ContentUnavailableView("조건에 맞는 케이스가 없습니다", systemImage: "line.3.horizontal.decrease.circle")
+    private var liveMatrix: some View {
+        if filteredLiveGroups.isEmpty {
+            ContentUnavailableView(
+                liveRunGroups.isEmpty ? "수집된 실행 기록이 없습니다" : "조건에 맞는 실행 기록이 없습니다",
+                systemImage: "waveform.path.ecg.rectangle"
+            )
         } else {
-            // 가로 스크롤을 바깥에 두면 열 머리와 본문이 같이 움직이고,
-            // 세로 스크롤은 안쪽이라 열 머리가 위에 고정된 채로 남는다.
+            let maxAttempts = max(1, filteredLiveGroups.map { $0.attempts.count }.max() ?? 1)
             GeometryReader { geo in
-                let width = cellWidth(containerWidth: geo.size.width)
-                let tableWidth = caseColumnWidth + 20 + CGFloat(columns.count) * (width + 21)
+                let cellW = max(minCellWidth, (geo.size.width - caseColumnWidth - 36) / CGFloat(maxAttempts))
+                let tableWidth = caseColumnWidth + 20 + CGFloat(maxAttempts) * (cellW + 21)
+
                 ScrollView(.horizontal) {
                     VStack(alignment: .leading, spacing: 0) {
-                        columnHeader(cellWidth: width)
+                        liveColumnHeader(maxAttempts: maxAttempts, cellWidth: cellW)
                         ScrollView(.vertical) {
                             LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(Array(filteredCases.enumerated()), id: \.element.id) { index, labCase in
-                                    row(labCase, cellWidth: width, isEven: index.isMultiple(of: 2))
+                                ForEach(Array(filteredLiveGroups.enumerated()), id: \.element.id) { index, group in
+                                    liveRow(group, maxAttempts: maxAttempts, cellWidth: cellW, isEven: index.isMultiple(of: 2))
                                     Divider()
                                 }
                             }
@@ -225,80 +257,94 @@ public struct AILabView: View {
         }
     }
 
-    /// 열이 몇 개든 가로 스크롤 없이 폭을 꽉 채우게. 좁아지면 minCellWidth 에서 멈추고 스크롤한다.
-    /// 케이스 열 + 좌우 padding(20) + 세로 스크롤바(16) + 셀마다 padding(20) + 구분선(1) 을 뺀 나머지를 열 수로 나눈다.
-    private func cellWidth(containerWidth: CGFloat) -> CGFloat {
-        guard !columns.isEmpty else { return minCellWidth }
-        let available = containerWidth - caseColumnWidth - 36 - CGFloat(columns.count) * 21
-        return max(minCellWidth, available / CGFloat(columns.count))
-    }
-
-    private func columnHeader(cellWidth: CGFloat) -> some View {
+    private func liveColumnHeader(maxAttempts: Int, cellWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 0) {
-                Text("케이스 / 질문")
+                Text("실행 ID / 태스크")
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
                     .frame(width: caseColumnWidth, alignment: .leading)
                     .padding(.horizontal, 10)
 
-                ForEach(columns, id: \.self) { column in
+                ForEach(1...maxAttempts, id: \.self) { attemptNum in
                     Divider()
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(column)
-                                .font(.callout.bold())
-                            if axis == .level, let desc = AILabFormat.levelDescription(column) {
-                                Text(desc)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Text(columnSummary(column))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(width: cellWidth, alignment: .leading)
-                    .padding(.horizontal, 10)
+                    Text("시도 \(attemptNum) (Attempt \(attemptNum))")
+                        .font(.callout.bold())
+                        .frame(width: cellWidth, alignment: .leading)
+                        .padding(.horizontal, 10)
                 }
             }
             .padding(.vertical, 8)
             Divider()
         }
-        // HStack 안의 Divider 가 남은 세로 공간을 다 먹지 않도록 콘텐츠 높이로 고정한다.
         .fixedSize(horizontal: false, vertical: true)
         .background(.bar)
     }
 
-    private func row(_ labCase: LabCase, cellWidth: CGFloat, isEven: Bool) -> some View {
+    private func liveRow(_ group: LiveRunGroup, maxAttempts: Int, cellWidth: CGFloat, isEven: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            AILabCaseCell(
-                labCase: labCase,
-                isExpanded: expandedCases.contains(labCase.id),
-                ratedCount: labCase.levels.filter { rating(labCase.id, $0.name) != nil }.count,
-                onToggle: { toggleExpanded(labCase.id) }
-            )
+            // 좌측 헤더: 실행 정보 및 입력 할일 조회 버튼
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(group.isSuccess ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(group.runId)
+                        .font(.caption.monospaced().bold())
+                        .lineLimit(1)
+                }
+
+                Text(group.task)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+
+                if let startedAt = group.startedAt {
+                    Text(startedAt.formatted(date: .numeric, time: .standard))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+
+                if !group.itemIDs.isEmpty {
+                    Button {
+                        selectedInputItemIDs = group.itemIDs
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "list.bullet.rectangle")
+                            Text("입력 항목 (\(group.itemCount)개)")
+                        }
+                        .font(.system(size: 11))
+                    }
+                    .buttonStyle(.link)
+                    .help("이 실행에 주입된 원본 할일/메모 내용 조회")
+                }
+            }
             .frame(width: caseColumnWidth, alignment: .leading)
             .padding(.horizontal, 10)
 
-            ForEach(columns, id: \.self) { column in
+            // 시도별 셀
+            ForEach(1...maxAttempts, id: \.self) { attemptNum in
                 Divider()
-                if let level = level(in: labCase, column: column) {
-                    AILabResultCell(
-                        level: level,
-                        isExpanded: expandedCases.contains(labCase.id),
-                        rating: rating(labCase.id, level.name) ?? LabRating(),
-                        onVerdict: { verdict in
-                            updateRating(labCase.id, level.name) { $0.verdict = ($0.verdict == verdict) ? nil : verdict }
+                if let record = group.attempts.first(where: { ($0.attempt ?? 1) == attemptNum }) {
+                    let ratingKey = "\(group.runId)|\(attemptNum)"
+                    LiveAttemptCell(
+                        record: record,
+                        rating: ratings[ratingKey] ?? LabRating(),
+                        onVerdict: { v in
+                            updateRating(key: ratingKey) { $0.verdict = ($0.verdict == v) ? nil : v }
                         },
-                        onNote: { note in
-                            updateRating(labCase.id, level.name) { $0.note = note }
+                        onNote: { n in
+                            updateRating(key: ratingKey) { $0.note = n }
+                        },
+                        onViewInputs: { ids in
+                            selectedInputItemIDs = ids
                         }
                     )
                     .frame(width: cellWidth, alignment: .topLeading)
                     .padding(.horizontal, 10)
                 } else {
-                    Text("데이터 없음")
+                    Text("-")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .frame(width: cellWidth, alignment: .center)
@@ -310,185 +356,303 @@ public struct AILabView: View {
         .background(isEven ? Color.clear : Color.primary.opacity(0.025))
     }
 
-    // MARK: - 열 / 행 계산
-
-    private func columnKey(_ level: LabLevel) -> String {
-        axis == .level ? level.name : (level.model ?? "unknown")
-    }
-
-    private var columns: [String] {
-        var seen: Set<String> = []
-        var result: [String] = []
-        for labCase in cases {
-            for level in labCase.levels where !seen.contains(columnKey(level)) {
-                seen.insert(columnKey(level))
-                result.append(columnKey(level))
-            }
-        }
-        return result.sorted()
-    }
-
-    private func level(in labCase: LabCase, column: String) -> LabLevel? {
-        labCase.levels.first { columnKey($0) == column }
-    }
-
-    private var filteredCases: [LabCase] {
-        switch filter {
-        case .all:
-            return cases
-        case .warning:
-            return cases.filter { hasWarning($0) }
-        case .unrated:
-            return cases.filter { labCase in
-                labCase.levels.contains { rating(labCase.id, $0.name) == nil }
-            }
-        }
-    }
-
-    private func hasWarning(_ labCase: LabCase) -> Bool {
-        labCase.levels.contains { $0.scores.values.contains { $0 < 0.5 } }
-    }
-
-    private var warningCount: Int { cases.filter { hasWarning($0) }.count }
-
-    private var totalResultCount: Int { cases.reduce(0) { $0 + $1.levels.count } }
-
-    private var ratedCount: Int {
-        cases.reduce(0) { sum, labCase in
-            sum + labCase.levels.filter { rating(labCase.id, $0.name) != nil }.count
-        }
-    }
-
-    /// 열 머리에 붙는 요약: 평균 점수 · 평균 지연.
-    private func columnSummary(_ column: String) -> String {
-        let levels = filteredCases.compactMap { level(in: $0, column: column) }
-        guard !levels.isEmpty else { return "데이터 없음" }
-        let scores = levels.flatMap { $0.scores.values }
-        let avgScore = scores.isEmpty ? 0 : scores.reduce(0, +) / Double(scores.count)
-        let avgLatency = levels.reduce(0) { $0 + $1.latency } / levels.count
-        return String(format: "평균 %.2f · %dms", avgScore, avgLatency)
-    }
-
-    private func toggleExpanded(_ caseId: String) {
-        if expandedCases.contains(caseId) {
-            expandedCases.remove(caseId)
+    private func formatSeconds(_ ms: Int) -> String {
+        let sec = Double(ms) / 1000.0
+        if sec >= 10 {
+            return String(format: "%.1fs", sec)
         } else {
-            expandedCases.insert(caseId)
+            return String(format: "%.2fs", sec)
         }
     }
 
-    // MARK: - 평가 저장
+    // MARK: - 골든셋 매트릭스 (더미/평가용)
 
-    private var ratings: [String: LabRating] {
+    @ViewBuilder
+    private var goldenMatrix: some View {
+        if goldenCases.isEmpty {
+            ContentUnavailableView("골든셋 결과가 없습니다", systemImage: "chart.bar.doc.horizontal")
+        } else {
+            List(goldenCases) { gCase in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(gCase.title)
+                        .font(.headline)
+                    ForEach(gCase.levels) { lvl in
+                        HStack {
+                            Text(lvl.name)
+                                .font(.subheadline.bold())
+                            if let model = lvl.model {
+                                Text("(\(model))").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(formatSeconds(lvl.latency)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("출력 (추천 결과)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.secondary)
+                            Text(lvl.output)
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // MARK: - 데이터 로딩 및 필터링
+
+    private var filteredLiveGroups: [LiveRunGroup] {
+        liveRunGroups.filter { group in
+            if taskFilter != "전체" && group.task != taskFilter {
+                return false
+            }
+            switch liveFilter {
+            case .all:
+                return true
+            case .failed:
+                return group.hasFailure
+            case .ok:
+                return group.isSuccess
+            case .unrated:
+                return group.attempts.indices.contains { idx in
+                    ratings["\(group.runId)|\(idx + 1)"] == nil
+                }
+            }
+        }
+    }
+
+    private func loadRecords() {
+        isLoading = true
+        defer { isLoading = false }
+
+        var runs: [String: [RunRecord]] = [:]
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        // 1. App Support / HorongHorong / runs/*.jsonl
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let baseDir = appSupport?.appendingPathComponent("HorongHorong")
+        let runsDir = baseDir?.appendingPathComponent("runs")
+
+        if let runsDir = runsDir, FileManager.default.fileExists(atPath: runsDir.path) {
+            let files = (try? FileManager.default.contentsOfDirectory(at: runsDir, includingPropertiesForKeys: nil)) ?? []
+            for file in files where file.pathExtension == "jsonl" {
+                if let content = try? String(contentsOf: file, encoding: .utf8) {
+                    for line in content.split(separator: "\n") {
+                        if let data = line.data(using: .utf8),
+                           let record = try? decoder.decode(RunRecord.self, from: data),
+                           let runId = record.runId {
+                            let taskName = record.task ?? "weekly_goal"
+                            let groupKey = "\(runId)|\(taskName)"
+                            runs[groupKey, default: []].append(record)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. HorongHorong-Debug/runs/*.jsonl 도 함께 탐색 (개발 모드 실행분)
+        let debugBaseDir = appSupport?.appendingPathComponent("HorongHorong-Debug")
+        let debugRunsDir = debugBaseDir?.appendingPathComponent("runs")
+        if let debugRunsDir = debugRunsDir, FileManager.default.fileExists(atPath: debugRunsDir.path) {
+            let files = (try? FileManager.default.contentsOfDirectory(at: debugRunsDir, includingPropertiesForKeys: nil)) ?? []
+            for file in files where file.pathExtension == "jsonl" {
+                if let content = try? String(contentsOf: file, encoding: .utf8) {
+                    for line in content.split(separator: "\n") {
+                        if let data = line.data(using: .utf8),
+                           let record = try? decoder.decode(RunRecord.self, from: data),
+                           let runId = record.runId {
+                            let taskName = record.task ?? "weekly_goal"
+                            let groupKey = "\(runId)|\(taskName)"
+                            // 중복 체크 후 추가
+                            if let existing = runs[groupKey], existing.contains(where: { $0.startedAt == record.startedAt && $0.attempt == record.attempt }) {
+                                continue
+                            }
+                            runs[groupKey, default: []].append(record)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 그룹 리스트 변환 및 최신순 정렬
+        liveRunGroups = runs.compactMap { key, attempts in
+            let sortedAttempts = attempts.sorted { ($0.attempt ?? 1) < ($1.attempt ?? 1) }
+            guard let first = sortedAttempts.first, let runId = first.runId else { return nil }
+            return LiveRunGroup(
+                id: key,
+                runId: runId,
+                task: first.task ?? "weekly_goal",
+                startedAt: first.startedAt,
+                attempts: sortedAttempts
+            )
+        }.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+
+        loadRatings()
+    }
+
+    private func loadRatings() {
         guard let data = ratingsJSON.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode([String: LabRating].self, from: data) else {
-            return [:]
-        }
-        return decoded
+              let decoded = try? JSONDecoder().decode([String: LabRating].self, from: data) else { return }
+        self.ratings = decoded
     }
 
-    private func rating(_ caseId: String, _ levelName: String) -> LabRating? {
-        ratings["\(caseId)|\(levelName)"]
+    private func updateRating(key: String, mutate: (inout LabRating) -> Void) {
+        var r = ratings[key] ?? LabRating()
+        mutate(&r)
+        ratings[key] = r
+        saveRatings()
     }
 
-    private func updateRating(_ caseId: String, _ levelName: String, _ transform: (inout LabRating) -> Void) {
-        let key = "\(caseId)|\(levelName)"
-        var all = ratings
-        var value = all[key] ?? LabRating()
-        transform(&value)
-        if value.isEmpty {
-            all.removeValue(forKey: key)
-        } else {
-            all[key] = value
+    private func saveRatings() {
+        // 빈 항목 정리
+        let all = ratings.filter { _, v in
+            v.verdict != nil || !v.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         guard let data = try? JSONEncoder().encode(all),
               let json = String(data: data, encoding: .utf8) else { return }
         ratingsJSON = json
     }
-}
 
-// MARK: - 케이스(행 머리) 셀
-
-private struct AILabCaseCell: View {
-    let labCase: AILabView.LabCase
-    let isExpanded: Bool
-    let ratedCount: Int
-    let onToggle: () -> Void
-
-    private var worstScore: Double {
-        labCase.levels.flatMap { $0.scores.values }.min() ?? 1.0
-    }
-
-    var body: some View {
-        Button(action: onToggle) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(AILabFormat.color(for: worstScore))
-                        .frame(width: 6, height: 6)
-                    Text(labCase.id)
-                        .font(.caption.bold())
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                Text(labCase.title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(isExpanded ? nil : 2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("평가 \(ratedCount)/\(labCase.levels.count)")
-                    .font(.system(size: 9))
-                    .foregroundStyle(ratedCount == labCase.levels.count ? Color.green : Color.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(isExpanded ? "접기" : "펼쳐서 전체 응답 보기")
+    private func revealRunsFolder() {
+        guard let runsDir = try? SwiftDataStoreLocation.applicationDirectoryURL()
+            .appendingPathComponent("runs", isDirectory: true) else { return }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: runsDir.path)
     }
 }
 
-// MARK: - 결과 셀 (응답 + 점수 + 평가)
+// MARK: - 시도(Attempt) 카드 셀
 
-private struct AILabResultCell: View {
-    let level: AILabView.LabLevel
-    let isExpanded: Bool
+private struct LiveAttemptCell: View {
+    let record: RunRecord
     let rating: AILabView.LabRating
     let onVerdict: (String) -> Void
     let onNote: (String) -> Void
+    let onViewInputs: ([String]) -> Void
 
     @State private var isEditingNote = false
     @State private var noteDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(level.output)
-                .font(.caption)
-                .textSelection(.enabled)
-                .lineLimit(isExpanded ? nil : 3)
-                .fixedSize(horizontal: false, vertical: true)
+            // 헤더: 공급자 + Outcome 배지
+            HStack(alignment: .center, spacing: 6) {
+                Text(record.provider ?? "unknown")
+                    .font(.subheadline.bold())
+                if let model = record.model {
+                    Text("(\(model))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                outcomeBadge
+            }
+
+            // 하이퍼파라미터
+            if let params = record.parameters, !params.isEmpty {
+                let formatted = params.sorted(by: { $0.key < $1.key }).map { k, v in
+                    let valStr = v.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(v))" : String(format: "%g", v)
+                    return "\(k):\(valStr)"
+                }.joined(separator: ", ")
+                HStack(spacing: 4) {
+                    Text("⚙️")
+                        .font(.system(size: 9))
+                    Text(formatted)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2.5)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
+            }
+
+            // 후보 / 입력 수치 & 클릭 시 원문 확인 버튼
+            if let input = record.inputSummary {
+                Button {
+                    onViewInputs(input.itemIDs)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.system(size: 10))
+                        Text("입력 \(input.itemCount)개 (\(input.promptCharacters)자)")
+                            .font(.system(size: 11, weight: .medium))
+                        if let cand = input.candidateCount {
+                            Text("(후보 \(cand)개 중)")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
+                }
+                .buttonStyle(.plain)
+                .help("클릭하여 이 시도에 주입된 실제 메모/할일 원문 \(input.itemCount)개 보기")
+            }
+
+            // 파서 지표 (추천 목표 개수)
+            if let parse = record.parse {
+                HStack(spacing: 6) {
+                    Text("추천 목표 총 \(parse.modelReturned)개 중 최종 \(parse.kept)개 채택")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    if parse.badID > 0 {
+                        Text("잘못된ID:\(parse.badID)")
+                            .font(.system(size: 10).bold())
+                            .foregroundStyle(.red)
+                    }
+                }
+                .help("모델이 제안한 추천 목표 총 개수(\(parse.modelReturned)개) 중 유효성 검증을 통과한 최종 추천 목표 개수(\(parse.kept)개)")
+            }
+
+            // 토큰 사용량
+            if let usage = record.usage, (usage.tokensIn != nil || usage.tokensOut != nil) {
+                HStack(spacing: 4) {
+                    Image(systemName: "number.circle")
+                        .font(.system(size: 9))
+                    Text("토큰 in:\(usage.tokensIn ?? 0) / out:\(usage.tokensOut ?? 0)")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            // 생성 결과
+            if !record.output.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 9))
+                        Text("출력 (추천 결과)")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundStyle(.secondary)
+
+                    Text(record.output)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .lineLimit(6)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(6)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
-                .help(level.output)
-
-            HStack(spacing: 4) {
-                ForEach(level.scores.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                    AILabScoreChip(key: key, value: value)
-                }
-                Spacer(minLength: 0)
             }
 
+            // 소요 시간 & 평가 버튼
             HStack(spacing: 4) {
                 verdictButton("hand.thumbsup", verdict: "up", tint: .green)
                 verdictButton("hand.thumbsdown", verdict: "down", tint: .red)
                 noteButton
                 Spacer(minLength: 0)
-                Text("\(level.latency)ms")
+                let genMs = record.timings?["generate"] ?? record.totalMs
+                Text("생성 \(formatSeconds(genMs)) / 총 \(formatSeconds(record.totalMs))")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }
@@ -498,9 +662,98 @@ private struct AILabResultCell: View {
                     .font(.system(size: 10))
                     .italic()
                     .foregroundStyle(.secondary)
-                    .lineLimit(isExpanded ? nil : 2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
             }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.1)))
+    }
+
+    private func formatSeconds(_ ms: Int) -> String {
+        let sec = Double(ms) / 1000.0
+        if sec >= 10 {
+            return String(format: "%.1fs", sec)
+        } else {
+            return String(format: "%.2fs", sec)
+        }
+    }
+
+    private var outcomeBadge: some View {
+        let outcome = record.outcome ?? "unknown"
+        let detail = record.outcomeDetail
+        let isOk = outcome == "ok"
+        let isWarn = outcome == "parsedEmpty" || outcome == "validationFailed"
+        let tint: Color = isOk ? .green : (isWarn ? .orange : .red)
+
+        let (labelText, tooltip) = outcomeInfo(outcome: outcome, detail: detail)
+
+        return Text(labelText)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 4).fill(tint.opacity(0.12)))
+            .help(tooltip)
+    }
+
+    private func outcomeInfo(outcome: String, detail: String?) -> (label: String, tooltip: String) {
+        switch outcome {
+        case "ok":
+            return ("성공 (ok)", "목표 초안이 정상적으로 생성 및 파싱되었습니다.")
+        case "generationFailed":
+            if let detail = detail {
+                switch detail {
+                case "timeout":
+                    return ("타임아웃 (timeout)", "60초 동안 모델이 응답하지 않아 시간 초과되었습니다.")
+                case "connectionRefused":
+                    return ("서버 연결 실패 (connectionRefused)", "로컬 Ollama 데몬이 꺼져 있거나 포트에 접속할 수 없습니다.")
+                case "networkDisconnected":
+                    return ("네트워크 단절", "네트워크 연결이 끊겼습니다.")
+                case "networkError":
+                    return ("네트워크 오류", "모델 통신 중 네트워크 오류가 발생했습니다.")
+                default:
+                    return ("생성 실패 (\(detail))", "LLM 추론 실패: \(detail)")
+                }
+            }
+            return ("생성 실패 (generationFailed)", "LLM 추론 단계 실패 또는 60초 타임아웃이 발생했습니다.")
+        case "serverUnavailable":
+            return ("서버 불가 (serverUnavailable)", "Ollama 데몬이 꺼져 있거나 서버에 연결할 수 없습니다.")
+        case "modelUnavailable":
+            return ("모델 불가 (modelUnavailable)", "해당 기기에서 지원하지 않거나 모델 파일이 없습니다.")
+        case "decodeFailed":
+            if let detail = detail {
+                switch detail {
+                case "noJSON":
+                    return ("JSON 누락 (noJSON)", "모델 응답 안에 JSON 객체({})가 전혀 없습니다. (자연어로만 답변)")
+                case "malformed":
+                    return ("문법 오류 (malformed)", "JSON 형식이 깨져 파싱할 수 없습니다.")
+                case "missingKeys":
+                    return ("필수 키 누락 (missingKeys)", "JSON에 title, memos 등 필수 필드가 빠졌습니다.")
+                case "truncated":
+                    return ("응답 잘림 (truncated)", "최대 토큰 길이에 도달해 JSON이 중간에 잘렸습니다.")
+                default:
+                    return ("해석 실패 (\(detail))", "JSON 디코딩 실패: \(detail)")
+                }
+            }
+            return ("JSON 해석 실패", "모델 출력을 JSON으로 파싱하지 못했습니다.")
+        case "parsedEmpty", "validationFailed":
+            if let detail = detail {
+                switch detail {
+                case "emptyList":
+                    return ("초안 목록 비어있음 (emptyList)", "모델이 빈 목록([])을 반환했습니다.")
+                case "hallucinatedIDs":
+                    return ("가짜 ID 환각 (hallucinatedIDs)", "입력에 없는 가짜 메모 ID를 생성하여 비즈니스 검증에서 모두 탈락했습니다.")
+                case "tooFewMemos":
+                    return ("메모 개수 부족 (tooFewMemos)", "목표당 최소 메모 묶음 기준에 미달하여 제외되었습니다.")
+                case "duplicateMemos":
+                    return ("중복 메모 (duplicateMemos)", "이미 사용된 메모를 중복 재사용하여 제외되었습니다.")
+                default:
+                    return ("검증 탈락 (\(detail))", "비즈니스 규칙 검증 실패: \(detail)")
+                }
+            }
+            return ("유효 결과 없음 (parsedEmpty)", "JSON은 읽었으나 메모 ID 불일치/환각 등으로 쓸 수 있는 초안이 0개입니다.")
+        default:
+            return (detail != nil ? "\(outcome):\(detail!)" : outcome, outcome)
         }
     }
 
@@ -516,7 +769,6 @@ private struct AILabResultCell: View {
                 .background(RoundedRectangle(cornerRadius: 4).fill(isOn ? tint.opacity(0.15) : Color.primary.opacity(0.05)))
         }
         .buttonStyle(.plain)
-        .help(verdict == "up" ? "좋은 응답" : "나쁜 응답")
     }
 
     private var noteButton: some View {
@@ -531,10 +783,9 @@ private struct AILabResultCell: View {
                 .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05)))
         }
         .buttonStyle(.plain)
-        .help("메모 남기기")
         .popover(isPresented: $isEditingNote, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("\(level.name) 메모")
+                Text("실행 평가 메모")
                     .font(.caption.bold())
                 TextEditor(text: $noteDraft)
                     .font(.caption)
@@ -556,74 +807,110 @@ private struct AILabResultCell: View {
     }
 }
 
-// MARK: - 점수 chip
+// MARK: - 입력 할일/메모 원문 조회 시트
 
-private struct AILabScoreChip: View {
-    let key: String
-    let value: Double
+private struct ItemIDsWrapper: Identifiable {
+    let id = UUID()
+    let ids: [String]
+}
+
+private struct InputItemsDetailSheet: View {
+    let itemIDs: [String]
+    let memos: [Memo]
+    let goals: [AchievementGoalRecord]
+
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        HStack(spacing: 3) {
-            Text(AILabFormat.shortName(key))
-            Text(String(format: "%.1f", value))
-                .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("주입된 원본 입력 항목")
+                        .font(.title3.bold())
+                    Text("이 실행 시 모델 프롬프트에 포함되었던 \(itemIDs.count)개의 항목 원문입니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("닫기") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(itemIDs, id: \.self) { rawID in
+                        if let uuid = UUID(uuidString: rawID) {
+                            if let memo = memos.first(where: { $0.id == uuid }) {
+                                memoRow(memo)
+                            } else if let goal = goals.first(where: { $0.id == uuid }) {
+                                goalRow(goal)
+                            } else {
+                                missingRow(rawID)
+                            }
+                        } else {
+                            missingRow(rawID)
+                        }
+                    }
+                }
+            }
         }
-        .font(.system(size: 10))
-        .foregroundStyle(AILabFormat.color(for: value))
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(RoundedRectangle(cornerRadius: 4).fill(AILabFormat.color(for: value).opacity(0.12)))
-        .help("\(AILabFormat.fullName(key)) \(String(format: "%.2f", value))")
+        .padding(20)
+        .frame(minWidth: 500, minHeight: 400)
     }
-}
 
-// MARK: - 표기 규칙 (eval-report.py 와 동일한 임계값)
-
-private enum AILabFormat {
-    static func fullName(_ key: String) -> String {
-        switch key {
-        case "honorific": return "존댓말 비율"
-        case "sentenceCount": return "문장 수 제한"
-        case "groundedness": return "사실 기반"
-        case "pairF1": return "F1 스코어"
-        case "predictedGroups": return "추천 목표 개수"
-        default: return key
+    private func memoRow(_ memo: Memo) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(memo.icon ?? "📝")
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(memo.content)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                HStack(spacing: 8) {
+                    if let deadline = memo.deadline {
+                        Text("마감: \(deadline.formatted(date: .numeric, time: .omitted))")
+                    }
+                    if memo.isCompleted == true {
+                        Text("완료됨").foregroundStyle(.green)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
     }
 
-    static func shortName(_ key: String) -> String {
-        switch key {
-        case "honorific": return "존대"
-        case "sentenceCount": return "문장"
-        case "groundedness": return "사실"
-        case "pairF1": return "F1"
-        case "predictedGroups": return "개수"
-        default: return key
+    private func goalRow(_ goal: AchievementGoalRecord) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(goal.emoji)
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(goal.title)
+                    .font(.callout.bold())
+                    .textSelection(.enabled)
+                Text("\(goal.cadence) 목표 · 연결 메모 \(goal.linkedMemoIDs.count)개")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
     }
 
-    static func color(for value: Double) -> Color {
-        if value >= 0.99 { return .green }
-        if value <= 0.01 { return .red }
-        if value < 0.5 { return .orange }
-        return .yellow
-    }
-
-    static func levelDescription(_ level: String) -> String? {
-        switch level {
-        case "L0": return "Prompt-only"
-        case "L1": return "Structured-context"
-        case "L2": return "Lexical-retrieval"
-        case "L3": return "Hybrid-retrieval"
-        case "L4": return "Graph-augmented"
-        default: return nil
+    private func missingRow(_ idStr: String) -> some View {
+        HStack {
+            Image(systemName: "questionmark.circle")
+                .foregroundStyle(.tertiary)
+            Text("삭제되었거나 찾을 수 없는 항목 (ID: \(idStr))")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-    }
-}
-
-struct AILabView_Previews: PreviewProvider {
-    static var previews: some View {
-        AILabView()
-            .frame(width: 720, height: 620)
+        .padding(8)
     }
 }

@@ -80,6 +80,7 @@ final class WeeklyGoalTaskTests: XCTestCase {
         XCTAssertFalse(text.contains("startDate:"), "startDate가 없으면 줄 자체를 넣지 않는다")
         XCTAssertFalse(text.contains("deadline:"), "deadline이 없으면 줄 자체를 넣지 않는다")
         XCTAssertFalse(text.contains("없음"), "빈 값을 문자열로 채우지 않는다")
+        XCTAssertTrue(text.contains("[1] 아침 러닝"), "번호와 첫 줄이 깔끔하게 들어간다")
     }
 
     func testPresentDateFieldsAreIncluded() {
@@ -89,13 +90,39 @@ final class WeeklyGoalTaskTests: XCTestCase {
             suggestionCount: 4,
             maxMemoCount: 5
         )
-        XCTAssertTrue(text.contains("deadline:"), "값이 있으면 반드시 전달한다")
+        XCTAssertTrue(text.contains("마감"), "마감일이 있으면 인라인으로 전달한다")
     }
 
     func testCompletedFlagOmittedWhenFalse() {
-        // 미완료 할일만 입력으로 들어오므로 항상 false인 줄을 40번 반복할 이유가 없다.
         let text = WeeklyGoalTask.prompt(for: [memo("아침 러닝")], suggestionCount: 4, maxMemoCount: 5)
-        XCTAssertFalse(text.contains("completed:"))
+        XCTAssertFalse(text.contains("완료됨"))
+    }
+
+    func testFirstLineOnlyIsExtracted() {
+        let memoWithMultiLines = memo("이력서 작성\n회의록 전문: 어쩌고 저쩌고\nhttps://example.com/link")
+        let text = WeeklyGoalTask.prompt(for: [memoWithMultiLines], suggestionCount: 4, maxMemoCount: 5)
+        XCTAssertTrue(text.contains("[1] 이력서 작성"))
+        XCTAssertFalse(text.contains("회의록 전문"))
+        XCTAssertFalse(text.contains("https://example.com"))
+    }
+
+    func testParsesIntegerItemIndexes() {
+        let m1 = memo("이력서 작성", id: uuid(1))
+        let m2 = memo("포트폴리오 배포", id: uuid(2))
+        let jsonText = """
+        {"suggestions": [{"title": "취업 준비", "reason": "함께 준비", "items": [1, 2], "emoji": "🎯"}]}
+        """
+        let outcome = WeeklyGoalTask.parse(
+            jsonText,
+            memos: [m1, m2],
+            allowedIDs: Set([uuid(1), uuid(2)]),
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+        XCTAssertEqual(outcome.drafts.count, 1)
+        XCTAssertEqual(outcome.drafts.first?.title, "취업 준비")
+        XCTAssertEqual(outcome.drafts.first?.memoIDs, [uuid(1), uuid(2)])
+        XCTAssertEqual(outcome.drafts.first?.criterion, "연결한 할일 2개 완료")
     }
 
     // MARK: - 파싱
@@ -162,10 +189,49 @@ final class WeeklyGoalTaskTests: XCTestCase {
         let outcome = WeeklyGoalTask.parse(
             "이건 JSON 이 아니다", allowedIDs: [], suggestionCount: 3, maxMemoCount: 3
         )
-        guard case .decodeFailed(let characters) = outcome.diagnostics else {
+        guard case let .decodeFailed(characters, reason) = outcome.diagnostics else {
             return XCTFail("디코드 실패가 진단에 안 남았다")
         }
         XCTAssertEqual(characters, "이건 JSON 이 아니다".count)
+        XCTAssertEqual(reason, "noJSON", "JSON 을 아예 안 낸 경우")
+    }
+
+    /// **필수 키가 하나만 빠져도 제안 전체가 버려진다.** id 는 다섯 갈래로 방어하면서
+    /// 필수 키(title, reason) 누락 시 디코드 실패가 명확한 이유로 남는다.
+    func testMissingRequiredKeyLosesEverythingAndSaysWhich() {
+        // reason 이 없다.
+        let text = """
+        {"suggestions": [{"title": "주간 보고서 마무리",
+         "items": [1, 2], "scheduleText": "월/수"}]}
+        """
+
+        let outcome = WeeklyGoalTask.parse(
+            text, allowedIDs: Set([1, 2].map(uuid)), suggestionCount: 3, maxMemoCount: 3
+        )
+
+        XCTAssertTrue(outcome.drafts.isEmpty, "필수 키 누락 시 제안이 비워진다")
+        guard case let .decodeFailed(_, reason) = outcome.diagnostics else {
+            return XCTFail("디코드 실패가 진단에 안 남았다")
+        }
+        XCTAssertEqual(reason, "missingKey:reason", "어느 키가 빠졌는지 남아야 원인을 안다")
+    }
+
+    /// 응답이 중간에 잘리면 `{` 만 있고 `}` 가 없다. 토큰 상한을 의심할 자리라 따로 가른다.
+    func testTruncatedResponseIsDistinguishedFromMalformed() {
+        let truncated = WeeklyGoalTask.parse(
+            "{\"suggestions\": [{\"title\": \"보고서", allowedIDs: [], suggestionCount: 3, maxMemoCount: 3
+        )
+        // 괄호는 둘 다 있는데 문법이 깨진 경우
+        let malformed = WeeklyGoalTask.parse(
+            "{\"suggestions\": [{\"title\": }", allowedIDs: [], suggestionCount: 3, maxMemoCount: 3
+        )
+
+        guard case let .decodeFailed(_, truncatedReason) = truncated.diagnostics,
+              case let .decodeFailed(_, malformedReason) = malformed.diagnostics else {
+            return XCTFail("디코드 실패가 진단에 안 남았다")
+        }
+        XCTAssertEqual(truncatedReason, "truncated")
+        XCTAssertEqual(malformedReason, "malformed")
     }
 
     /// ② 허용 목록에 없는 id 는 버린다. 모델이 id 를 지어내는 일이 있다.
@@ -254,5 +320,80 @@ final class WeeklyGoalTaskTests: XCTestCase {
         let text = json(item(reason: long, memoIDs: [1, 2]))
 
         XCTAssertEqual(parse(text).first?.reason, long)
+    }
+
+    // MARK: - extractJSONObject 특성화 테스트
+
+    /// 모델이 `<think> ... </think>` 사고 과정을 함께 출력해도 제거하고 JSON만 추출한다.
+    func testExtractJSONObjectRemovesThinkBlocks() {
+        let raw = "<think>사용자의 메모를 분석해서 목표를 만듭니다.</think>{\"suggestions\": []}"
+        let extracted = GoalSuggestionPayload.extractJSONObject(from: raw)
+        XCTAssertEqual(extracted, "{\"suggestions\": []}")
+    }
+
+    /// 마크다운 코드 블록(```json ... ```)으로 감싸진 JSON을 정상 추출한다.
+    func testExtractJSONObjectExtractsFromMarkdownCodeBlock() {
+        let raw = """
+        네, 목표 추천 결과입니다:
+        ```json
+        {"suggestions": []}
+        ```
+        확인해 주세요.
+        """
+        let extracted = GoalSuggestionPayload.extractJSONObject(from: raw)
+        XCTAssertEqual(extracted, "{\"suggestions\": []}")
+    }
+
+    /// 언어 태그 없는 코드 블록(``` ... ```)도 정상 추출한다.
+    func testExtractJSONObjectExtractsFromGenericCodeBlock() {
+        let raw = """
+        ```
+        {"suggestions": []}
+        ```
+        """
+        let extracted = GoalSuggestionPayload.extractJSONObject(from: raw)
+        XCTAssertEqual(extracted, "{\"suggestions\": []}")
+    }
+
+    /// `<think>` 블록과 코드 블록이 혼합된 경우에도 온전한 JSON만 추출한다.
+    func testExtractJSONObjectHandlesCombinedThinkAndCodeBlock() {
+        let raw = """
+        <think>
+        분석 중...
+        </think>
+        다음은 JSON입니다:
+        ```json
+        {
+          "suggestions": []
+        }
+        ```
+        """
+        let extracted = GoalSuggestionPayload.extractJSONObject(from: raw)
+        XCTAssertEqual(extracted, "{\n  \"suggestions\": []\n}")
+    }
+
+    // MARK: - 생성 타임아웃
+
+    /// 생성 작업이 타임아웃 시간을 초과하면 CancellationError로 중단되고 diagnostics에 failure가 기록된다.
+    func testRunTimesOutWhenGenerationExceedsLimit() async {
+        let memos = [memo("할일 1", id: uuid(1)), memo("할일 2", id: uuid(2))]
+        let outcome = await WeeklyGoalTask.run(
+            memos: memos,
+            suggestionCount: 2,
+            maxMemoCount: 3,
+            inputLimit: 10,
+            budget: 4000,
+            timeoutInterval: 0.05,
+            generate: { _, _ in
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5초 대기
+                return "{\"suggestions\": []}"
+            }
+        )
+
+        XCTAssertTrue(outcome.drafts.isEmpty)
+        guard case .generationFailed(let error) = outcome.diagnostics else {
+            return XCTFail("타임아웃 시 generationFailed 진단이 남아야 한다")
+        }
+        XCTAssertTrue(error is CancellationError)
     }
 }

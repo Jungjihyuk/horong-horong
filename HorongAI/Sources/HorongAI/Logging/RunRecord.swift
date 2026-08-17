@@ -77,11 +77,16 @@ public struct RunRecord: Codable {
     public let inputSummary: InputSummary?
     /// `"ok"` · `"generationFailed"` · `"decodeFailed"` · `"parsedEmpty"` · `"modelUnavailable"`.
     public let outcome: String?
+    /// 결과를 한 겹 더 들여다본 이유. `decodeFailed` 만으로는 **프롬프트 문제인지 모델 문제인지
+    /// 파서 문제인지 가릴 수 없다.** 예: `missingKey:criterion`(모델이 필수 키를 빠뜨림) ·
+    /// `noJSON`(JSON 을 아예 안 냄) · `malformed`(중간에 잘림).
+    public let outcomeDetail: String?
     public let parse: ParseSummary?
     public let usage: UsageSummary?
     /// 단계별 소요(ms). `select_input` · `render_prompt` · `generate` · `parse`.
     /// 총합만 보면 58초 중 무엇이 오래 걸렸는지 알 수 없다.
     public let timings: [String: Int]?
+    public let parameters: [String: Double]?
 
     // MARK: - 곁딸린 것
 
@@ -152,7 +157,7 @@ public struct RunRecord: Codable {
     }
 
     /// 모델이 실제로 쓴 양. **공급자마다 알 수 있는 것이 다르다** — 모르면 `nil`.
-    public struct UsageSummary: Codable {
+    public struct UsageSummary: Codable, Sendable {
         public let tokensIn: Int?
         public let tokensOut: Int?
 
@@ -183,9 +188,11 @@ public struct RunRecord: Codable {
         case attempt
         case inputSummary = "input_summary"
         case outcome
+        case outcomeDetail = "outcome_detail"
         case parse
         case usage
         case timings
+        case parameters
     }
 
     public init(
@@ -204,9 +211,11 @@ public struct RunRecord: Codable {
         attempt: Int? = nil,
         inputSummary: InputSummary? = nil,
         outcome: String? = nil,
+        outcomeDetail: String? = nil,
         parse: ParseSummary? = nil,
         usage: UsageSummary? = nil,
-        timings: [String: Int]? = nil
+        timings: [String: Int]? = nil,
+        parameters: [String: Double]? = nil
     ) {
         self.caseId = caseId
         self.model = model
@@ -223,8 +232,10 @@ public struct RunRecord: Codable {
         self.attempt = attempt
         self.inputSummary = inputSummary
         self.outcome = outcome
+        self.outcomeDetail = outcomeDetail
         self.parse = parse
         self.usage = usage
         self.timings = timings
+        self.parameters = parameters
     }
 }

@@ -5,12 +5,15 @@ import AppKit
 private struct ScreenshotCaptureConfiguration {
     static let targetArgumentName = "--screenshot-target"
     static let tabArgumentName = "--screenshot-tab"
+    static let dateArgumentName = "--screenshot-date"
     static let environmentName = "HORONGHORONG_SCREENSHOT_TARGET"
     static let legacyEnvironmentName = "HORONGHORONG_SCREENSHOT_TAB"
+    static let environmentDateName = "HORONGHORONG_SCREENSHOT_DATE"
     static let popoverThemeEnvironmentName = "HORONGHORONG_SCREENSHOT_POPOVER_THEME"
 
     let target: ScreenshotCaptureTarget
     let popoverTheme: String?
+    let referenceDate: Date?
 
     var windowTitle: String {
         "HorongHorong Screenshot - \(target.identifier)"
@@ -81,28 +84,63 @@ private struct ScreenshotCaptureConfiguration {
 
     static var current: ScreenshotCaptureConfiguration? {
         let arguments = CommandLine.arguments
+        let environment = ProcessInfo.processInfo.environment
+        let referenceDate = parsedDate(from: arguments, environment: environment)
+
         if let argumentIndex = arguments.firstIndex(of: targetArgumentName),
            arguments.indices.contains(argumentIndex + 1),
            let target = ScreenshotCaptureTarget(identifier: arguments[argumentIndex + 1]) {
-            return ScreenshotCaptureConfiguration(target: target, popoverTheme: validatedPopoverTheme)
+            return ScreenshotCaptureConfiguration(
+                target: target,
+                popoverTheme: validatedPopoverTheme,
+                referenceDate: referenceDate
+            )
         }
 
         if let argumentIndex = arguments.firstIndex(of: tabArgumentName),
            arguments.indices.contains(argumentIndex + 1),
            let tab = PopoverTab(screenshotIdentifier: arguments[argumentIndex + 1]) {
-            return ScreenshotCaptureConfiguration(target: .popover(tab), popoverTheme: validatedPopoverTheme)
+            return ScreenshotCaptureConfiguration(
+                target: .popover(tab),
+                popoverTheme: validatedPopoverTheme,
+                referenceDate: referenceDate
+            )
         }
 
-        if let environmentValue = ProcessInfo.processInfo.environment[environmentName],
+        if let environmentValue = environment[environmentName],
            let target = ScreenshotCaptureTarget(identifier: environmentValue) {
-            return ScreenshotCaptureConfiguration(target: target, popoverTheme: validatedPopoverTheme)
+            return ScreenshotCaptureConfiguration(
+                target: target,
+                popoverTheme: validatedPopoverTheme,
+                referenceDate: referenceDate
+            )
         }
 
-        if let environmentValue = ProcessInfo.processInfo.environment[legacyEnvironmentName],
+        if let environmentValue = environment[legacyEnvironmentName],
            let tab = PopoverTab(screenshotIdentifier: environmentValue) {
-            return ScreenshotCaptureConfiguration(target: .popover(tab), popoverTheme: validatedPopoverTheme)
+            return ScreenshotCaptureConfiguration(
+                target: .popover(tab),
+                popoverTheme: validatedPopoverTheme,
+                referenceDate: referenceDate
+            )
         }
         return nil
+    }
+
+    private static func parsedDate(from arguments: [String], environment: [String: String]) -> Date? {
+        var rawDate: String?
+        if let argumentIndex = arguments.firstIndex(of: dateArgumentName),
+           arguments.indices.contains(argumentIndex + 1) {
+            rawDate = arguments[argumentIndex + 1]
+        } else if let envValue = environment[environmentDateName] {
+            rawDate = envValue
+        }
+        guard let rawDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        return formatter.date(from: rawDate)
     }
 
     private static var validatedPopoverTheme: String? {
@@ -124,7 +162,7 @@ private enum CompanionScreenshotMode: String {
 private enum ScreenshotCaptureTarget {
     case popover(PopoverTab)
     case settings(SettingsTab)
-    case statsDetail(StatsViewMode)
+    case statsDetail(StatsViewMode, StatsContentMode = .period, isShorthandFocus: Bool = false)
     case achievementDetail(AchievementDetailScreenshotMode = .progress)
     /// 화면 위에 뜨는 컴패니언.
     case companion(CompanionScreenshotMode = .chat)
@@ -136,7 +174,10 @@ private enum ScreenshotCaptureTarget {
             return "popover-\(tab.screenshotIdentifier)"
         case .settings(let tab):
             return "settings-\(tab.screenshotIdentifier)"
-        case .statsDetail(let mode):
+        case .statsDetail(let mode, let contentMode, let isShorthandFocus):
+            if contentMode == .focus {
+                return isShorthandFocus ? "stats-detail-focus" : "stats-detail-focus-\(mode.screenshotIdentifier)"
+            }
             return "stats-detail-\(mode.screenshotIdentifier)"
         case .achievementDetail(let mode):
             return mode == .progress ? "achievement-detail" : "achievement-detail-\(mode.screenshotIdentifier)"
@@ -166,6 +207,22 @@ private enum ScreenshotCaptureTarget {
                 self = .newsReportArchive
                 return
             }
+            if identifier == "stats-detail-focus" || identifier == "stats-focus" {
+                self = .statsDetail(.daily, .focus, isShorthandFocus: true)
+                return
+            }
+            if identifier == "stats-detail-focus-daily" {
+                self = .statsDetail(.daily, .focus, isShorthandFocus: false)
+                return
+            }
+            if identifier == "stats-detail-focus-weekly" {
+                self = .statsDetail(.weekly, .focus, isShorthandFocus: false)
+                return
+            }
+            if identifier == "stats-detail-focus-monthly" {
+                self = .statsDetail(.monthly, .focus, isShorthandFocus: false)
+                return
+            }
             if let tab = PopoverTab(screenshotIdentifier: identifier) {
                 self = .popover(tab)
                 return
@@ -181,8 +238,24 @@ private enum ScreenshotCaptureTarget {
             guard let tab = SettingsTab(screenshotIdentifier: parts[1]) else { return nil }
             self = .settings(tab)
         case "stats-detail":
+            if parts[1] == "focus" {
+                self = .statsDetail(.daily, .focus, isShorthandFocus: true)
+                return
+            }
+            if parts[1] == "focus-daily" {
+                self = .statsDetail(.daily, .focus, isShorthandFocus: false)
+                return
+            }
+            if parts[1] == "focus-weekly" {
+                self = .statsDetail(.weekly, .focus, isShorthandFocus: false)
+                return
+            }
+            if parts[1] == "focus-monthly" {
+                self = .statsDetail(.monthly, .focus, isShorthandFocus: false)
+                return
+            }
             guard let mode = StatsViewMode(screenshotIdentifier: parts[1]) else { return nil }
-            self = .statsDetail(mode)
+            self = .statsDetail(mode, .period, isShorthandFocus: false)
         case "achievement-detail":
             guard let mode = AchievementDetailScreenshotMode(screenshotIdentifier: parts[1]) else { return nil }
             self = .achievementDetail(mode)
@@ -211,6 +284,7 @@ private enum AchievementDetailScreenshotMode: String {
     case timelineAll = "timeline-all"
     case journey
     case records
+    case reward
 
     var screenshotIdentifier: String { rawValue }
 
@@ -224,6 +298,8 @@ private enum AchievementDetailScreenshotMode: String {
             return AchievementDetailScreenshotState(tabIdentifier: "journey")
         case .records:
             return AchievementDetailScreenshotState(tabIdentifier: "records")
+        case .reward:
+            return AchievementDetailScreenshotState(tabIdentifier: "reward")
         }
     }
 
@@ -360,6 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         migrateRemovedDocumentCategory(in: context)
         seedDefaultCategoryRules(in: context)
+        seedDefaultRewardCatalogItems(in: context)
         repairOrphanedPomodoroRecords(in: context)
 
         timerManager.setModelContext(context)
@@ -482,7 +559,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let contentSize = config.contentSize
-        let rootView = screenshotRootView(for: config.target, colorScheme: config.colorScheme)
+        let rootView = screenshotRootView(
+            for: config.target,
+            colorScheme: config.colorScheme,
+            referenceDate: config.referenceDate
+        )
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.frame = CGRect(origin: .zero, size: contentSize)
         hostingView.appearance = config.appearance
@@ -517,13 +598,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         screenshotWindow = window
     }
 
-    private func screenshotRootView(for target: ScreenshotCaptureTarget, colorScheme: ColorScheme?) -> AnyView {
+    private func screenshotRootView(
+        for target: ScreenshotCaptureTarget,
+        colorScheme: ColorScheme?,
+        referenceDate: Date?
+    ) -> AnyView {
         switch target {
         case .popover(let tab):
             return AnyView(
-                MenuBarPopover(timerManager: timerManager, initialTab: tab)
-                    .environment(appState)
-                    .modelContainer(modelContainer)
+                MenuBarPopover(
+                    timerManager: timerManager,
+                    initialTab: tab,
+                    referenceDate: referenceDate ?? Date()
+                )
+                .environment(appState)
+                .modelContainer(modelContainer)
             )
         case .settings(let tab):
             let view = SettingsRoot(initialSelection: tab)
@@ -541,15 +630,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 return AnyView(view)
             }
-        case .statsDetail(let mode):
+        case .statsDetail(let mode, let contentMode, _):
             return AnyView(
-                StatsDetailWindow(initialViewMode: mode)
-                    .environment(appState)
-                    .modelContainer(modelContainer)
-                    .frame(
-                        width: Constants.statsWindowWidth,
-                        height: Constants.statsWindowHeight
-                    )
+                StatsDetailWindow(
+                    initialViewMode: mode,
+                    initialContentMode: contentMode,
+                    initialSelectedDate: referenceDate
+                )
+                .environment(appState)
+                .modelContainer(modelContainer)
+                .frame(
+                    width: Constants.statsWindowWidth,
+                    height: Constants.statsWindowHeight
+                )
             )
         case .achievementDetail(let mode):
             return AnyView(
@@ -605,11 +698,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 컴패니언 스크린샷에 쓸 고정 대화.
     private static let screenshotChatMessages: [CompanionChatMessage] = [
-        CompanionChatMessage(role: .user, text: "오늘 뭐부터 할까?"),
+        CompanionChatMessage(role: .user, text: "안녕 호롱아, 좋은 아침!"),
+        CompanionChatMessage(role: .companion, text: "좋은 아침이에요! 오늘도 함께 힘차게 몰입해봐요 ✨"),
+        CompanionChatMessage(role: .user, text: "오늘 남은 일정 뭐 있지?"),
         CompanionChatMessage(
             role: .companion,
-            text: "오전엔 집중이 잘 되니까 «성취 추천 모델 문서화»부터 끝내는 게 좋겠어요. "
-                + "짧은 메모 정리는 오후로 미뤄도 괜찮아요."
+            text: "오늘 예정된 일정이 4개 있어요. 먼저 «오전 몰입 작업»부터 진행해볼까요?"
+        ),
+        CompanionChatMessage(
+            role: .user,
+            text: "19:00에 [호롱호롱] 마인드맵 및 타임라인 생성 기능 구현 일정 추가해줘"
+        ),
+        CompanionChatMessage(
+            role: .companion,
+            text: "19:00 «[호롱호롱] 마인드맵 및 타임라인 생성 기능 구현» 일정을 등록했어요! 📝",
+            isHovered: true
         ),
     ]
 
@@ -620,15 +723,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let time1 = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: now)
         let time2 = calendar.date(bySettingHour: 14, minute: 30, second: 0, of: now)
         let time3 = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: now)
+        let time4 = calendar.date(bySettingHour: 19, minute: 0, second: 0, of: now)
         return [
             CompanionScheduleEntry(time: time1, title: "오전 몰입 작업 (성취 추천 모델 문서화)", isCompleted: true),
             CompanionScheduleEntry(time: time2, title: "주간 팀 싱크 미팅 및 진행 상황 공유", isCompleted: false),
             CompanionScheduleEntry(time: time3, title: "타이머 UI 테마 리팩토링 검토", isCompleted: false),
+            CompanionScheduleEntry(time: time4, title: "[호롱호롱] 마인드맵 및 타임라인 생성 기능 구현", isCompleted: false),
         ]
     }
 
     private func seedDefaultCategoryRules(in context: ModelContext) {
         try? DefaultAppCategoryRuleStore.reconcile(in: context)
+    }
+
+    private func seedDefaultRewardCatalogItems(in context: ModelContext) {
+        let existing = (try? context.fetch(FetchDescriptor<RewardCatalogItem>())) ?? []
+        let defaultItems: [(title: String, emoji: String, cost: Int)] = [
+            ("하쿠텐 라멘 먹으러 가기", "🍜", 50),
+            ("아이폰 케이스 구매", "📱", 30),
+            ("겨울에 스키장 가기", "⛷️", 200),
+            ("뉴발란스 운동화 구매", "👟", 120),
+        ]
+        var nextOrder = (existing.map(\.sortOrder).max() ?? -1) + 1
+        for defaultItem in defaultItems {
+            if !existing.contains(where: { $0.title == defaultItem.title }) {
+                let item = RewardCatalogItem(
+                    title: defaultItem.title,
+                    emoji: defaultItem.emoji,
+                    costPoints: defaultItem.cost,
+                    sortOrder: nextOrder
+                )
+                context.insert(item)
+                nextOrder += 1
+            }
+        }
+        try? context.save()
     }
 
     private func repairOrphanedPomodoroRecords(in context: ModelContext) {

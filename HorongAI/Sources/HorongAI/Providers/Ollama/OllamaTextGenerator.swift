@@ -20,25 +20,64 @@ public struct OllamaTextGenerator: Sendable {
         await OllamaChatClient.isReachable(endpoint: endpoint)
     }
 
+    public struct GenerationOutput: Sendable {
+        public let text: String
+        public let usage: RunRecord.UsageSummary?
+
+        public init(text: String, usage: RunRecord.UsageSummary? = nil) {
+            self.text = text
+            self.usage = usage
+        }
+    }
+
     public func generate(
         prompt: String,
         instructions: String,
         temperature: Double,
-        maxTokens: Int
+        maxTokens: Int,
+        repeatPenalty: Double? = nil,
+        presencePenalty: Double? = nil,
+        frequencyPenalty: Double? = nil
     ) async throws -> String {
+        try await generateWithUsage(
+            prompt: prompt,
+            instructions: instructions,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            repeatPenalty: repeatPenalty,
+            presencePenalty: presencePenalty,
+            frequencyPenalty: frequencyPenalty
+        ).text
+    }
+
+    public func generateWithUsage(
+        prompt: String,
+        instructions: String,
+        temperature: Double,
+        maxTokens: Int,
+        repeatPenalty: Double? = nil,
+        presencePenalty: Double? = nil,
+        frequencyPenalty: Double? = nil
+    ) async throws -> GenerationOutput {
         let client = OllamaChatClient(endpoint: endpoint, model: model)
         var text = ""
-        for try await partial in client.stream(
+        var usage: RunRecord.UsageSummary? = nil
+        for try await update in client.streamUpdates(
             messages: [
                 .init(role: "system", content: instructions),
                 .init(role: "user", content: prompt),
             ],
             temperature: temperature,
-            maxTokens: maxTokens
+            maxTokens: maxTokens,
+            repeatPenalty: repeatPenalty,
+            presencePenalty: presencePenalty,
+            frequencyPenalty: frequencyPenalty
         ) {
-            // `stream` 은 조각이 아니라 매번 지금까지의 전문을 준다(`OllamaStreamContractTests`).
-            text = partial
+            text = update.text
+            if let u = update.usage {
+                usage = RunRecord.UsageSummary(tokensIn: u.promptTokens, tokensOut: u.completionTokens)
+            }
         }
-        return text
+        return GenerationOutput(text: text, usage: usage)
     }
 }
