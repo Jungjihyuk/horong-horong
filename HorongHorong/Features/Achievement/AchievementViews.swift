@@ -1298,20 +1298,235 @@ enum AchievementFoundationGoalSuggestionProvider {
         runID: String = AIRunLog.newRunID(),
         candidateCount: Int? = nil
     ) async -> [AchievementGoalSuggestion] {
+        let context = RunContext(
+            runID: runID,
+            task: "monthly_goal",
+            candidateCount: candidateCount ?? goals.count
+        )
+
+        // 주간과 같은 설정값(`achievementSuggestionProvider`)을 따른다. 8/2 에 Ollama 를 붙일 때
+        // 주간 경로에만 분기를 달아서, 설정에서 Ollama 를 골라도 월간은 계속 AFM 으로만 돌았다.
+        switch selectedProvider {
+        case .mlx:
+            let fromMLX = await monthlyMLXSuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                context: context.attempt(1)
+            )
+            if !fromMLX.isEmpty { return fromMLX }
+            achievementSuggestionLog.info("monthly provider fallback=mlx→afm")
+        case .ollama:
+            let fromOllama = await monthlyOllamaSuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                context: context.attempt(1)
+            )
+            if !fromOllama.isEmpty { return fromOllama }
+            achievementSuggestionLog.info("monthly provider fallback=ollama→afm")
+        case .appleFoundation:
+            break
+        }
+
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await FoundationModelsGoalSuggestionProvider().monthlySuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
-                context: RunContext(
-                    runID: runID,
-                    task: "monthly_goal",
-                    candidateCount: candidateCount ?? goals.count
-                )
+                context: context.attempt(selectedProvider == .appleFoundation ? 1 : 2)
             )
         }
         #endif
         return []
+    }
+
+    private static func monthlyMLXSuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        context: RunContext
+    ) async -> [AchievementGoalSuggestion] {
+        #if canImport(MLXLLM)
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+                ?? Constants.defaultAchievementSuggestionMLXModel
+            let generator = MLXTextGenerator(model: model)
+            let temperature = 0.25
+            let maxTokens = 900
+            return await sharedMonthlySuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                provider: .mlx,
+                model: model,
+                source: .mlx,
+                context: context,
+                parameters: [
+                    "temperature": temperature,
+                    "max_tokens": Double(maxTokens)
+                ],
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens
+                    )
+                }
+            )
+        }
+        #endif
+        achievementSuggestionLog.error("monthly mlx failure=unavailable")
+        return []
+    }
+
+    private static func monthlyOllamaSuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        context: RunContext
+    ) async -> [AchievementGoalSuggestion] {
+        if #available(macOS 26.0, *) {
+            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+                ?? Constants.defaultAchievementSuggestionOllamaModel
+            let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
+                ?? Constants.defaultNewsOllamaEndpoint
+            let generator = OllamaTextGenerator(endpoint: endpoint, model: model)
+
+            // 온도·토큰은 AFM 월간 경로와 맞춘다 — 공급자를 바꿔도 같은 질문이어야 비교가 된다.
+            // 반복 페널티는 주간 Ollama 경로와 같은 이유다(같은 생성기라 같은 루프 위험을 진다).
+            let temperature = 0.25
+            let repeatPenalty = 1.15
+            let presencePenalty = 0.0
+            let frequencyPenalty = 0.0
+            let maxTokens = 900
+
+            return await sharedMonthlySuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                provider: .ollama,
+                model: model,
+                source: .ollama,
+                context: context,
+                parameters: [
+                    "temperature": temperature,
+                    "repeat_penalty": repeatPenalty,
+                    "presence_penalty": presencePenalty,
+                    "frequency_penalty": frequencyPenalty,
+                    "max_tokens": Double(maxTokens)
+                ],
+                // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
+                precondition: { await generator.isReachable() },
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens,
+                        repeatPenalty: repeatPenalty,
+                        presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty
+                    )
+                }
+            )
+        }
+        return []
+    }
+
+    /// MLX·Ollama 가 공유하는 월간 추천 흐름. 주간의 `weeklySuggestions` 와 짝이다.
+    ///
+    /// 이름이 `monthlySuggestions` 가 아닌 이유는 **바깥에 같은 이름의 분배기가 있어서**다.
+    /// 둘을 같은 이름으로 두면 호출부에서 어느 쪽이 불리는지 눈으로 가릴 수 없다.
+    @available(macOS 26.0, *)
+    private static func sharedMonthlySuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        provider: Constants.AchievementSuggestionProviderKind,
+        model: String,
+        source: AchievementGoalSuggestionSource,
+        context: RunContext,
+        parameters: [String: Double] = [:],
+        precondition: () async -> Bool = { true },
+        // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> [AchievementGoalSuggestion] {
+        let label = provider.rawValue
+        let startedAt = Date()
+
+        guard await precondition() else {
+            achievementSuggestionLog.error("monthly \(label, privacy: .public) failure=serverUnavailable")
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: "serverUnavailable",
+                    parameters: parameters
+                )
+            )
+            return []
+        }
+
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: label,
+            model: model
+        )
+        let outcome = await MonthlyGoalTask.run(
+            goals: goals.map(\.taskGoal),
+            suggestionCount: suggestionCount,
+            inputLimit: max(3, min(30, suggestionCount * 6)),
+            trace: trace,
+            generate: generate
+        )
+        if let trace { TraceRecorder.shared?.record(trace) }
+
+        if let error = outcome.failure {
+            achievementSuggestionLog.error(
+                """
+                monthly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(achievementModelErrorDescription(error), privacy: .public)
+                """
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: "generationFailed",
+                    outcomeDetail: error.detailedFailureReason,
+                    selectedIDs: outcome.selectedIDs,
+                    promptCharacters: outcome.promptCharacters,
+                    timings: outcome.timings,
+                    parameters: parameters
+                )
+            )
+            return []
+        }
+        if outcome.drafts.isEmpty {
+            achievementSuggestionLog.error(
+                """
+                monthly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)
+                """
+            )
+        }
+
+        // 파서를 AFM 경로와 공유하므로 초안은 `.foundationModel` 로 붙어 나온다. 실제 공급자로 다시 태깅한다.
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly).retagged(as: source) }
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: label,
+                model: model,
+                outcome: outcome.drafts.isEmpty ? "parsedEmpty" : "ok",
+                outcomeDetail: outcome.drafts.isEmpty ? "emptyList" : nil,
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                timings: outcome.timings,
+                parameters: parameters
+            )
+        )
+        return suggestions
     }
 }
 
