@@ -141,6 +141,11 @@ extension Error {
         if self is CancellationError {
             return "timeout"
         }
+        // 안 받아 둔 모델을 고른 것뿐인데 `inferenceError` 로 남으면 모델이 고장 난 것처럼 보인다.
+        // 보통은 `preflight` 가 먼저 막지만, 고른 뒤 `ollama rm` 을 하면 여기까지 온다.
+        if case .modelNotFound = (self as? OllamaChatError) ?? .serverUnavailable {
+            return "modelUnavailable"
+        }
         if let urlError = self as? URLError {
             switch urlError.code {
             case .timedOut:

@@ -1073,6 +1073,17 @@ enum AchievementFoundationGoalSuggestionProvider {
                     "temperature": temperature,
                     "max_tokens": Double(maxTokens)
                 ],
+                // 안 받아 둔 모델이면 프롬프트를 만들 필요가 없다. 그대로 보내면 생성 단계에서
+                // `MLXChatError.notPrepared` 가 나는데, 그건 기록에 `inferenceError` 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다 — Ollama 404 와 똑같은 사정이다.
+                //
+                // Apple Silicon 이 아닌 기기도 같은 값으로 묶는다. 그 기기에서는 **모든** MLX
+                // 실행이 이렇게 나오므로 기록 한 건만 봐도 구분된다.
+                preflight: {
+                    MLXModelStore.isSupported && MLXModelStore.isKnownPrepared(model)
+                        ? nil
+                        : "modelUnavailable"
+                },
                 generate: { prompt, instructions in
                     let text = try await generator.generate(
                         prompt: prompt,
@@ -1123,8 +1134,16 @@ enum AchievementFoundationGoalSuggestionProvider {
                     "frequency_penalty": frequencyPenalty,
                     "max_tokens": Double(maxTokens)
                 ],
-                // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
-                precondition: { await generator.isReachable() },
+                // 서버가 꺼져 있거나 **모델을 안 받아 뒀으면** 프롬프트를 만들어 보낼 필요가 없다.
+                // 보내 보면 Ollama 가 404 를 주는데, 그건 기록에 «추론 실패» 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다(실측 2026-08-19).
+                preflight: {
+                    switch await OllamaChatClient.readiness(endpoint: endpoint, model: model) {
+                    case .ready:            return nil
+                    case .serverUnavailable: return "serverUnavailable"
+                    case .modelNotInstalled: return "modelUnavailable"
+                    }
+                },
                 generate: { prompt, instructions in
                     let output = try await generator.generateWithUsage(
                         prompt: prompt,
@@ -1160,21 +1179,27 @@ enum AchievementFoundationGoalSuggestionProvider {
         source: AchievementGoalSuggestionSource,
         context: RunContext,
         parameters: [String: Double] = [:],
-        precondition: () async -> Bool = { true },
+        /// 실행 전에 막을 이유가 있으면 **기록할 결과 이름**을 돌려준다. 막을 이유가 없으면 `nil`.
+        ///
+        /// `Bool` 로 두면 «왜 막혔나» 가 사라져, 서버가 꺼진 것과 모델을 안 받아 둔 것이
+        /// 기록에서 한 칸으로 뭉친다. 사용자가 할 일은 서로 다르다.
+        preflight: () async -> String? = { nil },
         // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> WeeklyGoalTask.GenerationOutput
     ) async -> [AchievementGoalSuggestion] {
         let label = provider.rawValue
         let startedAt = Date()
 
-        guard await precondition() else {
-            achievementSuggestionLog.error("weekly \(label, privacy: .public) failure=serverUnavailable")
+        if let blocked = await preflight() {
+            achievementSuggestionLog.error(
+                "weekly \(label, privacy: .public) failure=\(blocked, privacy: .public)"
+            )
             AIRunLog.record(
                 context.record(
                     startedAt: startedAt,
                     provider: label,
                     model: model,
-                    outcome: "serverUnavailable",
+                    outcome: blocked,
                     parameters: parameters
                 )
             )
@@ -1362,6 +1387,12 @@ enum AchievementFoundationGoalSuggestionProvider {
                     "temperature": temperature,
                     "max_tokens": Double(maxTokens)
                 ],
+                // 주간 MLX 경로와 같은 판단이다.
+                preflight: {
+                    MLXModelStore.isSupported && MLXModelStore.isKnownPrepared(model)
+                        ? nil
+                        : "modelUnavailable"
+                },
                 generate: { prompt, instructions in
                     try await generator.generate(
                         prompt: prompt,
@@ -1411,8 +1442,16 @@ enum AchievementFoundationGoalSuggestionProvider {
                     "frequency_penalty": frequencyPenalty,
                     "max_tokens": Double(maxTokens)
                 ],
-                // 서버가 꺼져 있으면 프롬프트를 만들어 보낼 필요도 없다.
-                precondition: { await generator.isReachable() },
+                // 서버가 꺼져 있거나 **모델을 안 받아 뒀으면** 프롬프트를 만들어 보낼 필요가 없다.
+                // 보내 보면 Ollama 가 404 를 주는데, 그건 기록에 «추론 실패» 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다(실측 2026-08-19).
+                preflight: {
+                    switch await OllamaChatClient.readiness(endpoint: endpoint, model: model) {
+                    case .ready:            return nil
+                    case .serverUnavailable: return "serverUnavailable"
+                    case .modelNotInstalled: return "modelUnavailable"
+                    }
+                },
                 generate: { prompt, instructions in
                     try await generator.generate(
                         prompt: prompt,
@@ -1442,21 +1481,24 @@ enum AchievementFoundationGoalSuggestionProvider {
         source: AchievementGoalSuggestionSource,
         context: RunContext,
         parameters: [String: Double] = [:],
-        precondition: () async -> Bool = { true },
+        /// 주간(`weeklySuggestions`)과 같은 규약이다 — 막을 이유가 있으면 기록할 결과 이름.
+        preflight: () async -> String? = { nil },
         // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
     ) async -> [AchievementGoalSuggestion] {
         let label = provider.rawValue
         let startedAt = Date()
 
-        guard await precondition() else {
-            achievementSuggestionLog.error("monthly \(label, privacy: .public) failure=serverUnavailable")
+        if let blocked = await preflight() {
+            achievementSuggestionLog.error(
+                "monthly \(label, privacy: .public) failure=\(blocked, privacy: .public)"
+            )
             AIRunLog.record(
                 context.record(
                     startedAt: startedAt,
                     provider: label,
                     model: model,
-                    outcome: "serverUnavailable",
+                    outcome: blocked,
                     parameters: parameters
                 )
             )
