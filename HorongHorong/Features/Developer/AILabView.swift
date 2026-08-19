@@ -27,6 +27,14 @@ public struct AILabView: View {
             attempts.contains { $0.outcome != "ok" }
         }
 
+        /// 주간·월간을 동시에 돌렸나 하나씩 돌렸나 — `RunRecord.variant`.
+        ///
+        /// 같은 모델·같은 입력인데 소요 시간이 다르면 **이것부터 봐야 한다.** 전략이 다르면
+        /// 애초에 다른 조건에서 잰 숫자라 나란히 놓고 비교하면 안 된다.
+        var executionVariant: String? {
+            attempts.compactMap(\.variant).first
+        }
+
         var candidateCount: Int? {
             attempts.first?.inputSummary?.candidateCount
         }
@@ -294,11 +302,34 @@ public struct AILabView: View {
                         .lineLimit(1)
                 }
 
-                Text(group.task)
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+                HStack(spacing: 4) {
+                    Text(group.task)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+
+                    // 실행 전략. 없으면 이 값을 남기기 전(2026-08-19 이전)의 기록이다.
+                    if let variant = group.executionVariant {
+                        let isParallel = variant == "parallel"
+                        Label(
+                            isParallel ? "병렬" : "직렬",
+                            systemImage: isParallel ? "arrow.trianglehead.branch" : "arrow.down"
+                        )
+                        .font(.caption2.bold())
+                        .foregroundStyle(isParallel ? Color.orange : Color.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill((isParallel ? Color.orange : Color.secondary).opacity(0.12))
+                        )
+                        .help(
+                            isParallel
+                                ? "주간·월간을 동시에 보냈습니다. 로컬 모델은 요청을 하나씩만 처리하므로 뒤엣것이 큐에서 기다리다 타임아웃될 수 있습니다."
+                                : "주간이 끝난 뒤 월간을 보냈습니다. 각자 타임아웃 예산을 온전히 씁니다."
+                        )
+                    }
+                }
 
                 if let startedAt = group.startedAt {
                     Text(startedAt.formatted(date: .numeric, time: .standard))
