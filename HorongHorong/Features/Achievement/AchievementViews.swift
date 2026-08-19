@@ -1002,15 +1002,21 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int,
         runID: String = AIRunLog.newRunID(),
-        candidateCount: Int? = nil
+        candidateCount: Int? = nil,
+        variant: String? = nil,
+        // 실행당 **한 번** 읽은 값을 받는다. 여기서 다시 읽으면 주간과 월간이 서로 다른
+        // 공급자를 볼 수 있다 — 순차로 돌면 두 읽기 사이가 수십 초까지 벌어진다
+        // (실측 2026-08-19: 주간 mlx, 7초 뒤 월간 appleFoundation).
+        provider: Constants.AchievementSuggestionProviderKind
     ) async -> [AchievementGoalSuggestion] {
         let context = RunContext(
             runID: runID,
             task: "weekly_goal",
-            candidateCount: candidateCount ?? memos.count
+            candidateCount: candidateCount ?? memos.count,
+            variant: variant
         )
 
-        switch selectedProvider {
+        switch provider {
         case .mlx:
             let fromMLX = await mlxSuggestions(
                 from: memos,
@@ -1038,7 +1044,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             from: memos,
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount,
-            context: context.attempt(selectedProvider == .appleFoundation ? 1 : 2)
+            context: context.attempt(provider == .appleFoundation ? 1 : 2)
         )
     }
 
@@ -1322,17 +1328,21 @@ enum AchievementFoundationGoalSuggestionProvider {
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
         runID: String = AIRunLog.newRunID(),
-        candidateCount: Int? = nil
+        candidateCount: Int? = nil,
+        variant: String? = nil,
+        /// 주간(`suggestions`)과 같은 사정이다 — 실행당 한 번 읽은 값을 받는다.
+        provider: Constants.AchievementSuggestionProviderKind
     ) async -> [AchievementGoalSuggestion] {
         let context = RunContext(
             runID: runID,
             task: "monthly_goal",
-            candidateCount: candidateCount ?? goals.count
+            candidateCount: candidateCount ?? goals.count,
+            variant: variant
         )
 
         // 주간과 같은 설정값(`achievementSuggestionProvider`)을 따른다. 8/2 에 Ollama 를 붙일 때
         // 주간 경로에만 분기를 달아서, 설정에서 Ollama 를 골라도 월간은 계속 AFM 으로만 돌았다.
-        switch selectedProvider {
+        switch provider {
         case .mlx:
             let fromMLX = await monthlyMLXSuggestions(
                 from: goals,
@@ -1358,7 +1368,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             return await FoundationModelsGoalSuggestionProvider().monthlySuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
-                context: context.attempt(selectedProvider == .appleFoundation ? 1 : 2)
+                context: context.attempt(provider == .appleFoundation ? 1 : 2)
             )
         }
         #endif
@@ -8710,13 +8720,24 @@ private struct AchievementGoalComposerSheet: View {
         Task {
             // 앞선 실행이 걸어 둔 언로드 예약을 취소한다. 지금 쓸 모델을 밑에서 걷어내면 안 된다.
             await SuggestionModelUnloader.shared.beginRun()
+            // 공급자를 **여기서 한 번만** 읽는다. 주간·월간이 각자 읽으면 순차로 돌 때
+            // 두 읽기 사이가 수십 초까지 벌어져, 그사이 설정을 바꾸면 한 실행 안에서
+            // 공급자가 갈린다(실측 2026-08-19: 주간 mlx → 7초 뒤 월간 appleFoundation).
+            // 버튼 한 번은 한 공급자로 끝나야 기록도 비교도 성립한다.
+            let provider = AchievementFoundationGoalSuggestionProvider.selectedProvider
+            // 어떻게 돌렸는지는 **기록에 남는다**(`RunRecord.variant`). 어느 쪽이 빠른지는
+            // 공급자마다 다른데 지금 기본값은 관측에 기댄 추측이라, 뒤집어 재 볼 수 있어야 한다.
+            let strategy = SuggestionExecutionStrategy.resolved(provider: provider)
+
             @Sendable func weeklyRun() async -> [AchievementGoalSuggestion] {
                 await AchievementFoundationGoalSuggestionProvider.suggestions(
                     from: snapshots,
                     suggestionCount: suggestionCount,
                     maxMemoCount: maxTodoCount,
                     runID: runID,
-                    candidateCount: snapshots.count
+                    candidateCount: snapshots.count,
+                    variant: strategy.rawValue,
+                    provider: provider
                 )
             }
             @Sendable func monthlyRun() async -> [AchievementGoalSuggestion] {
@@ -8725,7 +8746,9 @@ private struct AchievementGoalComposerSheet: View {
                     from: weeklyGoalSnapshots,
                     suggestionCount: monthlySuggestionCount,
                     runID: runID,
-                    candidateCount: weeklyGoalSnapshots.count
+                    candidateCount: weeklyGoalSnapshots.count,
+                    variant: strategy.rawValue,
+                    provider: provider
                 )
             }
 
@@ -8745,11 +8768,12 @@ private struct AchievementGoalComposerSheet: View {
             // 순차로 만들면 얻는 것 없이 느려지기만 한다.
             let weeklyModelValues: [AchievementGoalSuggestion]
             let monthlyModelValues: [AchievementGoalSuggestion]
-            if AchievementFoundationGoalSuggestionProvider.selectedProvider == .appleFoundation {
+            switch strategy {
+            case .parallel:
                 async let weekly = weeklyRun()
                 async let monthly = monthlyRun()
                 (weeklyModelValues, monthlyModelValues) = await (weekly, monthly)
-            } else {
+            case .sequential:
                 weeklyModelValues = await weeklyRun()
                 monthlyModelValues = await monthlyRun()
             }

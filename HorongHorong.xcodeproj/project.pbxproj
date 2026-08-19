@@ -165,6 +165,7 @@
 		84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
 		853DD6929C384C8932D1626E /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D6422AFDFDFF4A0C229A93 /* FocusSession.swift */; };
 		856CA0AC5FF9CFD5BEFA5EBB /* FocusPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655CFFAFA153975887808698 /* FocusPage.swift */; };
+		85ABAF186AFF428B1771CEC2 /* SuggestionExecutionStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D4180095C9372A7EF9F50D /* SuggestionExecutionStrategy.swift */; };
 		86FFA4D3D5C222867E3BCA28 /* LanternOilJarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D622C8DA96DA9DBCBAA400 /* LanternOilJarView.swift */; };
 		87514069E0442B45EE871778 /* PomodoroReflectionEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */; };
 		87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658FBB3D526E45D220DD3A3A /* NumberField.swift */; };
@@ -251,6 +252,7 @@
 		C9152C92297F1D3166835ECD /* MemoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B92287537E68101A2064BE /* MemoListView.swift */; };
 		CABF233D11DAB7DA3F24B7A7 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = CC0BB0B5B9A3665B4712C82E /* MLXLLM */; };
 		CBC2870A5ECA2D2DC5BDCF45 /* MLXModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF7167773C553C08A59165D /* MLXModelPicker.swift */; };
+		CC417B4FA8D062F80D32BF49 /* SuggestionExecutionStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48D4180095C9372A7EF9F50D /* SuggestionExecutionStrategy.swift */; };
 		CCB9DE55F5502038F5321174 /* NewsPipelineLaunchConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA80CB813084951E57A396F /* NewsPipelineLaunchConfiguration.swift */; };
 		CDB824ED9A9BD44F60F92F11 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
 		CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */; };
@@ -284,6 +286,7 @@
 		E31A54EE84EC9A62F4FA971C /* HotKey in Frameworks */ = {isa = PBXBuildFile; productRef = 249ADDF9DA45E15FEBDF62D3 /* HotKey */; };
 		E3C8FF0049B8921F18CE8281 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADC8779891445802AEFEEDE5 /* NewsView.swift */; };
 		E66989622DD4CF4E1A1E623E /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367A19AC0B33153A38EC710 /* AppUsageRecord.swift */; };
+		E8A977F2D213038EA96275D1 /* SuggestionExecutionStrategyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9285AA21F4EDE4D8D6EEA785 /* SuggestionExecutionStrategyTests.swift */; };
 		E8C7E21EF40437EB94DCA161 /* FocusNudgeSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */; };
 		E959B94296644B9C3AF5AA8C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 99C698B2D6E31BC55CA99E28 /* Sparkle */; };
 		EA80346AF95E33D253BC6571 /* StatsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE1DBB9705778C054D58377 /* StatsPage.swift */; };
@@ -365,6 +368,7 @@
 		466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HorongHorongTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		47BCD9DC2B0CED624438303A /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
 		4861DFF23A23F7FD51035820 /* AppIconManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconManagerTests.swift; sourceTree = "<group>"; };
+		48D4180095C9372A7EF9F50D /* SuggestionExecutionStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionExecutionStrategy.swift; sourceTree = "<group>"; };
 		4B437AE498E52F90B40CEBC8 /* companion_chat.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = companion_chat.md; sourceTree = "<group>"; };
 		4C2459912E419AFD5A5D7A90 /* StatsAggregateCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsAggregateCache.swift; sourceTree = "<group>"; };
 		51D9BE9BF74EB33D376D7FC6 /* CompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionTests.swift; sourceTree = "<group>"; };
@@ -403,6 +407,7 @@
 		8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakTransitionIntent.swift; sourceTree = "<group>"; };
 		8D0D6724228BCA301EECBFEC /* FocusTrend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusTrend.swift; sourceTree = "<group>"; };
 		922D40CD9D1BF83B6C912DB0 /* CompanionAppFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAppFacts.swift; sourceTree = "<group>"; };
+		9285AA21F4EDE4D8D6EEA785 /* SuggestionExecutionStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionExecutionStrategyTests.swift; sourceTree = "<group>"; };
 		9319CF257767C9BA14FC62A9 /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		93C3B4093C76333C488BBFBF /* DataPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataPage.swift; sourceTree = "<group>"; };
 		97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorongAppStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -626,6 +631,7 @@
 				3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */,
 				F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */,
 				658FBB3D526E45D220DD3A3A /* NumberField.swift */,
+				48D4180095C9372A7EF9F50D /* SuggestionExecutionStrategy.swift */,
 				A7B0E21E76F99C264A651BB5 /* SuggestionModelUnloader.swift */,
 				3727A9B5A94FC100A696BC36 /* SwiftDataStoreLocation.swift */,
 				28560EC4AA259D92267C28F5 /* ToastPanel.swift */,
@@ -660,6 +666,7 @@
 				58ECF2ADC2ADD3798445571E /* NewsUsageEstimatorTests.swift */,
 				727A149D60047427F9249A50 /* PromptSnapshotTests.swift */,
 				C848AFFD27FE78B0F32159D0 /* RewardLedgerTests.swift */,
+				9285AA21F4EDE4D8D6EEA785 /* SuggestionExecutionStrategyTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
 			);
 			path = HorongHorongTests;
@@ -1230,6 +1237,7 @@
 				0001FB54B1AE562E58F819BA /* StatsDetailWindow.swift in Sources */,
 				35D80B553132B90DF264D277 /* StatsPage.swift in Sources */,
 				93D9F4D663EFE21581AA00F8 /* StatsSummaryView.swift in Sources */,
+				CC417B4FA8D062F80D32BF49 /* SuggestionExecutionStrategy.swift in Sources */,
 				B064B92F7102CC859E6090B0 /* SuggestionModelUnloader.swift in Sources */,
 				25B0E14F3F8559765D991402 /* SwiftDataStoreLocation.swift in Sources */,
 				D86AE09E168B67F6030C8D75 /* TelemetryClient.swift in Sources */,
@@ -1364,6 +1372,7 @@
 				84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */,
 				EA80346AF95E33D253BC6571 /* StatsPage.swift in Sources */,
 				743204795E302BF902290E6E /* StatsSummaryView.swift in Sources */,
+				85ABAF186AFF428B1771CEC2 /* SuggestionExecutionStrategy.swift in Sources */,
 				AE4CD4E3CE1BA7DFF05BB123 /* SuggestionModelUnloader.swift in Sources */,
 				65087745A1FB1998A76AA08D /* SwiftDataStoreLocation.swift in Sources */,
 				3269DB63DD8C3318494DF45C /* TelemetryClient.swift in Sources */,
@@ -1398,6 +1407,7 @@
 				C1607E5F8B80FAF53954DF3B /* NewsUsageEstimatorTests.swift in Sources */,
 				100A2B283785D34171CB105C /* PromptSnapshotTests.swift in Sources */,
 				D8527CE0A715C87A2289DB75 /* RewardLedgerTests.swift in Sources */,
+				E8A977F2D213038EA96275D1 /* SuggestionExecutionStrategyTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

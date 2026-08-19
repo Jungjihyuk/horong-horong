@@ -71,13 +71,18 @@ final class GoalSuggestionEvalTests: XCTestCase {
                 .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             ?? Constants.defaultAchievementSuggestionProvider
+        // 공급자는 인자로 넘긴다. 안쪽에서 읽던 시절에는 이 한 줄이 곧 선택이었지만,
+        // 지금은 실행당 한 번만 읽는 값을 부르는 쪽이 정한다. 이 줄은 **모델 이름 같은
+        // 나머지 설정**을 안쪽이 같은 공급자 기준으로 읽게 맞춰 두는 용도로 남긴다.
         UserDefaults.standard.set(requested, forKey: Constants.AppStorageKey.achievementSuggestionProvider)
+        let provider = Constants.AchievementSuggestionProviderKind(rawValue: requested) ?? .appleFoundation
 
         let startTime = Date()
         let suggestions = await AchievementFoundationGoalSuggestionProvider.suggestions(
             from: snapshots,
             suggestionCount: Constants.defaultAchievementSuggestionCount,
-            maxMemoCount: Constants.defaultAchievementSuggestionMaxTodoCount
+            maxMemoCount: Constants.defaultAchievementSuggestionMaxTodoCount,
+            provider: provider
         )
         let latencyMs = Int(Date().timeIntervalSince(startTime) * 1000)
 

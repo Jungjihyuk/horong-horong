@@ -885,6 +885,9 @@ enum Constants {
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
         static let achievementSuggestionProvider = "achievement.suggestionProvider"
+        /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
+        /// `defaults write com.horonghorong.app achievement.executionStrategy -string sequential`
+        static let achievementExecutionStrategy = "achievement.executionStrategy"
         static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
         static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
