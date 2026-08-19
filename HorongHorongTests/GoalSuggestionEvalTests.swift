@@ -98,13 +98,18 @@ final class GoalSuggestionEvalTests: XCTestCase {
                 caseId: goldenCase.caseName,
                 model: requested,
                 output: outputText,
+                // 목표 추천에 맞는 자는 `pairF1` 하나뿐이다.
+                //
+                // `honorific`·`sentenceCount` 는 **대화용 자**라 뗐다(2026-08-19). 출력이 명사구
+                // 제목이라 존댓말로 끝날 이유가 없어 전 케이스 0.00 이 나왔는데, 그 0 이 셋을 망쳤다.
+                // - 열 평균을 끌어내린다 (`eval-report.py` 의 `column_summary` 가 전 점수를 평균낸다)
+                // - **모든 케이스를 '주의'로 칠한다** (`is_warning` — 0.5 미만이 하나라도 있으면 주의)
+                // - 모든 칸을 최저 등급으로 칠한다 (`worst_class` 가 최솟값을 본다)
+                //
+                // 자가 틀린 게 아니라 **붙일 곳이 틀렸다.** 두 함수는 `DeterministicCheckers` 에
+                // 그대로 있고, 컴패니언 스위트가 생기면 거기 붙인다.
                 scores: [
                     "pairF1": f1Score,
-                    // `honorific`·`sentenceCount` 는 **대화용 자**다. 목표 추천 출력은 명사구 제목이라
-                    // 존댓말로 끝날 이유가 없어 전 케이스 0.00 이 나온다. 스위트별 채점자를 도입할 때
-                    // 뗀다 — 지금 빼면 보관된 기준선과 열이 어긋난다.
-                    "honorific": DeterministicCheckers.checkHonorific(outputText),
-                    "sentenceCount": DeterministicCheckers.checkSentenceCount(outputText, maxCount: 3),
                 ],
                 totalMs: latencyMs,
                 runId: runID,
