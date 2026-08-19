@@ -7811,12 +7811,10 @@ private struct AchievementGoalComposerSheet: View {
                     .font(.system(size: 18))
                     .frame(width: 28, height: 28)
                     .background(PopoverChrome.accentSoft.opacity(0.7), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(suggestion.title)
-                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.ink)
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    // 배지는 폭이 고정이라 제목과 한 줄을 나눠 쓰면 **제목이 먼저 잘린다.**
+                    // 위로 올려 제목이 카드 폭을 통째로 쓰게 한다.
+                    HStack(spacing: 5) {
                         Text(suggestion.cadence.rawValue)
                             .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             .foregroundStyle(suggestion.cadence == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
@@ -7836,11 +7834,19 @@ private struct AchievementGoalComposerSheet: View {
                             .background(PopoverChrome.surfaceAlt.opacity(0.6), in: Capsule())
                         #endif
                     }
+                    Text(suggestion.title)
+                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                        // 줄 수를 막지 않는다 — 잘린 제목은 어느 목표인지 알 수 없게 만든다.
+                        // `fixedSize` 가 없으면 높이가 좁다고 판단해 그대로 말줄임으로 돌아간다.
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(suggestion.reason)
                         .font(.system(size: 11.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .lineLimit(2)
                 }
+                // 남는 폭을 제목이 갖게 한다. 이게 없으면 텍스트 열과 `Spacer` 가 폭을 나눠 갖는다.
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 4)
                 Button {
                     dismissSuggestion(suggestion)
