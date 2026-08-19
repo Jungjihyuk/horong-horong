@@ -41,4 +41,25 @@ final class OllamaChatClientTests: XCTestCase {
         let url = OllamaChatClient.url(endpoint: "//localhost:11434", path: "/api/chat")
         XCTAssertEqual(url?.absoluteString, "localhost:11434/api/chat")
     }
+
+    // MARK: - 설치 여부를 가릴 때 쓰는 태그 해석
+
+    /// 태그를 적었으면 그대로 쓴다. `/api/tags` 가 돌려주는 이름과 같은 모양이다.
+    func testKeepsExplicitTag() {
+        XCTAssertEqual(OllamaChatClient.resolvedTag(for: "qwen3:8b"), "qwen3:8b")
+        XCTAssertEqual(OllamaChatClient.resolvedTag(for: "qwen3.6:27b-q4_K_M"), "qwen3.6:27b-q4_K_M")
+    }
+
+    /// **태그를 생략하면 `:latest` 를 붙인다.** 이게 없으면 태그 없이 적은 모델이 전부
+    /// «안 받아 둠» 으로 읽혀 조용히 Apple 모델로 내려간다 — 실패가 아니라 **다른 모델로
+    /// 답이 나오므로** 사용자는 눈치채기 어렵다.
+    func testAppendsLatestWhenTagOmitted() {
+        XCTAssertEqual(OllamaChatClient.resolvedTag(for: "qwen3"), "qwen3:latest")
+        XCTAssertEqual(OllamaChatClient.resolvedTag(for: "gemma4"), "gemma4:latest")
+    }
+
+    /// 이미 `:latest` 면 두 번 붙이지 않는다.
+    func testDoesNotDoubleAppendLatest() {
+        XCTAssertEqual(OllamaChatClient.resolvedTag(for: "qwen3:latest"), "qwen3:latest")
+    }
 }

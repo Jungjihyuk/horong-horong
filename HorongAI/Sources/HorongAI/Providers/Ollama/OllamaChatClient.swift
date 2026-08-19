@@ -79,14 +79,58 @@ public struct OllamaChatClient: Sendable {
 
     /// 서버가 떠 있는지. 꺼져 있으면 Apple 모델로 돌아가야 한다.
     public static func isReachable(endpoint: String) async -> Bool {
-        guard let url = url(endpoint: endpoint, path: "/api/tags") else { return false }
+        await installedModels(endpoint: endpoint) != nil
+    }
+
+    /// 서버에 받아 둔 모델 이름들. **서버가 응답하지 않으면 `nil`** —
+    /// "서버가 없다"와 "받아 둔 게 하나도 없다"는 다른 상태라 빈 배열로 뭉개지 않는다.
+    public static func installedModels(endpoint: String) async -> [String]? {
+        guard let url = url(endpoint: endpoint, path: "/api/tags") else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse else {
-            return false
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let tags = try? JSONDecoder().decode(TagsResponse.self, from: data) else {
+            return nil
         }
-        return (200..<300).contains(http.statusCode)
+        return tags.models.map(\.name)
+    }
+
+    private struct TagsResponse: Decodable {
+        struct Entry: Decodable { let name: String }
+        let models: [Entry]
+    }
+
+    /// 이 모델로 지금 추론을 걸 수 있는가.
+    ///
+    /// **걸어 보고 실패를 읽는 대신 먼저 묻는다.** 안 받아 둔 모델로 요청하면 Ollama 가 404 를
+    /// 주는데, 그때는 이미 프롬프트를 만들어 보낸 뒤라 기록에 «추론 실패» 로 남는다. 사용자는
+    /// 모델을 안 받았을 뿐인데 모델이 고장 난 것처럼 보인다.
+    ///
+    /// 목록은 `isReachable` 이 어차피 부르던 `/api/tags` 에서 그대로 나오므로 요청이 늘지 않는다.
+    public static func readiness(endpoint: String, model: String) async -> Readiness {
+        guard let installed = await installedModels(endpoint: endpoint) else {
+            return .serverUnavailable
+        }
+        return installed.contains(resolvedTag(for: model)) ? .ready : .modelNotInstalled
+    }
+
+    /// 사용자가 적은 이름을 `/api/tags` 가 돌려주는 이름에 맞춘다.
+    ///
+    /// 태그를 생략하면 Ollama 가 `:latest` 로 푼다 — `qwen3` 로 요청하면 돌아가지만
+    /// 목록에는 `qwen3:latest` 로 적혀 있다. 이 한 줄을 빠뜨리면 태그 없이 적은 모델이
+    /// 전부 «안 받아 둠» 으로 읽혀 **조용히 Apple 모델로 내려간다.**
+    static func resolvedTag(for model: String) -> String {
+        model.contains(":") ? model : "\(model):latest"
+    }
+
+    public enum Readiness: Sendable, Equatable {
+        case ready
+        /// 서버가 꺼져 있거나 주소가 틀렸다.
+        case serverUnavailable
+        /// 서버는 살아 있는데 그 모델을 안 받아 뒀다.
+        case modelNotInstalled
     }
 
     private struct UnloadRequest: Encodable {
@@ -155,8 +199,16 @@ public struct OllamaChatClient: Sendable {
                     )
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse,
-                          (200..<300).contains(http.statusCode) else {
+                    guard let http = response as? HTTPURLResponse else {
+                        throw OllamaChatError.serverUnavailable
+                    }
+                    // 404 는 «그 모델이 없다» 는 뜻이다(실측: `{"error":"model '…' not found"}`).
+                    // 서버 문제와 뭉개면 기록에 `inferenceError` 로 남아, 모델을 안 받았을 뿐인
+                    // 상황이 추론이 깨진 것처럼 보인다.
+                    guard http.statusCode != 404 else {
+                        throw OllamaChatError.modelNotFound(model)
+                    }
+                    guard (200..<300).contains(http.statusCode) else {
                         throw OllamaChatError.serverUnavailable
                     }
 
@@ -247,6 +299,9 @@ public struct OllamaChatClient: Sendable {
 public enum OllamaChatError: LocalizedError {
     case invalidEndpoint(String)
     case serverUnavailable
+    /// 서버는 살아 있는데 그 모델을 안 받아 뒀다. `serverUnavailable` 과 갈라 두는 이유는
+    /// 사용자가 할 일이 다르기 때문이다 — 서버를 켤 것인가, `ollama pull` 을 할 것인가.
+    case modelNotFound(String)
     case emptyResponse
 
     public var errorDescription: String? {
@@ -255,6 +310,8 @@ public enum OllamaChatError: LocalizedError {
             return "Ollama 주소가 올바르지 않습니다: \(endpoint)"
         case .serverUnavailable:
             return "Ollama 서버에 연결할 수 없습니다."
+        case .modelNotFound(let model):
+            return "Ollama 에 '\(model)' 모델이 없습니다. `ollama pull \(model)` 로 먼저 받아 주세요."
         case .emptyResponse:
             return "Ollama 가 빈 응답을 보냈습니다."
         }
