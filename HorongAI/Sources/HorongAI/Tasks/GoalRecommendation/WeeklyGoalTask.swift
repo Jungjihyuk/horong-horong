@@ -446,6 +446,28 @@ public enum WeeklyGoalTask {
         return formatter.string(from: date)
     }
 
+    /// 모델이 낼 수 있는 응답의 모양. 위 프롬프트의 «JSON 형식» 과 **같은 것을 두 번 적은 것**이라
+    /// 한쪽만 고치면 어긋난다. 프롬프트 바로 옆에 두는 이유가 그것이다.
+    ///
+    /// `scheduleText` · `criterion` 은 필수로 걸지 않는다 — 파서가 기본값을 채우므로
+    /// 모델에게 지어내라고 시킬 이유가 없다(토큰만 쓰고 내용도 나빠진다).
+    public static let responseSchema = JSONSchema.object(
+        properties: [
+            "suggestions": .array(of: .object(
+                properties: [
+                    "title": .string,
+                    "reason": .string,
+                    // 주간은 할일 **번호**로 받는다. 스키마가 정수 배열이라
+                    // `[[16],[17]]` 같은 중첩은 애초에 만들 수 없다.
+                    "items": .array(of: .integer),
+                    "emoji": .string,
+                ],
+                required: ["title", "reason", "items"]
+            ))
+        ],
+        required: ["suggestions"]
+    )
+
     private static let promptFallback = """
     너는 사용자가 등록한 할일들을 분석해서, 이번 주에 추진할 "의미 있는 주간 목표"로 묶어주는 어시스턴트야.
 

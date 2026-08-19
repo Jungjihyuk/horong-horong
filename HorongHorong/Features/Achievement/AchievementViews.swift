@@ -1158,7 +1158,9 @@ enum AchievementFoundationGoalSuggestionProvider {
                         maxTokens: maxTokens,
                         repeatPenalty: repeatPenalty,
                         presencePenalty: presencePenalty,
-                        frequencyPenalty: frequencyPenalty
+                        frequencyPenalty: frequencyPenalty,
+                        // 프롬프트로 부탁만 하지 않고 **모양을 강제한다.**
+                        format: WeeklyGoalTask.responseSchema
                     )
                     return WeeklyGoalTask.GenerationOutput(text: output.text, usage: output.usage)
                 }
@@ -1471,7 +1473,8 @@ enum AchievementFoundationGoalSuggestionProvider {
                         maxTokens: maxTokens,
                         repeatPenalty: repeatPenalty,
                         presencePenalty: presencePenalty,
-                        frequencyPenalty: frequencyPenalty
+                        frequencyPenalty: frequencyPenalty,
+                        format: MonthlyGoalTask.responseSchema
                     )
                 }
             )
