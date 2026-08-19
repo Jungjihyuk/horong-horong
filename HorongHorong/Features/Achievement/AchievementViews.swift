@@ -8704,6 +8704,8 @@ private struct AchievementGoalComposerSheet: View {
         let runID = AIRunLog.newRunID()
 
         Task {
+            // 앞선 실행이 걸어 둔 언로드 예약을 취소한다. 지금 쓸 모델을 밑에서 걷어내면 안 된다.
+            await SuggestionModelUnloader.shared.beginRun()
             async let modelSuggestions = AchievementFoundationGoalSuggestionProvider.suggestions(
                 from: snapshots,
                 suggestionCount: suggestionCount,
@@ -8720,6 +8722,9 @@ private struct AchievementGoalComposerSheet: View {
                 )
                 : []
             let (weeklyModelValues, monthlyModelValues) = await (modelSuggestions, monthlyModelSuggestions)
+            // 주간·월간이 **모두** 돌아온 뒤에 유예 타이머를 건다. 한쪽만 끝났을 때 걸면
+            // 아직 도는 쪽이 쓰던 모델을 30초 뒤에 뺏는다.
+            await SuggestionModelUnloader.shared.endRun()
             await MainActor.run {
                 let weeklyModel = mergeSuggestions(
                     weeklyModelValues,
