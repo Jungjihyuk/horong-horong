@@ -327,7 +327,9 @@ public struct AILabView: View {
             ForEach(1...maxAttempts, id: \.self) { attemptNum in
                 Divider()
                 if let record = group.attempts.first(where: { ($0.attempt ?? 1) == attemptNum }) {
-                    let ratingKey = "\(group.runId)|\(attemptNum)"
+                    // `group.id` 는 `runId|task` 다. `runId` 만 쓰면 한 번의 묶음 실행에서 나온
+                    // 주간·월간이 같은 칸을 공유해 한쪽을 누르면 양쪽이 같이 눌린다.
+                    let ratingKey = "\(group.id)|\(attemptNum)"
                     LiveAttemptCell(
                         record: record,
                         rating: ratings[ratingKey] ?? LabRating(),
@@ -418,8 +420,10 @@ public struct AILabView: View {
             case .ok:
                 return group.isSuccess
             case .unrated:
-                return group.attempts.indices.contains { idx in
-                    ratings["\(group.runId)|\(idx + 1)"] == nil
+                // 칸을 그릴 때와 **같은 식**으로 키를 만든다. 배열 순번(`idx`)을 쓰면
+                // 1번 시도가 없는 그룹에서 실제 시도 번호와 어긋나 미평가 판정이 틀린다.
+                return group.attempts.contains { record in
+                    ratings["\(group.id)|\(record.attempt ?? 1)"] == nil
                 }
             }
         }
