@@ -20,8 +20,15 @@ final class TraceRecorderTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeTrace(runId: String = "R-1") -> RunTrace {
-        var trace = RunTrace(runId: runId, task: "weekly_goal", provider: "ollama", model: "qwen3:8b")
+    private func makeTrace(
+        runId: String = "R-1",
+        task: String = "weekly_goal",
+        provider: String = "ollama",
+        attempt: Int = 1
+    ) -> RunTrace {
+        var trace = RunTrace(
+            runId: runId, task: task, provider: provider, model: "qwen3:8b", attempt: attempt
+        )
         trace.append(.init(.prompt, text: "너는 …", facts: ["characters": 5]))
         trace.append(.init(.rawResponse, text: "<think>음…</think>\n{\"suggestions\": []}"))
         return trace
@@ -47,7 +54,37 @@ final class TraceRecorderTests: XCTestCase {
         recorder.flush()
 
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        XCTAssertEqual(Set(files), ["R-1.json", "R-2.json"])
+        XCTAssertEqual(Set(files), ["R-1_weekly_goal_1.json", "R-2_weekly_goal_1.json"])
+    }
+
+    // MARK: - 한 실행이 여러 trace 를 낳는다
+
+    /// **주간·월간은 설계상 같은 `runId` 를 공유한다.** 한 번 누른 실행으로 묶기 위해서다.
+    /// 파일 이름이 `runId` 뿐이면 나중에 쓴 쪽이 앞을 덮는다.
+    func testWeeklyAndMonthlyOfSameRunDoNotCollide() throws {
+        let recorder = TraceRecorder(directory: directory, isEnabled: true)
+        recorder.record(makeTrace(runId: "R-1", task: "weekly_goal"))
+        recorder.record(makeTrace(runId: "R-1", task: "monthly_goal"))
+        recorder.flush()
+
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        XCTAssertEqual(Set(files), ["R-1_weekly_goal_1.json", "R-1_monthly_goal_1.json"])
+    }
+
+    /// 폴백이 일어나면 한 태스크가 시도를 여러 번 한다.
+    ///
+    /// 이걸 못 가르면 **성공한 폴백이 실패한 시도를 덮는다** — 실측(2026-08-19)에서 실제로
+    /// 그렇게 잃었다. 원문을 남기는 목적이 실패를 쫓는 것인데 실패만 골라 지우는 꼴이었다.
+    func testFallbackAttemptDoesNotOverwriteFailedAttempt() throws {
+        let recorder = TraceRecorder(directory: directory, isEnabled: true)
+        recorder.record(makeTrace(runId: "R-1", provider: "mlx", attempt: 1))
+        recorder.record(makeTrace(runId: "R-1", provider: "appleFoundation", attempt: 2))
+        recorder.flush()
+
+        let failed = try XCTUnwrap(recorder.trace(runId: "R-1", task: "weekly_goal", attempt: 1))
+        let fallback = try XCTUnwrap(recorder.trace(runId: "R-1", task: "weekly_goal", attempt: 2))
+        XCTAssertEqual(failed.provider, "mlx")
+        XCTAssertEqual(fallback.provider, "appleFoundation")
     }
 
     /// 원문이 손실 없이 돌아온다 — `<think>` 블록이 실제로 있었는지 보려면 그대로여야 한다.
@@ -56,9 +93,10 @@ final class TraceRecorderTests: XCTestCase {
         recorder.record(makeTrace())
         recorder.flush()
 
-        let loaded = try XCTUnwrap(recorder.trace(for: "R-1"))
+        let loaded = try XCTUnwrap(recorder.trace(runId: "R-1", task: "weekly_goal", attempt: 1))
         XCTAssertEqual(loaded.runId, "R-1")
         XCTAssertEqual(loaded.task, "weekly_goal")
+        XCTAssertEqual(loaded.attempt, 1)
         XCTAssertEqual(loaded.spans.count, 2)
         XCTAssertEqual(loaded.spans[0].name, .prompt)
         XCTAssertEqual(loaded.spans[0].facts?["characters"], 5)
@@ -71,7 +109,7 @@ final class TraceRecorderTests: XCTestCase {
         recorder.record(makeTrace())
         recorder.flush()
 
-        let text = try String(contentsOf: recorder.fileURL(for: "R-1"), encoding: .utf8)
+        let text = try String(contentsOf: recorder.fileURL(runId: "R-1", task: "weekly_goal", attempt: 1), encoding: .utf8)
         XCTAssertTrue(text.contains("\n"))
         // 경로·태그가 \/ 로 깨져 나오면 읽기 어렵다.
         XCTAssertFalse(text.contains("\\/"))
@@ -79,7 +117,7 @@ final class TraceRecorderTests: XCTestCase {
 
     func testMissingTraceReturnsNil() {
         let recorder = TraceRecorder(directory: directory, isEnabled: true)
-        XCTAssertNil(recorder.trace(for: "없는-런"))
+        XCTAssertNil(recorder.trace(runId: "없는-런"))
     }
 
     // MARK: - 보존 기한
@@ -92,7 +130,7 @@ final class TraceRecorderTests: XCTestCase {
         recorder.flush()
 
         // 하나만 8일 전 것으로 돌려놓는다.
-        let old = recorder.fileURL(for: "old")
+        let old = recorder.fileURL(runId: "old", task: "weekly_goal", attempt: 1)
         try FileManager.default.setAttributes(
             [.modificationDate: Date().addingTimeInterval(-8 * 24 * 60 * 60)],
             ofItemAtPath: old.path
@@ -102,7 +140,7 @@ final class TraceRecorderTests: XCTestCase {
         recorder.flush()
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: recorder.fileURL(for: "fresh").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recorder.fileURL(runId: "fresh", task: "weekly_goal", attempt: 1).path))
     }
 
     /// 폴더가 없어도 터지지 않는다 — 한 번도 기록하지 않은 상태에서 앱이 시작하는 경우.

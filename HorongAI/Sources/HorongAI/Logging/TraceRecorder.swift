@@ -46,7 +46,10 @@ public final class TraceRecorder {
                 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
                 encoder.dateEncodingStrategy = .iso8601
                 let data = try encoder.encode(trace)
-                try data.write(to: self.fileURL(for: trace.runId), options: .atomic)
+                try data.write(
+                    to: self.fileURL(runId: trace.runId, task: trace.task, attempt: trace.attempt),
+                    options: .atomic
+                )
             } catch {
                 // 기록은 부수 작업이다. 여기서 던지면 본래 하려던 일까지 죽는다.
                 AILog.recording.error("trace 기록 실패 runId=\(trace.runId, privacy: .public)")
@@ -54,12 +57,32 @@ public final class TraceRecorder {
         }
     }
 
-    public func fileURL(for runId: String) -> URL {
-        directory.appendingPathComponent("\(runId).json")
+    /// 파일 하나가 **시도 하나**다.
+    ///
+    /// `runId` 만으로 이름을 지으면 덮인다. 주간·월간은 한 번 누른 실행을 묶으려고 **설계상
+    /// 같은 `runId` 를 공유**하고, 폴백이 일어나면 한 태스크가 시도를 여러 번 한다.
+    ///
+    /// 실측(2026-08-19) — 한 실행이 trace 3개를 만들었는데 파일은 1개만 남았고, 그것도
+    /// **나중에 쓴 성공한 폴백**이 남아 정작 보려던 실패가 지워졌다. 원문을 남기는 목적이
+    /// 실패를 쫓는 것인데 실패만 골라 지우는 셈이었다.
+    public func fileURL(runId: String, task: String? = nil, attempt: Int? = nil) -> URL {
+        directory.appendingPathComponent(Self.fileName(runId: runId, task: task, attempt: attempt))
     }
 
-    public func trace(for runId: String) -> RunTrace? {
-        guard let data = try? Data(contentsOf: fileURL(for: runId)) else { return nil }
+    /// `R-20260819-154405-9F5C_weekly_goal_1.json`
+    ///
+    /// `runId` 를 맨 앞에 두는 이유는 한 실행의 시도들을 **이름만으로 모을 수 있게** 하기
+    /// 위해서다(`runId` 에는 `_` 가 없으므로 접두사로 안전하게 걸린다).
+    static func fileName(runId: String, task: String?, attempt: Int?) -> String {
+        var name = runId
+        if let task, !task.isEmpty { name += "_\(task)" }
+        if let attempt { name += "_\(attempt)" }
+        return name + ".json"
+    }
+
+    public func trace(runId: String, task: String? = nil, attempt: Int? = nil) -> RunTrace? {
+        let url = fileURL(runId: runId, task: task, attempt: attempt)
+        guard let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode(RunTrace.self, from: data)
@@ -95,10 +118,11 @@ extension TraceRecorder {
         runId: String,
         task: String? = nil,
         provider: String? = nil,
-        model: String? = nil
+        model: String? = nil,
+        attempt: Int? = nil
     ) -> TraceCollector? {
         guard isEnabled else { return nil }
-        return TraceCollector(runId: runId, task: task, provider: provider, model: model)
+        return TraceCollector(runId: runId, task: task, provider: provider, model: model, attempt: attempt)
     }
 
     /// 수집기가 모은 것을 파일로 남긴다.
@@ -115,8 +139,8 @@ public final class TraceCollector {
     private var trace: RunTrace
     private let lock = NSLock()
 
-    init(runId: String, task: String?, provider: String?, model: String?) {
-        self.trace = RunTrace(runId: runId, task: task, provider: provider, model: model)
+    init(runId: String, task: String?, provider: String?, model: String?, attempt: Int?) {
+        self.trace = RunTrace(runId: runId, task: task, provider: provider, model: model, attempt: attempt)
     }
 
     public func add(_ name: RunTrace.Span.Name, _ text: String, facts: [String: Int]? = nil) {
