@@ -1,3 +1,5 @@
+import HorongAI
+import HorongAIMLX
 import SwiftUI
 
 struct SettingsRoot: View {
@@ -491,6 +493,62 @@ private struct AchievementPage: View {
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
         .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
+        // 공급자를 떠나면 그쪽이 붙잡고 있던 가중치를 내린다. 안 내리면 Ollama 로 한 번 돌린 뒤
+        // MLX 로 바꿔도 Ollama 쪽 모델이 그대로 남는다(실측 2026-08-19: 1.9GB, 만료 16시간 뒤).
+        .onChange(of: suggestionProvider) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            unloadSuggestionModel(of: oldValue)
+        }
+        .onChange(of: suggestionOllamaModel) { oldValue, newValue in
+            guard suggestionProvider == Constants.AchievementSuggestionProviderKind.ollama.rawValue,
+                  oldValue != newValue else { return }
+            unloadOllamaSuggestionModel(oldValue)
+        }
+        .onChange(of: suggestionMLXModel) { oldValue, newValue in
+            guard suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue,
+                  oldValue != newValue else { return }
+            unloadMLXSuggestionModel()
+        }
+    }
+
+    private var normalizedOllamaEndpoint: String {
+        let trimmed = ollamaEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultNewsOllamaEndpoint : trimmed
+    }
+
+    /// 떠난 공급자가 붙잡고 있던 모델을 내린다.
+    ///
+    /// **새 공급자의 모델을 미리 올리지는 않는다.** 컴패니언(`CompanionPage`)은 대화가 즉답이라
+    /// 미리 올려 두지만, 성취는 추천 버튼을 누를 때만 쓴다 — 설정 화면에서 골라 보기만 해도
+    /// 수 GB 가 메모리에 올라오면 안 된다. 화면에 적어 둔 약속이 그것이다:
+    /// «추천 받을 때만 잠깐 모델을 메모리에 올리고 사용이 끝나면 해제합니다».
+    private func unloadSuggestionModel(of provider: String) {
+        switch Constants.AchievementSuggestionProviderKind(rawValue: provider) {
+        case .ollama:
+            unloadOllamaSuggestionModel(suggestionOllamaModel)
+        case .mlx:
+            unloadMLXSuggestionModel()
+        case .appleFoundation, .none:
+            // AFM 은 시스템이 들고 있다. 앱이 내릴 수 있는 것이 없다.
+            break
+        }
+    }
+
+    /// Ollama 는 가중치가 남의 프로세스에 살아서 `keep_alive: 0` 한 줄로 내린다.
+    ///
+    /// 유휴 타임아웃에 기대지 않는 이유: 그 값은 **서버 설정**이라 앱이 모른다.
+    /// 기본은 5분이지만 실측한 이 맥은 16시간을 잡고 있었다.
+    private func unloadOllamaSuggestionModel(_ model: String) {
+        guard !model.isEmpty else { return }
+        let endpoint = normalizedOllamaEndpoint
+        Task { await OllamaChatClient.unload(endpoint: endpoint, model: model) }
+    }
+
+    /// MLX 는 가중치가 **이 앱의 메모리**에 올라오므로, 놓아 주지 않으면 앱이 살아 있는 내내 남는다.
+    private func unloadMLXSuggestionModel() {
+        #if canImport(MLXLLM)
+        Task { await MLXModelStore.shared.unload() }
+        #endif
     }
 
     /// 전체 폭이 필요한 컨트롤용 블록. `SettingsRow` 는 컨트롤을 오른쪽 좁은 슬롯에 두므로
