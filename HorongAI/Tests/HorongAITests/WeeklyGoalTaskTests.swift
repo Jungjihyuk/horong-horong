@@ -125,6 +125,61 @@ final class WeeklyGoalTaskTests: XCTestCase {
         XCTAssertEqual(outcome.drafts.first?.criterion, "연결한 할일 2개 완료")
     }
 
+    /// **id 를 배열로 한 겹 더 감싸 보내는 모델이 있다.**
+    ///
+    /// 실측(2026-08-19/20) — `gemma-4-e4b` 계열이 `"items": [[16],[17],[18]]` 처럼 냈다.
+    /// mlx·ollama 양쪽에서 5건. 내용은 멀쩡했는데(묶음 4~5개가 제대로 나왔다) 껍데기 한 겹
+    /// 때문에 `typeMismatch:Index 0` 로 **통째로 버려졌다.**
+    func testParsesItemIndexesWrappedInArrays() {
+        let m1 = memo("이력서 작성", id: uuid(1))
+        let m2 = memo("포트폴리오 배포", id: uuid(2))
+        let jsonText = """
+        {"suggestions": [{"title": "취업 준비", "reason": "함께 준비", "items": [[1], [2]], "emoji": "🎯"}]}
+        """
+        let outcome = WeeklyGoalTask.parse(
+            jsonText,
+            memos: [m1, m2],
+            allowedIDs: Set([uuid(1), uuid(2)]),
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+        XCTAssertEqual(outcome.drafts.first?.memoIDs, [uuid(1), uuid(2)])
+    }
+
+    /// 한 껍데기 안에 여럿을 담아 보내도 잃지 않는다. `[[1, 2]]` 도 `[1, 2]` 로 편다.
+    func testParsesMultipleIDsInsideOneWrapper() {
+        let m1 = memo("이력서 작성", id: uuid(1))
+        let m2 = memo("포트폴리오 배포", id: uuid(2))
+        let jsonText = """
+        {"suggestions": [{"title": "취업 준비", "reason": "함께 준비", "items": [[1, 2]], "emoji": "🎯"}]}
+        """
+        let outcome = WeeklyGoalTask.parse(
+            jsonText,
+            memos: [m1, m2],
+            allowedIDs: Set([uuid(1), uuid(2)]),
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+        XCTAssertEqual(outcome.drafts.first?.memoIDs, [uuid(1), uuid(2)])
+    }
+
+    /// 섞여 와도 받는다. 모델이 일관되게 감싸리라는 보장이 없다.
+    func testParsesMixedWrappedAndBareIDs() {
+        let m1 = memo("이력서 작성", id: uuid(1))
+        let m2 = memo("포트폴리오 배포", id: uuid(2))
+        let jsonText = """
+        {"suggestions": [{"title": "취업 준비", "reason": "함께 준비", "items": [1, [2]], "emoji": "🎯"}]}
+        """
+        let outcome = WeeklyGoalTask.parse(
+            jsonText,
+            memos: [m1, m2],
+            allowedIDs: Set([uuid(1), uuid(2)]),
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+        XCTAssertEqual(outcome.drafts.first?.memoIDs, [uuid(1), uuid(2)])
+    }
+
     // MARK: - 파싱
 
     private func json(_ items: String) -> String {

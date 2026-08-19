@@ -172,7 +172,7 @@ public enum WeeklyGoalTask {
         var requestedIDs = 0
         var used = Set<UUID>()
         let result = payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
-            let rawValues: [GoalSuggestionPayload.IDValue] = item.items ?? item.memoIDs ?? item.goalIDs ?? []
+            let rawValues: [GoalSuggestionPayload.IDValue] = (item.items ?? item.memoIDs ?? item.goalIDs)?.values ?? []
             requestedIDs += rawValues.count
             
             var parsedIDs: [UUID] = []
