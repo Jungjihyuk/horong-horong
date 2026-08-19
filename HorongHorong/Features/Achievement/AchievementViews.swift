@@ -1211,7 +1211,8 @@ enum AchievementFoundationGoalSuggestionProvider {
             runId: context.runID,
             task: context.task,
             provider: label,
-            model: model
+            model: model,
+            attempt: context.attemptNumber
         )
         let outcome = await WeeklyGoalTask.run(
             memos: memos.map(\.taskMemo),
@@ -1509,7 +1510,8 @@ enum AchievementFoundationGoalSuggestionProvider {
             runId: context.runID,
             task: context.task,
             provider: label,
-            model: model
+            model: model,
+            attempt: context.attemptNumber
         )
         let outcome = await MonthlyGoalTask.run(
             goals: goals.map(\.taskGoal),
@@ -1658,7 +1660,8 @@ struct FoundationModelsGoalSuggestionProvider {
         let trace = TraceRecorder.shared?.makeCollector(
             runId: context.runID,
             task: context.task,
-            provider: "appleFoundation"
+            provider: "appleFoundation",
+            attempt: context.attemptNumber
         )
         let outcome = await WeeklyGoalTask.run(
             memos: memos.map(\.taskMemo),
@@ -1750,7 +1753,8 @@ struct FoundationModelsGoalSuggestionProvider {
         let trace = TraceRecorder.shared?.makeCollector(
             runId: context.runID,
             task: context.task,
-            provider: "appleFoundation"
+            provider: "appleFoundation",
+            attempt: context.attemptNumber
         )
         let outcome = await MonthlyGoalTask.run(
             goals: goals.map(\.taskGoal),

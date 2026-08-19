@@ -22,6 +22,12 @@ public struct RunTrace: Codable, Sendable {
     public let task: String?
     public let provider: String?
     public let model: String?
+    /// 폴백 사슬에서 몇 번째 시도인가(1부터). `RunRecord.attempt` 와 같은 값이라
+    /// 요약과 원문을 이 값으로 맞붙일 수 있다.
+    ///
+    /// **파일 이름의 일부이기도 하다.** 한 태스크가 여러 번 시도하면 `runId` 와 `task` 만으로는
+    /// 구분되지 않아 뒤 시도가 앞 시도를 덮는다(→ `TraceRecorder.fileURL`).
+    public let attempt: Int?
     public let startedAt: Date
     public private(set) var spans: [Span]
 
@@ -30,6 +36,7 @@ public struct RunTrace: Codable, Sendable {
         task: String? = nil,
         provider: String? = nil,
         model: String? = nil,
+        attempt: Int? = nil,
         startedAt: Date = Date(),
         spans: [Span] = []
     ) {
@@ -37,6 +44,7 @@ public struct RunTrace: Codable, Sendable {
         self.task = task
         self.provider = provider
         self.model = model
+        self.attempt = attempt
         self.startedAt = startedAt
         self.spans = spans
     }
