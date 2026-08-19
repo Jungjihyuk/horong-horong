@@ -61,6 +61,8 @@ final class CompanionController {
 
     /// 화면 갱신 주기. 애니메이션이 자연스러운 선에서 가장 성긴 값으로 둬 CPU·배터리 부담을 줄인다.
     private static let tickInterval: TimeInterval = 1.0 / 20.0
+    /// 한 틱이 인정하는 최대 간격. 잠들었다 깨거나 시계가 앞으로 튀어도 이만큼만 흘린 것으로 본다.
+    private static let maximumTickDelta: TimeInterval = 1.0
 
     init(appState: AppState) {
         self.appState = appState
@@ -410,8 +412,15 @@ final class CompanionController {
 
     private func tick() {
         let now = Date()
-        let delta = lastTickAt.map { now.timeIntervalSince($0) } ?? Self.tickInterval
+        let elapsed = lastTickAt.map { now.timeIntervalSince($0) } ?? Self.tickInterval
         lastTickAt = now
+        // `Date()` 는 벽시계라 **뒤로 갈 수 있다.** 맥이 깨어날 때 NTP 로 시각을 다시 맞추면
+        // 음수 간격이 나오고, 그러면 애니메이션 경과 시간이 음수로 내려가 프레임 번호가
+        // 음수가 된다(크래시 2026-08-19: `CompanionView.swift:191` Index out of range).
+        //
+        // 반대로 잠들었다 깨면 몇 시간짜리 간격이 한 번에 들어온다. 그대로 흘려보내면
+        // 걷기 엔진이 한 틱에 몇 시간을 전진해 화면 밖으로 나간다. 양쪽을 다 자른다.
+        let delta = min(max(elapsed, 0), Self.maximumTickDelta)
 
         // 대화·말풍선이 떠 있는 동안에는 그쪽 동작을 유지한다.
         if mode == .roaming, !state.isChatting, state.bubble == nil {
@@ -444,12 +453,38 @@ final class CompanionController {
         ).count
         guard frameCount > 1 else { return }
 
-        animationElapsed += delta
-        let rawIndex = Int(animationElapsed / animation.frameDuration)
-        let index = animation.loops ? rawIndex % frameCount : min(rawIndex, frameCount - 1)
+        animationElapsed = max(0, animationElapsed + delta)
+        let index = Self.frameIndex(
+            elapsed: animationElapsed,
+            frameDuration: animation.frameDuration,
+            frameCount: frameCount,
+            loops: animation.loops
+        )
         if index != state.frameIndex {
             state.frameIndex = index
         }
+    }
+
+    /// 경과 시간으로 보여 줄 프레임 번호를 정한다.
+    ///
+    /// 순수 함수로 떼어 둔 이유는 **음수 방어를 테스트로 못 박기 위해서**다. 이 값이 범위를
+    /// 벗어나면 화면(`CompanionView`)이 배열을 그대로 인덱싱하다 앱이 죽는다
+    /// (크래시 2026-08-19: 시계가 뒤로 가 프레임 번호가 음수가 됐다).
+    ///
+    /// `%` 를 그대로 믿으면 안 된다 — Swift 의 나머지는 **피제수의 부호를 따른다**(`-1 % 5 == -1`).
+    static func frameIndex(
+        elapsed: TimeInterval,
+        frameDuration: TimeInterval,
+        frameCount: Int,
+        loops: Bool
+    ) -> Int {
+        guard frameCount > 0, frameDuration > 0 else { return 0 }
+        // 경과가 터무니없이 크면 `Int(_:)` 변환 자체가 터진다. 나누기 전에 접는다.
+        let steps = (elapsed / frameDuration).rounded(.down)
+        guard steps.isFinite else { return 0 }
+        let rawIndex = steps > Double(Int.max / 2) ? Int.max / 2 : Int(steps)
+        let index = loops ? rawIndex % frameCount : min(rawIndex, frameCount - 1)
+        return min(max(index, 0), frameCount - 1)
     }
 
     // MARK: - 포모도로 연동
