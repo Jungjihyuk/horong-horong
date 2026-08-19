@@ -71,12 +71,59 @@ struct GoalSuggestionPayload: Codable {
         }
     }
 
+    /// id 목록. 원소가 **배열로 한 겹 더 감싸여 와도** 펴서 받는다.
+    ///
+    /// 실측(2026-08-19/20) — `gemma-4-e4b` 계열이 `[[16],[17],[18]]` 처럼 냈다. mlx·ollama
+    /// 양쪽에서 5건이 나왔고, 묶음 내용은 멀쩡했는데 껍데기 한 겹 때문에 통째로 버려졌다.
+    ///
+    /// **한 겹만 편다.** 두 겹 이상은 모델이 다른 뜻으로 쓴 것일 수 있어 함부로 짐작하지 않는다.
+    /// `items` 는 계약상 평평한 id 목록이므로 한 겹까지는 잡음이 분명하다.
+    struct IDList: Codable, Sendable {
+        let values: [IDValue]
+
+        init(from decoder: Decoder) throws {
+            // 원소마다 **자기 decoder** 를 받으므로, 스칼라 시도가 실패해도
+            // 바깥 배열의 읽기 위치가 흐트러지지 않는다.
+            let elements = try [Element](from: decoder)
+            self.values = elements.flatMap { element in
+                switch element {
+                case .single(let value): return [value]
+                case .nested(let values): return values
+                }
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            try values.encode(to: encoder)
+        }
+
+        private enum Element: Codable {
+            case single(IDValue)
+            case nested([IDValue])
+
+            init(from decoder: Decoder) throws {
+                if let one = try? IDValue(from: decoder) {
+                    self = .single(one)
+                } else {
+                    self = .nested(try [IDValue](from: decoder))
+                }
+            }
+
+            func encode(to encoder: Encoder) throws {
+                switch self {
+                case .single(let value): try value.encode(to: encoder)
+                case .nested(let values): try values.encode(to: encoder)
+                }
+            }
+        }
+    }
+
     struct Item: Codable {
         let title: String
         let reason: String
-        let memoIDs: [IDValue]?
-        let goalIDs: [IDValue]?
-        let items: [IDValue]?
+        let memoIDs: IDList?
+        let goalIDs: IDList?
+        let items: IDList?
         let scheduleText: String?
         let criterion: String?
         let emoji: String?

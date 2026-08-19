@@ -182,7 +182,7 @@ public enum MonthlyGoalTask {
         let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
         var used = Set<UUID>()
         return payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
-            let rawIDs: [GoalSuggestionPayload.IDValue] = item.goalIDs ?? item.items ?? item.memoIDs ?? []
+            let rawIDs: [GoalSuggestionPayload.IDValue] = (item.goalIDs ?? item.items ?? item.memoIDs)?.values ?? []
             let ids = rawIDs.compactMap { val -> UUID? in
                 switch val {
                 case .int(let idx):
