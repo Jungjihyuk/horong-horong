@@ -217,6 +217,26 @@ public enum MonthlyGoalTask {
         .map { $0 }
     }
 
+    /// 모델이 낼 수 있는 응답의 모양. 주간(`WeeklyGoalTask.responseSchema`)과 같은 사정이다.
+    ///
+    /// 월간은 주간 목표의 **UUID 문자열**로 받는다. 번호가 아니라 문자열인 것이 주간과 다르다.
+    public static let responseSchema = JSONSchema.object(
+        properties: [
+            "suggestions": .array(of: .object(
+                properties: [
+                    "title": .string,
+                    "reason": .string,
+                    "goalIDs": .array(of: .string),
+                    "scheduleText": .string,
+                    "criterion": .string,
+                    "emoji": .string,
+                ],
+                required: ["title", "reason", "goalIDs"]
+            ))
+        ],
+        required: ["suggestions"]
+    )
+
     private static let promptFallback = """
     아래 주간 목표들을 의미, 달성 기준, 페르소나, 비전, 연결된 할일 수를 함께 보고 월간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
     월간 목표 하나에는 주간 목표를 2개 이상 4개 이하로 넣어.

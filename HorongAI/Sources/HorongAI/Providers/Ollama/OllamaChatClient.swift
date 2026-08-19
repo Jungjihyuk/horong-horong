@@ -29,6 +29,8 @@ public struct OllamaChatClient: Sendable {
         let stream: Bool
         /// qwen3 계열은 기본이 추론 모드라 생각하는 데 토큰을 다 쓰고 빈 답을 준다.
         let think: Bool
+        /// 응답의 모양을 강제하는 스키마. `nil` 이면 키 자체가 안 나가고 예전처럼 자유 출력이다.
+        let format: JSONSchema?
         let options: Options
 
         struct Options: Encodable {
@@ -170,7 +172,8 @@ public struct OllamaChatClient: Sendable {
         maxTokens: Int,
         repeatPenalty: Double? = nil,
         presencePenalty: Double? = nil,
-        frequencyPenalty: Double? = nil
+        frequencyPenalty: Double? = nil,
+        format: JSONSchema? = nil
     ) -> AsyncThrowingStream<StreamUpdate, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -188,6 +191,7 @@ public struct OllamaChatClient: Sendable {
                             messages: messages,
                             stream: true,
                             think: false,
+                            format: format,
                             options: .init(
                                 temperature: temperature,
                                 num_predict: maxTokens,
