@@ -82,6 +82,11 @@ struct RunContext {
     let task: String
     /// 필터를 통과한 전체 후보 수. `item_count` 와 벌어질수록 모델이 못 본 것이 많다(실측 123 → 6).
     let candidateCount: Int
+    /// 주간·월간을 **어떻게 돌렸나** — `"parallel"` · `"sequential"`.
+    ///
+    /// 어느 쪽이 빠른지는 공급자마다 다르고 우리는 아직 추측으로 정해 두었다.
+    /// 기록에 남겨야 «AFM 은 정말 병렬이 빠른가» 를 숫자로 답할 수 있다.
+    var variant: String?
     var attemptNumber: Int = 1
 
     func attempt(_ number: Int) -> RunContext {
@@ -117,6 +122,7 @@ struct RunContext {
             task: task,
             source: "live",
             recipe: "promptOnly",
+            variant: variant,
             provider: provider,
             attempt: attemptNumber,
             inputSummary: RunRecord.InputSummary(
