@@ -8710,22 +8710,49 @@ private struct AchievementGoalComposerSheet: View {
         Task {
             // 앞선 실행이 걸어 둔 언로드 예약을 취소한다. 지금 쓸 모델을 밑에서 걷어내면 안 된다.
             await SuggestionModelUnloader.shared.beginRun()
-            async let modelSuggestions = AchievementFoundationGoalSuggestionProvider.suggestions(
-                from: snapshots,
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxTodoCount,
-                runID: runID,
-                candidateCount: snapshots.count
-            )
-            async let monthlyModelSuggestions = shouldSuggestMonthly
-                ? AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
+            @Sendable func weeklyRun() async -> [AchievementGoalSuggestion] {
+                await AchievementFoundationGoalSuggestionProvider.suggestions(
+                    from: snapshots,
+                    suggestionCount: suggestionCount,
+                    maxMemoCount: maxTodoCount,
+                    runID: runID,
+                    candidateCount: snapshots.count
+                )
+            }
+            @Sendable func monthlyRun() async -> [AchievementGoalSuggestion] {
+                guard shouldSuggestMonthly else { return [] }
+                return await AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
                     from: weeklyGoalSnapshots,
                     suggestionCount: monthlySuggestionCount,
                     runID: runID,
                     candidateCount: weeklyGoalSnapshots.count
                 )
-                : []
-            let (weeklyModelValues, monthlyModelValues) = await (modelSuggestions, monthlyModelSuggestions)
+            }
+
+            // 주간·월간을 동시에 보낼지, 하나씩 보낼지는 **공급자가 정한다.**
+            //
+            // 로컬 모델(Ollama·MLX)은 요청을 하나씩만 처리한다(실측 2026-08-19: 같은 모델에
+            // 두 요청을 동시에 보내면 뒤엣것이 18.6초를 한 글자도 못 받고 기다렸다). 그런데
+            // 60초 타임아웃은 **보낸 순간부터** 도므로, 기다린 시간이 자기 몫에서 깎여 나간다.
+            // 실측에서 타임아웃 14건 중 11건이 이 모양이었다 — 같은 실행의 다른 태스크가
+            // 같은 공급자로 성공하는 동안 이쪽은 큐에서 예산을 다 쓰고 죽었다.
+            //
+            // 순차로 바꿔도 **총 시간은 그대로다.** 어차피 하나씩 처리되고 있었고,
+            // 달라지는 건 타이머가 자기 차례에 시작한다는 것뿐이다.
+            //
+            // AFM 은 반대다. 앱 밖(시스템)에서 돌아 진짜로 겹쳐 실행되고(실측: 24.0초짜리와
+            // 43.8초짜리가 겹쳐서 43.8초에 끝났다), 105건 중 타임아웃이 0건이다. 여기까지
+            // 순차로 만들면 얻는 것 없이 느려지기만 한다.
+            let weeklyModelValues: [AchievementGoalSuggestion]
+            let monthlyModelValues: [AchievementGoalSuggestion]
+            if AchievementFoundationGoalSuggestionProvider.selectedProvider == .appleFoundation {
+                async let weekly = weeklyRun()
+                async let monthly = monthlyRun()
+                (weeklyModelValues, monthlyModelValues) = await (weekly, monthly)
+            } else {
+                weeklyModelValues = await weeklyRun()
+                monthlyModelValues = await monthlyRun()
+            }
             // 주간·월간이 **모두** 돌아온 뒤에 유예 타이머를 건다. 한쪽만 끝났을 때 걸면
             // 아직 도는 쪽이 쓰던 모델을 30초 뒤에 뺏는다.
             await SuggestionModelUnloader.shared.endRun()
