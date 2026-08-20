@@ -39,6 +39,27 @@ final class Memo {
 }
 
 extension Memo {
+    /// 시작·마감을 함께 정한다. **뒤집힌 값이 저장되지 않도록** 한쪽을 옮기면 다른 쪽이 따라온다.
+    ///
+    /// 방금 고른 쪽을 살리고 반대쪽을 미는 이유는, 사용자가 고른 값을 말없이 버리면
+    /// «왜 안 바뀌지» 가 되기 때문이다.
+    ///
+    /// 규칙을 모델에 두는 이유는 **쓰는 곳이 하나가 아니어서**다. 화면 한 곳에만 두면
+    /// 다음 작성자가 그냥 `memo.deadline = …` 을 쓰고 우회한다.
+    ///
+    /// 뒤집힌 값이 남으면 «마감 − 시작» 이 음수가 되어 소요 시간 통계가 깨진다
+    /// (실측 2026-08-20: 시작·마감이 둘 다 있는 완료 할일 68건 중 6건이 역전 상태였다).
+    func setStartDate(_ date: Date) {
+        startDate = date
+        if let deadline, deadline < date { self.deadline = date }
+    }
+
+    /// 마감을 시작보다 앞으로 당기면 시작도 함께 당긴다. `setStartDate` 와 같은 사정이다.
+    func setDeadline(_ date: Date) {
+        deadline = date
+        if let startDate, date < startDate { self.startDate = date }
+    }
+
     var isCompletedValue: Bool {
         get { isCompleted == true }
         set { setCompleted(newValue, at: Date()) }
