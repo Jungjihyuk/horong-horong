@@ -48,13 +48,15 @@ final class MonthlyGoalParseTests: XCTestCase {
         """
     }
 
+    /// 이 파일은 **어떤 초안이 남는가**만 본다. 왜 그만큼만 남았는지(진단)는
+    /// `MonthlyGoalDiagnosticsTests` 가 맡는다.
     private func parse(_ text: String, suggestionCount: Int = 3) -> [GoalSuggestionDraft] {
         MonthlyGoalTask.parse(
             text,
             allowedIDs: Set(sourceGoals.map(\.id)),
             sourceGoals: sourceGoals,
             suggestionCount: suggestionCount
-        )
+        ).drafts
     }
 
     // MARK: - 정상 경로

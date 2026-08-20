@@ -123,6 +123,12 @@ public struct AILabView: View {
         .onAppear {
             loadRecords()
         }
+        // 실험실을 **열어 둔 채** 다른 창에서 추천을 돌리는 게 보통이다. 그때 새 기록이
+        // 안 들어와서 «룰 시도가 안 보인다» 로 읽혔다(실측 2026-08-20). 창이 다시 앞에
+        // 오면 스스로 읽는다 — 새로고침 버튼을 누르는 걸 기억에 맡기지 않는다.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            loadRecords()
+        }
         .sheet(item: Binding(
             get: { selectedInputItemIDs.map { ItemIDsWrapper(ids: $0) } },
             set: { selectedInputItemIDs = $0?.ids }
@@ -578,11 +584,23 @@ private struct LiveAttemptCell: View {
             HStack(alignment: .center, spacing: 6) {
                 Text(record.provider ?? "unknown")
                     .font(.subheadline.bold())
+                    // 룰 폴백은 **모델이 아니다.** 색을 달리해 한눈에 갈리게 한다.
+                    .foregroundStyle(record.provider == "rule" ? Color.purple : Color.primary)
                 if let model = record.model {
                     Text("(\(model))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                }
+                // 어느 룰이 만들었나 — `rule:context+keyword` 처럼 온다.
+                if let recipe = record.recipe, recipe.hasPrefix("rule") {
+                    Text(recipe.replacingOccurrences(of: "rule:", with: ""))
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.purple)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.purple.opacity(0.12)))
+                        .help("모델이 하나도 못 만들어 규칙으로 묶은 결과입니다. 어느 규칙이 쓰였는지 보여줍니다.")
                 }
                 Spacer(minLength: 0)
                 outcomeBadge
@@ -633,19 +651,29 @@ private struct LiveAttemptCell: View {
                 .help("클릭하여 이 시도에 주입된 실제 메모/할일 원문 \(input.itemCount)개 보기")
             }
 
-            // 파서 지표 (추천 목표 개수)
+            // 파서 지표 — **왜 걸러졌는지까지** 보여준다.
+            //
+            // 예전에는 «2개 중 0개 채택» 까지만 보여주고 이유를 안 그려서, 기록에는 답이
+            // 있는데 화면만 보고는 판단이 안 됐다(실측 2026-08-20). 원문을 열어 볼 필요가
+            // 없어야 실험실이 제 값을 한다.
             if let parse = record.parse {
-                HStack(spacing: 6) {
-                    Text("추천 목표 총 \(parse.modelReturned)개 중 최종 \(parse.kept)개 채택")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("모델 제안 \(parse.modelReturned)개 → 채택 \(parse.kept)개")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
-                    if parse.badID > 0 {
-                        Text("잘못된ID:\(parse.badID)")
-                            .font(.system(size: 10).bold())
-                            .foregroundStyle(.red)
+                        .help("모델이 만든 묶음 \(parse.modelReturned)개 중 검증을 통과해 화면에 나간 것이 \(parse.kept)개입니다.")
+                    ForEach(parseNotes) { note in
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Image(systemName: note.symbol)
+                                .font(.system(size: 9))
+                            Text(note.text)
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(note.tint)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(note.hint)
                     }
                 }
-                .help("모델이 제안한 추천 목표 총 개수(\(parse.modelReturned)개) 중 유효성 검증을 통과한 최종 추천 목표 개수(\(parse.kept)개)")
             }
 
             // 토큰 사용량
@@ -711,6 +739,81 @@ private struct LiveAttemptCell: View {
         } else {
             return String(format: "%.2fs", sec)
         }
+    }
+
+    /// 걸러진 이유 한 줄. **무슨 일이 있었는지**를 명사구로 말하고 개수를 괄호에 담는다.
+    ///
+    /// 이름을 줄여 쓰면(`2개미만 1`) 숫자가 무엇을 세는지 알 수 없다. 특히 `tooFewIDs` 만
+    /// **묶음 수**이고 나머지는 **항목 수**라, 나란히 놓으면 같은 단위처럼 읽힌다.
+    struct ParseNote: Identifiable {
+        let id = UUID()
+        let symbol: String
+        let text: String
+        let tint: Color
+        let hint: String
+    }
+
+    /// 주간은 «할일», 월간은 «주간 목표» 를 묶는다. 같은 카운터라도 세는 대상이 다르다.
+    private var itemNoun: String {
+        record.task == "monthly_goal" ? "주간 목표" : "할일"
+    }
+
+    /// 묶음당 상한. 실행 시점의 설정값을 기록에서 읽는다 —
+    /// 지금 설정을 읽으면 **그 사이 바뀐 값**을 보여주게 된다.
+    private var maxItemsPerGoal: Int? {
+        record.parameters?["max_items_per_goal"].map { Int($0) }
+    }
+
+    /// 0 인 것은 빼서 **일어난 일만** 남긴다. 영향이 큰 것부터 위로 둔다 —
+    /// 묶음이 통째로 사라진 것과 항목 몇 개가 잘린 것은 무게가 다르다.
+    private var parseNotes: [ParseNote] {
+        guard let parse = record.parse else { return [] }
+        var notes: [ParseNote] = []
+        if parse.tooFewIDs > 0 {
+            notes.append(ParseNote(
+                symbol: "xmark.circle",
+                text: "\(itemNoun.withParticle(.subject)) 1개뿐이라 목표 \(parse.tooFewIDs)개 제외",
+                tint: .red,
+                hint: "목표는 여러 \(itemNoun)을 묶어 하나의 결과로 만드는 것입니다. "
+                    + "1개짜리는 그 \(itemNoun) 자체라 목표로 만들지 않습니다. "
+                    + "모델이 억지로 묶기를 피했거나, 애초에 묶을 만한 것이 없는 입력일 수 있습니다."
+            ))
+        }
+        if parse.badID > 0 {
+            notes.append(ParseNote(
+                symbol: "questionmark.circle",
+                text: "존재하지 않는 \(itemNoun) \(parse.badID)개 생성",
+                tint: .red,
+                hint: "모델이 입력에 없던 항목 번호를 지어냈습니다(환각). 그만큼 묶음에서 빠졌습니다."
+            ))
+        }
+        if parse.alreadyUsed > 0 {
+            notes.append(ParseNote(
+                symbol: "arrow.triangle.branch",
+                text: "다른 목표에 이미 묶인 \(itemNoun) \(parse.alreadyUsed)개 제외",
+                tint: .orange,
+                hint: "한 \(itemNoun)은 목표 하나에만 들어갑니다. 앞선 목표가 이미 가져간 항목을 "
+                    + "모델이 다른 목표에도 넣어, 나중 목표에서 뺐습니다. "
+                    + "그 결과 나중 목표가 1개짜리가 되어 통째로 버려지기도 합니다."
+            ))
+        }
+        if parse.overMaxMemo > 0 {
+            // **몇 개 목표에서 잘렸는지는 세지 않는다.** 이 값은 잘려나간 항목의 총합이라
+            // 한 목표에서 3개가 잘린 것과 세 목표에서 1개씩 잘린 것이 똑같이 3 으로 나온다.
+            // 그래서 숫자 옆에 반드시 단위를 붙인다 — 목표 수로 읽히면 안 된다.
+            let limitText = maxItemsPerGoal.map { " (묶음당 \($0)개까지)" } ?? ""
+            notes.append(ParseNote(
+                symbol: "scissors",
+                text: "상한을 넘겨 \(itemNoun) \(parse.overMaxMemo)개 잘림\(limitText)",
+                tint: .orange,
+                hint: "모델이 설정보다 많이 묶어서 뒤엣것이 잘렸습니다. "
+                    + "**버려진 것이 아니라 잘린 것**이라 추천 자체는 나옵니다. "
+                    + "숫자는 잘려나간 \(itemNoun)의 **총합**입니다 — 한 목표에서 여러 개가 잘렸을 수도, "
+                    + "여러 목표에서 하나씩 잘렸을 수도 있습니다. "
+                    + "설정을 올리면 더 큰 묶음을 받을 수 있습니다."
+            ))
+        }
+        return notes
     }
 
     private var outcomeBadge: some View {
