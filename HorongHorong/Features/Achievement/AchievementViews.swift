@@ -531,6 +531,11 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     /// 룰 폴백은 오래도록 기록에 한 줄도 안 남았다 — 화면에는 뜨는데 AI 실험실에는 없었다.
     /// 어느 룰이 얼마나 쓰이는지 재려면 이름이 필요하다.
     let ruleName: String?
+    /// 이 카드를 만든 **추천 실행**. 사용자가 채택하면 목표에 그대로 옮겨 심는다.
+    ///
+    /// 카드가 자기 출처를 모르면 «이 목표가 어느 추천에서 왔나» 를 이을 수 없고,
+    /// 그러면 채택률을 낼 수 없다(→ 평가 문서 [4]).
+    let runID: String?
 
     init(
         id: UUID = UUID(),
@@ -544,7 +549,8 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         emoji: String,
         cadence: AchievementGoalCadence = .weekly,
         source: AchievementGoalSuggestionSource,
-        ruleName: String? = nil
+        ruleName: String? = nil,
+        runID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -558,6 +564,7 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         self.cadence = cadence
         self.source = source
         self.ruleName = ruleName
+        self.runID = runID
     }
 
     /// 파서를 AFM 경로와 공유하므로 MLX 결과도 `.foundationModel` 로 붙는다.
@@ -574,7 +581,9 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
             targetValueText: targetValueText,
             emoji: emoji,
             cadence: cadence,
-            source: source
+            source: source,
+            ruleName: ruleName,
+            runID: runID
         )
     }
 }
@@ -1266,7 +1275,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         )
         if let trace { TraceRecorder.shared?.record(trace) }
 
-        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly).retagged(as: source) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly, runID: context.runID).retagged(as: source) }
 
         switch outcome.diagnostics {
         case .parsed(let diagnostics):
@@ -1597,7 +1606,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         }
 
         // 파서를 AFM 경로와 공유하므로 초안은 `.foundationModel` 로 붙어 나온다. 실제 공급자로 다시 태깅한다.
-        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly).retagged(as: source) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly, runID: context.runID).retagged(as: source) }
         // 주간과 **같은 그릇**에 담아 같은 헬퍼로 읽는다. `parse` 가 비는 건 생성 자체가
         // 실패했을 때뿐인데, 그건 위에서 이미 돌아갔다.
         let diagnostics = WeeklyGoalTask.RunOutcome.Diagnostics.parsed(
@@ -1650,7 +1659,7 @@ private extension AchievementMemoSnapshot {
 /// `reason` 을 여기서 줄이는 이유는 72자 제한이 **화면 사정**이기 때문이다 — 파서가 정할 일이 아니다.
 /// 추천 카드가 이유를 2줄까지만 보여준다(`AchievementViews.swift` 의 `lineLimit(2)`).
 extension GoalSuggestionDraft {
-    func suggestion(cadence: AchievementGoalCadence) -> AchievementGoalSuggestion {
+    func suggestion(cadence: AchievementGoalCadence, runID: String? = nil) -> AchievementGoalSuggestion {
         AchievementGoalSuggestion(
             title: title,
             reason: AchievementDataBuilder.shortText(reason, limit: 72),
@@ -1661,7 +1670,8 @@ extension GoalSuggestionDraft {
             targetValueText: targetValueText,
             emoji: emoji,
             cadence: cadence,
-            source: .foundationModel
+            source: .foundationModel,
+            runID: runID
         )
     }
 }
@@ -1760,7 +1770,7 @@ struct FoundationModelsGoalSuggestionProvider {
             achievementSuggestionLog.error("\(promptSummary, privacy: .public)")
         }
 
-        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly, runID: context.runID) }
         AIRunLog.record(
             context.record(
                 startedAt: startedAt,
@@ -1854,7 +1864,7 @@ struct FoundationModelsGoalSuggestionProvider {
                 "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
             )
         }
-        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly) }
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly, runID: context.runID) }
         // 주간과 **같은 그릇**에 담아 같은 헬퍼로 읽는다. `parse` 가 비는 건 생성 자체가
         // 실패했을 때뿐인데, 그건 위에서 이미 돌아갔다.
         let diagnostics = WeeklyGoalTask.RunOutcome.Diagnostics.parsed(
@@ -1996,6 +2006,15 @@ private enum AchievementDataBuilder {
             let goalProgress = progress(for: record)
             let done = goalProgress.total > 0 ? min(goalProgress.done, goalProgress.total) : 0
             let total = goalProgress.total
+            // 달성을 **사건으로** 남긴다. 여기가 달성 여부를 아는 유일한 자리다 —
+            // `done`·`total` 은 지금 남아 있는 할일로부터 계산되므로, 나중에 할일을 더하거나
+            // 지우면 답이 바뀐다. 처음 참이 된 순간을 찍어 두지 않으면 그 사실을 잃는다.
+            //
+            // 한 번 찍은 값은 되돌리지 않는다. 달성이 풀리는 일(할일 추가)은 있어도
+            // «그때 달성했었다» 는 사실은 변하지 않는다.
+            if total > 0, done >= total, record.completedAt == nil {
+                record.completedAt = Date()
+            }
             return AchievementGoal(
                 id: record.id,
                 emoji: record.emoji,
@@ -7675,6 +7694,12 @@ private struct AchievementMemoPickerSection: Identifiable {
 }
 
 private struct AchievementGoalComposerSheet: View {
+    /// 지금 폼에 채워 넣은 추천. «적용» 을 눌렀을 때만 채워진다.
+    ///
+    /// 적용과 저장은 **다른 순간**이다 — 적용은 폼을 채울 뿐이고 목표는 저장에서 생긴다.
+    /// 적용만 하고 닫으면 채택이 아니므로, 출처를 여기 들고 있다가 **저장할 때** 심는다.
+    @State private var appliedSuggestion: AchievementGoalSuggestion?
+
     let memos: [Memo]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
@@ -9001,6 +9026,9 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func dismissSuggestion(_ suggestion: AchievementGoalSuggestion) {
+        // 명시적 거절은 **무반응과 다른 신호**다. 그냥 안 고른 것은 «못 봤다» 일 수도 있지만
+        // ✕ 를 누른 것은 «보고 버렸다» 이다.
+        AIRunLog.recordDismissal(suggestion: suggestion)
         let key = suggestionKey(for: suggestion)
         var keys = dismissedSuggestionKeys
         keys.insert(key)
@@ -9073,6 +9101,7 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func applySuggestion(_ suggestion: AchievementGoalSuggestion) {
+        appliedSuggestion = suggestion
         selectedInputMode = "직접 입력"
         selectedTargetLevel = suggestion.cadence.levelName
         selectedEmoji = suggestion.emoji
@@ -9340,8 +9369,14 @@ private struct AchievementGoalComposerSheet: View {
             monthGoal: hierarchy.monthGoal,
             linkedMemoIDs: linkedMemoIDs
         )
+        // 추천에서 온 목표면 출처를 심는다. 직접 만든 목표는 `nil` 로 남아 둘이 갈린다.
+        record.sourceRunID = appliedSuggestion?.runID
+        record.sourceSuggestionID = appliedSuggestion?.id
         do {
             try onSave(record, selectedChildGoalIDs, pendingNewChildTitles)
+            if let applied = appliedSuggestion {
+                AIRunLog.recordAdoption(suggestion: applied, goalID: record.id, titleEdited: applied.title != trimmedTitle)
+            }
             onClose()
         } catch {
             validationMessage = "목표 저장에 실패했습니다: \(error.localizedDescription)"

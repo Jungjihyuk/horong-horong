@@ -284,3 +284,76 @@ extension AIRunLog {
         return names.isEmpty ? "rule" : "rule:" + names.joined(separator: "+")
     }
 }
+
+extension AIRunLog {
+    /// 사용자가 추천을 **실제로 목표로 만든** 순간을 남긴다.
+    ///
+    /// «적용» 버튼이 아니라 **저장**을 기준으로 센다. 적용은 폼을 채울 뿐이고,
+    /// 적용만 하고 닫으면 목표가 안 생기므로 채택이 아니다.
+    ///
+    /// 이 기록이 없으면 «AI 추천을 채택한 목표» 와 «직접 만든 목표» 를 가릴 수 없다.
+    /// 그 순간에만 알 수 있는 정보라 **소급이 불가능하다**(→ 평가 문서 [4]·[5]).
+    static func recordAdoption(
+        suggestion: AchievementGoalSuggestion,
+        goalID: UUID,
+        titleEdited: Bool
+    ) {
+        record(
+            RunRecord(
+                // 사람이 훑어볼 요약. 채택된 제목이라 **출력**이다.
+                output: suggestion.title,
+                // 채택·거절은 추론이 아니라 **사건**이라 걸린 시간이 없다.
+                totalMs: 0,
+                runId: suggestion.runID,
+                startedAt: Date(),
+                task: suggestion.cadence == .monthly ? "monthly_goal" : "weekly_goal",
+                source: "adoption",
+                // 어느 공급자의 추천을 골랐나. 룰이면 어느 룰인지까지.
+                recipe: suggestion.ruleName.map { "rule:\($0)" } ?? "promptOnly",
+                // 사용자가 제목을 고쳐서 저장했나. 그대로 쓴 것과 손본 것은 만족도가 다르다.
+                variant: titleEdited ? "edited" : "asIs",
+                provider: suggestion.source.recordedName,
+                inputSummary: RunRecord.InputSummary(
+                    itemCount: suggestion.cadence == .monthly
+                        ? suggestion.childGoalIDs.count
+                        : suggestion.memoIDs.count,
+                    // 만들어진 목표의 id. 나중에 이 목표를 찾아 달성 여부를 본다.
+                    itemIDs: [goalID.uuidString],
+                    promptCharacters: 0
+                ),
+                outcome: "adopted"
+            )
+        )
+    }
+
+    /// 사용자가 추천을 **명시적으로 버린** 순간(✕). 무반응과 다르다.
+    static func recordDismissal(suggestion: AchievementGoalSuggestion) {
+        record(
+            RunRecord(
+                output: suggestion.title,
+                // 채택·거절은 추론이 아니라 **사건**이라 걸린 시간이 없다.
+                totalMs: 0,
+                runId: suggestion.runID,
+                startedAt: Date(),
+                task: suggestion.cadence == .monthly ? "monthly_goal" : "weekly_goal",
+                source: "adoption",
+                recipe: suggestion.ruleName.map { "rule:\($0)" } ?? "promptOnly",
+                provider: suggestion.source.recordedName,
+                outcome: "dismissed"
+            )
+        )
+    }
+}
+
+extension AchievementGoalSuggestionSource {
+    /// 기록에 남길 이름. 화면 표시용 한글(`rawValue`)과 달리 **집계용 식별자**라
+    /// `RunRecord.provider` 의 다른 값들(`ollama`·`mlx`·`appleFoundation`·`rule`)과 어휘를 맞춘다.
+    var recordedName: String {
+        switch self {
+        case .rule: return "rule"
+        case .foundationModel: return "appleFoundation"
+        case .mlx: return "mlx"
+        case .ollama: return "ollama"
+        }
+    }
+}
