@@ -90,6 +90,8 @@ public enum MonthlyGoalTask {
         public let selectedIDs: [UUID]
         public let promptCharacters: Int
         public let timings: [String: Int]
+        /// 왜 그만큼만 남았나. 생성 자체가 실패했으면 `nil` 이다 — 읽을 응답이 없었으니까.
+        public let parse: WeeklyGoalTask.ParseOutcome.Diagnostics?
     }
 
     /// 개수 자르기 → 프롬프트 → 생성 → 파싱.
@@ -116,13 +118,18 @@ public enum MonthlyGoalTask {
                    facts: ["selected": selected.count, "candidates": goals.count])
         trace?.add(.prompt, prompt, facts: ["characters": prompt.count])
 
-        func outcome(drafts: [GoalSuggestionDraft], failure: Error?) -> RunOutcome {
+        func outcome(
+            drafts: [GoalSuggestionDraft],
+            failure: Error?,
+            parse: WeeklyGoalTask.ParseOutcome.Diagnostics? = nil
+        ) -> RunOutcome {
             RunOutcome(
                 drafts: drafts,
                 failure: failure,
                 selectedIDs: selected.map(\.id),
                 promptCharacters: prompt.count,
-                timings: clock.elapsed
+                timings: clock.elapsed,
+                parse: parse
             )
         }
 
@@ -146,16 +153,16 @@ public enum MonthlyGoalTask {
             trace?.add(.extractedJSON, GoalSuggestionPayload.extractJSONObject(from: text))
             // 허용 id 와 원본 목표는 **자르기 전 전체**다. 잘린 목표의 할일까지 끌어올려야 하는
             // 경우가 생기면 좁혀 둔 쪽이 조용히 후보를 잃는다.
-            let drafts = parse(
+            let parsed = parse(
                 text,
                 allowedIDs: Set(goals.map(\.id)),
                 sourceGoals: goals,
                 suggestionCount: suggestionCount
             )
             clock.mark("parse")
-            trace?.add(.parsed, drafts.map { "- \($0.title)" }.joined(separator: "\n"),
-                       facts: ["kept": drafts.count])
-            return outcome(drafts: drafts, failure: nil)
+            trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
+                       facts: ["kept": parsed.drafts.count])
+            return outcome(drafts: parsed.drafts, failure: nil, parse: parsed.diagnostics)
         } catch {
             clock.mark("generate")
             trace?.add(.failure, String(describing: error))
@@ -163,9 +170,24 @@ public enum MonthlyGoalTask {
         }
     }
 
+    /// 월간 목표 하나에 넣을 주간 목표의 최대 수. 프롬프트에도 같은 수가 적혀 있어
+    /// **한쪽만 고치면 어긋난다.**
+    public static let maxGoalsPerSuggestion = 4
+
     // MARK: - 응답 읽기
 
-    /// 주간과 달리 진단 로그가 없어 후보 목록만 돌려준다.
+    /// 초안과 **왜 그만큼만 남았는지**를 함께 돌려준다.
+    ///
+    /// 예전에는 후보 목록만 돌려주고 실패 이유를 버렸다. 그 대가로 «초안 0개» 가 한 칸에
+    /// 뭉쳐, 실측(2026-08-19/20)에서 서로 다른 세 원인이 똑같이 `parsedEmpty` 로 보였다.
+    /// - 응답이 잘려 JSON 이 깨짐 (AFM, `max_tokens` 900 에 2016자)
+    /// - 모델이 산문만 냄 (`qwen3:4b`)
+    /// - JSON 은 멀쩡한데 **주간 목표를 1개씩만 묶어** 필터가 다 버림 (AFM)
+    ///
+    /// 원인을 가르려고 trace 파일을 하나씩 열어 봐야 했다. 이제는 기록 한 줄로 갈린다.
+    ///
+    /// 진단 그릇은 주간(`WeeklyGoalTask.ParseOutcome`)을 **그대로 쓴다.** 두 벌로 두면
+    /// 한쪽만 고치는 실수가 나고, AI 실험실·리포트가 이미 그 모양을 읽고 있다.
     ///
     /// `sourceGoals` 가 필요한 이유는 월간 후보가 **묶은 주간 목표들의 할일까지 끌어올리기** 때문이다.
     public static func parse(
@@ -173,30 +195,58 @@ public enum MonthlyGoalTask {
         allowedIDs: Set<UUID>,
         sourceGoals: [Goal],
         suggestionCount: Int
-    ) -> [GoalSuggestionDraft] {
+    ) -> WeeklyGoalTask.ParseOutcome {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard case .success(let payload) = GoalSuggestionPayload.decode(from: trimmed) else {
-            return []
+        let payload: GoalSuggestionPayload
+        switch GoalSuggestionPayload.decode(from: trimmed) {
+        case .success(let decoded):
+            payload = decoded
+        case .failure(let failure):
+            return WeeklyGoalTask.ParseOutcome(
+                drafts: [],
+                diagnostics: .decodeFailed(characters: trimmed.count, reason: failure.reason)
+            )
         }
 
         let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
+        var badID = 0
+        var alreadyUsed = 0
+        var overMaxGoal = 0
+        var tooFewIDs = 0
+        var requestedIDs = 0
         var used = Set<UUID>()
-        return payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
+        let result = payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
             let rawIDs: [GoalSuggestionPayload.IDValue] = (item.goalIDs ?? item.items ?? item.memoIDs)?.values ?? []
-            let ids = rawIDs.compactMap { val -> UUID? in
+            requestedIDs += rawIDs.count
+
+            var parsedIDs: [UUID] = []
+            for val in rawIDs {
                 switch val {
                 case .int(let idx):
-                    if idx >= 1 && idx <= sourceGoals.count {
-                        return sourceGoals[idx - 1].id
+                    if idx >= 1 && idx <= sourceGoals.count, allowedIDs.contains(sourceGoals[idx - 1].id) {
+                        parsedIDs.append(sourceGoals[idx - 1].id)
+                    } else {
+                        badID += 1
                     }
-                    return nil
                 case .string(let str):
-                    return UUID(uuidString: str)
+                    if let uuid = UUID(uuidString: str), allowedIDs.contains(uuid) {
+                        parsedIDs.append(uuid)
+                    } else {
+                        badID += 1
+                    }
                 }
             }
-            .filter { allowedIDs.contains($0) && !used.contains($0) }
-            .prefix(4)
-            guard ids.count >= 2 else { return nil }
+
+            let unused = parsedIDs.filter { !used.contains($0) }
+            alreadyUsed += parsedIDs.count - unused.count
+            // 월간 하나에 주간 목표는 최대 4개. 프롬프트에도 같은 수가 적혀 있다.
+            let ids = unused.prefix(maxGoalsPerSuggestion)
+            overMaxGoal += unused.count - ids.count
+            // **묶음은 2개 이상**이어야 한다. 1개짜리는 그 주간 목표 자체라 월간 목표가 아니다.
+            guard ids.count >= 2 else {
+                tooFewIDs += 1
+                return nil
+            }
             used.formUnion(ids)
             let goals = ids.compactMap { goalByID[$0] }
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -213,8 +263,21 @@ public enum MonthlyGoalTask {
                 emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅"
             )
         }
-        .prefix(suggestionCount)
-        .map { $0 }
+
+        return WeeklyGoalTask.ParseOutcome(
+            drafts: Array(result.prefix(suggestionCount)),
+            diagnostics: .decoded(
+                modelReturned: payload.suggestions.count,
+                kept: result.count,
+                requestedIDs: requestedIDs,
+                badID: badID,
+                alreadyUsed: alreadyUsed,
+                // 주간의 `overMaxMemo` 자리다. 월간에서는 **주간 목표** 초과를 뜻한다 —
+                // 기록 스키마를 그대로 쓰려고 이름은 주간 것을 따른다.
+                overMaxMemo: overMaxGoal,
+                tooFewIDs: tooFewIDs
+            )
+        )
     }
 
     /// 모델이 낼 수 있는 응답의 모양. 주간(`WeeklyGoalTask.responseSchema`)과 같은 사정이다.

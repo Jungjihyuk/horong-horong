@@ -110,7 +110,9 @@ struct RunContext {
         parse: RunRecord.ParseSummary? = nil,
         usage: RunRecord.UsageSummary? = nil,
         timings: [String: Int] = [:],
-        parameters: [String: Double]? = nil
+        parameters: [String: Double]? = nil,
+        /// 어떤 기법을 켠 실행인가. 모델은 프롬프트만 쓰고, 룰 폴백은 어느 룰인지 담는다.
+        recipe: String = "promptOnly"
     ) -> RunRecord {
         RunRecord(
             model: model,
@@ -121,7 +123,7 @@ struct RunContext {
             startedAt: startedAt,
             task: task,
             source: "live",
-            recipe: "promptOnly",
+            recipe: recipe,
             variant: variant,
             provider: provider,
             attempt: attemptNumber,
@@ -232,5 +234,53 @@ extension WeeklyGoalTask.RunOutcome.Diagnostics {
             overMaxMemo: overMaxMemo,
             tooFewIDs: tooFewIDs
         )
+    }
+}
+
+extension AIRunLog {
+    /// 모델이 하나도 못 만들어 **룰이 대신한** 실행을 남긴다.
+    ///
+    /// 오래도록 이 기록이 없었다. 화면에는 추천이 떴는데 AI 실험실에는 아무것도 없어서,
+    /// «모델이 실패했는데 사용자는 결과를 받았다» 는 상황이 통째로 안 보였다.
+    /// 그래서 룰 추천이 얼마나 자주 쓰이는지도, 사용자가 그걸 실제로 채택하는지도 잰 적이 없다.
+    ///
+    /// `attempt` 는 모델 시도들 **뒤에** 오도록 넉넉히 잡는다. 폴백 사슬이 길어져도
+    /// 룰이 항상 마지막에 오게 하려는 것이다.
+    static func recordRuleFallback(
+        runID: String,
+        task: String,
+        candidateCount: Int,
+        suggestions: [AchievementGoalSuggestion]
+    ) {
+        let context = RunContext(
+            runID: runID,
+            task: task,
+            candidateCount: candidateCount,
+            // 실행 전략은 모델 얘기라 룰에는 뜻이 없다.
+            variant: nil,
+            attemptNumber: ruleFallbackAttempt
+        )
+        record(
+            context.record(
+                startedAt: Date(),
+                provider: "rule",
+                model: nil,
+                outcome: suggestions.isEmpty ? "parsedEmpty" : "ok",
+                outcomeDetail: suggestions.isEmpty ? "emptyList" : nil,
+                titles: suggestions.map(\.title),
+                selectedIDs: suggestions.flatMap { $0.cadence == .monthly ? $0.childGoalIDs : $0.memoIDs },
+                // 어느 룰이 만들었나. 여러 룰이 섞이면 이름을 이어 붙인다 —
+                // `recipe` 는 «어떤 기법을 켠 실행인가» 를 담는 자리다.
+                recipe: ruleRecipe(from: suggestions)
+            )
+        )
+    }
+
+    /// 룰은 모델 시도 뒤에 온다. 지금 사슬이 최대 2단(공급자 → AFM)이라 그 다음 번호다.
+    private static let ruleFallbackAttempt = 3
+
+    private static func ruleRecipe(from suggestions: [AchievementGoalSuggestion]) -> String {
+        let names = Set(suggestions.compactMap(\.ruleName)).sorted()
+        return names.isEmpty ? "rule" : "rule:" + names.joined(separator: "+")
     }
 }

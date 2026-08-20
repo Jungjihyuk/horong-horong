@@ -133,6 +133,7 @@
 		68680247DF258E8C5CA78625 /* FocusNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119BB9C4677CB7F9E52BBFC6 /* FocusNudge.swift */; };
 		693264CD9F0555C27CD695F7 /* MemoBrowserWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */; };
 		695BCFFE660CE68416839EFC /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */; };
+		6A045FAF40FC75A8D52E6383 /* KoreanParticleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EDF20B3CA5E860377EF27FB /* KoreanParticleTests.swift */; };
 		6B9AE3B79B370DC4284245ED /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102B15EB31C2926F8C02CA7D /* SettingsSection.swift */; };
 		6BFB097785CBEA0B19A95973 /* GoalSuggestionRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */; };
 		6C206EDE2C37A453BBEA18D8 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 76D70BAFD216660F52671512 /* MLXLLM */; };
@@ -223,6 +224,7 @@
 		B29EB188EB9DA958F8D7BBDA /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
 		B3528784509B495DC0B74EBF /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
 		B37012611F784B8746C60180 /* RewardLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23024A3A59FDBED2A95D852B /* RewardLedger.swift */; };
+		B3A6701CFFB42BC3A18EEFB4 /* KoreanParticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705DE7EFA94C91FBF42434C3 /* KoreanParticle.swift */; };
 		B4111E6D89040B5552A11C09 /* CompanionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CA4446419C673DB86332AB /* CompanionController.swift */; };
 		B5350B35370991EF04FE8DC2 /* overview in Resources */ = {isa = PBXBuildFile; fileRef = EDB2AFEB48A4D9B3BE3A07ED /* overview */; };
 		B5A0621B33B842DCC14C7042 /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */; };
@@ -280,6 +282,7 @@
 		D9DEC366DACB63491DEC3196 /* CompanionAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28C94D6AB63EB00A9FD9480 /* CompanionAnimation.swift */; };
 		DC75971C572F7C2271E87F3C /* AttentionThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0327985821E5D309FC544549 /* AttentionThresholdStore.swift */; };
 		DE77B8B431013949F4432E0C /* DailyAttentionReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 881B92C8DB05873BF8307228 /* DailyAttentionReport.swift */; };
+		E01C976995D885658B564E81 /* KoreanParticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705DE7EFA94C91FBF42434C3 /* KoreanParticle.swift */; };
 		E0E8E2D315CAAD284FAA4995 /* AppTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F9699B1ADE6A072BC15A16 /* AppTracker.swift */; };
 		E15AFF18394A732618E4691D /* OllamaModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84208C64E5FF8177FE973E1A /* OllamaModelPicker.swift */; };
 		E19966BE08A49A5041BBBEC8 /* PackageChatProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */; };
@@ -340,6 +343,7 @@
 		18F9699B1ADE6A072BC15A16 /* AppTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTracker.swift; sourceTree = "<group>"; };
 		1BDF8123B9CEEA21DE7E0CC4 /* FocusNudgeEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeEngineTests.swift; sourceTree = "<group>"; };
 		1DEF83A33677F0B7AD6A6DA7 /* RewardTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardTabView.swift; sourceTree = "<group>"; };
+		1EDF20B3CA5E860377EF27FB /* KoreanParticleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoreanParticleTests.swift; sourceTree = "<group>"; };
 		214CF0D4CCCD0DC041B81763 /* CompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionView.swift; sourceTree = "<group>"; };
 		23024A3A59FDBED2A95D852B /* RewardLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardLedger.swift; sourceTree = "<group>"; };
 		2837EDC8B6F46340EEC124ED /* NewsUsageSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsUsageSummaryView.swift; sourceTree = "<group>"; };
@@ -389,6 +393,7 @@
 		6BFDB918694C1C7CA83E3B9C /* BrowserURLClassificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserURLClassificationTests.swift; sourceTree = "<group>"; };
 		6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConsentStore.swift; sourceTree = "<group>"; };
 		6E31EDDBD9D5616803DDF039 /* AppearancePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearancePage.swift; sourceTree = "<group>"; };
+		705DE7EFA94C91FBF42434C3 /* KoreanParticle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoreanParticle.swift; sourceTree = "<group>"; };
 		727A149D60047427F9249A50 /* PromptSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptSnapshotTests.swift; sourceTree = "<group>"; };
 		7295A6537FEB7087333AD889 /* TelemetryConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConfig.swift; sourceTree = "<group>"; };
 		74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionEditSheet.swift; sourceTree = "<group>"; };
@@ -631,6 +636,7 @@
 				AA25DD516AA5500C0E0491CE /* Constants.swift */,
 				58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */,
 				3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */,
+				705DE7EFA94C91FBF42434C3 /* KoreanParticle.swift */,
 				F9C6F1083C9DDEF623009D0D /* NotificationManager.swift */,
 				658FBB3D526E45D220DD3A3A /* NumberField.swift */,
 				48D4180095C9372A7EF9F50D /* SuggestionExecutionStrategy.swift */,
@@ -664,6 +670,7 @@
 				C3C9F8C22F114231C1759AB9 /* GoalSuggestionEvalTests.swift */,
 				E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */,
 				06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */,
+				1EDF20B3CA5E860377EF27FB /* KoreanParticleTests.swift */,
 				B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */,
 				42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */,
 				58ECF2ADC2ADD3798445571E /* NewsUsageEstimatorTests.swift */,
@@ -1193,6 +1200,7 @@
 				016B7A74E59B3A72E3858673 /* HubTab.swift in Sources */,
 				238B891522C7CEB45D85FAA8 /* IdlePromptPanel.swift in Sources */,
 				00966F3FF0C3252F37DC0342 /* IdleThresholdStore.swift in Sources */,
+				E01C976995D885658B564E81 /* KoreanParticle.swift in Sources */,
 				8D8AC3134395938061C6D48F /* LanternOilJarView.swift in Sources */,
 				043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */,
 				785236243EA27B543C8746A1 /* MainHubWindow.swift in Sources */,
@@ -1328,6 +1336,7 @@
 				96894586C27182661336D09D /* HubTab.swift in Sources */,
 				3A1DAABFEF3A8028ADD4CD79 /* IdlePromptPanel.swift in Sources */,
 				CEEB0868110644CE605BE0EF /* IdleThresholdStore.swift in Sources */,
+				B3A6701CFFB42BC3A18EEFB4 /* KoreanParticle.swift in Sources */,
 				86FFA4D3D5C222867E3BCA28 /* LanternOilJarView.swift in Sources */,
 				CBC2870A5ECA2D2DC5BDCF45 /* MLXModelPicker.swift in Sources */,
 				642FEC07572D2F634E399383 /* MainHubWindow.swift in Sources */,
@@ -1406,6 +1415,7 @@
 				81038CFA865086286DADC683 /* GoalSuggestionEvalTests.swift in Sources */,
 				412CB0A8A15592A1BFEFB4A5 /* GoalSuggestionParserTests.swift in Sources */,
 				6BFB097785CBEA0B19A95973 /* GoalSuggestionRegressionTests.swift in Sources */,
+				6A045FAF40FC75A8D52E6383 /* KoreanParticleTests.swift in Sources */,
 				45A882288E745AC844D54E2F /* NewsDefaultsTests.swift in Sources */,
 				BFAC5B2A7AFE0FDD5FEC0656 /* NewsSchedulerTests.swift in Sources */,
 				C1607E5F8B80FAF53954DF3B /* NewsUsageEstimatorTests.swift in Sources */,
