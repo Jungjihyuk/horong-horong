@@ -1,0 +1,64 @@
+{
+  "caseName": "영어 학습과 등록된 TOEIC 목표 맥락",
+  "datasetType": "context_dependent",
+  "successConditions": [
+    "context_handling",
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "영어 단어·문법·모의고사 학습만으로는 일반 영어 공부인지 특정 시험 준비인지 확정하기 어렵다. 페르소나 없이 사용자 프로필에 등록된 TOEIC 목표 맥락만 제공했을 때 시험 준비 목표로 연결하는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": {
+      "source": "companion_chat",
+      "text": "TOEIC 850점 달성을 목표로 준비 중",
+      "observedAt": "2026-08-20",
+      "status": "user_confirmed"
+    }
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "TOEIC 빈출 단어 30개 외우기",
+      "icon": "📖",
+      "startDate": "2026-08-17 20:00",
+      "deadline": "2026-08-17 20:30"
+    },
+    {
+      "id": "m2",
+      "content": "영어 문법 관계대명사 강의 듣기",
+      "icon": "🎧",
+      "deadline": "2026-08-19 21:00"
+    },
+    {
+      "id": "m3",
+      "content": "TOEIC LC 파트 2 문제 20개 풀기",
+      "icon": "📝",
+      "startDate": "2026-08-20 19:00",
+      "deadline": "2026-08-20 20:00"
+    },
+    {
+      "id": "m4",
+      "content": "TOEIC 모의고사 오답 정리하기",
+      "icon": "📝",
+      "startDate": "2026-08-21 19:00"
+    },
+    {
+      "id": "m5",
+      "content": "주방 수세미 교체하기",
+      "icon": "🧽",
+      "deadline": "2026-08-18 18:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "TOEIC 850점 달성을 위한 학습하기",
+      "memos": ["m1", "m2", "m3", "m4"]
+    }
+  ]
+}

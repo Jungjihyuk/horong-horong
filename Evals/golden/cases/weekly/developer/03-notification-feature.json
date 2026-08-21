@@ -1,0 +1,64 @@
+{
+  "caseName": "알림 설정 기능과 알림 발송 운영 점검",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "over_grouping_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "사용자 알림 설정 기능 구현과 알림 발송 운영 점검이 같은 알림 도메인을 다루더라도 서로 다른 목표로 분리되는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "알림 설정 화면에 이메일·푸시 토글 추가하기",
+      "icon": "🔔",
+      "startDate": "2026-08-18 09:00",
+      "deadline": "2026-08-18 12:00"
+    },
+    {
+      "id": "m2",
+      "content": "알림 설정 저장 API와 화면 연결하기",
+      "icon": "🔗",
+      "deadline": "2026-08-19 17:00"
+    },
+    {
+      "id": "m3",
+      "content": "알림 설정 변경 후 다시 불러오는 테스트 작성하기",
+      "icon": "🧪",
+      "startDate": "2026-08-20 14:00"
+    },
+    {
+      "id": "m4",
+      "content": "알림 발송 워커 재시도 정책 점검하기",
+      "icon": "🔁",
+      "startDate": "2026-08-20 10:00",
+      "deadline": "2026-08-20 11:00"
+    },
+    {
+      "id": "m5",
+      "content": "알림 발송 실패 로그 대시보드 확인하기",
+      "icon": "📈",
+      "startDate": "2026-08-21 10:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "알림 설정 기능 구현 완료하기",
+      "memos": ["m1", "m2", "m3"]
+    },
+    {
+      "type": "weekly_goal",
+      "title": "알림 발송 운영 상태 점검하기",
+      "memos": ["m4", "m5"]
+    }
+  ]
+}

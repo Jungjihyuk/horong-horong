@@ -1,0 +1,19 @@
+{
+  "caseName": "면접 전형 준비와 후속 연락 분리",
+  "datasetType": "general",
+  "successConditions": ["semantic_cohesion", "over_grouping_exclusion", "measurability", "clarity", "relevance"],
+  "note": "면접 전 준비와 면접 후 감사 메일·질문 정리는 같은 전형에 속하지만 시간과 결과가 다른 두 목표다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "2차 기술 면접 예상 질문 10개 답변 정리하기", "icon": "🎯", "deadline": "2026-08-18 21:00"},
+    {"id": "m2", "content": "면접 과제 발표 자료를 10분 분량으로 줄이기", "icon": "📊", "deadline": "2026-08-19 20:00"},
+    {"id": "m3", "content": "기술 면접 모의 발표 1회 진행하기", "icon": "🎤", "startDate": "2026-08-20 19:00"},
+    {"id": "m4", "content": "면접 후 감사 메일 초안 작성하기", "icon": "✉️", "deadline": "2026-08-21 18:00"},
+    {"id": "m5", "content": "면접에서 답하지 못한 질문의 답 찾아 정리하기", "icon": "🔎", "startDate": "2026-08-21 20:00"}
+  ],
+  "expectedGroups": [
+    {"type": "weekly_goal", "title": "2차 기술 면접 준비하기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "면접 후속 연락과 복기 정리하기", "memos": ["m4", "m5"]}
+  ]
+}

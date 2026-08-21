@@ -1,0 +1,62 @@
+{
+  "caseName": "데이터베이스 마이그레이션 단계 3개 + 무관한 잡무",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "스키마 마이그레이션 작성, 애플리케이션 모델 수정, 마이그레이션 테스트가 하나의 데이터 구조 변경 결과로 이어지는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "사용자 알림 설정 테이블 마이그레이션 작성하기",
+      "icon": "🗃️",
+      "deadline": "2026-08-18 11:00"
+    },
+    {
+      "id": "m2",
+      "content": "알림 설정 테이블에 맞춰 사용자 모델 수정하기",
+      "icon": "🧩",
+      "startDate": "2026-08-19 13:00",
+      "deadline": "2026-08-19 15:00"
+    },
+    {
+      "id": "m3",
+      "content": "기존 데이터로 마이그레이션 테스트 실행하기",
+      "icon": "✅",
+      "startDate": "2026-08-20 16:00"
+    },
+    {
+      "id": "m4",
+      "content": "냉장고 안 식재료 유통기한 확인하기",
+      "icon": "🥬"
+    },
+    {
+      "id": "m5",
+      "content": "은행 앱 알림 설정 확인하기",
+      "icon": "📱",
+      "deadline": "2026-08-21 18:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "사용자 알림 설정 데이터 마이그레이션 완료하기",
+      "memos": ["m1", "m2", "m3"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "은행 앱 알림 설정은 이름만 비슷할 뿐 데이터베이스 마이그레이션과 무관하다",
+      "groups": [["m4", "m5"]]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "caseName": "자전거 정비 단계 3개 + 무관한 생활 잡무",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity"
+  ],
+  "note": "타이어·체인·브레이크 점검이 자전거를 주행 가능한 상태로 만드는 하나의 결과로 이어지는지 본다. 반복 횟수가 아닌 단계 간 응집성을 평가하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "자전거 타이어 공기압 점검하고 바람 넣기",
+      "icon": "🚲",
+      "startDate": "2026-08-17 19:00",
+      "deadline": "2026-08-17 19:30"
+    },
+    {
+      "id": "m2",
+      "content": "자전거 체인 세척하고 윤활하기",
+      "icon": "🚲",
+      "deadline": "2026-08-18 20:00"
+    },
+    {
+      "id": "m3",
+      "content": "자전거 브레이크와 변속 상태 점검하기",
+      "icon": "🚲",
+      "startDate": "2026-08-20 19:00"
+    },
+    {
+      "id": "m4",
+      "content": "침구 세탁하기",
+      "icon": "🧺",
+      "deadline": "2026-08-19 18:00"
+    },
+    {
+      "id": "m5",
+      "content": "주민센터 운영시간 확인하기",
+      "icon": "📅"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "자전거 정비 마치기",
+      "memos": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    }
+  ],
+  "traps": [
+    {
+      "why": "서로 관련 없는 일회성 생활 잡무를 하나의 목표로 묶으면 안 된다",
+      "groups": [
+        [
+          "m4",
+          "m5"
+        ]
+      ]
+    }
+  ]
+}

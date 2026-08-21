@@ -1,0 +1,77 @@
+{
+  "caseName": "비목표 문장과 노이즈가 섞인 입력",
+  "datasetType": "non_goal_or_noise",
+  "successConditions": [
+    "noise_detection",
+    "abstention_when_non_goal",
+    "clarity"
+  ],
+  "note": "실행할 일이나 목표가 아닌 감정 기록, 의미 없는 문자열, 링크, 생각 메모가 섞여 있다. 내용을 억지로 목표로 바꾸거나 서로 묶지 않고 추천을 생략해야 하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "오늘은 너무 피곤해서 아무것도 못 했다.",
+      "icon": "😮‍💨",
+      "deadline": "2026-08-17 23:59"
+    },
+    {
+      "id": "m2",
+      "content": "asdf ㅁㄴㅇㄹ",
+      "icon": "❓",
+      "deadline": "2026-08-18 12:00"
+    },
+    {
+      "id": "m3",
+      "content": "https://example.com/something-to-read",
+      "icon": "🔗"
+    },
+    {
+      "id": "m4",
+      "content": "요즘 내가 뭘 하고 싶은지 잘 모르겠다",
+      "icon": "💭",
+      "startDate": "2026-08-20 22:00"
+    },
+    {
+      "id": "m5",
+      "content": "회의 준비? 음...",
+      "icon": "💬"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "no_goal_recommendation",
+    "reason": "입력에 실행할 행동이나 측정 가능한 목표가 없어 추천할 수 없다.",
+    "itemReviews": [
+      {
+        "memo": "m1",
+        "classification": "status_or_feeling",
+        "reason": "완료할 행동이 아니라 하루 상태를 기록한 문장이다."
+      },
+      {
+        "memo": "m2",
+        "classification": "gibberish",
+        "reason": "의미를 해석할 수 없는 문자열이다."
+      },
+      {
+        "memo": "m3",
+        "classification": "link_only",
+        "reason": "실행할 행동 없이 링크만 있다."
+      },
+      {
+        "memo": "m4",
+        "classification": "reflection",
+        "reason": "생각이나 고민을 기록한 문장이지 실행할 일이 아니다."
+      },
+      {
+        "memo": "m5",
+        "classification": "ambiguous_note",
+        "reason": "회의 준비를 하려는 것인지 단순한 생각 메모인지 확정할 수 없다."
+      }
+    ]
+  }
+}

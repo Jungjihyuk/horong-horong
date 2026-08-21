@@ -1,0 +1,28 @@
+{
+  "caseName": "구직 중 남긴 비목표 메모와 노이즈",
+  "datasetType": "non_goal_or_noise",
+  "successConditions": ["noise_detection", "abstention_when_non_goal", "clarity", "relevance"],
+  "note": "구직자 페르소나가 있어도 감정 기록, 링크, 의미 없는 문자열, 결과 상태를 지원 목표로 추측하지 않아야 한다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "오늘 지원 결과 또 탈락...", "icon": "😞", "deadline": "2026-08-17 18:00"},
+    {"id": "m2", "content": "https://example.com/jobs/frontend", "icon": "🔗"},
+    {"id": "m3", "content": "asdfasdf ㅁㄴㅇㄹ", "icon": "❓", "startDate": "2026-08-19 12:00"},
+    {"id": "m4", "content": "요즘 어떤 회사가 나랑 맞을까", "icon": "💭"},
+    {"id": "m5", "content": "서류 결과 기다리는 중", "icon": "⏳", "deadline": "2026-08-21 23:59"}
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "no_goal_recommendation",
+    "reason": "실행할 행동이나 측정 가능한 구직 목표가 아니라 결과 상태, 링크, 의미 없는 문자열, 고민, 대기 기록만 있다.",
+    "itemReviews": [
+      {"memo": "m1", "classification": "status_or_feeling", "reason": "지원 결과와 감정을 기록한 문장이다."},
+      {"memo": "m2", "classification": "link_only", "reason": "링크만 있어 실행할 작업을 알 수 없다."},
+      {"memo": "m3", "classification": "gibberish", "reason": "의미를 해석할 수 없는 문자열이다."},
+      {"memo": "m4", "classification": "reflection", "reason": "진로 고민을 기록한 문장이지 실행할 일이 아니다."},
+      {"memo": "m5", "classification": "status_or_feeling", "reason": "지원 결과를 기다리는 상태 기록이다."
+      }
+    ]
+  }
+}

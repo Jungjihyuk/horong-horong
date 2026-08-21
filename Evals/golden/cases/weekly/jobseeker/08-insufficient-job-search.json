@@ -1,0 +1,25 @@
+{
+  "caseName": "취업 준비 메모지만 목표와 범위가 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": ["ambiguity_detection", "abstention_when_ambiguous", "clarity", "measurability", "relevance"],
+  "note": "취업 준비라는 영역은 알 수 있지만 목표 직무, 지원 기업, 준비 활동과 완료 기준이 없어 주간 목표를 만들 수 없다. 각 메모를 SMART 기준으로 구체화해야 한다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "취업 준비하기", "icon": "💼", "deadline": "2026-08-17 23:59"},
+    {"id": "m2", "content": "지원서 쓰기", "icon": "📄", "deadline": "2026-08-19 23:59"},
+    {"id": "m3", "content": "공부하기", "icon": "📚", "startDate": "2026-08-20 20:00"},
+    {"id": "m4", "content": "면접 준비하기", "icon": "🎤"}
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "목표 직무와 기업, 준비 활동, 수량과 기한을 정해 각 메모를 구체화한다. 실행 가능성과 개인의 관련성은 입력 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {"memo": "m1", "missing": ["specific", "measurable"], "suggestion": "프론트엔드 개발자 공고 3개를 비교하고 이번 주 지원 우선순위 1개 정하기처럼 직무와 산출물을 정해보세요."},
+      {"memo": "m2", "missing": ["specific", "measurable"], "suggestion": "A사 프론트엔드 지원서 자기소개 문항 2개를 작성하고 글자 수 제한을 확인하기처럼 대상을 정해보세요."},
+      {"memo": "m3", "missing": ["specific", "measurable"], "suggestion": "코딩테스트 배열 문제 5개를 풀고 풀이를 기록하기처럼 학습 범위와 수량을 정해보세요."},
+      {"memo": "m4", "missing": ["specific", "measurable", "time_bound"], "suggestion": "다음 주 기술 면접을 위해 예상 질문 10개 답변을 금요일까지 작성하기처럼 전형과 기한을 정해보세요."}
+    ]
+  }
+}

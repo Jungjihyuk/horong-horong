@@ -1,0 +1,78 @@
+{
+  "caseName": "개발 중 남긴 비목표 메모와 노이즈",
+  "datasetType": "non_goal_or_noise",
+  "successConditions": [
+    "noise_detection",
+    "abstention_when_non_goal",
+    "clarity",
+    "relevance"
+  ],
+  "note": "개발자 페르소나가 있어도 빌드 로그, 이슈 링크, 감정 기록, 의미 없는 메모를 실행할 개발 목표로 추측해서는 안 된다. 모든 입력을 추천에서 제외해야 하는 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "빌드가 또 깨졌다...",
+      "icon": "💥",
+      "deadline": "2026-08-17 18:00"
+    },
+    {
+      "id": "m2",
+      "content": "https://example.com/issues/1234",
+      "icon": "🔗"
+    },
+    {
+      "id": "m3",
+      "content": "Fatal error: unexpectedly found nil while unwrapping an Optional value",
+      "icon": "⚠️",
+      "startDate": "2026-08-19 14:00"
+    },
+    {
+      "id": "m4",
+      "content": "오늘은 집중이 안 된다",
+      "icon": "😵‍💫"
+    },
+    {
+      "id": "m5",
+      "content": "TODO ??? 나중에 보기",
+      "icon": "❓",
+      "deadline": "2026-08-21 23:59"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "no_goal_recommendation",
+    "reason": "실행할 행동이나 측정 가능한 개발 목표가 아니라 상태 기록, 링크, 오류 출력, 감정, 미완성 메모만 있다.",
+    "itemReviews": [
+      {
+        "memo": "m1",
+        "classification": "status_or_feeling",
+        "reason": "빌드 상태를 기록했을 뿐 해결할 대상과 행동이 적혀 있지 않다."
+      },
+      {
+        "memo": "m2",
+        "classification": "link_only",
+        "reason": "링크만 있어 실행할 작업을 알 수 없다."
+      },
+      {
+        "memo": "m3",
+        "classification": "error_output",
+        "reason": "오류 메시지 자체이며 재현·수정·확인 행동이 없다."
+      },
+      {
+        "memo": "m4",
+        "classification": "status_or_feeling",
+        "reason": "집중 상태를 기록한 문장이지 실행할 일이 아니다."
+      },
+      {
+        "memo": "m5",
+        "classification": "incomplete_note",
+        "reason": "대상과 행동이 확정되지 않은 미완성 메모다."
+      }
+    ]
+  }
+}
