@@ -1,17 +1,28 @@
 // 골든셋 케이스에서 promptfooconfig.yaml 을 생성한다.
 //
 // 정답(expectedGroups)을 YAML 에 손으로 복사하면 골든셋과 어긋나기 시작한다.
-// 단일 출처는 Evals/golden/cases/*.json 이고, 이 스크립트가 기계적으로 옮긴다.
+// 단일 출처는 Evals/golden/cases/weekly/**/*.json 이고, 이 스크립트가 기계적으로 옮긴다.
 import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
+// weekly/ 만 읽는다 — monthly 는 memos 대신 weeklyGoals 를 받아 입력 모양이 다르다.
 // drafts/ 도 포함한다. 각색 전이라 커밋은 못 하지만 로컬 채점은 가능해야 한다.
-const caseDirs = ['Evals/golden/cases', 'Evals/golden/drafts'].map((d) => path.join(root, d));
+const caseDirs = ['Evals/golden/cases/weekly', 'Evals/golden/drafts'].map((d) => path.join(root, d));
+
+/** 하위 폴더까지 훑는다. 케이스가 페르소나별로 갈려 있어 한 겹만 읽으면 전부 놓친다. */
+function jsonFilesUnder(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) return jsonFilesUnder(full);
+    return e.name.endsWith('.json') ? [full] : [];
+  });
+}
 
 const cases = caseDirs
-  .filter((d) => fs.existsSync(d))
-  .flatMap((d) => fs.readdirSync(d).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(d, f)))
+  .flatMap(jsonFilesUnder)
+  .sort()
   .map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
 
 const config = {

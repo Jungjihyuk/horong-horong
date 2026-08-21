@@ -19,15 +19,18 @@ def load_golden_notes():
         directory = os.path.join(here, folder)
         if not os.path.isdir(directory):
             continue
-        for name in sorted(os.listdir(directory)):
-            if not name.endswith(".json"):
-                continue
-            try:
-                with open(os.path.join(directory, name), encoding="utf-8") as f:
-                    case = json.load(f)
-                notes[case.get("caseName", "")] = case.get("note") or ""
-            except (OSError, ValueError):
-                continue
+        # 하위 폴더까지 훑는다. 케이스가 주기(weekly/monthly)와 페르소나로 갈려 있어
+        # 한 겹만 읽으면 전부 놓치고 설명이 통째로 비어 버린다.
+        for root, _, names in os.walk(directory):
+            for name in sorted(names):
+                if not name.endswith(".json"):
+                    continue
+                try:
+                    with open(os.path.join(root, name), encoding="utf-8") as f:
+                        case = json.load(f)
+                    notes[case.get("caseName", "")] = case.get("note") or ""
+                except (OSError, ValueError):
+                    continue
     return notes
 
 

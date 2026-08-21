@@ -74,16 +74,22 @@ final class PairEvaluatorTests: XCTestCase {
         XCTAssertEqual(s.f1, 0.0)
     }
 
-    /// `shouldNotGroup` 은 점수를 깎지 않고 **횟수만 센다**. 현재 동작이 그렇다.
-    func testViolationsAreCountedButDoNotChangeF1() {
+    /// 함정을 밟으면 **최종 점수가 깎인다.** `f1` 자체는 감점 전 값으로 남는다.
+    ///
+    /// 예전에는 `shouldNotGroup` 이 횟수만 세고 점수에 아무 영향이 없었다 —
+    /// README 는 «감점한다» 고 적혀 있었으니 문서와 코드가 어긋나 있었다(2026-08-21).
+    /// 자세한 규칙은 `TrapScoringTests`.
+    func testViolationsPenalizeTheFinalScore() {
         let s = PairEvaluator.score(
             expectedGroups: [["a", "b"]],
             predictedGroups: [["a", "b"], ["x", "y"]],
-            shouldNotGroup: [["x", "y"]]
+            traps: [PairEvaluator.Trap(groups: [["x", "y"]])]
         )
         XCTAssertEqual(s.violations, 1)
         XCTAssertEqual(s.hit, 1)
         XCTAssertEqual(s.precision, 0.5)
-        XCTAssertEqual(s.f1, 2.0 / 3.0, accuracy: 1e-9)
+        XCTAssertEqual(s.f1, 2.0 / 3.0, accuracy: 1e-9, "F1 은 감점 전 값")
+        XCTAssertEqual(s.trapAvoidance, 0, accuracy: 1e-9, "하나뿐인 함정을 밟았다")
+        XCTAssertEqual(s.groupingScore, 0, accuracy: 1e-9)
     }
 }

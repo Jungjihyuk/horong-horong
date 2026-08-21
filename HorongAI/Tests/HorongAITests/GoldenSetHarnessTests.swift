@@ -28,7 +28,7 @@ final class GoldenSetHarnessTests: XCTestCase {
     /// 정답 묶음을 그대로 뱉는 "완벽한 모델" 의 응답을 만든다.
     private func perfectResponse(for goldenCase: GoldenSet.Case) -> String {
         let uuidByShortID = goldenCase.identifiers.uuidByShortID
-        let items = goldenCase.expectedGroups.map { group -> String in
+        let items = goldenCase.expectedMemoGroups(of: .weekly).map { group -> String in
             let ids = group
                 .compactMap { uuidByShortID[$0] }
                 .map { "\"\($0.uuidString)\"" }
@@ -63,9 +63,9 @@ final class GoldenSetHarnessTests: XCTestCase {
             draft.memoIDs.compactMap { shortIDByUUID[$0] }
         }
         return PairEvaluator.score(
-            expectedGroups: goldenCase.expectedGroups,
+            expectedGroups: goldenCase.expectedMemoGroups(of: .weekly),
             predictedGroups: predicted,
-            shouldNotGroup: goldenCase.shouldNotGroup ?? []
+            traps: goldenCase.traps ?? []
         )
     }
 
@@ -86,23 +86,31 @@ final class GoldenSetHarnessTests: XCTestCase {
         }
     }
 
-    /// 묶으면 안 되는 조합을 뱉으면 위반으로 잡혀야 한다. 채점 방향이 반대면 이게 0 으로 나온다.
-    func testForbiddenGroupingIsCaught() async throws {
+    /// 함정을 밟으면 위반으로 잡히고 **최종 점수가 깎여야** 한다.
+    /// 채점 방향이 반대면 위반이 0 으로 나온다.
+    func testSteppingOnATrapIsCaughtAndPenalized() async throws {
         let cases = try goldenCases()
-        guard let target = cases.first(where: { ($0.shouldNotGroup ?? []).contains(where: { $0.count >= 2 }) }),
-              let forbidden = (target.shouldNotGroup ?? []).first(where: { $0.count >= 2 }) else {
-            throw XCTSkip("shouldNotGroup 이 있는 케이스가 없다")
+        guard let target = cases.first(where: { ($0.traps ?? []).contains { !PairEvaluator.pairs(ofTrap: $0).isEmpty } }),
+              let trap = (target.traps ?? []).first(where: { !PairEvaluator.pairs(ofTrap: $0).isEmpty }),
+              // 함정 쌍 하나를 골라 그 둘을 억지로 한 묶음에 넣는다.
+              let pair = PairEvaluator.pairs(ofTrap: trap).sorted().first else {
+            throw XCTSkip("함정이 있는 케이스가 없다")
         }
 
         let uuidByShortID = target.identifiers.uuidByShortID
-        let ids = forbidden.compactMap { uuidByShortID[$0] }.map { "\"\($0.uuidString)\"" }.joined(separator: ", ")
+        let ids = pair.split(separator: "|").compactMap { uuidByShortID[String($0)] }
+            .map { "\"\($0.uuidString)\"" }.joined(separator: ", ")
         let response = """
         {"suggestions": [{"title": "억지 묶음", "reason": "이유", "memoIDs": [\(ids)],
          "scheduleText": "", "criterion": "", "emoji": "🎯"}]}
         """
 
         let score = await score(target, response: response)
-        XCTAssertGreaterThan(score.violations, 0, "\(target.caseName): 금지 조합을 묶었는데 위반이 0 이다")
+        XCTAssertGreaterThan(score.violations, 0, "\(target.caseName): 함정을 밟았는데 위반이 0 이다")
+        XCTAssertLessThan(
+            score.groupingScore, score.f1 + 1e-9,
+            "\(target.caseName): 함정을 밟았는데 최종 점수가 안 깎였다"
+        )
     }
 
     /// 같은 입력·같은 응답이면 점수가 **정확히** 같아야 한다. 이게 회귀 판정의 전제다.
