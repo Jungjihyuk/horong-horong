@@ -57,7 +57,7 @@ final class GoalSuggestionEvalTests: XCTestCase {
                 id: GoldenSet.deterministicUUID(for: memo.id),
                 content: memo.content,
                 icon: memo.icon,
-                date: GoldenSet.date(memo.date) ?? Date(),
+                date: memo.derivedDate(referenceDate: goldenCase.reference),
                 startDate: GoldenSet.date(memo.startDate),
                 deadline: GoldenSet.date(memo.deadline),
                 isCompleted: false
@@ -90,11 +90,11 @@ final class GoalSuggestionEvalTests: XCTestCase {
             suggestion.memoIDs.compactMap { shortIDByUUID[$0] }
         }
 
-        let f1Score = PairEvaluator.score(
-            expectedGroups: goldenCase.expectedGroups,
+        let score = PairEvaluator.score(
+            expectedGroups: goldenCase.expectedMemoGroups(of: .weekly),
             predictedGroups: predicted,
-            shouldNotGroup: goldenCase.shouldNotGroup ?? []
-        ).f1
+            traps: goldenCase.traps ?? []
+        )
 
         let outputText = suggestions.map { "- \($0.title)" }.joined(separator: "\n")
 
@@ -114,7 +114,12 @@ final class GoalSuggestionEvalTests: XCTestCase {
                 // 자가 틀린 게 아니라 **붙일 곳이 틀렸다.** 두 함수는 `DeterministicCheckers` 에
                 // 그대로 있고, 컴패니언 스위트가 생기면 거기 붙인다.
                 scores: [
-                    "pairF1": f1Score,
+                    // 순수 F1. **함정 감점 전** 값이라 옛 기록과 그대로 비교된다.
+                    "pairF1": score.f1,
+                    // 함정을 얼마나 피했나. 함정을 안 적은 케이스는 1.0.
+                    "trapAvoidance": score.trapAvoidance,
+                    // **묶음 일치도** — 최종 점수. F1 × 함정 회피.
+                    "groupingScore": score.groupingScore,
                 ],
                 totalMs: latencyMs,
                 runId: runID,
