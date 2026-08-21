@@ -1,0 +1,98 @@
+{
+  "caseName": "지원서 개선과 면접 준비를 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "over_grouping_exclusion",
+    "noise_exclusion",
+    "recall",
+    "measurability",
+    "clarity"
+  ],
+  "note": "취업 준비라는 공통 범위 안에서 지원서 경쟁력 개선과 면접 대응력 향상이라는 두 결과를 분리한다. 채용 공고·직무 역량·경험 정리라는 표현이 겹쳐도 하나의 월간 목표로 합치지 않고, 무관한 자격증 학습은 제외해야 한다. 합성 데이터.",
+  "context": {
+    "persona": "jobseeker",
+    "profile": null
+  },
+  "referenceDate": "2027-12-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2027-12-01",
+      "dueDate": "2027-12-07",
+      "title": "관심 직무 공고 10개를 비교해 공통 요구 역량 정리하기",
+      "icon": "🔎"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2027-12-04",
+      "dueDate": "2027-12-14",
+      "title": "이력서 경력 bullet 5개를 성과와 수치 중심으로 수정하기",
+      "icon": "📄"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2027-12-11",
+      "dueDate": "2027-12-21",
+      "title": "지원 기업 3곳에 맞춰 자기소개서 핵심 문단을 각각 작성하기",
+      "icon": "✍️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2027-12-18",
+      "dueDate": "2027-12-28",
+      "title": "완성한 지원서 3건을 검토받고 수정본으로 제출하기",
+      "icon": "📤"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2027-12-02",
+      "dueDate": "2027-12-09",
+      "title": "지원 직무의 예상 질문 15개와 답변 핵심 요지 정리하기",
+      "icon": "💬"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2027-12-08",
+      "dueDate": "2027-12-16",
+      "title": "대표 경험 3개를 STAR 구조로 말하는 연습 녹음하기",
+      "icon": "🎙️"
+    },
+    {
+      "id": "g7",
+      "createdAt": "2027-12-15",
+      "dueDate": "2027-12-23",
+      "title": "모의 면접 2회를 진행하고 답변별 개선점 기록하기",
+      "icon": "🎯"
+    },
+    {
+      "id": "g8",
+      "createdAt": "2027-12-05",
+      "dueDate": "2027-12-31",
+      "title": "정보처리기사 데이터베이스 과목 3장까지 공부하기",
+      "icon": "📚"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "관심 직무에 맞는 지원서 완성도 높이기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "type": "monthly_goal",
+      "title": "직무 면접 대응력과 답변 전달력 강화하기",
+      "goals": ["g5", "g6", "g7"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "지원서와 면접 모두 직무 역량과 경험을 다루지만, 하나는 서류 제출 결과이고 다른 하나는 면접 대응 결과다.",
+      "groups": [["g1", "g5"], ["g3", "g6"]]
+    },
+    {
+      "why": "정보처리기사 공부는 구직자에게 유용할 수 있지만 지원서나 면접 준비의 산출물로 이어지지 않는 별도 학습 목표다.",
+      "groups": [["g8", "g1"], ["g8", "g5"]]
+    }
+  ]
+}

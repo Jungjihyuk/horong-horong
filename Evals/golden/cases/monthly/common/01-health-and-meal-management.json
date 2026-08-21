@@ -1,0 +1,67 @@
+{
+  "caseName": "기존 주간 건강 목표를 하나의 월간 목표로 통합",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "over_grouping_exclusion",
+    "measurability",
+    "clarity"
+  ],
+  "note": "러닝·체중 관리·집밥 준비 주간 목표는 건강한 생활 습관과 체중 관리라는 한 달 결과로 이어지고, 독서와 반품 처리는 그 월간 목표에 섞이지 않아야 한다.",
+  "context": {
+    "persona": null,
+    "profile": null
+  },
+  "referenceDate": "2026-08-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-08-03",
+      "dueDate": "2026-08-31",
+      "title": "주 3회 30분 러닝하기",
+      "icon": "🏃"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-08-10",
+      "dueDate": "2026-08-31",
+      "title": "주 3회 운동하고 식단 기록 5일 남기기",
+      "icon": "⚖️"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-08-24",
+      "dueDate": "2026-08-30",
+      "title": "주말 집밥 2끼 준비하고 식재료 목록 기록하기",
+      "icon": "🍽️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-08-04",
+      "dueDate": "2026-08-31",
+      "title": "주 3회 소설 20쪽 읽기",
+      "icon": "📖"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2026-08-05",
+      "dueDate": null,
+      "title": "주문 상품 반품 완료하기",
+      "icon": "↩️"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "주 3회 운동과 식단 기록으로 체중 관리하기",
+      "goals": ["g1", "g2", "g3"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "독서와 반품 처리는 건강한 식습관·체중 관리라는 월간 결과로 이어지지 않는다",
+      "groups": [["g4", "g5"]]
+    }
+  ]
+}
