@@ -1,0 +1,74 @@
+{
+  "caseName": "취업 준비 방향은 보이지만 목표 정보가 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability",
+    "relevance"
+  ],
+  "note": "취업 준비라는 영역은 보이지만 목표 직무·기업·지원 산출물·지원 횟수와 완료 기한이 없어 월간 목표를 만들 수 없다. 구직자 페르소나만으로 희망 직무나 활동 우선순위를 추측하지 않고 각 주간 목표를 SMART 기준으로 구체화해야 하는 합성 데이터.",
+  "context": {
+    "persona": "jobseeker",
+    "profile": null
+  },
+  "referenceDate": "2028-11-30",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2028-11-01",
+      "dueDate": "2028-11-07",
+      "title": "좋은 회사 찾기",
+      "icon": "🏢"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2028-11-04",
+      "dueDate": "2028-11-14",
+      "title": "이력서 준비하기",
+      "icon": "📄"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2028-11-10",
+      "dueDate": "2028-11-21",
+      "title": "사람들 만나기",
+      "icon": "🤝"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2028-11-17",
+      "dueDate": "2028-11-28",
+      "title": "면접 잘 보기",
+      "icon": "💬"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_weekly_goals_with_smart_guidance",
+    "guidance": "희망 직무와 기업, 준비할 산출물, 지원·연락 횟수, 면접 연습 기준과 완료 기한이 없어 월간 목표를 정할 수 없다. 먼저 각 목표를 구체적인 행동과 측정 가능한 결과가 있는 주간 목표로 바꾼다.",
+    "goalReviews": [
+      {
+        "goal": "g1",
+        "missing": ["specific", "measurable"],
+        "suggestion": "관심 직무와 지역·근무 조건을 정하고 채용 공고 10개를 비교해 지원 후보 3곳을 선정하기처럼 기준과 수량을 정해보세요."
+      },
+      {
+        "goal": "g2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "지원할 직무를 정한 뒤 이력서의 경력 bullet 5개를 성과와 수치 중심으로 수정하고 피드백 1회를 받기처럼 산출물을 정해보세요."
+      },
+      {
+        "goal": "g3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "참여할 커뮤니티나 만날 대상 3명을 정하고 직무 관련 질문을 준비해 연락 3건을 보내기처럼 대상과 횟수를 정해보세요."
+      },
+      {
+        "goal": "g4",
+        "missing": ["specific", "measurable", "time_bound"],
+        "suggestion": "지원 직무의 예상 질문 10개를 선정해 답변을 녹음 2회 하고, 각 답변의 개선점 1개씩 기록하기처럼 연습량과 기한을 정해보세요."
+      }
+    ]
+  }
+}

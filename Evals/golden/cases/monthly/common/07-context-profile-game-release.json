@@ -1,0 +1,81 @@
+{
+  "caseName": "일반 프로젝트 작업을 개인 게임 출시로 해석하는 맥락",
+  "datasetType": "context_dependent",
+  "successConditions": [
+    "context_handling",
+    "semantic_cohesion",
+    "noise_exclusion",
+    "over_grouping_exclusion",
+    "relevance",
+    "measurability",
+    "clarity"
+  ],
+  "note": "사용자 테스트, 오류 수정, 설명 작성, 배포 전 점검은 일반적인 디지털 프로젝트 작업으로도 해석할 수 있다. 프로필이 없으면 제품 베타·콘텐츠 프로젝트·개인 창작물 준비 등으로 이중 해석할 수 있지만, 개인 창작 게임을 다음 달 출시한다는 프로필이 있을 때 현재 출시 준비라는 월간 결과로 확정한다. 다음 창작 아이디어와 개발 도구 라이선스 점검은 현재 출시 결과와 무관한 별도 목표다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": {
+      "source": "companion_chat",
+      "text": "개인 창작 게임을 다음 달에 출시할 준비 중",
+      "observedAt": "2026-09-28",
+      "status": "user_confirmed"
+    }
+  },
+  "referenceDate": "2026-10-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-10-01",
+      "dueDate": "2026-10-05",
+      "title": "현재 결과물을 5명에게 사용해 보게 하고 개선 의견 정리하기",
+      "icon": "🎮"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-10-04",
+      "dueDate": "2026-10-12",
+      "title": "테스트에서 발견한 오류 5개 수정하고 재확인하기",
+      "icon": "🐞"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-10-10",
+      "dueDate": "2026-10-19",
+      "title": "결과물 소개 문구와 이미지 4장 준비하기",
+      "icon": "🖼️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-10-17",
+      "dueDate": "2026-10-30",
+      "title": "배포 전 점검 항목 10개 확인하고 최종 파일 보관하기",
+      "icon": "🚀"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2026-10-03",
+      "dueDate": "2026-10-26",
+      "title": "다음 창작 게임 아이디어 3개와 핵심 콘셉트 정리하기",
+      "icon": "💡"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2026-10-08",
+      "dueDate": null,
+      "title": "개발 도구 구독과 라이선스 만료일 점검하기",
+      "icon": "🔑"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "개인 창작 게임 첫 출시 준비 완료하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "다음 작품 기획과 개발 도구 라이선스 점검은 현재 게임 출시라는 월간 결과로 이어지지 않으며 서로도 하나의 목표가 아니다",
+      "groups": [["g5", "g6"]]
+    }
+  ]
+}

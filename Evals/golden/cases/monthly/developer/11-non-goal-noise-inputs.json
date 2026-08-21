@@ -1,0 +1,84 @@
+{
+  "caseName": "백엔드 주간 목표 형식으로 들어온 비목표와 노이즈",
+  "datasetType": "non_goal_or_noise",
+  "successConditions": [
+    "noise_detection",
+    "abstention_when_non_goal",
+    "clarity"
+  ],
+  "note": "백엔드 개발자 맥락은 있지만 실행할 목표가 아니라 현재 상태, 참고 링크, 회의 메모, 대기 중인 사건과 의미 없는 문자열만 있다. 이를 월간 개발 목표로 추측하거나 서로 묶지 않고 추천을 생략해야 하는 합성 데이터.",
+  "context": {
+    "persona": "backend_developer",
+    "profile": null
+  },
+  "referenceDate": "2027-12-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2027-12-01",
+      "dueDate": null,
+      "title": "이번 달 배포는 아직 없음",
+      "icon": "📦"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2027-12-03",
+      "dueDate": null,
+      "title": "https://example.com/incident-dashboard",
+      "icon": "🔗"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2027-12-08",
+      "dueDate": null,
+      "title": "운영팀 회의에서 API 이야기함",
+      "icon": "🗣️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2027-12-12",
+      "dueDate": null,
+      "title": "장애 원인 확인 중",
+      "icon": "⏳"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2027-12-18",
+      "dueDate": null,
+      "title": "ㅇㅇㅇ TODO ???",
+      "icon": "❓"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "no_goal_recommendation",
+    "reason": "실행할 행동과 측정 가능한 결과가 아니라 배포 부재 상태, 링크, 회의 메모, 조사 중인 상태와 의미 없는 문자열만 있다.",
+    "goalReviews": [
+      {
+        "goal": "g1",
+        "classification": "status_or_feeling",
+        "reason": "배포가 없다는 현재 상태를 기록한 문장이다."
+      },
+      {
+        "goal": "g2",
+        "classification": "link_only",
+        "reason": "링크만 있어 실행할 개발 목표를 알 수 없다."
+      },
+      {
+        "goal": "g3",
+        "classification": "meeting_note",
+        "reason": "회의에서 다룬 내용을 기록한 메모이며 결과물이나 완료 기준이 없다."
+      },
+      {
+        "goal": "g4",
+        "classification": "in_progress_status",
+        "reason": "장애 조사 상태만 나타내며 수행할 구체적인 다음 행동이 없다."
+      },
+      {
+        "goal": "g5",
+        "classification": "gibberish",
+        "reason": "의미를 해석할 수 없는 문자열이다."
+      }
+    ]
+  }
+}
