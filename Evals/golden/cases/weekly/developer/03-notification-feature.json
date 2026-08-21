@@ -52,12 +52,12 @@
   "expectedGroups": [
     {
       "type": "weekly_goal",
-      "title": "알림 설정 기능 구현 완료하기",
+      "title": "이메일·푸시 토글 2종의 저장·재조회 기능 구현하고 테스트 통과하기",
       "memos": ["m1", "m2", "m3"]
     },
     {
       "type": "weekly_goal",
-      "title": "알림 발송 운영 상태 점검하기",
+      "title": "알림 재시도 정책과 실패 로그 대시보드 점검 항목 5개 확인하기",
       "memos": ["m4", "m5"]
     }
   ]
