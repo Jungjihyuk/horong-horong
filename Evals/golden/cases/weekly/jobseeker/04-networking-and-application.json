@@ -13,7 +13,7 @@
     {"id": "m5", "content": "이번 주 마감인 지원서 2개의 제출 상태 확인하기", "icon": "✅", "startDate": "2026-08-21 18:00"}
   ],
   "expectedGroups": [
-    {"type": "weekly_goal", "title": "개발자 네트워킹 대화 준비하고 후속 연락하기", "memos": ["m1", "m2", "m3"]},
-    {"type": "weekly_goal", "title": "지원 현황과 마감 일정 관리하기", "memos": ["m4", "m5"]}
+    {"type": "weekly_goal", "title": "질문 5개로 개발자 커피챗 1회 준비·진행하고 후속 메시지 보내기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "지원 기업 5곳의 전형 단계와 마감 지원서 2건 기록·확인하기", "memos": ["m4", "m5"]}
   ]
 }

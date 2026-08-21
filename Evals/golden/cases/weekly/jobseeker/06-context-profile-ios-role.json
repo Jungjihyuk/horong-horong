@@ -1,15 +1,60 @@
 {
-  "caseName": "개발 학습과 iOS 취업 목표 맥락",
+  "caseName": "개발 학습과 등록된 직무 목표 맥락",
   "datasetType": "context_dependent",
-  "successConditions": ["context_handling", "semantic_cohesion", "measurability", "clarity", "relevance"],
-  "note": "Swift 학습과 앱 개선 작업만으로는 개인 학습인지 취업 준비인지 알기 어렵다. iOS 개발자 취업이라는 사용자 프로필이 있을 때 하나의 취업 준비 목표로 연결한다. 합성 데이터.",
-  "context": {"persona": "jobseeker", "profile": {"source": "companion_chat", "text": "iOS 개발자 취업을 준비 중", "observedAt": "2026-08-20", "status": "user_confirmed"}},
+  "successConditions": [
+    "context_handling",
+    "semantic_cohesion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "비동기 프로그래밍 학습, 앱 화면 개선, 기술 선택 설명, 채용 요구사항 정리는 개인 학습·프로젝트 문서화·일반 구직 준비로 이중 해석할 수 있다. 사용자가 iOS 개발자 취업을 준비 중이라는 프로필이 있을 때 하나의 직무 준비 목표로 확정한다. 합성 데이터.",
+  "context": {
+    "persona": "jobseeker",
+    "profile": {
+      "source": "companion_chat",
+      "text": "iOS 개발자 취업을 준비 중",
+      "observedAt": "2026-08-20",
+      "status": "user_confirmed"
+    }
+  },
   "referenceDate": "2026-08-21",
   "memos": [
-    {"id": "m1", "content": "Swift Concurrency 강의 2개 듣기", "icon": "🍎", "deadline": "2026-08-18 21:00"},
-    {"id": "m2", "content": "SwiftUI 앱 화면 접근성 개선하기", "icon": "📱", "deadline": "2026-08-19 20:00"},
-    {"id": "m3", "content": "앱 프로젝트 README에 iOS 기술 선택 이유 작성하기", "icon": "📄", "startDate": "2026-08-20 19:00"},
-    {"id": "m4", "content": "iOS 개발자 채용 공고의 기술 요구사항 정리하기", "icon": "🔎", "startDate": "2026-08-21 18:00"}
+    {
+      "id": "m1",
+      "content": "비동기 프로그래밍 강의 2개 듣기",
+      "icon": "🍎",
+      "deadline": "2026-08-18 21:00"
+    },
+    {
+      "id": "m2",
+      "content": "앱 화면 접근성 개선하기",
+      "icon": "📱",
+      "deadline": "2026-08-19 20:00"
+    },
+    {
+      "id": "m3",
+      "content": "앱 프로젝트 README에 기술 선택 이유 작성하기",
+      "icon": "📄",
+      "startDate": "2026-08-20 19:00"
+    },
+    {
+      "id": "m4",
+      "content": "관심 직무 채용 공고의 기술 요구사항 정리하기",
+      "icon": "🔎",
+      "startDate": "2026-08-21 18:00"
+    }
   ],
-  "expectedGroups": [{"type": "weekly_goal", "title": "iOS 개발자 취업 준비 역량과 포트폴리오 보완하기", "memos": ["m1", "m2", "m3", "m4"]}]
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "iOS 개발자 취업 준비 역량과 포트폴리오 보완하기",
+      "memos": [
+        "m1",
+        "m2",
+        "m3",
+        "m4"
+      ]
+    }
+  ]
 }
