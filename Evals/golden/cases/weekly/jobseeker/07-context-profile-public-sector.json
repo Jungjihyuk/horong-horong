@@ -1,0 +1,15 @@
+{
+  "caseName": "자격시험 공부와 공공기관 취업 맥락",
+  "datasetType": "context_dependent",
+  "successConditions": ["context_handling", "semantic_cohesion", "measurability", "clarity", "relevance"],
+  "note": "NCS 문제 풀이와 자기소개서 작성은 여러 취업 경로에 쓰일 수 있다. 공공기관 취업이라는 사용자 프로필이 있을 때 하나의 준비 목표로 연결한다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": {"source": "companion_chat", "text": "공공기관 취업을 준비 중", "observedAt": "2026-08-20", "status": "user_confirmed"}},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "NCS 의사소통능력 문제 20개 풀기", "icon": "📝", "deadline": "2026-08-18 20:00"},
+    {"id": "m2", "content": "NCS 수리능력 오답 10개 다시 풀기", "icon": "🧮", "deadline": "2026-08-19 20:00"},
+    {"id": "m3", "content": "공공기관 자기소개서 경험 문항 2개 초안 작성하기", "icon": "📄", "startDate": "2026-08-20 19:00"},
+    {"id": "m4", "content": "지원할 기관의 채용 일정과 필기 과목 확인하기", "icon": "📅", "startDate": "2026-08-21 18:00"}
+  ],
+  "expectedGroups": [{"type": "weekly_goal", "title": "공공기관 취업 필기·서류 준비하기", "memos": ["m1", "m2", "m3", "m4"]}]
+}

@@ -1,0 +1,69 @@
+{
+  "caseName": "배포 준비 메모지만 버전과 환경이 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability",
+    "relevance"
+  ],
+  "note": "배포 준비라는 영역은 알 수 있지만 대상 버전, 배포 환경, 점검 항목과 완료 기준이 없어 주간 목표를 만들 수 없다. 개발자 페르소나를 근거로 임의의 릴리스를 추측하지 않고 각 메모를 SMART 기준으로 구체화해야 하는 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "배포 준비하기",
+      "icon": "🚀",
+      "deadline": "2026-08-18 23:59"
+    },
+    {
+      "id": "m2",
+      "content": "릴리스 점검하기",
+      "icon": "✅",
+      "deadline": "2026-08-20 23:59"
+    },
+    {
+      "id": "m3",
+      "content": "문서 업데이트하기",
+      "icon": "📄",
+      "startDate": "2026-08-21 19:00"
+    },
+    {
+      "id": "m4",
+      "content": "배포 후 확인하기",
+      "icon": "🔎"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "배포할 버전과 환경을 먼저 정하고, 점검 항목·문서 범위·배포 후 확인 지표를 SMART 기준에 맞게 구체화한다. 실행 가능성은 현재 역량 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {
+        "memo": "m1",
+        "missing": ["specific", "measurable", "time_bound"],
+        "suggestion": "v2.4.0을 스테이징 환경에 배포하고 배포 체크리스트 10개를 완료하기처럼 버전, 환경, 완료 기준을 정해보세요."
+      },
+      {
+        "memo": "m2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "v2.4.0의 로그인·결제·푸시 알림 핵심 시나리오 3개를 점검하고 결과를 기록하기처럼 점검 범위와 기록 기준을 정해보세요."
+      },
+      {
+        "memo": "m3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "v2.4.0 변경 로그와 운영 배포 안내 문서를 업데이트하고 리뷰 1회를 받기처럼 문서 종류와 완료 조건을 정해보세요."
+      },
+      {
+        "memo": "m4",
+        "missing": ["specific", "measurable", "time_bound"],
+        "suggestion": "스테이징 배포 후 30분 동안 오류율과 로그인 성공률을 확인하고 결과를 기록하기처럼 확인할 지표와 기간을 정해보세요."
+      }
+    ]
+  }
+}

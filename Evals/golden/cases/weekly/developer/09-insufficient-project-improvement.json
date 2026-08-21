@@ -1,0 +1,69 @@
+{
+  "caseName": "프로젝트 개선 메모지만 대상과 완료 기준이 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability",
+    "relevance"
+  ],
+  "note": "개발 작업이라는 영역은 알 수 있지만 개선할 기능, 변경 범위, 측정 기준이 없어 주간 목표를 만들 수 없다. 개발자 페르소나가 있어도 내용을 추측하지 않고 각 메모를 SMART 기준으로 구체화해야 하는 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "프로젝트 개선하기",
+      "icon": "🛠️",
+      "deadline": "2026-08-17 23:59"
+    },
+    {
+      "id": "m2",
+      "content": "코드 정리하기",
+      "icon": "🧹",
+      "deadline": "2026-08-19 23:59"
+    },
+    {
+      "id": "m3",
+      "content": "성능 높이기",
+      "icon": "⚡",
+      "startDate": "2026-08-20 20:00"
+    },
+    {
+      "id": "m4",
+      "content": "테스트 보강하기",
+      "icon": "🧪"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "개선 대상과 변경 범위, 측정할 기준을 먼저 정하고 각 메모를 구체적인 산출물과 기한이 있는 작업으로 바꾼다. 실행 가능성은 현재 역량 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {
+        "memo": "m1",
+        "missing": ["specific", "measurable"],
+        "suggestion": "사용자 프로필 화면의 빈 상태 UI를 개선하고 주요 화면 3곳에 적용하기처럼 대상 기능과 적용 범위를 정해보세요."
+      },
+      {
+        "memo": "m2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "인증 모듈의 중복 함수 5개를 공통 함수로 합치고 관련 테스트를 통과시키기처럼 정리할 코드와 완료 기준을 정해보세요."
+      },
+      {
+        "memo": "m3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "검색 API p95 응답 시간을 500ms 이하로 낮추기처럼 개선할 지표와 목표값을 정해보세요."
+      },
+      {
+        "memo": "m4",
+        "missing": ["specific", "measurable"],
+        "suggestion": "알림 설정 저장 로직의 성공·실패 경로 테스트 6개를 추가하고 전체 테스트를 통과시키기처럼 대상과 테스트 수를 정해보세요."
+      }
+    ]
+  }
+}

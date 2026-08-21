@@ -1,0 +1,19 @@
+{
+  "caseName": "채용 박람회 참석 준비와 지원서 제출 분리",
+  "datasetType": "general",
+  "successConditions": ["semantic_cohesion", "over_grouping_exclusion", "measurability", "clarity", "relevance"],
+  "note": "채용 박람회에서 사용할 준비물과 특정 기업 지원서 제출은 모두 취업 활동이지만 서로 다른 결과로 이어진다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "채용 박람회 참가 기업 5곳의 부스 위치 확인하기", "icon": "🗺️", "deadline": "2026-08-18 20:00"},
+    {"id": "m2", "content": "채용 박람회용 30초 자기소개 연습하기", "icon": "🎤", "deadline": "2026-08-19 20:00"},
+    {"id": "m3", "content": "채용 박람회에 이력서 10부 출력해 가져가기", "icon": "📄", "startDate": "2026-08-20 18:00"},
+    {"id": "m4", "content": "관심 기업 프론트엔드 개발자 공고에 맞춰 이력서 수정하기", "icon": "✏️", "deadline": "2026-08-20 21:00"},
+    {"id": "m5", "content": "관심 기업 프론트엔드 개발자 공고에 지원서 제출하기", "icon": "📨", "startDate": "2026-08-21 18:00"}
+  ],
+  "expectedGroups": [
+    {"type": "weekly_goal", "title": "채용 박람회 참가 준비하기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "프론트엔드 개발자 지원서 제출하기", "memos": ["m4", "m5"]}
+  ]
+}

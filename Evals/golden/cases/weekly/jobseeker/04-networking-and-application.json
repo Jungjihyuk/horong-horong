@@ -1,0 +1,19 @@
+{
+  "caseName": "네트워킹 준비와 지원 현황 관리 분리",
+  "datasetType": "general",
+  "successConditions": ["semantic_cohesion", "over_grouping_exclusion", "measurability", "clarity", "relevance"],
+  "note": "현직자 대화 준비와 지원 기업 현황 업데이트는 모두 취업 활동이지만 서로 다른 결과를 만든다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "현직 개발자에게 물어볼 질문 5개 준비하기", "icon": "💬", "deadline": "2026-08-18 18:00"},
+    {"id": "m2", "content": "온라인 커피챗에서 소개할 경력 요약 1분으로 만들기", "icon": "☕", "deadline": "2026-08-19 20:00"},
+    {"id": "m3", "content": "커피챗 후 감사 메시지 보내기", "icon": "✉️", "startDate": "2026-08-20 19:00"},
+    {"id": "m4", "content": "지원한 기업 5곳의 전형 단계 스프레드시트 업데이트하기", "icon": "📋", "deadline": "2026-08-20 21:00"},
+    {"id": "m5", "content": "이번 주 마감인 지원서 2개의 제출 상태 확인하기", "icon": "✅", "startDate": "2026-08-21 18:00"}
+  ],
+  "expectedGroups": [
+    {"type": "weekly_goal", "title": "개발자 네트워킹 대화 준비하고 후속 연락하기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "지원 현황과 마감 일정 관리하기", "memos": ["m4", "m5"]}
+  ]
+}
