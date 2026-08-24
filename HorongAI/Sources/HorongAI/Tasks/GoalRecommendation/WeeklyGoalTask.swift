@@ -537,6 +537,7 @@ public enum WeeklyGoalTask {
     /// 모델에게 지어내라고 시킬 이유가 없다(토큰만 쓰고 내용도 나빠진다).
     public static let responseSchema = JSONSchema.object(
         properties: [
+            "resultType": .string,
             "suggestions": .array(of: .object(
                 properties: [
                     "title": .string,
@@ -547,9 +548,17 @@ public enum WeeklyGoalTask {
                     "emoji": .string,
                 ],
                 required: ["title", "reason", "items"]
+            )),
+            "guidance": .array(of: .object(
+                properties: [
+                    "items": .array(of: .integer),
+                    "missing": .array(of: .string),
+                    "suggestion": .string,
+                ],
+                required: ["items", "missing", "suggestion"]
             ))
         ],
-        required: ["suggestions"]
+        required: []
     )
 
     private static let promptFallback = """
