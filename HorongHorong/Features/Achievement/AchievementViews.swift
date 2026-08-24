@@ -9,6 +9,23 @@ import UniformTypeIdentifiers
 import FoundationModels
 #endif
 
+/*
+ 성취 탭의 화면과 앱 도메인 연결을 담당한다.
+
+ 이 파일의 책임
+ - 목표·할일을 화면에 표시하고, 목표 생성·수정·연결을 SwiftData에 반영한다.
+ - 목표 추천의 후보를 고른다: 앱 설정을 적용해 할일/주간 목표를 필터링하고 스냅샷으로 만든다.
+ - 추천 실행 흐름을 조율한다: 공급자 선택, 주간·월간 실행 순서, 룰 기반 폴백, 화면 상태와 실행 기록을 맡는다.
+
+ 이 파일의 책임이 아닌 것
+ - 프롬프트 구성, 입력 예산 적용, 모델 응답 JSON 파싱·검증은 `HorongAI`의
+   `WeeklyGoalTask`·`MonthlyGoalTask`가 담당한다.
+ - 공급자별 생성기(MLX·Ollama·Apple Foundation Models)의 실제 모델 호출은 각 생성기 타입이 담당한다.
+
+ 추천 관련 정책이 화면 상태와 무관해지거나 다른 기능에서도 재사용될 때는 이 파일에 쌓지 말고
+ 별도 정책 타입 또는 `HorongAI`로 옮긴다.
+ */
+
 private enum AchievementTodoStatus {
     case done
     case pending
@@ -645,7 +662,8 @@ enum AchievementGoalSuggestionBuilder {
 
     static func monthlyRuleBasedSuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int
     ) -> [AchievementGoalSuggestion] {
         let candidates = goals.filter { goal in
             goal.monthGoal?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
@@ -653,9 +671,9 @@ enum AchievementGoalSuggestionBuilder {
         let source = candidates.count >= 2 ? candidates : goals
         var suggestions: [AchievementGoalSuggestion] = []
 
-        suggestions.append(contentsOf: groupedMonthlyByContext(from: source))
-        suggestions.append(contentsOf: groupedMonthlyByKeyword(from: source))
-        suggestions.append(contentsOf: groupedMonthlyFallback(from: source))
+        suggestions.append(contentsOf: groupedMonthlyByContext(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
+        suggestions.append(contentsOf: groupedMonthlyByKeyword(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
+        suggestions.append(contentsOf: groupedMonthlyFallback(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
 
         return deduplicatedMonthly(suggestions)
             .sorted { lhs, rhs in
@@ -886,7 +904,7 @@ enum AchievementGoalSuggestionBuilder {
         return false
     }
 
-    private static func groupedMonthlyByContext(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyByContext(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         let groups = Dictionary(grouping: goals) { goal in
             [
                 goal.roleName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -898,7 +916,7 @@ enum AchievementGoalSuggestionBuilder {
 
         return groups.compactMap { key, items in
             guard !key.isEmpty, items.count >= 2 else { return nil }
-            let limited = limitedGoals(items)
+            let limited = limitedGoals(items, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
             return monthlySuggestion(
                 title: monthlyTitle(for: limited, context: key),
                 reason: "같은 페르소나나 비전으로 이어지는 주간 목표 \(limited.count)개를 묶었습니다.",
@@ -910,7 +928,7 @@ enum AchievementGoalSuggestionBuilder {
         }
     }
 
-    private static func groupedMonthlyByKeyword(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyByKeyword(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         let keywordGroups: [(keywords: [String], emoji: String)] = [
             (["이력서", "포트폴리오", "지원", "면접", "채용", "커리어"], "💼"),
             (["개발", "구현", "버그", "릴리즈", "v0", "앱", "호롱"], "🚀"),
@@ -927,7 +945,7 @@ enum AchievementGoalSuggestionBuilder {
                 }
             }
             guard items.count >= 2 else { return nil }
-            let limited = limitedGoals(items)
+            let limited = limitedGoals(items, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
             return monthlySuggestion(
                 title: monthlyTitle(for: limited),
                 reason: "비슷한 방향의 주간 목표 \(limited.count)개를 한 달 목표로 묶었습니다.",
@@ -939,9 +957,9 @@ enum AchievementGoalSuggestionBuilder {
         }
     }
 
-    private static func groupedMonthlyFallback(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyFallback(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         guard goals.count >= 2 else { return [] }
-        let limited = limitedGoals(goals)
+        let limited = limitedGoals(goals, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
         return [
             monthlySuggestion(
                 title: monthlyTitle(for: limited),
@@ -979,7 +997,7 @@ enum AchievementGoalSuggestionBuilder {
         )
     }
 
-    private static func limitedGoals(_ goals: [AchievementGoalSnapshot]) -> [AchievementGoalSnapshot] {
+    private static func limitedGoals(_ goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSnapshot] {
         Array(goals.sorted { lhs, rhs in
             if lhs.done == lhs.total, rhs.done != rhs.total {
                 return false
@@ -991,7 +1009,7 @@ enum AchievementGoalSuggestionBuilder {
                 return lhs.title < rhs.title
             }
             return lhs.total > rhs.total
-        }.prefix(4))
+        }.prefix(maxGoalsPerSuggestion))
     }
 
     private static func deduplicated(_ suggestions: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
@@ -1363,6 +1381,7 @@ enum AchievementFoundationGoalSuggestionProvider {
     static func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
         runID: String = AIRunLog.newRunID(),
         candidateCount: Int? = nil,
         variant: String? = nil,
@@ -1383,6 +1402,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             let fromMLX = await monthlyMLXSuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 context: context.attempt(1)
             )
             if !fromMLX.isEmpty { return fromMLX }
@@ -1391,6 +1411,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             let fromOllama = await monthlyOllamaSuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 context: context.attempt(1)
             )
             if !fromOllama.isEmpty { return fromOllama }
@@ -1404,6 +1425,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             return await FoundationModelsGoalSuggestionProvider().monthlySuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 context: context.attempt(provider == .appleFoundation ? 1 : 2)
             )
         }
@@ -1414,6 +1436,7 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func monthlyMLXSuggestions(
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
         context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         #if canImport(MLXLLM)
@@ -1426,6 +1449,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             return await sharedMonthlySuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 provider: .mlx,
                 model: model,
                 source: .mlx,
@@ -1458,6 +1482,7 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func monthlyOllamaSuggestions(
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
         context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         if #available(macOS 26.0, *) {
@@ -1478,6 +1503,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             return await sharedMonthlySuggestions(
                 from: goals,
                 suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 provider: .ollama,
                 model: model,
                 source: .ollama,
@@ -1524,6 +1550,7 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func sharedMonthlySuggestions(
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
         provider: Constants.AchievementSuggestionProviderKind,
         model: String,
         source: AchievementGoalSuggestionSource,
@@ -1538,7 +1565,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         let startedAt = Date()
         // 주간과 같은 사정이다. 월간 상한은 설정이 아니라 상수(`maxGoalsPerSuggestion`)다.
         let parameters = parameters.merging(
-            ["max_items_per_goal": Double(MonthlyGoalTask.maxGoalsPerSuggestion)]
+            ["max_items_per_goal": Double(maxGoalsPerSuggestion)]
         ) { a, _ in a }
 
         if let blocked = await preflight() {
@@ -1568,6 +1595,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             goals: goals.map(\.taskGoal),
             suggestionCount: suggestionCount,
             inputLimit: max(3, min(30, suggestionCount * 6)),
+            maxGoalsPerSuggestion: maxGoalsPerSuggestion,
             trace: trace,
             generate: generate
         )
@@ -1793,6 +1821,7 @@ struct FoundationModelsGoalSuggestionProvider {
     func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
         suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
         context: RunContext
     ) async -> [AchievementGoalSuggestion] {
         let startedAt = Date()
@@ -1808,7 +1837,7 @@ struct FoundationModelsGoalSuggestionProvider {
                     model: nil,
                     outcome: "modelUnavailable",
                     parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
-                     "max_items_per_goal": Double(MonthlyGoalTask.maxGoalsPerSuggestion)]
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
                 )
             )
             return []
@@ -1824,6 +1853,7 @@ struct FoundationModelsGoalSuggestionProvider {
             goals: goals.map(\.taskGoal),
             suggestionCount: suggestionCount,
             inputLimit: max(3, min(30, suggestionCount * 6)),
+            maxGoalsPerSuggestion: maxGoalsPerSuggestion,
             trace: trace,
             generate: { prompt, instructions in
                 try await generator.generate(
@@ -1854,7 +1884,7 @@ struct FoundationModelsGoalSuggestionProvider {
                     promptCharacters: outcome.promptCharacters,
                     timings: outcome.timings,
                     parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
-                     "max_items_per_goal": Double(MonthlyGoalTask.maxGoalsPerSuggestion)]
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
                 )
             )
             return []
@@ -1888,7 +1918,7 @@ struct FoundationModelsGoalSuggestionProvider {
                 parse: diagnostics.parseSummary,
                 timings: outcome.timings,
                 parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
-                     "max_items_per_goal": Double(MonthlyGoalTask.maxGoalsPerSuggestion)]
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
             )
         )
         return suggestions
@@ -4409,7 +4439,7 @@ struct AchievementDetailWindow: View {
         let wGoals = goals.filter { $0.cadence == "주간" && $0.monthGoal == goal.title }
         let wGoalMemoIDs = Set(wGoals.flatMap { $0.sourceMemoIDs })
         let directMemos = linkedMemos(for: goal).filter { !wGoalMemoIDs.contains($0.id) }
-        
+
         if !wGoals.isEmpty || !directMemos.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -4550,7 +4580,7 @@ struct AchievementDetailWindow: View {
             slots.append(nil)
         }
         let validSlots = Array(slots.prefix(clampedJourneyMaxFlagCount))
-        
+
         return validSlots.enumerated().sorted {
             let lhsGoal = $0.element
             let rhsGoal = $1.element
@@ -7707,13 +7737,17 @@ private struct AchievementGoalComposerSheet: View {
     let onSave: (AchievementGoalRecord, Set<UUID>, [String]) throws -> Void
 
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
-    private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
+    private var weeklySuggestionLimit: Int = Constants.defaultAchievementSuggestionCount
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
-    private var suggestionMaxTodoCount: Int = Constants.defaultAchievementSuggestionMaxTodoCount
+    private var maxTodosPerWeeklyGoal: Int = Constants.defaultAchievementSuggestionMaxTodoCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
-    private var monthlySuggestionMinWeeklyGoalCount: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
+    private var minWeeklyGoalsForMonthlySuggestions: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionCount)
-    private var monthlySuggestionCount: Int = Constants.defaultAchievementMonthlySuggestionCount
+    private var monthlySuggestionLimit: Int = Constants.defaultAchievementMonthlySuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementMinTodosForWeeklySuggestions)
+    private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
+    @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
+    private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
     @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementDismissedSuggestionKeys)
@@ -7798,16 +7832,22 @@ private struct AchievementGoalComposerSheet: View {
                 loadGoalSuggestions()
             }
         }
-        .onChange(of: suggestionCount) { _, _ in
+        .onChange(of: weeklySuggestionLimit) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: suggestionMaxTodoCount) { _, _ in
+        .onChange(of: maxTodosPerWeeklyGoal) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: monthlySuggestionMinWeeklyGoalCount) { _, _ in
+        .onChange(of: minWeeklyGoalsForMonthlySuggestions) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: monthlySuggestionCount) { _, _ in
+        .onChange(of: monthlySuggestionLimit) { _, _ in
+            reloadSuggestionsAfterSettingsChange()
+        }
+        .onChange(of: minTodosForWeeklySuggestions) { _, _ in
+            reloadSuggestionsAfterSettingsChange()
+        }
+        .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
         .onChange(of: excludedMemoIconsRaw) { _, _ in
@@ -8756,20 +8796,28 @@ private struct AchievementGoalComposerSheet: View {
         return unlinked
     }
 
-    private var clampedSuggestionCount: Int {
-        clamped(suggestionCount, in: Constants.achievementSuggestionCountRange)
+    private var clampedWeeklySuggestionLimit: Int {
+        clamped(weeklySuggestionLimit, in: Constants.achievementSuggestionCountRange)
     }
 
-    private var clampedSuggestionMaxTodoCount: Int {
-        clamped(suggestionMaxTodoCount, in: Constants.achievementSuggestionMaxTodoCountRange)
+    private var clampedMaxTodosPerWeeklyGoal: Int {
+        clamped(maxTodosPerWeeklyGoal, in: Constants.achievementSuggestionMaxTodoCountRange)
     }
 
-    private var clampedMonthlyMinWeeklyGoalCount: Int {
-        clamped(monthlySuggestionMinWeeklyGoalCount, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
+    private var clampedMinWeeklyGoalsForMonthlySuggestions: Int {
+        clamped(minWeeklyGoalsForMonthlySuggestions, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
     }
 
-    private var clampedMonthlySuggestionCount: Int {
-        clamped(monthlySuggestionCount, in: Constants.achievementMonthlySuggestionCountRange)
+    private var clampedMonthlySuggestionLimit: Int {
+        clamped(monthlySuggestionLimit, in: Constants.achievementMonthlySuggestionCountRange)
+    }
+
+    private var clampedMinTodosForWeeklySuggestions: Int {
+        clamped(minTodosForWeeklySuggestions, in: Constants.achievementMinTodosForWeeklySuggestionsRange)
+    }
+
+    private var clampedMaxWeeklyGoalsPerMonthlyGoal: Int {
+        clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
     }
 
     private func memo(for id: UUID) -> Memo? {
@@ -8782,30 +8830,27 @@ private struct AchievementGoalComposerSheet: View {
 
     private func loadGoalSuggestions(force: Bool = false) {
         guard force || !isLoadingSuggestions else { return }
-        let snapshots = AchievementGoalSuggestionBuilder.snapshots(from: suggestionSourceMemos)
-        let suggestionCount = clampedSuggestionCount
-        let maxTodoCount = clampedSuggestionMaxTodoCount
-        let weeklyGoalSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: weeklyGoalsForMonthlySuggestions)
-        let monthlyMinWeeklyCount = clampedMonthlyMinWeeklyGoalCount
-        let monthlySuggestionCount = clampedMonthlySuggestionCount
-        let shouldSuggestMonthly = weeklyGoalSnapshots.count >= monthlyMinWeeklyCount
-        let ruleSuggestions = AchievementGoalSuggestionBuilder.ruleBasedSuggestions(
-            from: snapshots,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxTodoCount
-        )
-        let monthlyRuleSuggestions = shouldSuggestMonthly
-            ? AchievementGoalSuggestionBuilder.monthlyRuleBasedSuggestions(
-                from: weeklyGoalSnapshots,
-                suggestionCount: monthlySuggestionCount
-            )
-            : []
+        // weekly
+        let minTodosForWeeklySuggestions = clampedMinTodosForWeeklySuggestions // 추천 시작 기준: 할 일이 N개 이상일 때
+        let weeklySuggestionLimit = clampedWeeklySuggestionLimit // 한 번에 보여줄 최대 주간 목표 수
+        let maxTodosPerWeeklyGoal = clampedMaxTodosPerWeeklyGoal // 주간 목표 하나에 묶을 최대 할 일 수
+        let weeklyTodoSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: suggestionSourceMemos) // 주간 할 일 스냅샷. (주간 목표 추천 시 입력 데이터 복사본/필터를 통과한 할 일 목록)
+        // monthly
+        let minWeeklyGoalsForMonthlySuggestions = clampedMinWeeklyGoalsForMonthlySuggestions // 추천 시작 기준: 주간 목표가 N개 이상일 때
+        let monthlySuggestionLimit = clampedMonthlySuggestionLimit // 한 번에 보여줄 최대 월간 목표 수
+        let maxWeeklyGoalsPerMonthlyGoal = clampedMaxWeeklyGoalsPerMonthlyGoal // 월간 목표 하나에 묶을 최대 주간 목표 수
+        let weeklyGoalSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: weeklyGoalsForMonthlySuggestions) // 주간 목표 스냅샷. (월간 목표 추천 시 입력 데이터 복사본/필터를 통과한 주간 목표 목록)
+
+        // 후보 할일이 너무 적으면 하나의 주간 목표로 의미 있게 묶을 수 없으므로 추천을 시작하지 않는다.
+        let canSuggestWeekly = weeklyTodoSnapshots.count >= minTodosForWeeklySuggestions
+        // 주간 목표가 충분히 쌓였을 때만, 그것들을 더 큰 월간 목표로 묶어 본다.
+        let canSuggestMonthly = weeklyGoalSnapshots.count >= minWeeklyGoalsForMonthlySuggestions
 
         suggestions = []
-        suggestionMessage = shouldSuggestMonthly
+        suggestionMessage = canSuggestMonthly
             ? "할일과 주간 목표의 의미를 분석하고 있습니다."
             : "할일의 의미를 분석하고 있습니다."
-        isLoadingSuggestions = true
+        isLoadingSuggestions = true // '추천 중' 로딩 표시를 위한 플래그
         didLoadSuggestions = true
 
         // 버튼 한 번에 붙는 id. 주간·월간이 이 값을 공유해야 기록에서 한 실행으로 묶인다.
@@ -8824,21 +8869,23 @@ private struct AchievementGoalComposerSheet: View {
             let strategy = SuggestionExecutionStrategy.resolved(provider: provider)
 
             @Sendable func weeklyRun() async -> [AchievementGoalSuggestion] {
-                await AchievementFoundationGoalSuggestionProvider.suggestions(
-                    from: snapshots,
-                    suggestionCount: suggestionCount,
-                    maxMemoCount: maxTodoCount,
+                guard canSuggestWeekly else { return [] }
+                return await AchievementFoundationGoalSuggestionProvider.suggestions(
+                    from: weeklyTodoSnapshots,
+                    suggestionCount: weeklySuggestionLimit,
+                    maxMemoCount: maxTodosPerWeeklyGoal,
                     runID: runID,
-                    candidateCount: snapshots.count,
+                    candidateCount: weeklyTodoSnapshots.count,
                     variant: strategy.rawValue,
                     provider: provider
                 )
             }
             @Sendable func monthlyRun() async -> [AchievementGoalSuggestion] {
-                guard shouldSuggestMonthly else { return [] }
+                guard canSuggestMonthly else { return [] }
                 return await AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
                     from: weeklyGoalSnapshots,
-                    suggestionCount: monthlySuggestionCount,
+                    suggestionCount: monthlySuggestionLimit,
+                    maxGoalsPerSuggestion: maxWeeklyGoalsPerMonthlyGoal,
                     runID: runID,
                     candidateCount: weeklyGoalSnapshots.count,
                     variant: strategy.rawValue,
@@ -8878,18 +8925,35 @@ private struct AchievementGoalComposerSheet: View {
                 let weeklyModel = mergeSuggestions(
                     weeklyModelValues,
                     cadence: .weekly,
-                    displayLimit: suggestionCount
+                    displayLimit: weeklySuggestionLimit
                 )
                 let monthlyModel = mergeSuggestions(
                     monthlyModelValues,
                     cadence: .monthly,
-                    displayLimit: monthlySuggestionCount
+                    displayLimit: monthlySuggestionLimit
                 )
+
+                // AI 결과가 유효하지 않을 때만 규칙 기반 폴백을 만든다.
+                let weeklyRuleSuggestions = weeklyModel.suggestions.isEmpty && canSuggestWeekly
+                    ? AchievementGoalSuggestionBuilder.ruleBasedSuggestions(
+                        from: weeklyTodoSnapshots,
+                        suggestionCount: weeklySuggestionLimit,
+                        maxMemoCount: maxTodosPerWeeklyGoal
+                    )
+                    : []
+                let monthlyRuleSuggestions = monthlyModel.suggestions.isEmpty && canSuggestMonthly
+                    ? AchievementGoalSuggestionBuilder.monthlyRuleBasedSuggestions(
+                        from: weeklyGoalSnapshots,
+                        suggestionCount: monthlySuggestionLimit,
+                        maxGoalsPerSuggestion: maxWeeklyGoalsPerMonthlyGoal
+                    )
+                    : []
+
                 let weekly = weeklyModel.suggestions.isEmpty
-                    ? mergeSuggestions(ruleSuggestions, cadence: .weekly, displayLimit: suggestionCount).suggestions
+                    ? mergeSuggestions(weeklyRuleSuggestions, cadence: .weekly, displayLimit: weeklySuggestionLimit).suggestions
                     : weeklyModel.suggestions
                 let monthly = monthlyModel.suggestions.isEmpty
-                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionCount).suggestions
+                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionLimit).suggestions
                     : monthlyModel.suggestions
 
                 // 룰이 대신 만든 경우도 **기록에 남긴다.** 오래도록 안 남겨서, 화면에는 떴는데
@@ -8898,10 +8962,10 @@ private struct AchievementGoalComposerSheet: View {
                 if weeklyModel.suggestions.isEmpty {
                     AIRunLog.recordRuleFallback(
                         runID: runID, task: "weekly_goal",
-                        candidateCount: snapshots.count, suggestions: weekly
+                        candidateCount: weeklyTodoSnapshots.count, suggestions: weekly
                     )
                 }
-                if shouldSuggestMonthly, monthlyModel.suggestions.isEmpty {
+                if canSuggestMonthly, monthlyModel.suggestions.isEmpty {
                     AIRunLog.recordRuleFallback(
                         runID: runID, task: "monthly_goal",
                         candidateCount: weeklyGoalSnapshots.count, suggestions: monthly
@@ -8909,12 +8973,12 @@ private struct AchievementGoalComposerSheet: View {
                 }
                 logSuggestionFunnel(
                     cadence: .weekly,
-                    inputCount: snapshots.count,
+                    inputCount: weeklyTodoSnapshots.count,
                     modelParsed: weeklyModelValues.count,
                     stats: weeklyModel.stats,
                     shownCount: weekly.count
                 )
-                if shouldSuggestMonthly {
+                if canSuggestMonthly {
                     logSuggestionFunnel(
                         cadence: .monthly,
                         inputCount: weeklyGoalSnapshots.count,
@@ -8929,14 +8993,16 @@ private struct AchievementGoalComposerSheet: View {
                     suggestionMessage = finalRuleSuggestionMessage(
                         weeklyCount: weekly.count,
                         monthlyCount: monthly.count,
-                        shouldSuggestMonthly: shouldSuggestMonthly,
-                        monthlyMinWeeklyCount: monthlyMinWeeklyCount
+                        canSuggestWeekly: canSuggestWeekly,
+                        weeklyTodoMinimum: minTodosForWeeklySuggestions,
+                        canSuggestMonthly: canSuggestMonthly,
+                        monthlyMinWeeklyCount: minWeeklyGoalsForMonthlySuggestions
                     )
-                } else if weeklyModel.suggestions.isEmpty || (shouldSuggestMonthly && monthlyModel.suggestions.isEmpty) {
+                } else if weeklyModel.suggestions.isEmpty || (canSuggestMonthly && monthlyModel.suggestions.isEmpty) {
                     // 모델이 못 만들어 **규칙이 대신한** 경우. 예전에는 «만들었습니다» 라고만 해서
                     // 사용자가 AI 결과를 받은 줄 알았다.
                     suggestionMessage = "AI가 묶음을 만들지 못해 규칙으로 묶었습니다. 다시 시도하면 달라질 수 있습니다."
-                } else if shouldSuggestMonthly && monthly.isEmpty {
+                } else if canSuggestMonthly && monthly.isEmpty {
                     // 월간을 시도했는데 하나도 못 만든 경우. 예전에는 «만들었습니다» 라고만 해서
                     // 사용자가 **월간이 왜 없는지 모른 채** 빈 자리를 봤다.
                     //
@@ -8964,8 +9030,8 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func mergeSuggestions(_ values: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
-        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedSuggestionCount)
-        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionCount)
+        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedWeeklySuggestionLimit)
+        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionLimit)
         return weekly.suggestions + monthly.suggestions
     }
 
@@ -9132,9 +9198,9 @@ private struct AchievementGoalComposerSheet: View {
         return first
     }
 
-    private func initialSuggestionMessage(weeklyCount: Int, monthlyCount: Int, shouldSuggestMonthly: Bool) -> String {
+    private func initialSuggestionMessage(weeklyCount: Int, monthlyCount: Int, canSuggestMonthly: Bool) -> String {
         if weeklyCount == 0 && monthlyCount == 0 {
-            return shouldSuggestMonthly
+            return canSuggestMonthly
                 ? "직접 선택할 수 있는 목표는 있지만 자동 묶음은 아직 없습니다."
                 : "주간 목표가 더 쌓이면 월간 목표 추천도 함께 보여줍니다."
         }
@@ -9147,11 +9213,16 @@ private struct AchievementGoalComposerSheet: View {
     private func finalRuleSuggestionMessage(
         weeklyCount: Int,
         monthlyCount: Int,
-        shouldSuggestMonthly: Bool,
+        canSuggestWeekly: Bool,
+        weeklyTodoMinimum: Int,
+        canSuggestMonthly: Bool,
         monthlyMinWeeklyCount: Int
     ) -> String {
         if weeklyCount == 0 && monthlyCount == 0 {
-            return shouldSuggestMonthly
+            if !canSuggestWeekly {
+                return "할일이 (weeklyTodoMinimum)개 이상 쌓이면 주간 목표를 추천합니다."
+            }
+            return canSuggestMonthly
                 ? "추천할 묶음이 없습니다. 직접 목표를 선택해 만들 수 있습니다."
                 : "주간 목표가 \(monthlyMinWeeklyCount)개 이상 쌓이면 월간 목표도 추천합니다."
         }

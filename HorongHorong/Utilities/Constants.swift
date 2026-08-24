@@ -883,6 +883,8 @@ enum Constants {
         static let achievementSuggestionMaxTodoCount = "achievement.suggestionMaxTodoCount"
         static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
+        static let achievementMinTodosForWeeklySuggestions = "achievement.minTodosForWeeklySuggestions"
+        static let achievementMaxWeeklyGoalsPerMonthlyGoal = "achievement.maxWeeklyGoalsPerMonthlyGoal"
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
         static let achievementSuggestionProvider = "achievement.suggestionProvider"
         /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
@@ -1014,6 +1016,8 @@ enum Constants {
     static let defaultAchievementSuggestionMaxTodoCount = 5
     static let defaultAchievementMonthlySuggestionMinWeeklyGoalCount = 3
     static let defaultAchievementMonthlySuggestionCount = 2
+    static let defaultAchievementMinTodosForWeeklySuggestions = 2
+    static let defaultAchievementMaxWeeklyGoalsPerMonthlyGoal = 4
     static let legacyAchievementSuggestionExcludedMemoIconsRaw = "☕️,💡,📜"
     static let defaultAchievementSuggestionExcludedMemoIcons = ["☕️", "🌱", "📜"]
     static let defaultAchievementSuggestionExcludedMemoIconsRaw = defaultAchievementSuggestionExcludedMemoIcons.joined(separator: ",")
@@ -1021,6 +1025,8 @@ enum Constants {
     static let achievementSuggestionMaxTodoCountRange = 2...12
     static let achievementMonthlySuggestionMinWeeklyGoalCountRange = 2...8
     static let achievementMonthlySuggestionCountRange = 1...6
+    static let achievementMinTodosForWeeklySuggestionsRange = 2...12
+    static let achievementMaxWeeklyGoalsPerMonthlyGoalRange = 2...8
     static let defaultAchievementJourneyMaxFlagCount = 5
     static let achievementJourneyMaxFlagCountRange = 1...8
 

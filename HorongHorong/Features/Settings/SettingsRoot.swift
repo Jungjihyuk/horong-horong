@@ -254,13 +254,17 @@ struct SettingsRoot: View {
 
 private struct AchievementPage: View {
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
-    private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
+    private var weeklySuggestionLimit: Int = Constants.defaultAchievementSuggestionCount
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
-    private var suggestionMaxTodoCount: Int = Constants.defaultAchievementSuggestionMaxTodoCount
+    private var maxTodosPerWeeklyGoal: Int = Constants.defaultAchievementSuggestionMaxTodoCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
-    private var monthlySuggestionMinWeeklyGoalCount: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
+    private var minWeeklyGoalsForMonthlySuggestions: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionCount)
-    private var monthlySuggestionCount: Int = Constants.defaultAchievementMonthlySuggestionCount
+    private var monthlySuggestionLimit: Int = Constants.defaultAchievementMonthlySuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementMinTodosForWeeklySuggestions)
+    private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
+    @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
+    private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
     @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -323,83 +327,48 @@ private struct AchievementPage: View {
                 }
             }
 
-            SettingsGroupCard("목표 추천") {
+            SettingsGroupCard("주간 목표 추천") {
                 SettingsRow(
-                    "주간 목표 추천 개수",
-                    subtitle: "할일을 묶어 한 번에 보여줄 주간 목표 초안 수입니다."
+                    "추천 시작 기준",
+                    subtitle: "할일이 이 개수 이상 있을 때부터 주간 목표 추천을 보여줍니다."
                 ) {
-                    Text("\(clampedSuggestionCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedSuggestionCount)개",
-                        value: Binding(
-                            get: { clampedSuggestionCount },
-                            set: { suggestionCount = clamped($0, in: Constants.achievementSuggestionCountRange) }
-                        ),
-                        in: Constants.achievementSuggestionCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $minTodosForWeeklySuggestions, range: Constants.achievementMinTodosForWeeklySuggestionsRange)
+                }
+                SettingsRow(
+                    "한 번에 보여줄 최대 주간 목표 수",
+                    subtitle: "할일을 묶어 한 번에 보여줄 주간 목표 초안의 최대 개수입니다."
+                ) {
+                    suggestionStepper(value: $weeklySuggestionLimit, range: Constants.achievementSuggestionCountRange)
                 }
 
                 SettingsRow(
-                    "묶음당 할일 최대 개수",
-                    subtitle: "추천 목표 하나에 포함할 할일 수를 제한합니다. 값이 클수록 더 큰 목표 초안이 만들어집니다."
+                    "주간 목표 하나에 묶을 최대 할일 수",
+                    subtitle: "값이 클수록 더 큰 주간 목표 초안이 만들어집니다."
                 ) {
-                    Text("\(clampedMaxTodoCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMaxTodoCount)개",
-                        value: Binding(
-                            get: { clampedMaxTodoCount },
-                            set: { suggestionMaxTodoCount = clamped($0, in: Constants.achievementSuggestionMaxTodoCountRange) }
-                        ),
-                        in: Constants.achievementSuggestionMaxTodoCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $maxTodosPerWeeklyGoal, range: Constants.achievementSuggestionMaxTodoCountRange)
                 }
             }
 
             SettingsGroupCard("월간 목표 추천") {
                 SettingsRow(
-                    "활성화 기준",
+                    "추천 시작 기준",
                     subtitle: "주간 목표가 이 개수 이상 있을 때부터 월간 목표 추천을 함께 보여줍니다."
                 ) {
-                    Text("\(clampedMonthlyMinWeeklyGoalCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMonthlyMinWeeklyGoalCount)개",
-                        value: Binding(
-                            get: { clampedMonthlyMinWeeklyGoalCount },
-                            set: { monthlySuggestionMinWeeklyGoalCount = clamped($0, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange) }
-                        ),
-                        in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $minWeeklyGoalsForMonthlySuggestions, range: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
                 }
 
                 SettingsRow(
-                    "월간 목표 추천 개수",
+                    "한 번에 보여줄 최대 월간 목표 수",
                     subtitle: "주간 목표들을 다시 묶어 제안할 월간 목표 초안의 최대 개수입니다."
                 ) {
-                    Text("\(clampedMonthlySuggestionCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMonthlySuggestionCount)개",
-                        value: Binding(
-                            get: { clampedMonthlySuggestionCount },
-                            set: { monthlySuggestionCount = clamped($0, in: Constants.achievementMonthlySuggestionCountRange) }
-                        ),
-                        in: Constants.achievementMonthlySuggestionCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $monthlySuggestionLimit, range: Constants.achievementMonthlySuggestionCountRange)
+                }
+
+                SettingsRow(
+                    "월간 목표 하나에 묶을 최대 주간 목표 수",
+                    subtitle: "값이 클수록 더 큰 월간 목표 초안이 만들어집니다."
+                ) {
+                    suggestionStepper(value: $maxWeeklyGoalsPerMonthlyGoal, range: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
                 }
             }
 
@@ -486,10 +455,12 @@ private struct AchievementPage: View {
             }
         }
         .onAppear(perform: normalizeValues)
-        .onChange(of: suggestionCount) { _, _ in normalizeValues() }
-        .onChange(of: suggestionMaxTodoCount) { _, _ in normalizeValues() }
-        .onChange(of: monthlySuggestionMinWeeklyGoalCount) { _, _ in normalizeValues() }
-        .onChange(of: monthlySuggestionCount) { _, _ in normalizeValues() }
+        .onChange(of: weeklySuggestionLimit) { _, _ in normalizeValues() }
+        .onChange(of: maxTodosPerWeeklyGoal) { _, _ in normalizeValues() }
+        .onChange(of: minWeeklyGoalsForMonthlySuggestions) { _, _ in normalizeValues() }
+        .onChange(of: monthlySuggestionLimit) { _, _ in normalizeValues() }
+        .onChange(of: minTodosForWeeklySuggestions) { _, _ in normalizeValues() }
+        .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in normalizeValues() }
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
         .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
@@ -574,21 +545,16 @@ private struct AchievementPage: View {
         .padding(.vertical, 10)
     }
 
-    private var clampedSuggestionCount: Int {
-        clamped(suggestionCount, in: Constants.achievementSuggestionCountRange)
+    private func suggestionStepper(value: Binding<Int>, range: ClosedRange<Int>) -> some View {
+        HStack {
+            Text("\(clamped(value.wrappedValue, in: range))개")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+            Stepper("", value: value, in: range).labelsHidden()
+        }
     }
 
-    private var clampedMaxTodoCount: Int {
-        clamped(suggestionMaxTodoCount, in: Constants.achievementSuggestionMaxTodoCountRange)
-    }
-
-    private var clampedMonthlyMinWeeklyGoalCount: Int {
-        clamped(monthlySuggestionMinWeeklyGoalCount, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
-    }
-
-    private var clampedMonthlySuggestionCount: Int {
-        clamped(monthlySuggestionCount, in: Constants.achievementMonthlySuggestionCountRange)
-    }
 
     private var clampedJourneyMaxFlagCount: Int {
         clamped(journeyMaxFlagCount, in: Constants.achievementJourneyMaxFlagCountRange)
@@ -610,10 +576,12 @@ private struct AchievementPage: View {
     }
 
     private func normalizeValues() {
-        suggestionCount = clampedSuggestionCount
-        suggestionMaxTodoCount = clampedMaxTodoCount
-        monthlySuggestionMinWeeklyGoalCount = clampedMonthlyMinWeeklyGoalCount
-        monthlySuggestionCount = clampedMonthlySuggestionCount
+        weeklySuggestionLimit = clamped(weeklySuggestionLimit, in: Constants.achievementSuggestionCountRange)
+        maxTodosPerWeeklyGoal = clamped(maxTodosPerWeeklyGoal, in: Constants.achievementSuggestionMaxTodoCountRange)
+        minWeeklyGoalsForMonthlySuggestions = clamped(minWeeklyGoalsForMonthlySuggestions, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
+        monthlySuggestionLimit = clamped(monthlySuggestionLimit, in: Constants.achievementMonthlySuggestionCountRange)
+        minTodosForWeeklySuggestions = clamped(minTodosForWeeklySuggestions, in: Constants.achievementMinTodosForWeeklySuggestionsRange)
+        maxWeeklyGoalsPerMonthlyGoal = clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
         journeyMaxFlagCount = clampedJourneyMaxFlagCount
         rewardWeeklyGoalPoints = clampedRewardWeeklyGoalPoints
         excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)
