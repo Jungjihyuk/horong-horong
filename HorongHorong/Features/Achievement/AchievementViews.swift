@@ -605,6 +605,53 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     }
 }
 
+/// 화면·실험실·골든셋 실행기가 함께 소비하는 추천 결과.
+///
+/// 빈 배열만 반환하면 `guidance`와 모델 실패가 구분되지 않아, 안내를 규칙 기반 추천으로
+/// 덮어쓰게 된다. 공급자 경계에서 이 타입을 끝까지 유지한다.
+enum AchievementGoalRecommendationResult: Sendable {
+    case suggestions([AchievementGoalSuggestion])
+    case guidance([GoalRecommendationGuidance])
+    case noSuggestion
+
+    var suggestions: [AchievementGoalSuggestion] {
+        guard case .suggestions(let suggestions) = self else { return [] }
+        return suggestions
+    }
+
+    var guidance: [GoalRecommendationGuidance] {
+        guard case .guidance(let guidance) = self else { return [] }
+        return guidance
+    }
+
+    /// 폴백을 멈춰야 하는 유효한 모델 결과인가.
+    var hasModelResult: Bool {
+        switch self {
+        case .suggestions(let suggestions): return !suggestions.isEmpty
+        case .guidance(let guidance): return !guidance.isEmpty
+        case .noSuggestion: return false
+        }
+    }
+
+    static func from(
+        _ result: GoalRecommendationResult,
+        cadence: AchievementGoalCadence,
+        source: AchievementGoalSuggestionSource,
+        runID: String
+    ) -> AchievementGoalRecommendationResult {
+        switch result {
+        case .suggestions(let drafts):
+            return .suggestions(
+                drafts.map { $0.suggestion(cadence: cadence, runID: runID).retagged(as: source) }
+            )
+        case .guidance(let guidance):
+            return .guidance(guidance)
+        case .noSuggestion:
+            return .noSuggestion
+        }
+    }
+}
+
 enum AchievementGoalSuggestionBuilder {
     static func ruleBasedSuggestions(
         from memos: [AchievementMemoSnapshot],

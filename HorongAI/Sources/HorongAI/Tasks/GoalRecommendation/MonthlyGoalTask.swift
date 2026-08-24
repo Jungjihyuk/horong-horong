@@ -371,6 +371,7 @@ public enum MonthlyGoalTask {
     /// 월간은 주간 목표의 **UUID 문자열**로 받는다. 번호가 아니라 문자열인 것이 주간과 다르다.
     public static let responseSchema = JSONSchema.object(
         properties: [
+            "resultType": .string,
             "suggestions": .array(of: .object(
                 properties: [
                     "title": .string,
@@ -381,9 +382,17 @@ public enum MonthlyGoalTask {
                     "emoji": .string,
                 ],
                 required: ["title", "reason", "goalIDs"]
+            )),
+            "guidance": .array(of: .object(
+                properties: [
+                    "goalIDs": .array(of: .string),
+                    "missing": .array(of: .string),
+                    "suggestion": .string,
+                ],
+                required: ["goalIDs", "missing", "suggestion"]
             ))
         ],
-        required: ["suggestions"]
+        required: []
     )
 
     private static let promptFallback = """
