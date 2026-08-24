@@ -58,6 +58,8 @@ METRIC_DESC = {
     "pairF1": "쌍 단위 F1 — 함정 감점 전",
     "trapAvoidance": "함정 회피율 — 함정을 적어둔 케이스에만 뜬다",
     "groupingScore": "묶음 일치도 = F1 × 함정 회피 (최종)",
+    "guidanceF1": "안내 대상 일치도 — 정보가 부족한 입력에만 표시",
+    "noSuggestionCorrect": "추천 보류 판정 — 노이즈 입력에만 표시",
     "predictedGroups": "추천 목표 개수",
 }
 
@@ -68,6 +70,8 @@ METRIC_SHORT = {
     "pairF1": "F1",
     "trapAvoidance": "함정회피",
     "groupingScore": "묶음",
+    "guidanceF1": "안내",
+    "noSuggestionCorrect": "보류",
     "predictedGroups": "개수",
 }
 
@@ -165,6 +169,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .filter button:last-child { border-right: none; }
         .filter button.active { background: var(--accent); color: #fff; font-weight: 600; }
+        .comparison-picker { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+        .comparison-picker select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 5px 8px; font: inherit; }
         .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
 
         /* 표 */
@@ -248,6 +254,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (btn) btn.classList.add('active');
         }
 
+        function selectComparison(prefix, selectedId) {
+            document.querySelectorAll(`[id^="${prefix}-"]`).forEach(el => {
+                el.style.display = el.id === selectedId ? '' : 'none';
+            });
+        }
+
         /** 표 안의 행을 '전체 / 주의' 로 걸러낸다. 주의 = 0.5 미만 점수 또는 실패가 있는 케이스. */
         function filterRows(button, tableId, mode) {
             button.parentElement.querySelectorAll('button').forEach(el => el.classList.remove('active'));
@@ -309,9 +321,15 @@ def visible_scores(case_id, scores):
     뜻이라 1.0 으로 찍힌다. 그걸 그대로 보여주면 만점 배지가 붙어 잘한 것처럼 읽히고,
     평균·경고·색칠까지 전부 끌어올린다. 없는 시험은 만점이 아니라 **무응시**다.
     """
-    if GOLDEN_META.get(case_id, {}).get("hasTraps", True):
-        return scores
-    return {k: v for k, v in scores.items() if k != "trapAvoidance"}
+    meta = GOLDEN_META.get(case_id, {})
+    result = scores
+    if meta.get("datasetType") not in GROUPABLE_TYPES and "datasetType" in meta:
+        # 이 유형의 정답은 '묶기'가 아니다. 구조적으로 0이 되는 묶음 점수를 보여주면
+        # 모델이 틀린 것이 아니라 자가 다른 것을 실패처럼 보이게 만든다.
+        result = {k: v for k, v in result.items() if k not in {"pairF1", "groupingScore", "trapAvoidance"}}
+    elif not meta.get("hasTraps", True):
+        result = {k: v for k, v in result.items() if k != "trapAvoidance"}
+    return result
 
 
 def is_warning(case_id, case_data):
@@ -376,6 +394,8 @@ def column_summary(data_dict, column):
         ("groupingScore", "묶음", groupable),
         ("pairF1", "F1", groupable),
         ("trapAvoidance", "함정회피", lambda m: m.get("hasTraps", True)),
+        ("guidanceF1", "안내", lambda m: m.get("datasetType") == "insufficient_information"),
+        ("noSuggestionCorrect", "보류", lambda m: m.get("datasetType") == "non_goal_or_noise"),
     ):
         got = average(key, keep)
         if got:
@@ -418,10 +438,12 @@ def render_table(data_dict, table_id, is_level=True):
         input_text = GOLDEN_NOTES.get(case_id, "")
 
         question = f"<div class='case-q'>{input_text}</div>" if input_text else ""
+        dataset_type = GOLDEN_META.get(case_id, {}).get("datasetType")
+        type_text = f"<span class='case-q'>{dataset_type}</span>" if dataset_type else ""
         row = [
             f"<td class='case-col'>"
             f"<div class='case-id'><span class='dot {worst_class(case_id, case_data)}'></span>{case_id}</div>"
-            f"{question}</td>"
+            f"{type_text}{question}</td>"
         ]
 
         for col in sorted_cols:
@@ -470,6 +492,29 @@ def render_table(data_dict, table_id, is_level=True):
             </tbody>
         </table>
     </div>
+    """
+
+
+def comparison_selector(prefix, label, tables):
+    """한 비교 축을 고른 뒤, 다른 축의 표만 보인다.
+
+    컨텍스트 비교 표에 서로 다른 모델 기록을 섞거나 모델 비교 표에 서로 다른
+    컨텍스트 기록을 섞으면, 같은 열이 서로 다른 조건의 실행이 되어 비교가 무의미해진다.
+    """
+    options = "".join(
+        f"<option value='{prefix}-{index}'>{name}</option>"
+        for index, (name, _) in enumerate(tables)
+    )
+    sections = []
+    for index, (_, table) in enumerate(tables):
+        hidden = "" if index == 0 else " style='display:none'"
+        sections.append(f"<div id='{prefix}-{index}' class='comparison-table'{hidden}>{table}</div>")
+    return f"""
+    <div class="comparison-picker">
+        <label>{label}</label>
+        <select onchange="selectComparison('{prefix}', this.value)">{options}</select>
+    </div>
+    {''.join(sections)}
     """
 
 
@@ -674,8 +719,8 @@ def render_live_table(live_runs_by_key):
     """
 
 
-def generate_html(data_by_level, data_by_model, live_runs):
-    has_golden = bool(data_by_level or data_by_model)
+def generate_html(data_by_level_by_model, data_by_model_by_level, live_runs):
+    has_golden = bool(data_by_level_by_model or data_by_model_by_level)
     has_live = bool(live_runs)
 
     tab_buttons = []
@@ -701,20 +746,26 @@ def generate_html(data_by_level, data_by_model, live_runs):
         tab_buttons.append(f'<button class="tab-button{active_cls_level}" data-tab="tab-level" onclick="openTab(\'tab-level\')">{btn_num_level} 골든셋: 컨텍스트 레벨별 비교</button>')
         tab_buttons.append(f'<button class="tab-button" data-tab="tab-model" onclick="openTab(\'tab-model\')">{btn_num_model} 골든셋: LLM 모델별 비교</button>')
 
-        table_level = render_table(data_by_level, "table-level", is_level=True)
-        table_model = render_table(data_by_model, "table-model", is_level=False)
+        level_tables = [
+            (model, render_table(data, f"table-level-{index}", is_level=True))
+            for index, (model, data) in enumerate(sorted(data_by_level_by_model.items()))
+        ]
+        model_tables = [
+            (level, render_table(data, f"table-model-{index}", is_level=False))
+            for index, (level, data) in enumerate(sorted(data_by_model_by_level.items()))
+        ]
 
         tab_contents.append(f"""
         <div id="tab-level" class="tab-content{active_cls_level}">
-            <p class="hint">동일한 모델 환경에서 문맥(Context)을 얼마나 제공했는지에 따른 답변 차이를 비교합니다.</p>
-            {table_level}
+            <p class="hint">선택한 하나의 모델 안에서 컨텍스트 레벨별 결과를 비교합니다.</p>
+            {comparison_selector("level-model", "모델", level_tables)}
         </div>
         """)
 
         tab_contents.append(f"""
         <div id="tab-model" class="tab-content">
-            <p class="hint">동일한 컨텍스트 환경에서 모델(Provider)에 따른 답변 퀄리티와 속도 차이를 비교합니다.</p>
-            {table_model}
+            <p class="hint">선택한 하나의 컨텍스트 레벨 안에서 모델별 결과를 비교합니다.</p>
+            {comparison_selector("model-context", "컨텍스트", model_tables)}
         </div>
         """)
 
@@ -782,8 +833,11 @@ def main():
             if os.path.exists(p):
                 records.extend(load_records_from_path(p))
 
-    data_by_level = defaultdict(dict)
-    data_by_model = defaultdict(dict)
+    # 같은 모델·같은 케이스를 컨텍스트별로 여러 번 실행할 수 있다. 평면 딕셔너리에
+    # 넣으면 마지막 실행이 앞 결과를 덮어쓴다. 두 비교 탭이 서로 다른 축을 고를 수 있게
+    # 3차원 기록을 두 방향으로 보존한다.
+    data_by_level_by_model = defaultdict(lambda: defaultdict(dict))
+    data_by_model_by_level = defaultdict(lambda: defaultdict(dict))
     live_runs = defaultdict(dict)
 
     for row in records:
@@ -802,11 +856,11 @@ def main():
             level = row.get("recipe", row.get("level", "promptOnly"))
             model = row.get("model", "unknown")
 
-            data_by_level[case_id][level] = row
+            data_by_level_by_model[model][case_id][level] = row
             if model:
-                data_by_model[case_id][model] = row
+                data_by_model_by_level[level][case_id][model] = row
 
-    html = generate_html(data_by_level, data_by_model, live_runs)
+    html = generate_html(data_by_level_by_model, data_by_model_by_level, live_runs)
 
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)

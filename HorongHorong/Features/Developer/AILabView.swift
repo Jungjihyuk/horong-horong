@@ -20,11 +20,18 @@ public struct AILabView: View {
         }
 
         var isSuccess: Bool {
-            lastAttempt?.outcome == "ok"
+            Self.isCompletedModelOutcome(lastAttempt?.outcome)
         }
 
         var hasFailure: Bool {
-            attempts.contains { $0.outcome != "ok" }
+            attempts.contains { !Self.isCompletedModelOutcome($0.outcome) }
+        }
+
+        private static func isCompletedModelOutcome(_ outcome: String?) -> Bool {
+            switch outcome {
+            case "ok", "guidance", "noSuggestion": true
+            default: false
+            }
         }
 
         /// 주간·월간을 동시에 돌렸나 하나씩 돌렸나 — `RunRecord.variant`.
