@@ -78,12 +78,13 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let provider = Constants.AchievementSuggestionProviderKind(rawValue: requested) ?? .appleFoundation
 
         let startTime = Date()
-        let suggestions = await AchievementFoundationGoalSuggestionProvider.suggestions(
+        let result = await AchievementFoundationGoalSuggestionProvider.suggestions(
             from: snapshots,
             suggestionCount: Constants.defaultAchievementSuggestionCount,
             maxMemoCount: Constants.defaultAchievementSuggestionMaxTodoCount,
             provider: provider
         )
+        let suggestions = result.suggestions
         let latencyMs = Int(Date().timeIntervalSince(startTime) * 1000)
 
         let predicted = suggestions.map { suggestion in
