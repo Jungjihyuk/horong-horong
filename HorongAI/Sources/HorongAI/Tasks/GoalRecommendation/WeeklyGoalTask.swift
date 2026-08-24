@@ -56,7 +56,8 @@ public enum WeeklyGoalTask {
         _ memos: [Memo],
         suggestionCount: Int,
         maxMemoCount: Int,
-        budget: Int
+        budget: Int,
+        context: GoalRecommendationContext = .empty
     ) -> [Memo] {
         // 묶으려면 최소 2개는 있어야 하므로 예산을 넘더라도 2개는 유지한다.
         let minimumCount = min(2, memos.count)
@@ -65,7 +66,8 @@ public enum WeeklyGoalTask {
             let size = prompt(
                 for: selected,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context
             ).count
             if size <= budget { break }
             selected.removeLast()
@@ -78,7 +80,8 @@ public enum WeeklyGoalTask {
     public static func prompt(
         for memos: [Memo],
         suggestionCount: Int,
-        maxMemoCount: Int
+        maxMemoCount: Int,
+        context: GoalRecommendationContext = .empty
     ) -> String {
         let lines = memos.enumerated().map { index, memo in
             let number = index + 1
@@ -112,6 +115,7 @@ public enum WeeklyGoalTask {
             values: [
                 "suggestionCount": "\(suggestionCount)",
                 "maxMemoCount": "\(maxMemoCount)",
+                "context": context.promptText,
                 "items": lines,
             ]
         )
@@ -123,7 +127,19 @@ public enum WeeklyGoalTask {
     /// 패키지가 앱의 `OSLog` 카테고리를 알면 안 되기 때문이다.
     public struct ParseOutcome: Sendable {
         public let drafts: [GoalSuggestionDraft]
+        /// 추천 카드·입력별 개선 안내·추천 없음 중 무엇을 보여줄지 정한 결과.
+        public let result: GoalRecommendationResult
         public let diagnostics: Diagnostics
+
+        init(
+            drafts: [GoalSuggestionDraft],
+            result: GoalRecommendationResult? = nil,
+            diagnostics: Diagnostics
+        ) {
+            self.drafts = drafts
+            self.result = result ?? .suggestions(drafts)
+            self.diagnostics = diagnostics
+        }
 
         public enum Diagnostics: Sendable {
             /// JSON 을 읽지 못했다. `characters` 는 다듬은 응답 길이 — 잘림인지 형식 문제인지 가른다.
@@ -165,13 +181,42 @@ public enum WeeklyGoalTask {
             )
         }
 
+        switch payload.resolvedResultType {
+        case .guidance:
+            let guidance = guidance(from: payload, memos: memos, allowedIDs: allowedIDs)
+            return ParseOutcome(
+                drafts: [],
+                result: guidance.isEmpty ? .noSuggestion : .guidance(guidance),
+                diagnostics: .decoded(
+                    modelReturned: payload.guidance?.count ?? 0,
+                    kept: guidance.count,
+                    requestedIDs: guidance.count,
+                    badID: 0,
+                    alreadyUsed: 0,
+                    overMaxMemo: 0,
+                    tooFewIDs: 0
+                )
+            )
+        case .noSuggestion:
+            return ParseOutcome(
+                drafts: [],
+                result: .noSuggestion,
+                diagnostics: .decoded(
+                    modelReturned: 0, kept: 0, requestedIDs: 0,
+                    badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0
+                )
+            )
+        case .suggestions:
+            break
+        }
+
         var badID = 0
         var alreadyUsed = 0
         var overMaxMemo = 0
         var tooFewIDs = 0
         var requestedIDs = 0
         var used = Set<UUID>()
-        let result = payload.suggestions.compactMap { item -> GoalSuggestionDraft? in
+        let result = (payload.suggestions ?? []).compactMap { item -> GoalSuggestionDraft? in
             let rawValues: [GoalSuggestionPayload.IDValue] = (item.items ?? item.memoIDs ?? item.goalIDs)?.values ?? []
             requestedIDs += rawValues.count
             
@@ -224,8 +269,9 @@ public enum WeeklyGoalTask {
 
         return ParseOutcome(
             drafts: Array(result.prefix(suggestionCount)),
+            result: result.isEmpty ? .noSuggestion : .suggestions(Array(result.prefix(suggestionCount))),
             diagnostics: .decoded(
-                modelReturned: payload.suggestions.count,
+                modelReturned: payload.suggestions?.count ?? 0,
                 kept: result.count,
                 requestedIDs: requestedIDs,
                 badID: badID,
@@ -234,6 +280,34 @@ public enum WeeklyGoalTask {
                 tooFewIDs: tooFewIDs
             )
         )
+    }
+
+    private static func guidance(
+        from payload: GoalSuggestionPayload,
+        memos: [Memo],
+        allowedIDs: Set<UUID>
+    ) -> [GoalRecommendationGuidance] {
+        var used = Set<UUID>()
+        return (payload.guidance ?? []).compactMap { item in
+            let rawIDs = (item.items ?? item.memoIDs ?? item.goalIDs)?.values ?? []
+            let ids = rawIDs.compactMap { value -> UUID? in
+                switch value {
+                case .int(let index):
+                    guard index >= 1, index <= memos.count else { return nil }
+                    return memos[index - 1].id
+                case .string(let value):
+                    return UUID(uuidString: value)
+                }
+            }.filter(allowedIDs.contains)
+            guard let id = ids.first(where: { used.insert($0).inserted }) else { return nil }
+            let suggestion = item.suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !suggestion.isEmpty else { return nil }
+            return GoalRecommendationGuidance(
+                inputID: id,
+                missing: item.missing.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
+                suggestion: suggestion
+            )
+        }
     }
 
     public static func parse(
@@ -266,6 +340,7 @@ public enum WeeklyGoalTask {
     /// 한 번의 추천에서 일어난 일. 로그 문구는 앱이 정하므로 여기서는 값만 돌려준다.
     public struct RunOutcome {
         public let drafts: [GoalSuggestionDraft]
+        public let result: GoalRecommendationResult
         public let diagnostics: Diagnostics
         /// 실제로 프롬프트에 실린 입력의 id. **무엇을 보여줬는지**를 되짚는 축이다.
         /// 원문은 담지 않는다 — 필요하면 앱이 저장소에서 붙인다.
@@ -277,6 +352,7 @@ public enum WeeklyGoalTask {
 
         public init(
             drafts: [GoalSuggestionDraft],
+            result: GoalRecommendationResult? = nil,
             diagnostics: Diagnostics,
             selectedIDs: [UUID],
             promptCharacters: Int,
@@ -284,6 +360,7 @@ public enum WeeklyGoalTask {
             usage: RunRecord.UsageSummary? = nil
         ) {
             self.drafts = drafts
+            self.result = result ?? .suggestions(drafts)
             self.diagnostics = diagnostics
             self.selectedIDs = selectedIDs
             self.promptCharacters = promptCharacters
@@ -321,6 +398,7 @@ public enum WeeklyGoalTask {
         maxMemoCount: Int,
         inputLimit: Int,
         budget: Int,
+        context: GoalRecommendationContext = .empty,
         timeoutInterval: TimeInterval = 60.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
         /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
@@ -335,14 +413,16 @@ public enum WeeklyGoalTask {
             Array(memos.prefix(inputLimit)),
             suggestionCount: suggestionCount,
             maxMemoCount: maxMemoCount,
-            budget: budget
+            budget: budget,
+            context: context
         )
         clock.mark("select_input")
 
         let prompt = prompt(
             for: selected,
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
+            maxMemoCount: maxMemoCount,
+            context: context
         )
         clock.mark("render_prompt")
         onPromptBuilt(prompt.count, selected.count)
@@ -352,11 +432,13 @@ public enum WeeklyGoalTask {
 
         func outcome(
             drafts: [GoalSuggestionDraft],
+            result: GoalRecommendationResult? = nil,
             diagnostics: RunOutcome.Diagnostics,
             usage: RunRecord.UsageSummary?
         ) -> RunOutcome {
             RunOutcome(
                 drafts: drafts,
+                result: result,
                 diagnostics: diagnostics,
                 selectedIDs: selected.map(\.id),
                 promptCharacters: prompt.count,
@@ -400,7 +482,7 @@ public enum WeeklyGoalTask {
             clock.mark("parse")
             trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
                        facts: ["kept": parsed.drafts.count])
-            return outcome(drafts: parsed.drafts, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
+            return outcome(drafts: parsed.drafts, result: parsed.result, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
         } catch {
             clock.mark("generate")
             trace?.add(.failure, String(describing: error))
@@ -415,6 +497,7 @@ public enum WeeklyGoalTask {
         maxMemoCount: Int,
         inputLimit: Int,
         budget: Int,
+        context: GoalRecommendationContext = .empty,
         timeoutInterval: TimeInterval = 60.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
         trace: TraceCollector? = nil,
@@ -426,6 +509,7 @@ public enum WeeklyGoalTask {
             maxMemoCount: maxMemoCount,
             inputLimit: inputLimit,
             budget: budget,
+            context: context,
             timeoutInterval: timeoutInterval,
             onPromptBuilt: onPromptBuilt,
             trace: trace,

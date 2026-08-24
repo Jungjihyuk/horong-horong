@@ -15,6 +15,11 @@
 - 존재하는 id만 goalIDs에 넣어.
 - 입력에 없는 구체적인 숫자, 회사 수, 횟수, 마감 조건을 만들지 마.
 
+[사용자 맥락]
+{{context}}
+- 맥락이 있으면 입력의 목적을 해석하는 데만 사용해. 입력에 없는 사실·수치·기한을 만들지 마.
+- 월간 목표로 묶기 위한 정보가 부족하면 억지로 묶지 말고 `guidance` 결과를 선택해 각 주간 목표를 어떻게 구체화할지 안내해.
+
 [제외 기준]
 - 도구명, 앱 이름, 채널명, 파일명, 프로젝트 코드명만 비슷한 주간 목표는 묶지 마.
 - 단지 진행률이 비슷하다는 이유만으로 묶지 마.
@@ -41,6 +46,7 @@
 
 JSON 형식:
 {
+  "resultType": "suggestions",
   "suggestions": [
     {
       "title": "결과를 담은 월간 목표명",
@@ -52,6 +58,17 @@ JSON 형식:
     }
   ]
 }
+
+정보가 부족할 때 JSON 형식:
+{
+  "resultType": "guidance",
+  "guidance": [
+    {"goalIDs": ["UUID"], "missing": ["specific", "measurable"], "suggestion": "구체화 문장"}
+  ]
+}
+
+의미 있는 묶음도 안내도 없을 때 JSON 형식:
+{"resultType": "noSuggestion"}
 
 주간 목표:
 {{items}}

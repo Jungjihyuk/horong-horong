@@ -12,6 +12,30 @@ import XCTest
 @available(macOS 26.0, *)
 final class WeeklyGoalTaskTests: XCTestCase {
 
+    func testParsesPerMemoGuidanceInsteadOfTreatingItAsAnEmptySuggestion() {
+        let first = WeeklyGoalTask.Memo(id: UUID(), content: "취업 준비", icon: "💼", date: Date())
+        let second = WeeklyGoalTask.Memo(id: UUID(), content: "지원서", icon: "📄", date: Date())
+        let outcome = WeeklyGoalTask.parse(
+            """
+            {"resultType":"guidance","guidance":[
+              {"items":[1],"missing":["specific","measurable"],"suggestion":"지원 직무와 지원할 공고를 정해보세요."},
+              {"items":[2],"missing":["specific"],"suggestion":"지원 기업과 작성할 문항을 정해보세요."}
+            ]}
+            """,
+            memos: [first, second],
+            allowedIDs: [first.id, second.id],
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+
+        guard case .guidance(let guidance) = outcome.result else {
+            return XCTFail("정보 부족 응답이 guidance 결과로 전달되지 않았다")
+        }
+        XCTAssertTrue(outcome.drafts.isEmpty)
+        XCTAssertEqual(guidance.map(\.inputID), [first.id, second.id])
+        XCTAssertEqual(guidance[0].missing, ["specific", "measurable"])
+    }
+
     private func uuid(_ n: Int) -> UUID {
         UUID(uuidString: String(format: "%08X-0000-0000-0000-000000000000", n)) ?? UUID()
     }

@@ -25,6 +25,15 @@ final class GoldenSetHarnessTests: XCTestCase {
         return cases
     }
 
+    private func monthlyGoldenCases() throws -> [GoldenSet.MonthlyCase] {
+        guard let root = GoldenSet.repositoryRoot() else {
+            throw XCTSkip("저장소 루트를 찾지 못했다")
+        }
+        let cases = try GoldenSet.loadMonthly(repositoryRoot: root)
+        try XCTSkipIf(cases.isEmpty, "월간 골든셋 케이스가 없다")
+        return cases
+    }
+
     /// 정답 묶음을 그대로 뱉는 "완벽한 모델" 의 응답을 만든다.
     private func perfectResponse(for goldenCase: GoldenSet.Case) -> String {
         let uuidByShortID = goldenCase.identifiers.uuidByShortID
@@ -83,6 +92,40 @@ final class GoldenSetHarnessTests: XCTestCase {
                 "\(goldenCase.caseName): 정답을 그대로 넣었는데 만점이 아니다"
             )
             XCTAssertEqual(score.violations, 0, goldenCase.caseName)
+        }
+    }
+
+    /// 월간 골든셋도 주간과 같은 «고정 응답 → 태스크 → id 매핑» 경로를 탄다.
+    /// 이 검사가 없으면 `cases/monthly` 파일은 있어도 평가에는 조용히 포함되지 않는다.
+    func testPerfectMonthlyAnswerScoresFullMarksOnEveryCase() async throws {
+        for goldenCase in try monthlyGoldenCases() {
+            let uuidByShortID = goldenCase.identifiers.uuidByShortID
+            let items = goldenCase.expectedGoalGroups().map { group in
+                let ids = group.compactMap { uuidByShortID[$0] }
+                    .map { "\"\($0.uuidString)\"" }
+                    .joined(separator: ", ")
+                return "{\"title\": \"묶음\", \"reason\": \"같은 결과로 이어진다\", \"goalIDs\": [\(ids)]}"
+            }
+            let response = "{\"suggestions\": [\(items.joined(separator: ", "))]}"
+            let generator = ReplayTextGenerator(response)
+            let outcome = await MonthlyGoalTask.run(
+                goals: goldenCase.taskGoals(),
+                suggestionCount: 4,
+                inputLimit: 60,
+                context: goldenCase.context?.taskContext ?? .empty,
+                generate: { prompt, instructions in
+                    try await generator.generate(prompt: prompt, instructions: instructions)
+                }
+            )
+            let predicted = outcome.drafts.map { draft in
+                draft.childGoalIDs.compactMap { goldenCase.identifiers.shortIDByUUID[$0] }
+            }
+            let score = PairEvaluator.score(
+                expectedGroups: goldenCase.expectedGoalGroups(),
+                predictedGroups: predicted,
+                traps: goldenCase.traps ?? []
+            )
+            XCTAssertEqual(score.f1, 1.0, accuracy: 0.0001, goldenCase.caseName)
         }
     }
 

@@ -37,7 +37,17 @@ public struct GoalSuggestionDraft: Sendable, Hashable {
 
 /// 모델 응답의 JSON 모양. 주간은 `memoIDs` 또는 `items`, 월간은 `goalIDs` 를 채워 보낸다.
 struct GoalSuggestionPayload: Codable {
-    let suggestions: [Item]
+    enum ResultType: String, Codable {
+        case suggestions
+        case guidance
+        case noSuggestion
+    }
+
+    /// 이전 모델 응답은 `resultType` 없이 `suggestions`만 보냈다. 계속 읽을 수 있어야
+    /// 프롬프트·앱 배포 순서가 달라도 추천이 사라지지 않는다.
+    let resultType: ResultType?
+    let suggestions: [Item]?
+    let guidance: [GuidanceItem]?
 
     enum IDValue: Codable, Sendable {
         case int(Int)
@@ -138,6 +148,28 @@ struct GoalSuggestionPayload: Codable {
             case criterion
             case emoji
         }
+    }
+
+    struct GuidanceItem: Codable {
+        let memoIDs: IDList?
+        let goalIDs: IDList?
+        let items: IDList?
+        let missing: [String]
+        let suggestion: String
+
+        enum CodingKeys: String, CodingKey {
+            case memoIDs
+            case goalIDs
+            case items
+            case missing
+            case suggestion
+        }
+    }
+
+    var resolvedResultType: ResultType {
+        if let resultType { return resultType }
+        if guidance != nil { return .guidance }
+        return .suggestions
     }
 
     /// 읽지 못한 이유. **"못 읽었다"만 남기면 원인을 영영 모른다.**

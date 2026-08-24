@@ -12,6 +12,41 @@ import Foundation
 /// 이미 제품에 들어와 있는 자리라 여기로 옮겼다.
 public enum GoldenSet {
 
+    /// 골든셋에 적는 사용자 맥락. 평가 파일의 표현을 제품 태스크의 공통 입력으로 바꾼다.
+    public struct Context: Decodable, Sendable {
+        public struct Profile: Decodable, Sendable {
+            public let text: String
+        }
+
+        public let persona: String?
+        public let profile: Profile?
+
+        enum CodingKeys: String, CodingKey {
+            case persona, profile
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            persona = try container.decodeIfPresent(String.self, forKey: .persona)
+            // 초기 골든셋은 «프로필 없음»을 `[]`로, 최신 케이스는 객체 또는 null로 썼다.
+            // 빈 배열은 정보가 없다는 뜻이므로 호환을 위해 nil로 읽는다.
+            profile = try? container.decode(Profile.self, forKey: .profile)
+        }
+
+        public var taskContext: GoalRecommendationContext {
+            GoalRecommendationContext(persona: persona, profile: profile?.text)
+        }
+    }
+
+    /// 월간 골든셋의 입력 주간 목표 하나.
+    public struct WeeklyGoal: Decodable, Sendable {
+        public let id: String
+        public let createdAt: String?
+        public let dueDate: String?
+        public let title: String
+        public let icon: String?
+    }
+
     /// 케이스 파일의 할일 하나.
     ///
     /// 날짜는 **`startDate` 와 `deadline` 둘뿐이다.** 예전에는 `date` 를 따로 적었는데,
@@ -59,11 +94,26 @@ public enum GoldenSet {
         /// 제목이 안 붙는 묶음은 애초에 묶음이 아니다(라벨링 가이드).
         public let title: String
         public let memos: [String]
+        public let goals: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case type, title, memos, goals
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            type = try container.decode(GoalType.self, forKey: .type)
+            title = try container.decode(String.self, forKey: .title)
+            memos = try container.decodeIfPresent([String].self, forKey: .memos) ?? []
+            goals = try container.decodeIfPresent([String].self, forKey: .goals) ?? []
+        }
     }
 
     public struct Case: Decodable, Sendable {
         public let caseName: String
         public let note: String?
+        public let datasetType: String?
+        public let context: Context?
         /// 이 케이스에서 «오늘». **«이번 주» 가 어디인지 정하는 값**이다.
         ///
         /// 없으면 케이스가 시간에 따라 뜻이 달라진다 — 어제는 이번 주였던 할일이
@@ -119,6 +169,51 @@ public enum GoldenSet {
         }
     }
 
+    /// 월간 추천 전용 골든셋 케이스. 월간은 할일이 아닌 주간 목표를 입력으로 받으므로
+    /// `Case`와 분리한다.
+    public struct MonthlyCase: Decodable, Sendable {
+        public let caseName: String
+        public let datasetType: String?
+        public let note: String?
+        public let context: Context?
+        public let referenceDate: String
+        public let weeklyGoals: [WeeklyGoal]
+        public let expectedGroups: [ExpectedGroup]
+        public let traps: [PairEvaluator.Trap]?
+
+        public var identifiers: (uuidByShortID: [String: UUID], shortIDByUUID: [UUID: String]) {
+            var forward: [String: UUID] = [:]
+            var backward: [UUID: String] = [:]
+            for goal in weeklyGoals {
+                let uuid = GoldenSet.deterministicUUID(for: goal.id)
+                forward[goal.id] = uuid
+                backward[uuid] = goal.id
+            }
+            return (forward, backward)
+        }
+
+        public func expectedGoalGroups() -> [[String]] {
+            expectedGroups.filter { $0.type == .monthly }.map(\.goals)
+        }
+
+        public func taskGoals() -> [MonthlyGoalTask.Goal] {
+            let uuidByShortID = identifiers.uuidByShortID
+            return weeklyGoals.map { goal in
+                MonthlyGoalTask.Goal(
+                    id: uuidByShortID[goal.id] ?? GoldenSet.deterministicUUID(for: goal.id),
+                    title: goal.title,
+                    emoji: goal.icon ?? "🎯",
+                    rule: "",
+                    done: 0,
+                    total: 0,
+                    sourceMemoIDs: [],
+                    roleName: context?.persona ?? "",
+                    vision: context?.profile?.text ?? ""
+                )
+            }
+        }
+    }
+
     // MARK: - 읽기
 
     /// `cases/weekly/` 를 **하위 폴더까지** 훑어 경로 순으로 읽는다.
@@ -127,10 +222,7 @@ public enum GoldenSet {
     /// (`weekly/developer/`, `weekly/jobseeker/`, `weekly/common/` …).
     /// 한 겹만 읽으면 폴더를 나누는 순간 케이스가 조용히 사라진다.
     ///
-    /// **`cases/monthly/` 는 여기서 안 읽는다.** 월간 태스크는 할일이 아니라 **주간 목표**를
-    /// 입력으로 받아(`MonthlyGoalTask.Goal`) `goalIDs` 를 뱉는다. 케이스 파일의 모양 자체가
-    /// 달라서(`memos` 대신 `weeklyGoals`) 같은 타입으로 못 읽는다. 월간 스키마가 정해지면
-    /// 자기 로더를 갖는다.
+    /// 월간은 입력 모양이 달라 `loadMonthly`가 별도로 읽는다.
     ///
     /// **`drafts/` 도 읽지 않는다.** 거기 있는 것은 각색·라벨링 전의 초안이라 정답이 없고,
     /// 채점에 섞이면 «만들다 만 것» 이 «모델이 틀린 것» 으로 집계된다
@@ -138,6 +230,17 @@ public enum GoldenSet {
     /// 초안은 사람이 눈으로 참고하는 재료로만 둔다.
     public static func load(repositoryRoot: URL) throws -> [Case] {
         let root = repositoryRoot.appendingPathComponent("Evals/golden/cases/weekly", isDirectory: true)
+        return try jsonFiles(in: root).map { try JSONDecoder().decode(Case.self, from: Data(contentsOf: $0)) }
+    }
+
+    /// `cases/monthly/`를 하위 폴더까지 읽는다. 월간 추천은 `WeeklyGoal`→`goalIDs` 경로를
+    /// 실제 태스크와 동일하게 검증해야 하므로 주간 로더에 섞지 않는다.
+    public static func loadMonthly(repositoryRoot: URL) throws -> [MonthlyCase] {
+        let root = repositoryRoot.appendingPathComponent("Evals/golden/cases/monthly", isDirectory: true)
+        return try jsonFiles(in: root).map { try JSONDecoder().decode(MonthlyCase.self, from: Data(contentsOf: $0)) }
+    }
+
+    private static func jsonFiles(in root: URL) -> [URL] {
         let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: nil,
@@ -148,7 +251,7 @@ public enum GoldenSet {
             // 경로 전체로 정렬해야 폴더 순서가 유지된다. 파일명만 쓰면 폴더가 뒤섞인다.
             .sorted { $0.path < $1.path }
 
-        return try files.map { try JSONDecoder().decode(Case.self, from: Data(contentsOf: $0)) }
+        return files
     }
 
     /// 부르는 파일에서 위로 거슬러 올라가 `Evals/` 가 있는 곳을 찾는다.
