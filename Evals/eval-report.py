@@ -12,8 +12,12 @@ def load_golden_notes():
 
     기록(JSONL)에는 담지 않는다 — 실행마다 같은 문장을 되풀이해 저장할 이유가 없고,
     문구를 고치면 옛 기록과 어긋난다. 보여줄 때 여기서 읽는다.
+
+    `datasetType` 과 «함정이 달렸나» 도 같이 읽는다. 지표마다 **분모가 다르기** 때문이다
+    (→ `column_summary`).
     """
     notes = {}
+    meta = {}
     here = os.path.dirname(os.path.abspath(__file__))
     for folder in ("golden/cases", "golden/drafts"):
         directory = os.path.join(here, folder)
@@ -29,19 +33,31 @@ def load_golden_notes():
                     with open(os.path.join(root, name), encoding="utf-8") as f:
                         case = json.load(f)
                     notes[case.get("caseName", "")] = case.get("note") or ""
+                    meta[case.get("caseName", "")] = {
+                        "datasetType": case.get("datasetType"),
+                        "hasTraps": bool(case.get("traps")),
+                    }
                 except (OSError, ValueError):
                     continue
-    return notes
+    return notes, meta
 
 
-GOLDEN_NOTES = load_golden_notes()
+GOLDEN_NOTES, GOLDEN_META = load_golden_notes()
+
+# 묶음 점수를 매길 수 있는 유형. 나머지 둘(`insufficient_information`,
+# `non_goal_or_noise`)은 정답이 «묶지 마라» 라서 `expectedGroups` 가 비어 있고,
+# 쌍 단위 채점자로는 무엇을 내든 0 이 나온다. 평균에 섞으면 «못한다» 로 읽히지만
+# 실제로는 **그 자로 잴 수 없는 것**이다.
+GROUPABLE_TYPES = {"general", "context_dependent"}
 
 
 METRIC_DESC = {
     "honorific": "존댓말 비율",
     "sentenceCount": "문장 수 제한",
     "groundedness": "사실 기반",
-    "pairF1": "F1 스코어",
+    "pairF1": "쌍 단위 F1 — 함정 감점 전",
+    "trapAvoidance": "함정 회피율 — 함정을 적어둔 케이스에만 뜬다",
+    "groupingScore": "묶음 일치도 = F1 × 함정 회피 (최종)",
     "predictedGroups": "추천 목표 개수",
 }
 
@@ -50,6 +66,8 @@ METRIC_SHORT = {
     "sentenceCount": "문장",
     "groundedness": "사실",
     "pairF1": "F1",
+    "trapAvoidance": "함정회피",
+    "groupingScore": "묶음",
     "predictedGroups": "개수",
 }
 
@@ -170,6 +188,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             white-space: nowrap;
         }
         thead th .lvl-desc { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+        thead th .col-agg .denom { color: var(--faint); font-weight: 400; margin-left: 1px; }
         thead th .col-agg { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
 
         .case-col { position: sticky; left: 0; z-index: 2; background: var(--panel); width: 230px; min-width: 230px; }
@@ -283,20 +302,32 @@ def format_score(name, value):
     return f"<span class='badge mid' title='{display_name}'>{short_name} <b>{value}</b></span>"
 
 
-def is_warning(case_data):
+def visible_scores(case_id, scores):
+    """이 케이스에 **의미가 있는** 지표만 남긴다.
+
+    함정을 안 적은 케이스의 `trapAvoidance` 는 «잘 피했다» 가 아니라 **잴 것이 없었다** 는
+    뜻이라 1.0 으로 찍힌다. 그걸 그대로 보여주면 만점 배지가 붙어 잘한 것처럼 읽히고,
+    평균·경고·색칠까지 전부 끌어올린다. 없는 시험은 만점이 아니라 **무응시**다.
+    """
+    if GOLDEN_META.get(case_id, {}).get("hasTraps", True):
+        return scores
+    return {k: v for k, v in scores.items() if k != "trapAvoidance"}
+
+
+def is_warning(case_id, case_data):
     """케이스 안에 0.5 미만 점수가 하나라도 있으면 '주의'."""
     for result in case_data.values():
-        for value in result.get("scores", {}).values():
+        for value in visible_scores(case_id, result.get("scores", {})).values():
             if isinstance(value, (int, float)) and value < 0.5:
                 return True
     return False
 
 
-def worst_class(case_data):
+def worst_class(case_id, case_data):
     values = [
         v
         for result in case_data.values()
-        for v in result.get("scores", {}).values()
+        for v in visible_scores(case_id, result.get("scores", {})).values()
         if isinstance(v, (int, float))
     ]
     return score_class(min(values)) if values else "pass"
@@ -313,19 +344,50 @@ def format_seconds(ms):
 
 
 def column_summary(data_dict, column):
-    """열 머리에 붙는 요약: 평균 점수 · 평균 지연."""
-    results = [case_data[column] for case_data in data_dict.values() if column in case_data]
-    if not results:
+    """열 머리에 붙는 요약: **지표별** 평균과 평균 지연.
+
+    지표를 한 통에 붓고 평균내면 안 된다. 세 가지가 동시에 틀린다.
+
+    - `groupingScore = pairF1 × trapAvoidance` 라 **셋은 독립이 아니다.**
+      곱한 값과 그 부품을 같이 평균내면 같은 정보를 세 번 센다
+    - `trapAvoidance` 는 함정을 안 적은 케이스에서 **자동으로 1.0** 이다.
+      전 케이스로 평균내면 «함정을 적게 적을수록 점수가 오른다» (실측 0.935 vs 0.778)
+    - `groupingScore` 는 정답이 «묶지 마라» 인 케이스에서 구조적으로 0 이다.
+      섞으면 모델 탓으로 읽힌다 (실측 31개 0.408 vs 묶음 가능 22개 0.574)
+
+    그래서 **지표마다 분모를 따로 고른다.** 괄호 안 숫자가 그 분모다.
+    """
+    pairs = [(case_id, case_data[column]) for case_id, case_data in data_dict.items() if column in case_data]
+    if not pairs:
         return "데이터 없음"
-    scores = [
-        v
-        for result in results
-        for v in result.get("scores", {}).values()
-        if isinstance(v, (int, float))
-    ]
-    avg_score = sum(scores) / len(scores) if scores else 0
-    avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for r in results) // len(results)
-    return f"평균 {avg_score:.2f} · {format_seconds(avg_latency)}"
+
+    def average(key, keep):
+        picked = [
+            row["scores"][key]
+            for case_id, row in pairs
+            if isinstance(row.get("scores", {}).get(key), (int, float)) and keep(GOLDEN_META.get(case_id, {}))
+        ]
+        return (sum(picked) / len(picked), len(picked)) if picked else None
+
+    # 골든셋에 없는 케이스(옛 기록 등)는 유형을 모른다. 빼면 통째로 사라지므로 남긴다.
+    groupable = lambda m: m.get("datasetType") in GROUPABLE_TYPES or "datasetType" not in m
+    parts = []
+    for key, label, keep in (
+        ("groupingScore", "묶음", groupable),
+        ("pairF1", "F1", groupable),
+        ("trapAvoidance", "함정회피", lambda m: m.get("hasTraps", True)),
+    ):
+        got = average(key, keep)
+        if got:
+            parts.append(f"{label} {got[0]:.2f}<span class='denom'>({got[1]})</span>")
+
+    if not parts:  # 옛 기록의 대화용 지표만 있는 경우 — 전부 평균내던 옛 동작으로 물러선다
+        scores = [v for _, row in pairs for v in row.get("scores", {}).values() if isinstance(v, (int, float))]
+        if scores:
+            parts.append(f"평균 {sum(scores) / len(scores):.2f}")
+
+    avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for _, r in pairs) // len(pairs)
+    return " · ".join(parts + [format_seconds(avg_latency)])
 
 
 def render_table(data_dict, table_id, is_level=True):
@@ -349,7 +411,7 @@ def render_table(data_dict, table_id, is_level=True):
     rows = []
     warning_count = 0
     for case_id, case_data in sorted(data_dict.items()):
-        warn = is_warning(case_data)
+        warn = is_warning(case_id, case_data)
         warning_count += 1 if warn else 0
 
         # 케이스 설명은 기록이 아니라 골든셋 JSON 이 원본이다(중복 저장하지 않는다).
@@ -358,7 +420,7 @@ def render_table(data_dict, table_id, is_level=True):
         question = f"<div class='case-q'>{input_text}</div>" if input_text else ""
         row = [
             f"<td class='case-col'>"
-            f"<div class='case-id'><span class='dot {worst_class(case_data)}'></span>{case_id}</div>"
+            f"<div class='case-id'><span class='dot {worst_class(case_id, case_data)}'></span>{case_id}</div>"
             f"{question}</td>"
         ]
 
@@ -368,7 +430,7 @@ def render_table(data_dict, table_id, is_level=True):
                 output = result.get("output", "")
                 scores = result.get("scores", {})
                 latency = result.get("total_ms", result.get("latency_ms", 0))
-                score_html = "".join(format_score(k, v) for k, v in sorted(scores.items()))
+                score_html = "".join(format_score(k, v) for k, v in sorted(visible_scores(case_id, scores).items()))
                 row.append(
                     f"<td>"
                     f"<div class='cell-content'>{output}</div>"
