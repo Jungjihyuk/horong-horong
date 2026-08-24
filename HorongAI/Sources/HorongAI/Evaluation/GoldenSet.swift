@@ -109,6 +109,35 @@ public enum GoldenSet {
         }
     }
 
+    /// 묶음 대신 안내 또는 추천 보류가 정답인 케이스의 기대 결과.
+    public struct ExpectedOutcome: Decodable, Sendable {
+        public struct Review: Decodable, Sendable {
+            public let memo: String?
+            public let goal: String?
+
+            public var inputID: String? { memo ?? goal }
+        }
+
+        public let action: String
+        public let memoReviews: [Review]
+        public let goalReviews: [Review]
+
+        enum CodingKeys: String, CodingKey {
+            case action, memoReviews, goalReviews
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            action = try container.decode(String.self, forKey: .action)
+            memoReviews = try container.decodeIfPresent([Review].self, forKey: .memoReviews) ?? []
+            goalReviews = try container.decodeIfPresent([Review].self, forKey: .goalReviews) ?? []
+        }
+
+        public var reviewedInputIDs: [String] {
+            (memoReviews + goalReviews).compactMap(\.inputID)
+        }
+    }
+
     public struct Case: Decodable, Sendable {
         public let caseName: String
         public let note: String?
@@ -122,6 +151,7 @@ public enum GoldenSet {
         public let memos: [Memo]
         /// 정답 묶음. 짧은 id(`m1`) 로 적혀 있다.
         public let expectedGroups: [ExpectedGroup]
+        public let expectedOutcome: ExpectedOutcome?
         /// **특히 틀리기 쉬운 자리.** 없을 수 있다.
         ///
         /// 예전 이름은 `shouldNotGroup` 이었는데, «묶이면 안 되는 모든 쌍» 을 뜻하는 것처럼 읽혀
@@ -179,6 +209,7 @@ public enum GoldenSet {
         public let referenceDate: String
         public let weeklyGoals: [WeeklyGoal]
         public let expectedGroups: [ExpectedGroup]
+        public let expectedOutcome: ExpectedOutcome?
         public let traps: [PairEvaluator.Trap]?
 
         public var identifiers: (uuidByShortID: [String: UUID], shortIDByUUID: [UUID: String]) {
