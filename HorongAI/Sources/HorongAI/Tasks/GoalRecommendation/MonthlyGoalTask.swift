@@ -52,7 +52,8 @@ public enum MonthlyGoalTask {
 
     public static func prompt(
         for goals: [Goal],
-        suggestionCount: Int
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion
     ) -> String {
         let lines = goals.map { goal in
             [
@@ -72,6 +73,7 @@ public enum MonthlyGoalTask {
             fallback: promptFallback,
             values: [
                 "suggestionCount": "\(suggestionCount)",
+                "maxGoalsPerSuggestion": "\(maxGoalsPerSuggestion)",
                 "items": lines,
             ]
         )
@@ -102,6 +104,7 @@ public enum MonthlyGoalTask {
         goals: [Goal],
         suggestionCount: Int,
         inputLimit: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
         timeoutInterval: TimeInterval = 60.0,
         /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
         trace: TraceCollector? = nil,
@@ -112,7 +115,7 @@ public enum MonthlyGoalTask {
         let selected = Array(goals.prefix(inputLimit))
         clock.mark("select_input")
 
-        let prompt = prompt(for: selected, suggestionCount: suggestionCount)
+        let prompt = prompt(for: selected, suggestionCount: suggestionCount, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
         clock.mark("render_prompt")
         trace?.add(.input, selected.map { "- \($0.id): \($0.title)" }.joined(separator: "\n"),
                    facts: ["selected": selected.count, "candidates": goals.count])
@@ -157,7 +160,8 @@ public enum MonthlyGoalTask {
                 text,
                 allowedIDs: Set(goals.map(\.id)),
                 sourceGoals: goals,
-                suggestionCount: suggestionCount
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion
             )
             clock.mark("parse")
             trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
@@ -194,7 +198,8 @@ public enum MonthlyGoalTask {
         _ text: String,
         allowedIDs: Set<UUID>,
         sourceGoals: [Goal],
-        suggestionCount: Int
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion
     ) -> WeeklyGoalTask.ParseOutcome {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let payload: GoalSuggestionPayload
@@ -239,7 +244,7 @@ public enum MonthlyGoalTask {
 
             let unused = parsedIDs.filter { !used.contains($0) }
             alreadyUsed += parsedIDs.count - unused.count
-            // 월간 하나에 주간 목표는 최대 4개. 프롬프트에도 같은 수가 적혀 있다.
+            // 월간 하나에 주간 목표는 설정된 수까지만 넣는다. 프롬프트에도 같은 수가 적혀 있다.
             let ids = unused.prefix(maxGoalsPerSuggestion)
             overMaxGoal += unused.count - ids.count
             // **묶음은 2개 이상**이어야 한다. 1개짜리는 그 주간 목표 자체라 월간 목표가 아니다.
@@ -302,7 +307,7 @@ public enum MonthlyGoalTask {
 
     private static let promptFallback = """
     아래 주간 목표들을 의미, 달성 기준, 페르소나, 비전, 연결된 할일 수를 함께 보고 월간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    월간 목표 하나에는 주간 목표를 2개 이상 4개 이하로 넣어.
+    월간 목표 하나에는 주간 목표를 2개 이상 {{maxGoalsPerSuggestion}}개 이하로 넣어.
     title은 입력된 주간 목표들의 실제 내용에서만 추론해 새로 작성해.
     입력에 없는 구체적인 숫자, 회사 수, 횟수, 마감 조건은 만들지 마.
     같은 주간 목표를 여러 월간 후보에 중복해서 넣지 마.

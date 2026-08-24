@@ -50,12 +50,17 @@ final class MonthlyGoalParseTests: XCTestCase {
 
     /// 이 파일은 **어떤 초안이 남는가**만 본다. 왜 그만큼만 남았는지(진단)는
     /// `MonthlyGoalDiagnosticsTests` 가 맡는다.
-    private func parse(_ text: String, suggestionCount: Int = 3) -> [GoalSuggestionDraft] {
+    private func parse(
+        _ text: String,
+        suggestionCount: Int = 3,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion
+    ) -> [GoalSuggestionDraft] {
         MonthlyGoalTask.parse(
             text,
             allowedIDs: Set(sourceGoals.map(\.id)),
             sourceGoals: sourceGoals,
-            suggestionCount: suggestionCount
+            suggestionCount: suggestionCount,
+            maxGoalsPerSuggestion: maxGoalsPerSuggestion
         ).drafts
     }
 
@@ -86,6 +91,13 @@ final class MonthlyGoalParseTests: XCTestCase {
     /// 한 월간 목표에 주간 목표는 4개까지다. 초과분은 버린다.
     func testTrimsToFourChildGoals() {
         XCTAssertEqual(parse(json(item(goalIDs: [1, 2, 3, 4, 5]))).first?.childGoalIDs.count, 4)
+    }
+
+    func testRespectsConfiguredMaximumChildGoals() {
+        XCTAssertEqual(
+            parse(json(item(goalIDs: [1, 2, 3, 4, 5])), maxGoalsPerSuggestion: 2).first?.childGoalIDs.count,
+            2
+        )
     }
 
     /// 같은 주간 목표를 두 후보에 넣으면 뒤쪽에서 제거되고, 2개 미만이 되면 그 후보가 버려진다.
