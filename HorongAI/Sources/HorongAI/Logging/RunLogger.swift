@@ -10,6 +10,7 @@ import Foundation
 /// **모델을 다시 안 돌리고** 채점 기준만 바꿔 재채점할 수 있다.
 public final class RunLogger {
     private let outputURL: URL
+    private let timestampStyle: TimestampStyle
     private let queue = DispatchQueue(label: "com.horonghorong.ai.runlogger")
 
     /// 이어 쓸지 새로 쓸지.
@@ -20,8 +21,20 @@ public final class RunLogger {
         case append
     }
 
-    public init(outputURL: URL, mode: Mode = .replace) {
+    /// 기록 파일의 날짜 표기 시간대.
+    /// 실사용 로그는 기존 UTC를 유지하고, 골든셋 결과만 KST로 읽기 쉽게 기록한다.
+    public enum TimestampStyle {
+        case utc
+        case koreaStandardTime
+    }
+
+    public init(
+        outputURL: URL,
+        mode: Mode = .replace,
+        timestampStyle: TimestampStyle = .utc
+    ) {
         self.outputURL = outputURL
+        self.timestampStyle = timestampStyle
         if mode == .replace, FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: outputURL)
         }
@@ -39,7 +52,20 @@ public final class RunLogger {
             let encoder = JSONEncoder()
             // 한 줄이어야 하므로 prettyPrinted 를 쓰지 않는다.
             // 날짜는 사람이 읽고 다른 도구가 파싱할 수 있게 ISO8601 로 남긴다.
-            encoder.dateEncodingStrategy = .iso8601
+            switch self.timestampStyle {
+            case .utc:
+                encoder.dateEncodingStrategy = .iso8601
+            case .koreaStandardTime:
+                encoder.dateEncodingStrategy = .custom { date, encoder in
+                    let formatter = DateFormatter()
+                    formatter.locale = Locale(identifier: "en_US_POSIX")
+                    formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
+                    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+
+                    var container = encoder.singleValueContainer()
+                    try container.encode(formatter.string(from: date))
+                }
+            }
             guard let data = try? encoder.encode(record),
                   let json = String(data: data, encoding: .utf8),
                   let line = (json + "\n").data(using: .utf8) else {

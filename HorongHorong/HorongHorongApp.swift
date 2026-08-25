@@ -434,6 +434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let context = modelContainer.mainContext
 
+        migrateLegacyOllamaEndpoint()
         migrateRemovedDocumentCategory(in: context)
         seedDefaultCategoryRules(in: context)
         seedDefaultRewardCatalogItems(in: context)
@@ -478,6 +479,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         companionController.start(modelContainer: modelContainer)
+    }
+
+    /// `localhost`는 이 기기에서 IPv6(`::1`)로 먼저 해석되지만 Ollama는 IPv4만 열어 둔
+    /// 경우가 있어 연결이 거절된다. 예전 기본값만 한 번 IPv4 루프백 주소로 옮긴다.
+    /// 사용자가 다른 서버 주소를 직접 지정한 경우에는 건드리지 않는다.
+    private func migrateLegacyOllamaEndpoint() {
+        let defaults = UserDefaults.standard
+        let key = Constants.NewsStorageKey.ollamaEndpoint
+        guard defaults.string(forKey: key) == "http://localhost:11434" else { return }
+        defaults.set(Constants.defaultNewsOllamaEndpoint, forKey: key)
     }
 
     private func toggleTimerFromHotkey() {

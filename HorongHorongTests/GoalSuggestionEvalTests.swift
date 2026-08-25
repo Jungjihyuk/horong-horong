@@ -35,20 +35,45 @@ final class GoalSuggestionEvalTests: XCTestCase {
         formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ssZ"
         let stamp = formatter.string(from: Date())
         let outputFile = outputDirectory.appendingPathComponent("\(stamp).jsonl")
-        let runner = RunLogger(outputURL: outputFile)
+        let runner = RunLogger(
+            outputURL: outputFile,
+            timestampStyle: .koreaStandardTime
+        )
         let runID = "G-\(stamp)"
         let configuration = evaluationConfiguration(repositoryRoot: repositoryRoot)
         let provider = selectedProvider(configuration: configuration, repositoryRoot: repositoryRoot)
         let model = configuration?.model ?? selectedModel(for: provider)
 
+        // 원문 기록기를 켠다. 지금까지는 앱 시작 경로(`AIRunLog.installTraceRecorder`)에서만
+        // 설치돼, 정작 원문이 필요한 골든셋 실행이 `trace: nil` 로 돌았다. 그래서 `noSuggestion`
+        // 이 «모델이 안 냈다» 인지 «파서가 버렸다» 인지 가릴 수가 없었다(2026-08-25).
+        //
+        // 골든셋 입력은 저장소에 든 합성 데이터라 원문을 남겨도 사용자 정보가 새지 않는다.
+        TraceRecorder.shared = TraceRecorder(
+            directory: outputDirectory.appendingPathComponent("traces", isDirectory: true),
+            isEnabled: true
+        )
+        // 쓰기가 큐에 실려 나가므로 테스트가 먼저 끝나면 마지막 케이스의 원문이 사라진다.
+        defer {
+            TraceRecorder.shared?.flush()
+            TraceRecorder.shared = nil
+        }
+
+        // 케이스마다 다른 `runId` 를 준다. **원문 파일 하나가 시도 하나**인데
+        // (→ `TraceRecorder.fileURL`) 배치 전체가 한 `runId` 를 쓰면 케이스들이 같은 파일을
+        // 덮어써 마지막 하나만 남는다. 배치 id 를 접두사로 두어 이름만으로 다시 묶인다.
+        var caseNumber = 0
         for goldenCase in weeklyCases {
             for variant in contextVariants(for: goldenCase.context, configuration: configuration) {
-                await run(goldenCase, provider: provider, model: model, variant: variant, runner: runner, runID: runID)
+                caseNumber += 1
+                await run(goldenCase, provider: provider, model: model, variant: variant, runner: runner, runID: "\(runID)-w\(caseNumber)")
             }
         }
+        caseNumber = 0
         for goldenCase in monthlyCases {
             for variant in contextVariants(for: goldenCase.context, configuration: configuration) {
-                await run(goldenCase, provider: provider, model: model, variant: variant, runner: runner, runID: runID)
+                caseNumber += 1
+                await run(goldenCase, provider: provider, model: model, variant: variant, runner: runner, runID: "\(runID)-m\(caseNumber)")
             }
         }
         runner.flush()
@@ -144,7 +169,7 @@ final class GoalSuggestionEvalTests: XCTestCase {
         if !expectedGuidance.isEmpty { scores["guidanceF1"] = setF1(expected: expectedGuidance, actual: actualGuidance) }
         if expectsNoSuggestion { scores["noSuggestionCorrect"] = isNoSuggestion(result) ? 1 : 0 }
 
-        runner.record(RunRecord(caseId: caseName, model: model, output: output, scores: scores, totalMs: Int(Date().timeIntervalSince(startedAt) * 1000), runId: runID, startedAt: startedAt, task: task, source: "golden", recipe: recipe, provider: provider, outcome: result.recordedOutcome))
+        runner.record(RunRecord(caseId: caseName, model: model, output: output, scores: scores, totalMs: Int(Date().timeIntervalSince(startedAt) * 1000), runId: runID, startedAt: startedAt, task: task, source: "golden", recipe: recipe, provider: provider, outcome: result.recordedOutcome, outcomeDetail: result.outcomeDetail))
     }
 
     private func isNoSuggestion(_ result: AchievementGoalRecommendationResult) -> Bool {

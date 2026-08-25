@@ -614,7 +614,7 @@ enum AchievementGoalRecommendationResult: Sendable {
     case guidance([GoalRecommendationGuidance])
     case noSuggestion
     /// 공급자·전송·파싱 실패. `noSuggestion`과 달리 다음 공급자로 내려갈 수 있다.
-    case failure
+    case failure(reason: String?)
 
     var suggestions: [AchievementGoalSuggestion] {
         guard case .suggestions(let suggestions) = self else { return [] }
@@ -631,12 +631,12 @@ enum AchievementGoalRecommendationResult: Sendable {
         switch self {
         case .suggestions(let suggestions): return !suggestions.isEmpty
         case .guidance(let guidance): return !guidance.isEmpty
-        case .noSuggestion, .failure: return false
+        case .noSuggestion, .failure(_): return false
         }
     }
 
     var shouldFallbackToNextProvider: Bool {
-        if case .failure = self { return true }
+        if case .failure(_) = self { return true }
         return false
     }
 
@@ -647,8 +647,18 @@ enum AchievementGoalRecommendationResult: Sendable {
         case .suggestions(let suggestions): return suggestions.isEmpty ? "noSuggestion" : "ok"
         case .guidance: return "guidance"
         case .noSuggestion: return "noSuggestion"
-        case .failure: return "generationFailed"
+        case .failure(let reason):
+            if reason == "modelUnavailable" || reason == "serverUnavailable" { return reason! }
+            if reason == "noJSON" || reason == "malformed" { return "decodeFailed" }
+            return "generationFailed"
         }
+    }
+
+    /// 생성 자체가 시작되지 못했거나 실패했을 때의 구체적 이유.
+    /// 골든셋은 이 값을 `outcome_detail`로 남겨, 0점과 인프라 실패를 구분한다.
+    var outcomeDetail: String? {
+        guard case let .failure(reason) = self else { return nil }
+        return reason
     }
 
     static func from(
@@ -1228,7 +1238,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         }
         #endif
         achievementSuggestionLog.error("weekly mlx failure=unavailable")
-        return .failure
+        return .failure(reason: nil)
     }
 
     private static func ollamaSuggestions(
@@ -1294,7 +1304,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 }
             )
         }
-        return .failure
+        return .failure(reason: nil)
     }
 
     /// MLX·Ollama 가 공유하는 주간 추천 흐름.
@@ -1343,7 +1353,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                     parameters: parameters
                 )
             )
-            return .failure
+            return .failure(reason: blocked)
         }
 
         // 원문 기록. 개발자 모드가 아니면 nil 이라 아무 비용도 들지 않는다.
@@ -1397,14 +1407,22 @@ enum AchievementFoundationGoalSuggestionProvider {
             )
         }
 
+        let result: AchievementGoalRecommendationResult
+        switch outcome.diagnostics {
+        case .generationFailed, .parsed(.decodeFailed):
+            result = .failure(reason: outcome.diagnostics.outcomeDetail)
+        case .parsed:
+            result = AchievementGoalRecommendationResult.from(
+                outcome.result, cadence: .weekly, source: source, runID: context.runID
+            )
+        }
+
         AIRunLog.record(
             context.record(
                 startedAt: startedAt,
                 provider: label,
                 model: model,
-                outcome: AchievementGoalRecommendationResult.from(
-                    outcome.result, cadence: .weekly, source: source, runID: context.runID
-                ).recordedOutcome,
+                outcome: result.recordedOutcome,
                 outcomeDetail: outcome.diagnostics.outcomeDetail,
                 titles: suggestions.map(\.title),
                 selectedIDs: outcome.selectedIDs,
@@ -1417,12 +1435,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         )
 
         // 태스크는 어느 공급자가 답했는지 모른다. 실제 공급자로 태깅해 폴백 비율 집계를 맞춘다.
-        return AchievementGoalRecommendationResult.from(
-            outcome.result,
-            cadence: .weekly,
-            source: source,
-            runID: context.runID
-        )
+        return result
     }
 
     /// 파서 진단을 로그 한 줄로. AFM 경로(`FoundationModelsGoalSuggestionProvider.parse`)와 같은 문구를 쓴다.
@@ -1465,7 +1478,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             )
         }
         #endif
-        return .failure
+        return .failure(reason: nil)
     }
 
     static func monthlySuggestions(
@@ -1528,7 +1541,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             )
         }
         #endif
-        return .failure
+        return .failure(reason: nil)
     }
 
     private static func monthlyMLXSuggestions(
@@ -1577,7 +1590,7 @@ enum AchievementFoundationGoalSuggestionProvider {
         }
         #endif
         achievementSuggestionLog.error("monthly mlx failure=unavailable")
-        return .failure
+        return .failure(reason: nil)
     }
 
     private static func monthlyOllamaSuggestions(
@@ -1643,7 +1656,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 }
             )
         }
-        return .failure
+        return .failure(reason: nil)
     }
 
     /// MLX·Ollama 가 공유하는 월간 추천 흐름. 주간의 `weeklySuggestions` 와 짝이다.
@@ -1686,7 +1699,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                     parameters: parameters
                 )
             )
-            return .failure
+            return .failure(reason: blocked)
         }
 
         let trace = TraceRecorder.shared?.makeCollector(
@@ -1728,7 +1741,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                     parameters: parameters
                 )
             )
-            return .failure
+            return .failure(reason: error.detailedFailureReason)
         }
         if outcome.drafts.isEmpty {
             achievementSuggestionLog.error(
@@ -1749,6 +1762,14 @@ enum AchievementFoundationGoalSuggestionProvider {
                 badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0
             )
         )
+        let result: AchievementGoalRecommendationResult
+        if case .decodeFailed = outcome.parse {
+            result = .failure(reason: diagnostics.outcomeDetail)
+        } else {
+            result = AchievementGoalRecommendationResult.from(
+                outcome.result, cadence: .monthly, source: source, runID: context.runID
+            )
+        }
         AIRunLog.record(
             context.record(
                 startedAt: startedAt,
@@ -1756,9 +1777,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 model: model,
                 // 왜 그만큼만 남았는지는 태스크가 안다. 여기서 다시 짐작하면
                 // «잘려서 0개» 와 «묶을 게 없어 0개» 가 한 칸으로 뭉친다.
-                outcome: AchievementGoalRecommendationResult.from(
-                    outcome.result, cadence: .monthly, source: source, runID: context.runID
-                ).recordedOutcome,
+                outcome: result.recordedOutcome,
                 outcomeDetail: diagnostics.outcomeDetail,
                 titles: suggestions.map(\.title),
                 selectedIDs: outcome.selectedIDs,
@@ -1768,12 +1787,7 @@ enum AchievementFoundationGoalSuggestionProvider {
                 parameters: parameters
             )
         )
-        return AchievementGoalRecommendationResult.from(
-            outcome.result,
-            cadence: .monthly,
-            source: source,
-            runID: context.runID
-        )
+        return result
     }
 }
 
@@ -1857,7 +1871,7 @@ struct FoundationModelsGoalSuggestionProvider {
                     outcome: "modelUnavailable"
                 )
             )
-            return .failure
+        return .failure(reason: nil)
         }
 
         // 추론이 거부되면 그 자리를 다시 남긴다. 로그 문구는 인시던트 2026-07-31 의 진단 서명이라 유지한다.
@@ -1963,7 +1977,7 @@ struct FoundationModelsGoalSuggestionProvider {
                      "max_items_per_goal": Double(maxGoalsPerSuggestion)]
                 )
             )
-            return .failure
+        return .failure(reason: nil)
         }
 
         let trace = TraceRecorder.shared?.makeCollector(
@@ -2011,7 +2025,7 @@ struct FoundationModelsGoalSuggestionProvider {
                      "max_items_per_goal": Double(maxGoalsPerSuggestion)]
                 )
             )
-            return .failure
+        return .failure(reason: nil)
         }
         if outcome.drafts.isEmpty {
             achievementSuggestionLog.error(

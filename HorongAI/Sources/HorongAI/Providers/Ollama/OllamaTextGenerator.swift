@@ -38,7 +38,8 @@ public struct OllamaTextGenerator: Sendable {
         repeatPenalty: Double? = nil,
         presencePenalty: Double? = nil,
         frequencyPenalty: Double? = nil,
-        format: JSONSchema? = nil
+        format: JSONSchema? = nil,
+        timeoutInterval: TimeInterval = 180.0
     ) async throws -> String {
         try await generateWithUsage(
             prompt: prompt,
@@ -48,7 +49,8 @@ public struct OllamaTextGenerator: Sendable {
             repeatPenalty: repeatPenalty,
             presencePenalty: presencePenalty,
             frequencyPenalty: frequencyPenalty,
-            format: format
+            format: format,
+            timeoutInterval: timeoutInterval
         ).text
     }
 
@@ -61,7 +63,8 @@ public struct OllamaTextGenerator: Sendable {
         presencePenalty: Double? = nil,
         frequencyPenalty: Double? = nil,
         /// 응답의 모양을 강제하는 스키마. `nil` 이면 예전처럼 프롬프트로 부탁만 한다.
-        format: JSONSchema? = nil
+        format: JSONSchema? = nil,
+        timeoutInterval: TimeInterval = 180.0
     ) async throws -> GenerationOutput {
         let client = OllamaChatClient(endpoint: endpoint, model: model)
         var text = ""
@@ -76,7 +79,8 @@ public struct OllamaTextGenerator: Sendable {
             repeatPenalty: repeatPenalty,
             presencePenalty: presencePenalty,
             frequencyPenalty: frequencyPenalty,
-            format: format
+            format: format,
+            requestTimeoutInterval: timeoutInterval
         ) {
             text = update.text
             if let u = update.usage {
