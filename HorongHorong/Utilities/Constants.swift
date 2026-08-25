@@ -1074,6 +1074,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .primary,
                 "qwen3.6:27b-mlx": .quality,
                 "qwen3.6:27b-q4_K_M": .quality,
+                "qwen3.8:27b": .quality,
+                "qwen3.8:27b-mlx": .quality,
                 "qwen3.5:9b": .lightweight,
             ]
         case 48..<64:
@@ -1087,6 +1089,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .quality,
                 "qwen3.6:27b-mlx": .primary,
                 "qwen3.6:27b-q4_K_M": .primary,
+                "qwen3.8:27b": .primary,
+                "qwen3.8:27b-mlx": .primary,
                 "qwen3.5:9b": .lightweight,
             ]
         case 24..<48:
@@ -1104,6 +1108,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .caution,
                 "qwen3.6:27b-q4_K_M": .caution,
+                "qwen3.8:27b": .caution,
+                "qwen3.8:27b-mlx": .caution,
                 "qwen3.5:9b": .primary,
             ]
         case 16..<24:
@@ -1121,6 +1127,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .quality,
             ]
         case 12..<16:
@@ -1140,6 +1148,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .caution,
             ]
         default:
@@ -1159,6 +1169,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .unsupported,
             ]
         }
@@ -1265,6 +1277,20 @@ enum Constants {
             detail: "장점: Qwen 3.6 27B. 양자화 모델로 적은 메모리로 구동 가능. 권장 RAM: 32GB+.",
             availability: .local,
             isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.8:27b",
+            label: "Qwen3.8 27B",
+            detail: "장점: 최신 Qwen3.8 27B로 긴 지시와 구조화 출력 품질을 비교하기 좋습니다. 대형 모델이라 목표 추천 품질 검증용으로 권장. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: true
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.8:27b-mlx",
+            label: "Qwen3.8 27B MLX",
+            detail: "장점: Apple Silicon에서 Ollama의 MLX 엔진을 사용해 응답 속도와 메모리 효율을 높인 Qwen3.8 27B입니다. M칩 Mac의 목표 추천 품질 검증용으로 권장. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: true
         ),
         NewsOllamaModelOption(
             name: "qwen3.6:35b-a3b-q4_K_M",
