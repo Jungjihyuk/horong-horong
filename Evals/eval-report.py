@@ -364,6 +364,8 @@ def visible_scores(case_id, scores):
 def is_warning(case_id, case_data):
     """케이스 안에 0.5 미만 점수가 하나라도 있으면 '주의'."""
     for result in case_data.values():
+        if is_infrastructure_failure(result):
+            return True
         for value in visible_scores(case_id, result.get("scores", {})).values():
             if isinstance(value, (int, float)) and value < 0.5:
                 return True
@@ -371,6 +373,8 @@ def is_warning(case_id, case_data):
 
 
 def worst_class(case_id, case_data):
+    if any(is_infrastructure_failure(result) for result in case_data.values()):
+        return "fail"
     values = [
         v
         for result in case_data.values()
@@ -378,6 +382,11 @@ def worst_class(case_id, case_data):
         if isinstance(v, (int, float))
     ]
     return score_class(min(values)) if values else "pass"
+
+
+def is_infrastructure_failure(result):
+    """모델 품질과 무관하게 추론이 시작되지 않았거나 중단된 실행인가."""
+    return result.get("outcome") in {"generationFailed", "serverUnavailable", "modelUnavailable"}
 
 
 def format_seconds(ms):
@@ -404,7 +413,11 @@ def column_summary(data_dict, column):
 
     그래서 **지표마다 분모를 따로 고른다.** 괄호 안 숫자가 그 분모다.
     """
-    pairs = [(case_id, case_data[column]) for case_id, case_data in data_dict.items() if column in case_data]
+    pairs = [
+        (case_id, case_data[column])
+        for case_id, case_data in data_dict.items()
+        if column in case_data and not is_infrastructure_failure(case_data[column])
+    ]
     if not pairs:
         return "데이터 없음"
 
@@ -503,10 +516,18 @@ def render_table(data_dict, table_id, is_level=True, page_size=None):
                 output = result.get("output", "")
                 scores = result.get("scores", {})
                 latency = result.get("total_ms", result.get("latency_ms", 0))
-                score_html = "".join(format_score(k, v) for k, v in sorted(visible_scores(case_id, scores).items()))
+                outcome = result.get("outcome", "ok")
+                outcome_detail = result.get("outcome_detail")
+                if is_infrastructure_failure(result):
+                    status, tooltip = get_outcome_info(outcome, outcome_detail)
+                    cell_content = "<span class='empty'>추론 미실행</span>"
+                    score_html = f"<span class='badge fail' title='{tooltip}'>{status}</span>"
+                else:
+                    cell_content = output
+                    score_html = "".join(format_score(k, v) for k, v in sorted(visible_scores(case_id, scores).items()))
                 row.append(
                     f"<td{column_attr}>"
-                    f"<div class='cell-content'>{output}</div>"
+                    f"<div class='cell-content'>{cell_content}</div>"
                     f"<div class='score-row'>{score_html}</div>"
                     f"<div class='meta'>⏱ {format_seconds(latency)}</div>"
                     f"</td>"
@@ -585,7 +606,11 @@ def get_outcome_info(outcome, detail):
     if outcome == "ok":
         return "성공 (ok)", "목표 초안이 정상적으로 생성 및 파싱되었습니다."
     elif outcome == "generationFailed":
-        if detail == "timeout":
+        if detail == "modelUnavailable":
+            return "모델 불가 (modelUnavailable)", "사전 점검에서 Ollama 모델 목록에 선택한 모델이 없었습니다. 추론은 시작하지 않았습니다."
+        elif detail == "serverUnavailable":
+            return "서버 불가 (serverUnavailable)", "사전 점검에서 Ollama 서버에 연결하지 못했습니다. 추론은 시작하지 않았습니다."
+        elif detail == "timeout":
             return "타임아웃 (timeout)", "60초 동안 모델이 응답하지 않아 시간 초과되었습니다."
         elif detail == "connectionRefused":
             return "서버 연결 실패 (connectionRefused)", "로컬 Ollama 데몬이 꺼져 있거나 포트에 접속할 수 없습니다."

@@ -1049,7 +1049,7 @@ enum Constants {
     static var defaultNewsOllamaModel: String {
         recommendedNewsOllamaModel()
     }
-    static let defaultNewsOllamaEndpoint = "http://localhost:11434"
+    static let defaultNewsOllamaEndpoint = "http://127.0.0.1:11434"
     static let defaultNewsOllamaTimeout = 120.0
     static var newsHardwareMemoryGB: Int {
         memoryGB(forPhysicalMemoryBytes: ProcessInfo.processInfo.physicalMemory)

@@ -157,6 +157,26 @@ public enum WeeklyGoalTask {
                 overMaxMemo: Int,
                 tooFewIDs: Int
             )
+
+            /// 원문 옆에 나란히 남길 숫자들. 이게 없으면 «모델이 안 냈다» 와
+            /// «파서가 버렸다» 를 원문을 통째로 읽어야만 가릴 수 있다.
+            var traceFacts: [String: Int] {
+                switch self {
+                case .decodeFailed(let characters, _):
+                    return ["characters": characters]
+                case .decoded(let modelReturned, let kept, let requestedIDs,
+                              let badID, let alreadyUsed, let overMaxMemo, let tooFewIDs):
+                    return [
+                        "modelReturned": modelReturned,
+                        "kept": kept,
+                        "requestedIDs": requestedIDs,
+                        "badID": badID,
+                        "alreadyUsed": alreadyUsed,
+                        "overMaxMemo": overMaxMemo,
+                        "tooFewIDs": tooFewIDs,
+                    ]
+                }
+            }
         }
     }
 
@@ -399,7 +419,7 @@ public enum WeeklyGoalTask {
         inputLimit: Int,
         budget: Int,
         context: GoalRecommendationContext = .empty,
-        timeoutInterval: TimeInterval = 60.0,
+        timeoutInterval: TimeInterval = 180.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
         /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
         /// `RunOutcome` 에 원문을 싣지 않기로 한 결정을 지키면서 원문을 꺼내는 통로다.
@@ -453,8 +473,8 @@ public enum WeeklyGoalTask {
                     try await generate(prompt, instructions)
                 }
                 group.addTask {
-                    // 생성 60초 타임아웃: 실측(2026-08-14)에서 Ollama 무한 루프/지연 발생 시
-                    // 107초 이상 사용자가 대기하는 문제를 방지하기 위해 60초 상한 설정.
+                    // 생성 90초 타임아웃: 로컬 대형 모델이 첫 응답을 준비할 시간을 주되,
+                    // 무한 루프·지연으로 사용자가 끝없이 대기하지 않도록 상한을 둔다.
                     // 초과 시 빠른 폴백(AFM/룰)을 유도한다.
                     let nanoseconds = UInt64(max(0.001, timeoutInterval) * 1_000_000_000)
                     try await Task.sleep(nanoseconds: nanoseconds)
@@ -468,7 +488,12 @@ public enum WeeklyGoalTask {
             // 원문이 없어서 `typeMismatch:Index 0` 를 못 쫓았던 자리다(2026-08-17).
             // 추출 결과도 함께 남긴다 — `<think>` 제거·코드펜스 처리가 실제로 일했는지는
             // 이 둘을 나란히 놓아야만 알 수 있다.
-            trace?.add(.rawResponse, genOutput.text, facts: ["characters": genOutput.text.count])
+            // 토큰 수를 함께 남긴다. 길이만으로는 «짧게 답했다» 와 «중간에 잘렸다» 가
+            // 구분되지 않는데, 그 둘은 고칠 곳이 서로 다르다.
+            var rawFacts = ["characters": genOutput.text.count]
+            if let tokensIn = genOutput.usage?.tokensIn { rawFacts["tokensIn"] = tokensIn }
+            if let tokensOut = genOutput.usage?.tokensOut { rawFacts["tokensOut"] = tokensOut }
+            trace?.add(.rawResponse, genOutput.text, facts: rawFacts)
             trace?.add(.extractedJSON, GoalSuggestionPayload.extractJSONObject(from: genOutput.text))
             // 허용 id 는 **자르기 전 전체**다. 예산에 밀려 프롬프트에 안 들어간 id 를 모델이
             // 지어내는 일은 없지만, 좁히면 재시도·캐시 같은 걸 붙일 때 조용히 후보를 잃는다.
@@ -481,7 +506,7 @@ public enum WeeklyGoalTask {
             )
             clock.mark("parse")
             trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
-                       facts: ["kept": parsed.drafts.count])
+                       facts: parsed.diagnostics.traceFacts)
             return outcome(drafts: parsed.drafts, result: parsed.result, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
         } catch {
             clock.mark("generate")
@@ -498,7 +523,7 @@ public enum WeeklyGoalTask {
         inputLimit: Int,
         budget: Int,
         context: GoalRecommendationContext = .empty,
-        timeoutInterval: TimeInterval = 60.0,
+        timeoutInterval: TimeInterval = 180.0,
         onPromptBuilt: (_ characters: Int, _ memoCount: Int) -> Void = { _, _ in },
         trace: TraceCollector? = nil,
         generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String

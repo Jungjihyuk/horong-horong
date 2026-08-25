@@ -127,7 +127,7 @@ public enum MonthlyGoalTask {
         inputLimit: Int,
         maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
         context: GoalRecommendationContext = .empty,
-        timeoutInterval: TimeInterval = 60.0,
+        timeoutInterval: TimeInterval = 180.0,
         /// 원문을 모을 자리. 개발자 모드가 아니면 `nil` 이라 아무 비용도 들지 않는다.
         trace: TraceCollector? = nil,
         // 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
@@ -171,7 +171,8 @@ public enum MonthlyGoalTask {
                     try await generate(prompt, instructions)
                 }
                 group.addTask {
-                    // 생성 60초 타임아웃: 무한 루프/지연 발생 시 상한을 설정해 빠른 폴백 유도
+                    // 생성 90초 타임아웃: 로컬 대형 모델에도 충분한 생성 시간을 주되,
+                    // 무한 루프·지연에는 상한을 설정해 빠른 폴백을 유도한다.
                     let nanoseconds = UInt64(max(0.001, timeoutInterval) * 1_000_000_000)
                     try await Task.sleep(nanoseconds: nanoseconds)
                     throw CancellationError()
@@ -194,7 +195,7 @@ public enum MonthlyGoalTask {
             )
             clock.mark("parse")
             trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
-                       facts: ["kept": parsed.drafts.count])
+                       facts: parsed.diagnostics.traceFacts)
             return outcome(drafts: parsed.drafts, result: parsed.result, failure: nil, parse: parsed.diagnostics)
         } catch {
             clock.mark("generate")

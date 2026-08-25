@@ -1,16 +1,13 @@
 {
   "contextModes": [
-    "withoutContext",
-    "withContext"
+    "withoutContext"
+  ],
+  "datasetTypes": [
+    "general"
   ],
   "models": [
     {
-      "name": "Ollama · Qwen3.8 27B mlx",
-      "provider": "mlx",
-      "model": "qwen3.8:27b-mlx"
-    },
-    {
-      "name": "Ollama · Qwen3.8 27B",
+      "name": "Ollama · Qwen3.8 27B · format 없음",
       "provider": "ollama",
       "model": "qwen3.8:27b"
     }

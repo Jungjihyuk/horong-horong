@@ -173,7 +173,8 @@ public struct OllamaChatClient: Sendable {
         repeatPenalty: Double? = nil,
         presencePenalty: Double? = nil,
         frequencyPenalty: Double? = nil,
-        format: JSONSchema? = nil
+        format: JSONSchema? = nil,
+        requestTimeoutInterval: TimeInterval = 60.0
     ) -> AsyncThrowingStream<StreamUpdate, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -183,6 +184,7 @@ public struct OllamaChatClient: Sendable {
                     }
 
                     var request = URLRequest(url: url)
+                    request.timeoutInterval = requestTimeoutInterval
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.httpBody = try JSONEncoder().encode(
