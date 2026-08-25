@@ -372,28 +372,28 @@ public enum MonthlyGoalTask {
     /// 월간은 주간 목표의 **UUID 문자열**로 받는다. 번호가 아니라 문자열인 것이 주간과 다르다.
     public static let responseSchema = JSONSchema.object(
         properties: [
-            "resultType": .string,
-            "suggestions": .array(of: .object(
+            .init("resultType", .stringEnum(["suggestions", "guidance", "noSuggestion"])),
+            .init("suggestions", .array(of: .object(
                 properties: [
-                    "title": .string,
-                    "reason": .string,
-                    "goalIDs": .array(of: .string),
-                    "scheduleText": .string,
-                    "criterion": .string,
-                    "emoji": .string,
+                    .init("title", .string),
+                    .init("reason", .string),
+                    .init("goalIDs", .array(of: .string)),
+                    .init("scheduleText", .string),
+                    .init("criterion", .string),
+                    .init("emoji", .string),
                 ],
-                required: ["title", "reason", "goalIDs"]
-            )),
-            "guidance": .array(of: .object(
+                required: ["goalIDs", "reason", "title"]
+            ))),
+            .init("guidance", .array(of: .object(
                 properties: [
-                    "goalIDs": .array(of: .string),
-                    "missing": .array(of: .string),
-                    "suggestion": .string,
+                    .init("goalIDs", .array(of: .string)),
+                    .init("missing", .array(of: .string)),
+                    .init("suggestion", .string),
                 ],
                 required: ["goalIDs", "missing", "suggestion"]
-            ))
+            )))
         ],
-        required: []
+        required: ["resultType"]
     )
 
     private static let promptFallback = """

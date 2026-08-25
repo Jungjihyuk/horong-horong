@@ -560,30 +560,34 @@ public enum WeeklyGoalTask {
     ///
     /// `scheduleText` · `criterion` 은 필수로 걸지 않는다 — 파서가 기본값을 채우므로
     /// 모델에게 지어내라고 시킬 이유가 없다(토큰만 쓰고 내용도 나빠진다).
+    /// **속성 순서는 프롬프트의 «JSON 형식» 예시와 같아야 한다.** 순서가 곧 문법이라
+    /// (→ `JSONSchema`) `resultType` 이 뒤에 오면 모델이 그걸 먼저 쓰는 순간 배열을 못 쓴다.
+    /// `suggestions` 와 `guidance` 는 한 응답에 함께 나오는 일이 없어 둘 사이 순서는 상관없지만,
+    /// 예시와 같은 줄로 세워 두면 모델이 다른 순서를 시도할 이유가 없다.
     public static let responseSchema = JSONSchema.object(
         properties: [
-            "resultType": .string,
-            "suggestions": .array(of: .object(
+            .init("resultType", .stringEnum(["suggestions", "guidance", "noSuggestion"])),
+            .init("suggestions", .array(of: .object(
                 properties: [
-                    "title": .string,
-                    "reason": .string,
+                    .init("title", .string),
+                    .init("reason", .string),
                     // 주간은 할일 **번호**로 받는다. 스키마가 정수 배열이라
                     // `[[16],[17]]` 같은 중첩은 애초에 만들 수 없다.
-                    "items": .array(of: .integer),
-                    "emoji": .string,
+                    .init("items", .array(of: .integer)),
+                    .init("emoji", .string),
                 ],
-                required: ["title", "reason", "items"]
-            )),
-            "guidance": .array(of: .object(
+                required: ["items", "reason", "title"]
+            ))),
+            .init("guidance", .array(of: .object(
                 properties: [
-                    "items": .array(of: .integer),
-                    "missing": .array(of: .string),
-                    "suggestion": .string,
+                    .init("items", .array(of: .integer)),
+                    .init("missing", .array(of: .string)),
+                    .init("suggestion", .string),
                 ],
                 required: ["items", "missing", "suggestion"]
-            ))
+            )))
         ],
-        required: []
+        required: ["resultType"]
     )
 
     private static let promptFallback = """

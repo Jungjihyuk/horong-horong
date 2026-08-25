@@ -1298,7 +1298,9 @@ enum AchievementFoundationGoalSuggestionProvider {
                         presencePenalty: presencePenalty,
                         frequencyPenalty: frequencyPenalty,
                         // 프롬프트로 부탁만 하지 않고 **모양을 강제한다.**
-                        format: WeeklyGoalTask.responseSchema
+                        format: WeeklyGoalTask.responseSchema,
+                        // 태스크 쪽 벽시계와 **같은 값**이어야 한다. 한쪽만 길면 짧은 쪽이 새 벽이 된다.
+                        timeoutInterval: Constants.achievementSuggestionTimeout
                     )
                     return WeeklyGoalTask.GenerationOutput(text: output.text, usage: output.usage)
                 }
@@ -1371,6 +1373,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             inputLimit: max(8, min(provider == .ollama || provider == .appleFoundation ? 15 : 24, suggestionCount * maxMemoCount * 2)),
             budget: Constants.achievementPromptCharacterBudget(for: provider),
             context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
             onPromptBuilt: { characters, memoCount in
                 achievementSuggestionLog.info(
                     """
@@ -1651,7 +1654,9 @@ enum AchievementFoundationGoalSuggestionProvider {
                         repeatPenalty: repeatPenalty,
                         presencePenalty: presencePenalty,
                         frequencyPenalty: frequencyPenalty,
-                        format: MonthlyGoalTask.responseSchema
+                        format: MonthlyGoalTask.responseSchema,
+                        // 태스크 쪽 벽시계와 **같은 값**이어야 한다. 한쪽만 길면 짧은 쪽이 새 벽이 된다.
+                        timeoutInterval: Constants.achievementSuggestionTimeout
                     )
                 }
             )
@@ -1715,6 +1720,7 @@ enum AchievementFoundationGoalSuggestionProvider {
             inputLimit: max(3, min(30, suggestionCount * 6)),
             maxGoalsPerSuggestion: maxGoalsPerSuggestion,
             context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
             trace: trace,
             generate: generate
         )
@@ -1891,6 +1897,7 @@ struct FoundationModelsGoalSuggestionProvider {
             inputLimit: max(8, min(15, suggestionCount * maxMemoCount * 2)),
             budget: achievementPromptCharacterBudget,
             context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
             onPromptBuilt: { characters, memoCount in
                 promptSummary = "weekly prompt chars=\(characters) memos=\(memoCount)"
                 achievementSuggestionLog.info(
@@ -1992,6 +1999,7 @@ struct FoundationModelsGoalSuggestionProvider {
             inputLimit: max(3, min(30, suggestionCount * 6)),
             maxGoalsPerSuggestion: maxGoalsPerSuggestion,
             context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
             trace: trace,
             generate: { prompt, instructions in
                 try await generator.generate(
