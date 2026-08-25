@@ -171,6 +171,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .filter button.active { background: var(--accent); color: #fff; font-weight: 600; }
         .comparison-picker { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
         .comparison-picker select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 5px 8px; font: inherit; }
+        .column-pager { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+        .column-pager button { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 4px 9px; cursor: pointer; font: inherit; }
+        .column-pager button:disabled { cursor: default; opacity: 0.45; }
         .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
 
         /* 표 */
@@ -195,7 +198,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         thead th .lvl-desc { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
         thead th .col-agg .denom { color: var(--faint); font-weight: 400; margin-left: 1px; }
-        thead th .col-agg { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 3px; }
+        thead th .col-agg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 6px; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 5px; white-space: normal; }
+        thead th .col-agg .metric { white-space: nowrap; }
+        thead th .col-agg .latency { grid-column: 1 / -1; }
+        thead th .model-provider { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+        thead th .model-name { display: block; font-size: 13px; color: var(--ink); }
 
         .case-col { position: sticky; left: 0; z-index: 2; background: var(--panel); width: 230px; min-width: 230px; }
         thead .case-col { z-index: 4; background: var(--panel-alt); }
@@ -275,6 +282,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     tr.style.display = (tr.dataset.fail !== '1') ? '' : 'none';
                 }
             });
+        }
+
+        function showColumnPage(tableId, page, pageSize, totalColumns) {
+            const pageCount = Math.ceil(totalColumns / pageSize);
+            const safePage = Math.max(0, Math.min(page, pageCount - 1));
+            const first = safePage * pageSize;
+            const last = first + pageSize;
+            document.querySelectorAll(`#${tableId} [data-column-index]`).forEach(el => {
+                const index = Number(el.dataset.columnIndex);
+                el.style.display = index >= first && index < last ? '' : 'none';
+            });
+            const pager = document.querySelector(`[data-pager-for="${tableId}"]`);
+            if (!pager) return;
+            pager.dataset.page = safePage;
+            pager.querySelector('[data-page-label]').textContent = `${safePage + 1} / ${pageCount}`;
+            pager.querySelector('[data-page-prev]').disabled = safePage === 0;
+            pager.querySelector('[data-page-next]').disabled = safePage >= pageCount - 1;
+        }
+
+        function moveColumnPage(tableId, delta, pageSize, totalColumns) {
+            const pager = document.querySelector(`[data-pager-for="${tableId}"]`);
+            showColumnPage(tableId, Number(pager.dataset.page || 0) + delta, pageSize, totalColumns);
         }
     </script>
 </head>
@@ -399,32 +428,53 @@ def column_summary(data_dict, column):
     ):
         got = average(key, keep)
         if got:
-            parts.append(f"{label} {got[0]:.2f}<span class='denom'>({got[1]})</span>")
+            parts.append(f"<span class='metric'>{label} {got[0]:.2f}<span class='denom'>({got[1]})</span></span>")
 
     if not parts:  # 옛 기록의 대화용 지표만 있는 경우 — 전부 평균내던 옛 동작으로 물러선다
         scores = [v for _, row in pairs for v in row.get("scores", {}).values() if isinstance(v, (int, float))]
         if scores:
-            parts.append(f"평균 {sum(scores) / len(scores):.2f}")
+            parts.append(f"<span class='metric'>평균 {sum(scores) / len(scores):.2f}</span>")
 
     avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for _, r in pairs) // len(pairs)
-    return " · ".join(parts + [format_seconds(avg_latency)])
+    return "".join(parts + [f"<span class='latency'>⏱ {format_seconds(avg_latency)}</span>"])
 
 
-def render_table(data_dict, table_id, is_level=True):
+def model_label(model_key):
+    """저장용 공급자·모델 키를 사람이 읽는 두 줄 레이블로 바꾼다."""
+    provider, _, model = model_key.partition("|")
+    provider_name = {
+        "appleFoundation": "Apple Foundation Models",
+        "ollama": "Ollama",
+        "mlx": "MLX",
+    }.get(provider, provider or "Unknown")
+    short_model = model.removeprefix("mlx-community/")
+    if not short_model or short_model == provider:
+        short_model = "기본 모델"
+    return provider_name, short_model
+
+
+def display_column_label(column, is_level):
+    if is_level:
+        return column
+    provider, model = model_label(column)
+    return f"<span class='model-provider'>{provider}</span><span class='model-name'>{model}</span>"
+
+
+def render_table(data_dict, table_id, is_level=True, page_size=None):
     columns = set()
     for case_data in data_dict.values():
         columns.update(case_data.keys())
     sorted_cols = sorted(columns)
 
     headers = ""
-    for col in sorted_cols:
+    for index, col in enumerate(sorted_cols):
         desc = ""
         if is_level:
             base_lvl = col.split(" ")[0]
             if base_lvl in LEVEL_DESC:
                 desc = f"<span class='lvl-desc'>{LEVEL_DESC[base_lvl]}</span>"
         headers += (
-            f"<th>{col}{desc}"
+            f"<th{' data-column-index=' + repr(index) if page_size else ''}>{display_column_label(col, is_level)}{desc}"
             f"<span class='col-agg'>{column_summary(data_dict, col)}</span></th>"
         )
 
@@ -446,7 +496,8 @@ def render_table(data_dict, table_id, is_level=True):
             f"{type_text}{question}</td>"
         ]
 
-        for col in sorted_cols:
+        for index, col in enumerate(sorted_cols):
+            column_attr = f" data-column-index='{index}'" if page_size else ""
             if col in case_data:
                 result = case_data[col]
                 output = result.get("output", "")
@@ -454,21 +505,32 @@ def render_table(data_dict, table_id, is_level=True):
                 latency = result.get("total_ms", result.get("latency_ms", 0))
                 score_html = "".join(format_score(k, v) for k, v in sorted(visible_scores(case_id, scores).items()))
                 row.append(
-                    f"<td>"
+                    f"<td{column_attr}>"
                     f"<div class='cell-content'>{output}</div>"
                     f"<div class='score-row'>{score_html}</div>"
                     f"<div class='meta'>⏱ {format_seconds(latency)}</div>"
                     f"</td>"
                 )
             else:
-                row.append("<td class='empty'>데이터 없음</td>")
+                row.append(f"<td class='empty'{column_attr}>데이터 없음</td>")
         rows.append(f"<tr data-warn='{1 if warn else 0}'>{''.join(row)}</tr>")
+
+    pager = ""
+    if page_size and len(sorted_cols) > page_size:
+        pager = f"""
+        <span class="column-pager" data-pager-for="{table_id}" data-page="0">
+            <button data-page-prev onclick="moveColumnPage('{table_id}', -1, {page_size}, {len(sorted_cols)})">← 이전</button>
+            <span data-page-label>1 / {(len(sorted_cols) + page_size - 1) // page_size}</span>
+            <button data-page-next onclick="moveColumnPage('{table_id}', 1, {page_size}, {len(sorted_cols)})">다음 →</button>
+        </span>
+        """
 
     toolbar = f"""
     <div class="toolbar">
         <span class="chip">케이스 <b>{len(data_dict)}</b></span>
         <span class="chip{' is-warn' if warning_count else ''}">주의 <b>{warning_count}</b></span>
         <span class="chip">{'레벨' if is_level else '모델'} <b>{len(sorted_cols)}</b></span>
+        {pager}
         <span class="spacer"></span>
         <span class="filter">
             <button class="active" onclick="filterRows(this, '{table_id}', 'all')">전체</button>
@@ -492,6 +554,7 @@ def render_table(data_dict, table_id, is_level=True):
             </tbody>
         </table>
     </div>
+    {f"<script>showColumnPage('{table_id}', 0, {page_size}, {len(sorted_cols)});</script>" if page_size and len(sorted_cols) > page_size else ""}
     """
 
 
@@ -747,11 +810,11 @@ def generate_html(data_by_level_by_model, data_by_model_by_level, live_runs):
         tab_buttons.append(f'<button class="tab-button" data-tab="tab-model" onclick="openTab(\'tab-model\')">{btn_num_model} 골든셋: LLM 모델별 비교</button>')
 
         level_tables = [
-            (model, render_table(data, f"table-level-{index}", is_level=True))
+            (" · ".join(model_label(model)), render_table(data, f"table-level-{index}", is_level=True))
             for index, (model, data) in enumerate(sorted(data_by_level_by_model.items()))
         ]
         model_tables = [
-            (level, render_table(data, f"table-model-{index}", is_level=False))
+            (level, render_table(data, f"table-model-{index}", is_level=False, page_size=7))
             for index, (level, data) in enumerate(sorted(data_by_model_by_level.items()))
         ]
 
@@ -854,11 +917,13 @@ def main():
         else:
             # 골든셋/평가 레코드
             level = row.get("recipe", row.get("level", "promptOnly"))
+            provider = row.get("provider", "unknown")
             model = row.get("model", "unknown")
+            model_key = f"{provider}|{model}"
 
-            data_by_level_by_model[model][case_id][level] = row
+            data_by_level_by_model[model_key][case_id][level] = row
             if model:
-                data_by_model_by_level[level][case_id][model] = row
+                data_by_model_by_level[level][case_id][model_key] = row
 
     html = generate_html(data_by_level_by_model, data_by_model_by_level, live_runs)
 
