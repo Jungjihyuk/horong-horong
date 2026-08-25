@@ -835,6 +835,25 @@ enum Constants {
         }
     }
 
+    /// 목표 추천 생성의 벽시계 상한(초).
+    ///
+    /// **제품과 평가는 요구가 반대라 값이 하나일 수 없다.** 제품은 사용자를 기다리게 하는
+    /// 자리라 상한이 짧아야 하고, 골든셋은 품질을 재는 자리라 속도 제약이 결과를 오염시키면
+    /// 안 된다 — 상한에 걸린 케이스는 «모델이 틀렸다» 가 아니라 «머신이 느렸다» 인데
+    /// 점수에는 똑같이 0으로 남는다.
+    ///
+    /// 기본값은 제품 값이고 **`GoalSuggestionEvalTests` 만 이 값을 올려 잡는다.**
+    /// `TraceRecorder.shared` 와 같은 방식이다 — 호출 사슬 네 겹에 인자를 뚫는 대신
+    /// 평가가 시작할 때 한 번 쓰고 끝나면 되돌린다.
+    nonisolated(unsafe) static var achievementSuggestionTimeout: TimeInterval = 180
+
+    /// 골든셋이 쓰는 상한.
+    ///
+    /// 실측(2026-08-25) 27B 모델이 GPU 에 다 안 올라가 `18% CPU` 로 새면 0.68 tok/s 까지
+    /// 떨어져 한 건에 **322초**가 걸렸다. 관측 최댓값 바로 위에 둔 값이라 여유가 크지 않다 —
+    /// 근본 해결은 모델을 GPU 에 온전히 올리는 것이다(`iogpu.wired_limit_mb`).
+    static let achievementSuggestionEvalTimeout: TimeInterval = 350
+
     static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
     /// 뉴스 기능과 같은 엔드포인트를 쓴다.
     static let defaultCompanionOllamaModel = "gemma4:e4b"

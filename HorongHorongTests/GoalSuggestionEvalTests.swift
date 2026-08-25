@@ -59,6 +59,12 @@ final class GoalSuggestionEvalTests: XCTestCase {
             TraceRecorder.shared = nil
         }
 
+        // 생성 상한을 평가용으로 올린다. 제품 값(180초)을 그대로 쓰면 느린 머신에서
+        // **«모델이 틀렸다» 와 «머신이 느렸다» 가 똑같이 0점으로 남는다.**
+        let productTimeout = Constants.achievementSuggestionTimeout
+        Constants.achievementSuggestionTimeout = Constants.achievementSuggestionEvalTimeout
+        defer { Constants.achievementSuggestionTimeout = productTimeout }
+
         // 케이스마다 다른 `runId` 를 준다. **원문 파일 하나가 시도 하나**인데
         // (→ `TraceRecorder.fileURL`) 배치 전체가 한 `runId` 를 쓰면 케이스들이 같은 파일을
         // 덮어써 마지막 하나만 남는다. 배치 id 를 접두사로 두어 이름만으로 다시 묶인다.

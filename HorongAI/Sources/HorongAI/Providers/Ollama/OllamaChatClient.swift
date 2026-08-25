@@ -23,14 +23,12 @@ public struct OllamaChatClient: Sendable {
         }
     }
 
-    private struct ChatRequest: Encodable {
+    struct ChatRequest: Encodable {
         let model: String
         let messages: [Message]
         let stream: Bool
         /// qwen3 계열은 기본이 추론 모드라 생각하는 데 토큰을 다 쓰고 빈 답을 준다.
         let think: Bool
-        /// 응답의 모양을 강제하는 스키마. `nil` 이면 키 자체가 안 나가고 예전처럼 자유 출력이다.
-        let format: JSONSchema?
         let options: Options
 
         struct Options: Encodable {
@@ -77,6 +75,21 @@ public struct OllamaChatClient: Sendable {
             case promptEvalCount = "prompt_eval_count"
             case evalCount = "eval_count"
         }
+    }
+
+    /// 요청 본문. **`format` 만 손으로 붙인다.**
+    ///
+    /// 스키마는 속성 순서가 의미를 갖는데(→ `JSONSchema`) `JSONEncoder` 는 객체 키 순서를
+    /// 보장하지 않는다. 인코더에 맡겼더니 `resultType` 이 맨 뒤로 밀려, 모델이 그걸 먼저 쓰는
+    /// 순간 배열을 못 쓰고 객체를 닫았다(실측 2026-08-25: 골든셋 62건 중 56건이 빈 결과).
+    ///
+    /// 나머지 필드는 순서가 상관없으므로 그대로 인코더에 맡긴다. 인코더 출력은 항상 `{` 로
+    /// 시작하고 이 객체는 비어 있지 않으므로, 여는 괄호 바로 뒤에 끼우면 유효한 JSON 이다.
+    static func body(_ request: ChatRequest, format: JSONSchema?) throws -> Data {
+        var data = try JSONEncoder().encode(request)
+        guard let format else { return data }
+        data.insert(contentsOf: Data(#""format":\#(format.jsonText),"#.utf8), at: 1)
+        return data
     }
 
     /// 서버가 떠 있는지. 꺼져 있으면 Apple 모델로 돌아가야 한다.
@@ -187,13 +200,12 @@ public struct OllamaChatClient: Sendable {
                     request.timeoutInterval = requestTimeoutInterval
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONEncoder().encode(
+                    request.httpBody = try Self.body(
                         ChatRequest(
                             model: model,
                             messages: messages,
                             stream: true,
                             think: false,
-                            format: format,
                             options: .init(
                                 temperature: temperature,
                                 num_predict: maxTokens,
@@ -201,7 +213,8 @@ public struct OllamaChatClient: Sendable {
                                 presence_penalty: presencePenalty,
                                 frequency_penalty: frequencyPenalty
                             )
-                        )
+                        ),
+                        format: format
                     )
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
