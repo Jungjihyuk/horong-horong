@@ -1119,6 +1119,8 @@ enum AchievementFoundationGoalSuggestionProvider {
         candidateCount: Int? = nil,
         variant: String? = nil,
         recommendationContext: GoalRecommendationContext = .empty,
+        modelOverride: String? = nil,
+        allowFallback: Bool = true,
         // 실행당 **한 번** 읽은 값을 받는다. 여기서 다시 읽으면 주간과 월간이 서로 다른
         // 공급자를 볼 수 있다 — 순차로 돌면 두 읽기 사이가 수십 초까지 벌어진다
         // (실측 2026-08-19: 주간 mlx, 7초 뒤 월간 appleFoundation).
@@ -1138,9 +1140,10 @@ enum AchievementFoundationGoalSuggestionProvider {
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount,
                 context: context.attempt(1),
-                recommendationContext: recommendationContext
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromMLX.shouldFallbackToNextProvider { return fromMLX }
+            if !fromMLX.shouldFallbackToNextProvider || !allowFallback { return fromMLX }
             achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
         case .ollama:
             let fromOllama = await ollamaSuggestions(
@@ -1148,9 +1151,10 @@ enum AchievementFoundationGoalSuggestionProvider {
                 suggestionCount: suggestionCount,
                 maxMemoCount: maxMemoCount,
                 context: context.attempt(1),
-                recommendationContext: recommendationContext
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromOllama.shouldFallbackToNextProvider { return fromOllama }
+            if !fromOllama.shouldFallbackToNextProvider || !allowFallback { return fromOllama }
             achievementSuggestionLog.info("weekly provider fallback=ollama→afm")
         case .appleFoundation:
             break
@@ -1177,11 +1181,12 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int,
         context: RunContext,
-        recommendationContext: GoalRecommendationContext
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
     ) async -> AchievementGoalRecommendationResult {
         #if canImport(MLXLLM)
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
                 ?? Constants.defaultAchievementSuggestionMLXModel
             let generator = MLXTextGenerator(model: model)
             let temperature = 0.2
@@ -1231,10 +1236,11 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxMemoCount: Int,
         context: RunContext,
-        recommendationContext: GoalRecommendationContext
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
     ) async -> AchievementGoalRecommendationResult {
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
                 ?? Constants.defaultAchievementSuggestionOllamaModel
             let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
                 ?? Constants.defaultNewsOllamaEndpoint
@@ -1470,6 +1476,8 @@ enum AchievementFoundationGoalSuggestionProvider {
         candidateCount: Int? = nil,
         variant: String? = nil,
         recommendationContext: GoalRecommendationContext = .empty,
+        modelOverride: String? = nil,
+        allowFallback: Bool = true,
         /// 주간(`suggestions`)과 같은 사정이다 — 실행당 한 번 읽은 값을 받는다.
         provider: Constants.AchievementSuggestionProviderKind
     ) async -> AchievementGoalRecommendationResult {
@@ -1489,9 +1497,10 @@ enum AchievementFoundationGoalSuggestionProvider {
                 suggestionCount: suggestionCount,
                 maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 context: context.attempt(1),
-                recommendationContext: recommendationContext
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromMLX.shouldFallbackToNextProvider { return fromMLX }
+            if !fromMLX.shouldFallbackToNextProvider || !allowFallback { return fromMLX }
             achievementSuggestionLog.info("monthly provider fallback=mlx→afm")
         case .ollama:
             let fromOllama = await monthlyOllamaSuggestions(
@@ -1499,9 +1508,10 @@ enum AchievementFoundationGoalSuggestionProvider {
                 suggestionCount: suggestionCount,
                 maxGoalsPerSuggestion: maxGoalsPerSuggestion,
                 context: context.attempt(1),
-                recommendationContext: recommendationContext
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromOllama.shouldFallbackToNextProvider { return fromOllama }
+            if !fromOllama.shouldFallbackToNextProvider || !allowFallback { return fromOllama }
             achievementSuggestionLog.info("monthly provider fallback=ollama→afm")
         case .appleFoundation:
             break
@@ -1526,11 +1536,12 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxGoalsPerSuggestion: Int,
         context: RunContext,
-        recommendationContext: GoalRecommendationContext
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
     ) async -> AchievementGoalRecommendationResult {
         #if canImport(MLXLLM)
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
                 ?? Constants.defaultAchievementSuggestionMLXModel
             let generator = MLXTextGenerator(model: model)
             let temperature = 0.25
@@ -1574,10 +1585,11 @@ enum AchievementFoundationGoalSuggestionProvider {
         suggestionCount: Int,
         maxGoalsPerSuggestion: Int,
         context: RunContext,
-        recommendationContext: GoalRecommendationContext
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
     ) async -> AchievementGoalRecommendationResult {
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
                 ?? Constants.defaultAchievementSuggestionOllamaModel
             let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
                 ?? Constants.defaultNewsOllamaEndpoint
