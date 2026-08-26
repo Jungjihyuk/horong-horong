@@ -530,6 +530,33 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     `<td>${capF2(d.missingF1)}</td></tr>`
                 ).join('');
             }
+
+            const judge = CAP.judge || {};
+            const jmeta = document.getElementById('cap-judge-meta');
+            const jtable = document.querySelector('#cap-judge tbody');
+            const jempty = document.getElementById('cap-judge-empty');
+            if (jmeta) {
+                const m = judge.meta;
+                jmeta.textContent = m
+                    ? `평가자 ${m.judge} · 기록 모델 라벨 ${m.judgeModel} · ${m.rubricVersion} · ${m.count}건 · ${m.file}`
+                    : '성공한 LLM judge 결과가 없습니다.';
+            }
+            if (jtable) {
+                const labels = {
+                    semantic_cohesion:'응집성', noise_exclusion:'노이즈 배제', measurability:'측정 가능성',
+                    clarity:'명확성', time_fit:'기간 적합성', relevance:'관련성', guidance_fit:'안내 적합성',
+                    guidance_actionability:'안내 실행성', grammar:'문법', vocabulary:'어휘', tone:'어투'
+                };
+                const metrics = judge.metrics || [];
+                jtable.innerHTML = (judge.models || []).map(d =>
+                    `<tr><td class="cap-name">${capEsc(d.model)}</td>` +
+                    metrics.map(k => `<td class="cap-cell">${d.judge[k] == null ? '—' : capF2(d.judge[k])}</td>`).join('') +
+                    `<td class="cap-muted">${d.judgeCount}건</td></tr>`
+                ).join('');
+                if (jempty) jempty.hidden = Boolean((judge.models || []).length);
+                const head = document.querySelector('#cap-judge thead tr');
+                if (head) head.innerHTML = '<th>모델</th>' + metrics.map(k => `<th>${labels[k] || k}<span>${k}</span></th>`).join('') + '<th>건수</th>';
+            }
         }
 
         function capRenderCases() {
@@ -1213,6 +1240,47 @@ def load_traces():
     return traces
 
 
+def load_judges():
+    """가장 최근의 성공한 LLM judge 결과를 읽는다.
+
+    judge 실행이 실패한 파일은 리포트에 섞지 않는다. 파일명보다 각 레코드의
+    status를 기준으로 골라, 중간 실패 파일이 최신인 경우에도 정상 결과를
+    표시할 수 있게 한다.
+    """
+    root = os.path.join(evals_dir(), "results", "judges")
+    candidates = sorted(glob.glob(os.path.join(root, "*.jsonl")),
+                        key=lambda p: os.path.getmtime(p), reverse=True)
+    for path in candidates:
+        rows = []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if row.get("status") == "ok" and row.get("runId"):
+                        rows.append(row)
+        except OSError:
+            continue
+        if not rows:
+            continue
+        first = rows[0]
+        return {
+            "rows": {row["runId"]: row for row in rows},
+            "meta": {
+                "file": os.path.basename(path),
+                "judge": first.get("judge") or "-",
+                "judgeModel": first.get("judgeModel") or "-",
+                "rubricVersion": first.get("rubricVersion") or "-",
+                "count": len(rows),
+            },
+        }
+    return {"rows": {}, "meta": None}
+
+
 def trace_facts(trace, span_name):
     for span in (trace or {}).get("spans", []):
         if span.get("name") == span_name:
@@ -1270,7 +1338,7 @@ def _mean(values):
     return (sum(values) / len(values)) if values else 0.0
 
 
-def build_capability_payload(records, specs, traces, max_detail_runs=1200):
+def build_capability_payload(records, specs, traces, judges=None, max_detail_runs=1200):
     """능력 격자·유형별 분해·맥락 효과·파싱 진단·케이스 격자·실행 상세를 한 번에 계산한다."""
     golden = [r for r in records
               if r.get("case_id") and r.get("source") != "live" and r.get("case_id") in specs]
@@ -1309,6 +1377,11 @@ def build_capability_payload(records, specs, traces, max_detail_runs=1200):
     def spec(row):
         return specs.get(row.get("case_id")) or {}
 
+    judge_rows = (judges or {}).get("rows", {})
+    judge_metric_order = [
+        "semantic_cohesion", "noise_exclusion", "measurability", "clarity", "time_fit",
+        "relevance", "guidance_fit", "guidance_actionability", "grammar", "vocabulary", "tone",
+    ]
     payload_models = []
     for model in models:
         rows = by_model[model]
@@ -1347,6 +1420,22 @@ def build_capability_payload(records, specs, traces, max_detail_runs=1200):
         missing_f1 = (2 * missing_precision * missing_recall / (missing_precision + missing_recall)
                       if missing_precision + missing_recall else 0.0)
 
+        judge_values = defaultdict(list)
+        judge_count = 0
+        for row in rows:
+            judged = judge_rows.get(row.get("run_id"))
+            if not judged:
+                continue
+            summary = (judged.get("evaluation") or {}).get("summary") or {}
+            judge_count += 1
+            for key, value in summary.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    judge_values[key].append(value)
+        judge_scores = {
+            key: round(_mean(judge_values[key]), 2) if judge_values.get(key) else None
+            for key in judge_metric_order
+        }
+
         payload_models.append({
             "model": model,
             "grouping": round(_mean([r.get("scores", {}).get("groupingScore", 0.0) for r in grouped]), 4),
@@ -1379,6 +1468,8 @@ def build_capability_payload(records, specs, traces, max_detail_runs=1200):
                 "mean": round(_mean(deltas), 4),
             },
             "fmt": dict(fmt),
+            "judge": judge_scores,
+            "judgeCount": judge_count,
         })
 
     sample = by_model[models[0]]
@@ -1436,6 +1527,11 @@ def build_capability_payload(records, specs, traces, max_detail_runs=1200):
         "cases": [{"name": n, **specs[n]} for n in case_names],
         "cells": cells,
         "runs": runs,
+        "judge": {
+            "meta": (judges or {}).get("meta"),
+            "metrics": judge_metric_order,
+            "models": [d for d in payload_models if d.get("judgeCount", 0) > 0],
+        },
     }
 
 
@@ -1469,6 +1565,14 @@ def render_capability_tabs(payload):
                     <th>모델</th><th>정답 기준 (TP)</th><th>잘못 추가한 기준 (FP)</th><th>놓친 기준 (FN)</th><th>기준 F1</th>
                 </tr></thead><tbody></tbody></table></div>
                 <p class="cap-def">각 메모의 <code>missing</code> 기준을 <code>메모 ID · 기준명</code> 쌍으로 비교한 결정적 지표입니다. 안내 문장 자체의 품질은 평가하지 않습니다.</p>
+            </div>
+        </div>
+        <div class="cap-panel">
+            <div class="cap-head"><h2>LLM judge 품질 점수</h2><span class="cap-scope" id="cap-judge-meta">성공한 judge 결과를 자동 선택합니다</span></div>
+            <div class="cap-body">
+                <div class="cap-wrap"><table class="cap-table" id="cap-judge"><thead><tr></tr></thead><tbody></tbody></table></div>
+                <p class="cap-def" id="cap-judge-empty">표시할 성공한 LLM judge 결과가 없습니다. <code>make llm-judge JUDGE=codex LIMIT=5</code> 실행 후 리포트를 다시 생성하세요.</p>
+                <p class="cap-def">0–5점 루브릭의 케이스별 평균입니다. 결정적 지표(목표 연결·안내 대상 F1)와 별도로 생성된 목표·안내 문장의 품질을 평가하며, 관련성은 페르소나/프로필이 있는 케이스에서만 채점됩니다. 대시(—)는 해당 케이스에 적용하지 않은 항목입니다.</p>
             </div>
         </div>
         <div class="cap-panel">
@@ -1822,7 +1926,9 @@ def main():
 
     # 유형 정보는 `RunRecord` 에 없고 케이스 파일에만 있으므로 `case_id` 로 조인한다.
     # 원문(trace)은 있으면 쓰고 없으면 상세 탭만 비운다.
-    capability = build_capability_payload(records, load_case_specs(), load_traces())
+    capability = build_capability_payload(
+        records, load_case_specs(), load_traces(), load_judges()
+    )
 
     html = generate_html(data_by_level_by_model, data_by_model_by_level, live_runs, capability)
 
