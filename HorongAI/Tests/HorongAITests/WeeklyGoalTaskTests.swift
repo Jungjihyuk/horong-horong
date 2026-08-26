@@ -36,6 +36,29 @@ final class WeeklyGoalTaskTests: XCTestCase {
         XCTAssertEqual(guidance[0].missing, ["specific", "measurable"])
     }
 
+    func testExpandsOneGuidanceItemAcrossAllMemoIDs() {
+        let memos = (1...5).map {
+            WeeklyGoalTask.Memo(id: uuid($0), content: "메모 \($0)", icon: "📝", date: Date())
+        }
+        let outcome = WeeklyGoalTask.parse(
+            """
+            {"resultType":"guidance","guidance":[
+              {"items":[1,2,3,4,5],"missing":[],"suggestion":"목표로 삼기 어려운 입력이에요."}
+            ]}
+            """,
+            memos: memos,
+            allowedIDs: Set(memos.map(\.id)),
+            suggestionCount: 3,
+            maxMemoCount: 5
+        )
+
+        guard case .guidance(let guidance) = outcome.result else {
+            return XCTFail("다중 ID 안내가 guidance 결과로 전달되지 않았다")
+        }
+        XCTAssertEqual(guidance.map(\.inputID), memos.map(\.id))
+        XCTAssertEqual(guidance.map(\.suggestion), Array(repeating: "목표로 삼기 어려운 입력이에요.", count: 5))
+    }
+
     func testRunWritesGuidanceToParsedTrace() async {
         let first = WeeklyGoalTask.Memo(id: uuid(1), content: "취업 준비", icon: "💼", date: Date())
         let trace = TraceCollector(runId: "weekly-guidance", task: nil, provider: nil, model: nil, attempt: nil)
