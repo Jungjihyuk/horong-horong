@@ -167,12 +167,41 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let grouping = PairEvaluator.score(expectedGroups: expectedGroups, predictedGroups: predictedGroups, traps: traps)
         let expectedGuidance = Set(expectedOutcome?.reviewedInputIDs ?? [])
         let actualGuidance = Set(result.guidance.compactMap { expectedInputIDs[$0.inputID] })
+        let expectedReviews = (expectedOutcome?.memoReviews ?? []) + (expectedOutcome?.goalReviews ?? [])
+        let expectedMissing = Dictionary(uniqueKeysWithValues: expectedReviews.compactMap { review in
+            review.inputID.map { ($0, Set(review.missing)) }
+        })
+        let actualMissing = Dictionary(uniqueKeysWithValues: result.guidance.compactMap { item in
+            expectedInputIDs[item.inputID].map { ($0, Set(item.missing)) }
+        })
         let expectsNoSuggestion = expectedOutcome?.action == "no_goal_recommendation"
         let output = !result.suggestions.isEmpty
             ? result.suggestions.map { "- \($0.title)" }.joined(separator: "\n")
             : result.guidance.map { "- \($0.suggestion)" }.joined(separator: "\n")
         var scores: [String: Double] = ["pairF1": grouping.f1, "trapAvoidance": grouping.trapAvoidance, "groupingScore": grouping.groupingScore]
-        if !expectedGuidance.isEmpty { scores["guidanceF1"] = setF1(expected: expectedGuidance, actual: actualGuidance) }
+        if !expectedGuidance.isEmpty {
+            let guidance = setCounts(expected: expectedGuidance, actual: actualGuidance)
+            scores["guidanceTP"] = Double(guidance.truePositive)
+            scores["guidanceFP"] = Double(guidance.falsePositive)
+            scores["guidanceFN"] = Double(guidance.falseNegative)
+            scores["guidancePrecision"] = guidance.precision
+            scores["guidanceRecall"] = guidance.recall
+            scores["guidanceF1"] = guidance.f1
+
+            let expectedMissingPairs = Set(expectedMissing.flatMap { inputID, fields in
+                fields.map { "\(inputID)|\($0)" }
+            })
+            let actualMissingPairs = Set(actualMissing.flatMap { inputID, fields in
+                fields.map { "\(inputID)|\($0)" }
+            })
+            let missing = setCounts(expected: expectedMissingPairs, actual: actualMissingPairs)
+            scores["missingTP"] = Double(missing.truePositive)
+            scores["missingFP"] = Double(missing.falsePositive)
+            scores["missingFN"] = Double(missing.falseNegative)
+            scores["missingPrecision"] = missing.precision
+            scores["missingRecall"] = missing.recall
+            scores["missingF1"] = missing.f1
+        }
         if expectsNoSuggestion { scores["noSuggestionCorrect"] = isNoSuggestion(result) ? 1 : 0 }
 
         runner.record(RunRecord(caseId: caseName, model: model, output: output, scores: scores, totalMs: Int(Date().timeIntervalSince(startedAt) * 1000), runId: runID, startedAt: startedAt, task: task, source: "golden", recipe: recipe, provider: provider, outcome: result.recordedOutcome, outcomeDetail: result.outcomeDetail))
@@ -183,10 +212,27 @@ final class GoalSuggestionEvalTests: XCTestCase {
         return false
     }
 
-    private func setF1(expected: Set<String>, actual: Set<String>) -> Double {
+    private struct SetCounts {
+        let truePositive: Int
+        let falsePositive: Int
+        let falseNegative: Int
+        let precision: Double
+        let recall: Double
+        let f1: Double
+    }
+
+    private func setCounts(expected: Set<String>, actual: Set<String>) -> SetCounts {
         let overlap = Double(expected.intersection(actual).count)
         let precision = actual.isEmpty ? 0 : overlap / Double(actual.count)
         let recall = overlap / Double(expected.count)
-        return precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall)
+        let f1 = precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall)
+        return SetCounts(
+            truePositive: expected.intersection(actual).count,
+            falsePositive: actual.subtracting(expected).count,
+            falseNegative: expected.subtracting(actual).count,
+            precision: precision,
+            recall: recall,
+            f1: f1
+        )
     }
 }

@@ -59,7 +59,7 @@ METRIC_DESC = {
     "groundedness": "사실 기반",
     "pairF1": "쌍 단위 F1 — 함정 감점 전",
     "trapAvoidance": "함정 회피율 — 함정을 적어둔 케이스에만 뜬다",
-    "groupingScore": "묶음 일치도 = F1 × 함정 회피 (최종)",
+    "groupingScore": "목표 연결 점수 = F1 × 함정 회피 (최종)",
     "guidanceF1": "안내 대상 일치도 — 정보가 부족한 입력에만 표시",
     "noSuggestionCorrect": "추천 보류 판정 — 노이즈 입력에만 표시",
     "predictedGroups": "추천 목표 개수",
@@ -71,7 +71,7 @@ METRIC_SHORT = {
     "groundedness": "사실",
     "pairF1": "F1",
     "trapAvoidance": "함정회피",
-    "groupingScore": "묶음",
+    "groupingScore": "목표 연결",
     "guidanceF1": "안내",
     "noSuggestionCorrect": "보류",
     "predictedGroups": "개수",
@@ -279,8 +279,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             font-family: monospace; font-size: 10.5px; font-weight: 700; color: var(--muted);
             vertical-align: bottom; border-bottom: 1px solid var(--line);
         }
+        .cap-table th.cap-group {
+            text-align: center; color: var(--ink); background: var(--bubble);
+            font-size: 11px; letter-spacing: .02em;
+        }
+        .cap-table thead tr:first-child th { padding-top: 8px; padding-bottom: 6px; }
+        .cap-table thead tr:nth-child(2) th { padding-top: 6px; }
         .cap-table th span { display: block; font-weight: 400; color: var(--faint); font-size: 10px; }
         .cap-table th:first-child, .cap-table td:first-child { text-align: left; }
+        .cap-table thead tr:nth-child(2) th:first-child { text-align: right; }
         .cap-table td { border-bottom: 1px solid var(--panel-alt); font-size: 12.5px; }
         .cap-table tfoot td {
             border-bottom: 0; border-top: 1px solid var(--line);
@@ -475,9 +482,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (!CAP || !CAP.models || !CAP.models.length) return;
             capGrid('cap-grid',
                 [{key:'grouping', n:CAP.counts.grouping}, {key:'trap', n:CAP.counts.grouping},
-                 {key:'guidance', n:CAP.counts.guidance, split:true}, {key:'refusal', n:CAP.counts.refusal},
-                 {key:'restraint', n:CAP.counts.restraint},
-                 {key:'inventedPairs', n:CAP.counts.inventedPairs, reverse:true, integer:true}],
+                 {key:'inventedPairs', n:CAP.counts.inventedPairs, reverse:true, integer:true},
+                 {key:'guidance', n:CAP.counts.guidance, split:true},
+                 {key:'guidanceTP', n:CAP.counts.guidance},
+                 {key:'guidanceFP', n:CAP.counts.guidance},
+                 {key:'guidanceFN', n:CAP.counts.guidance},
+                 {key:'refusal', n:CAP.counts.refusal, split:true},
+                 {key:'restraint', n:CAP.counts.restraint}],
                 CAP.models, (r, k) => r[k], {tail: r => r.ms.toFixed(1)});
             capGrid('cap-bytype',
                 [{key:'general'}, {key:'context_dependent'},
@@ -509,6 +520,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     `<tr><td class="cap-name">${capEsc(d.model)}</td>` + keys.map((k, i) =>
                         `<td class="${i === 2 ? 'cap-split' : ''}" style="font-family:monospace;color:${d.fmt[k] === 0 ? capVar('--faint') : capVar('--ink')}">${d.fmt[k]}</td>`
                     ).join('') + '</tr>').join('');
+            }
+
+            const mt = document.querySelector('#cap-missing tbody');
+            if (mt) {
+                mt.innerHTML = CAP.models.map(d =>
+                    `<tr><td class="cap-name">${capEsc(d.model)}</td>` +
+                    `<td>${d.missingTP}</td><td>${d.missingFP}</td><td>${d.missingFN}</td>` +
+                    `<td>${capF2(d.missingF1)}</td></tr>`
+                ).join('');
             }
         }
 
@@ -1316,12 +1336,33 @@ def build_capability_payload(records, specs, traces, max_detail_runs=1200):
                 fmt[key] += facts.get(key, 0)
 
         durations = sorted(r.get("total_ms", 0) for r in rows)
+        missing_tp = sum(r.get("scores", {}).get("missingTP", 0.0)
+                         for r in rows if spec(r).get("type") == "insufficient_information")
+        missing_fp = sum(r.get("scores", {}).get("missingFP", 0.0)
+                         for r in rows if spec(r).get("type") == "insufficient_information")
+        missing_fn = sum(r.get("scores", {}).get("missingFN", 0.0)
+                         for r in rows if spec(r).get("type") == "insufficient_information")
+        missing_precision = missing_tp / (missing_tp + missing_fp) if missing_tp + missing_fp else 0.0
+        missing_recall = missing_tp / (missing_tp + missing_fn) if missing_tp + missing_fn else 0.0
+        missing_f1 = (2 * missing_precision * missing_recall / (missing_precision + missing_recall)
+                      if missing_precision + missing_recall else 0.0)
 
         payload_models.append({
             "model": model,
             "grouping": round(_mean([r.get("scores", {}).get("groupingScore", 0.0) for r in grouped]), 4),
             "trap": round(_mean([r.get("scores", {}).get("trapAvoidance", 0.0) for r in grouped]), 4),
             "guidance": round(by_type.get("insufficient_information", 0.0), 4),
+            # 안내 대상 집합의 혼동행렬. guidanceF1만 남은 옛 기록에는 0으로 표시한다.
+            "guidanceTP": sum(r.get("scores", {}).get("guidanceTP", 0.0)
+                               for r in rows if spec(r).get("type") == "insufficient_information"),
+            "guidanceFP": sum(r.get("scores", {}).get("guidanceFP", 0.0)
+                               for r in rows if spec(r).get("type") == "insufficient_information"),
+            "guidanceFN": sum(r.get("scores", {}).get("guidanceFN", 0.0)
+                               for r in rows if spec(r).get("type") == "insufficient_information"),
+            "missingTP": missing_tp,
+            "missingFP": missing_fp,
+            "missingFN": missing_fn,
+            "missingF1": round(missing_f1, 4),
             "refusal": round(by_type.get("non_goal_or_noise", 0.0), 4),
             # `pairF1` 이 이 케이스들에서 만들어내는 공짜 1.0 을 묶기 평균에 넣지 않고 여기서 따로 센다.
             "restraint": round(_mean([1.0 if r.get("outcome") in ("noSuggestion", "guidance") else 0.0
@@ -1422,18 +1463,37 @@ def render_capability_tabs(payload):
     aggregate = f"""
     <div id="tab-capability" class="tab-content active">
         <div class="cap-panel">
+            <div class="cap-head"><h2>안내 기준 분해</h2><span class="cap-scope">메모별 missing 기준 쌍 · specific · measurable · time_bound</span></div>
+            <div class="cap-body">
+                <div class="cap-wrap"><table class="cap-table" id="cap-missing"><thead><tr>
+                    <th>모델</th><th>정답 기준 (TP)</th><th>잘못 추가한 기준 (FP)</th><th>놓친 기준 (FN)</th><th>기준 F1</th>
+                </tr></thead><tbody></tbody></table></div>
+                <p class="cap-def">각 메모의 <code>missing</code> 기준을 <code>메모 ID · 기준명</code> 쌍으로 비교한 결정적 지표입니다. 안내 문장 자체의 품질은 평가하지 않습니다.</p>
+            </div>
+        </div>
+        <div class="cap-panel">
             <div class="cap-head"><h2>능력 격자</h2><span class="cap-scope">열마다 대상 집합이 다릅니다 · 색 농도는 열 안에서의 상대값입니다</span></div>
             <div class="cap-body">
-                <div class="cap-wrap"><table class="cap-table" id="cap-grid"><thead><tr>
-                    <th>모델</th>
-                    <th>묶기<span>{counts['grouping']}건</span></th>
-                    <th>함정 회피<span>{counts['grouping']}건</span></th>
-                    <th class="cap-split">안내<span>{counts['guidance']}건</span></th>
-                    <th>거절<span>{counts['refusal']}건</span></th>
-                    <th>자제<span>{counts['restraint']}건</span></th>
-                    <th>잘못 묶은 쌍 (FP)<span>{counts['inventedPairs']}건 · 낮을수록 좋음</span></th>
-                    <th class="cap-split">중앙 소요<span>초</span></th>
-                </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+                <div class="cap-wrap"><table class="cap-table" id="cap-grid"><thead>
+                    <tr>
+                        <th rowspan="2">모델</th>
+                        <th colspan="3" class="cap-group">목표 연결</th>
+                        <th colspan="4" class="cap-group cap-split">안내</th>
+                        <th colspan="2" class="cap-group cap-split">보류 및 자제</th>
+                        <th rowspan="2" class="cap-group cap-split">실행 시간<span>초</span></th>
+                    </tr>
+                    <tr>
+                        <th>목표 연결 점수<span>{counts['grouping']}건</span></th>
+                        <th>함정 회피<span>{counts['grouping']}건</span></th>
+                        <th>잘못 묶은 쌍 (FP)<span>{counts['inventedPairs']}건 · 낮을수록 좋음</span></th>
+                        <th class="cap-split">안내 대상 일치도<span>{counts['guidance']}건</span></th>
+                        <th>정답 안내 (TP)<span>{counts['guidance']}건</span></th>
+                        <th>잘못 안내 (FP)<span>{counts['guidance']}건</span></th>
+                        <th>놓친 안내 (FN)<span>{counts['guidance']}건</span></th>
+                        <th class="cap-split">거절<span>{counts['refusal']}건</span></th>
+                        <th>자제<span>{counts['restraint']}건</span></th>
+                    </tr>
+                </thead><tbody></tbody><tfoot></tfoot></table></div>
                 <p class="cap-def">각 지표의 정의는 <b>용어</b> 탭에 있습니다. 유형마다 정답의 성격이 달라 열을 가로로 더한 값은 정의되지 않으므로 전체 평균 열은 두지 않습니다.</p>
             </div>
         </div>
@@ -1442,12 +1502,12 @@ def render_capability_tabs(payload):
             <div class="cap-body">
                 <div class="cap-wrap"><table class="cap-table" id="cap-bytype"><thead><tr>
                     <th>모델</th>
-                    <th>general<span>묶기</span></th>
-                    <th>context_dependent<span>묶기</span></th>
+                    <th>general<span>목표 연결</span></th>
+                    <th>context_dependent<span>목표 연결</span></th>
                     <th class="cap-split">insufficient_information<span>안내</span></th>
                     <th>non_goal_or_noise<span>거절</span></th>
                 </tr></thead><tbody></tbody></table></div>
-                <p class="cap-def">경계선 왼쪽 두 유형은 <b>묶어야</b> 정답이고, 오른쪽 두 유형은 <b>묶지 말아야</b> 정답입니다.</p>
+                <p class="cap-def">경계선 왼쪽 두 유형은 <b>목표를 연결해야</b> 정답이고, 오른쪽 두 유형은 <b>연결하지 말아야</b> 정답입니다.</p>
             </div>
         </div>
         <div class="cap-panel">
@@ -1508,17 +1568,19 @@ def render_capability_tabs(payload):
     glossary = """
     <div id="tab-glossary" class="tab-content">
         <div class="cap-panel">
-            <div class="cap-head"><h2>묶어야 정답인 유형의 지표</h2><span class="cap-scope">general · context_dependent</span></div>
+            <div class="cap-head"><h2>목표를 연결해야 정답인 유형의 지표</h2><span class="cap-scope">general · context_dependent</span></div>
             <div class="cap-body"><dl class="cap-gloss">
                 <dt>pairF1</dt><dd>정답 묶음이 만드는 「메모 쌍」 집합과 모델이 만든 쌍 집합의 F1.<em>정답이 [1,2,3] 한 묶음이면 쌍은 1-2 · 1-3 · 2-3 세 개</em></dd>
                 <dt>trapAvoidance</dt><dd>케이스가 지정한 「묶이면 안 되는 쌍」 중 밟지 않은 비율. 함정이 지정되지 않은 케이스는 1.0.<em>1 − 밟은 함정 쌍 ÷ 전체 함정 쌍</em></dd>
-                <dt>groupingScore</dt><dd>묶기의 최종 점수. 함정을 전부 밟으면 묶음을 잘해도 0이 됩니다.<em>pairF1 × trapAvoidance</em></dd>
+                <dt>groupingScore</dt><dd>목표 연결의 최종 점수. 함정을 전부 밟으면 연결을 잘해도 0이 됩니다.<em>pairF1 × trapAvoidance</em></dd>
             </dl></div>
         </div>
         <div class="cap-panel">
-            <div class="cap-head"><h2>묶지 말아야 정답인 유형의 지표</h2><span class="cap-scope">insufficient_information · non_goal_or_noise</span></div>
+            <div class="cap-head"><h2>목표를 연결하지 말아야 정답인 유형의 지표</h2><span class="cap-scope">insufficient_information · non_goal_or_noise</span></div>
             <div class="cap-body"><dl class="cap-gloss">
                 <dt>guidanceF1</dt><dd>안내를 붙여야 할 입력 ID 집합과 모델이 실제로 붙인 집합의 F1. 안내 문장의 내용은 채점하지 않고, 어느 입력을 골랐는지만 봅니다.<em>insufficient_information 유형에 부여</em></dd>
+                <dt>안내 TP/FP/FN</dt><dd>안내 대상 ID 집합의 혼동행렬입니다. <b>TP</b>는 안내해야 할 입력에 안내한 경우, <b>FP</b>는 안내하면 안 될 입력에 안내한 경우, <b>FN</b>은 안내해야 할 입력을 놓친 경우입니다. 이전 실행 기록에 원시 개수가 없으면 0으로 표시됩니다.</dd>
+                <dt>missing 기준 TP/FP/FN</dt><dd>메모 ID와 보완 기준(<code>specific</code>·<code>measurable</code>·<code>time_bound</code>)의 쌍을 비교합니다. 안내 문장 자체가 아니라 모델이 지적한 보완 기준의 정확도를 봅니다.</dd>
                 <dt>noSuggestionCorrect</dt><dd>아무 제안도 내지 않아야 하는 케이스에서 실제로 내지 않았으면 1, 냈으면 0.<em>non_goal_or_noise 유형에 부여</em></dd>
                 <dt>자제</dt><dd>정답 묶음이 없는 케이스에서 <b>제안을 만들지 않았는지</b>의 비율. 결과가 <code>noSuggestion</code>이나 <code>guidance</code>면 1, 제안을 냈으면 0.
                     <br>위 두 지표가 못 가르는 자리를 가릅니다 — <code>guidanceF1</code>은 <b>묶지 말아야 할 것을 묶은</b> 실패와 <b>아무 말도 하지 않은</b> 실패를 똑같이 0으로 처리하고, <code>noSuggestionCorrect</code>는 12건짜리 <code>non_goal_or_noise</code>만 보므로 <code>insufficient_information</code>에서 벌어지는 과잉 묶음을 못 봅니다.
