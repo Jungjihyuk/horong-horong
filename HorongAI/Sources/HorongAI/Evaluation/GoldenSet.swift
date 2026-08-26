@@ -114,8 +114,22 @@ public enum GoldenSet {
         public struct Review: Decodable, Sendable {
             public let memo: String?
             public let goal: String?
+            public let missing: [String]
+            public let suggestion: String?
 
             public var inputID: String? { memo ?? goal }
+
+            enum CodingKeys: String, CodingKey {
+                case memo, goal, missing, suggestion
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                memo = try container.decodeIfPresent(String.self, forKey: .memo)
+                goal = try container.decodeIfPresent(String.self, forKey: .goal)
+                missing = try container.decodeIfPresent([String].self, forKey: .missing) ?? []
+                suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
+            }
         }
 
         public let action: String
