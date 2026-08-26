@@ -3,11 +3,13 @@
 
 모델을 다시 실행하지 않고 Evals/results/*.jsonl 및 traces/*.json을 읽는다.
 기본 judge는 Codex CLI이며, Claude는 --judge claude, 기타 CLI는 --command로 연결한다.
+--model은 CLI에 전달하지 않는 기록용 라벨이다. 실제 모델은 각 CLI의 현재 선택/기본 설정을 따른다.
 """
 
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -157,6 +159,7 @@ def parse_json(text):
 def main():
     parser = argparse.ArgumentParser(description="기존 목표 추천 결과에 LLM judge 적용")
     parser.add_argument("--judge", choices=("codex", "claude", "antigravity"), default="codex")
+    parser.add_argument("--model", help="결과 파일명과 judgeModel에 남길 기록용 모델 라벨. CLI에는 전달하지 않음")
     parser.add_argument("--input", default=str(EVALS / "results"), help="결과 JSONL 또는 results 디렉터리")
     parser.add_argument("--output", help="judge JSONL 출력 경로")
     parser.add_argument("--command", help="judge CLI 명령. 프롬프트는 stdin으로 전달")
@@ -183,14 +186,16 @@ def main():
         return
 
     stamp = datetime.now().strftime("%Y%m%dT%H%M%S%z")
-    output = Path(args.output).resolve() if args.output else EVALS / "results" / "judges" / f"{stamp}-{args.judge}.jsonl"
+    judge_model = args.model or os.environ.get("JUDGE_MODEL") or "default"
+    model_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", judge_model).strip("._-") or "default"
+    output = Path(args.output).resolve() if args.output else EVALS / "results" / "judges" / f"{stamp}-{args.judge}-{model_slug}.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as handle:
         for index, (row, case, payload) in enumerate(selected, start=1):
             print(f"[{index}/{len(selected)}] {row.get('model')} · {row.get('case_id')}")
             result = {
                 "runId": row.get("run_id"), "caseId": row.get("case_id"), "model": row.get("model"),
-                "recipe": row.get("recipe"), "judge": args.judge, "rubricVersion": "v1",
+                "recipe": row.get("recipe"), "judge": args.judge, "judgeModel": judge_model, "rubricVersion": "v1",
             }
             try:
                 result["evaluation"] = parse_json(run_cli(args.judge, judge_input(row, case, payload, rubric), args.command))
