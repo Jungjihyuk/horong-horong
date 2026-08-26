@@ -16,6 +16,31 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let context: GoalRecommendationContext
     }
 
+    func testNoSuggestionCorrectAcceptsSilenceOrCompleteGuidance() {
+        let expected = Set(["m1", "m2", "m3", "m4", "m5"])
+
+        XCTAssertEqual(noSuggestionCorrectScore(
+            result: .noSuggestion,
+            expectedGuidance: expected,
+            actualGuidance: []
+        ), 1)
+        XCTAssertEqual(noSuggestionCorrectScore(
+            result: .guidance([]),
+            expectedGuidance: expected,
+            actualGuidance: expected
+        ), 1)
+        XCTAssertEqual(noSuggestionCorrectScore(
+            result: .guidance([]),
+            expectedGuidance: expected,
+            actualGuidance: Set(["m1", "m2", "m3", "m4"])
+        ), 0)
+        XCTAssertEqual(noSuggestionCorrectScore(
+            result: .suggestions([]),
+            expectedGuidance: expected,
+            actualGuidance: expected
+        ), 0)
+    }
+
     func testGenerateGoldenSetResults() async throws {
         let repositoryRoot = try XCTUnwrap(GoldenSet.repositoryRoot(), "저장소 루트를 찾지 못했습니다.")
         let marker = repositoryRoot.appendingPathComponent("Evals/.run-golden")
@@ -208,14 +233,32 @@ final class GoalSuggestionEvalTests: XCTestCase {
                 scores["missingF1"] = missing.f1
             }
         }
-        if expectsNoSuggestion { scores["noSuggestionCorrect"] = isNoSuggestion(result) ? 1 : 0 }
+        if expectsNoSuggestion {
+            scores["noSuggestionCorrect"] = noSuggestionCorrectScore(
+                result: result,
+                expectedGuidance: expectedGuidance,
+                actualGuidance: actualGuidance
+            )
+        }
 
         runner.record(RunRecord(caseId: caseName, model: model, output: output, scores: scores, totalMs: Int(Date().timeIntervalSince(startedAt) * 1000), runId: runID, startedAt: startedAt, task: task, source: "golden", recipe: recipe, provider: provider, outcome: result.recordedOutcome, outcomeDetail: result.outcomeDetail))
     }
 
-    private func isNoSuggestion(_ result: AchievementGoalRecommendationResult) -> Bool {
-        if case .noSuggestion = result { return true }
-        return false
+    /// 비목표 입력은 침묵해도, 모든 입력을 빠짐없이 설명해도 정답이다.
+    /// 안내 문장의 의미 품질은 결정적 채점이 아니라 별도 LLM judge가 담당한다.
+    private func noSuggestionCorrectScore(
+        result: AchievementGoalRecommendationResult,
+        expectedGuidance: Set<String>,
+        actualGuidance: Set<String>
+    ) -> Double {
+        switch result {
+        case .noSuggestion:
+            return 1
+        case .guidance:
+            return !expectedGuidance.isEmpty && actualGuidance == expectedGuidance ? 1 : 0
+        case .suggestions, .failure:
+            return 0
+        }
     }
 
     private struct SetCounts {

@@ -61,7 +61,7 @@ METRIC_DESC = {
     "trapAvoidance": "함정 회피율 — 함정을 적어둔 케이스에만 뜬다",
     "groupingScore": "목표 연결 점수 = F1 × 함정 회피 (최종)",
     "guidanceF1": "안내 대상 일치도 — 정보가 부족한 입력에만 표시",
-    "noSuggestionCorrect": "추천 보류 판정 — 노이즈 입력에만 표시",
+    "noSuggestionCorrect": "비목표 처리 판정 — 침묵 또는 전체 안내",
     "predictedGroups": "추천 목표 개수",
 }
 
@@ -1685,7 +1685,7 @@ def render_capability_tabs(payload):
                 <dt>guidanceF1</dt><dd>안내를 붙여야 할 입력 ID 집합과 모델이 실제로 붙인 집합의 F1. 안내 문장의 내용은 채점하지 않고, 어느 입력을 골랐는지만 봅니다.<em>insufficient_information 유형에 부여</em></dd>
                 <dt>안내 TP/FP/FN</dt><dd>안내 대상 ID 집합의 혼동행렬입니다. <b>TP</b>는 안내해야 할 입력에 안내한 경우, <b>FP</b>는 안내하면 안 될 입력에 안내한 경우, <b>FN</b>은 안내해야 할 입력을 놓친 경우입니다. 이전 실행 기록에 원시 개수가 없으면 0으로 표시됩니다.</dd>
                 <dt>missing 기준 TP/FP/FN</dt><dd>메모 ID와 보완 기준(<code>specific</code>·<code>measurable</code>·<code>time_bound</code>)의 쌍을 비교합니다. 안내 문장 자체가 아니라 모델이 지적한 보완 기준의 정확도를 봅니다.</dd>
-                <dt>noSuggestionCorrect</dt><dd>아무 제안도 내지 않아야 하는 케이스에서 실제로 내지 않았으면 1, 냈으면 0.<em>non_goal_or_noise 유형에 부여</em></dd>
+                <dt>noSuggestionCorrect</dt><dd>목표로 묶지 말아야 하는 케이스에서 아무 제안 없이 끝냈거나(<code>noSuggestion</code>), 정답 입력 ID 전체를 빠짐없이 안내했으면(<code>guidance</code>) 1, 일부만 안내하거나 목표를 제안했으면 0. 안내 문장의 의미 품질은 별도 LLM judge가 평가합니다.<em>non_goal_or_noise 유형에 부여</em></dd>
                 <dt>자제</dt><dd>정답 묶음이 없는 케이스에서 <b>제안을 만들지 않았는지</b>의 비율. 결과가 <code>noSuggestion</code>이나 <code>guidance</code>면 1, 제안을 냈으면 0.
                     <br>위 두 지표가 못 가르는 자리를 가릅니다 — <code>guidanceF1</code>은 <b>묶지 말아야 할 것을 묶은</b> 실패와 <b>아무 말도 하지 않은</b> 실패를 똑같이 0으로 처리하고, <code>noSuggestionCorrect</code>는 12건짜리 <code>non_goal_or_noise</code>만 보므로 <code>insufficient_information</code>에서 벌어지는 과잉 묶음을 못 봅니다.
                     <em>집계 전용 · RunRecord의 outcome에서 계산 · 묶기 평균에는 넣지 않습니다</em></dd>
