@@ -1347,6 +1347,13 @@ enum Constants {
             isRecommended: false
         ),
         NewsOllamaModelOption(
+            name: "exaone-deep:7.8b",
+            label: "EXAONE Deep 7.8B",
+            detail: "장점: 한국어 중심의 깊은 추론과 문제 해결에 강한 모델. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
             name: "llama3.1:8b",
             label: "Llama 3.1 8B",
             detail: "장점: 구조화 출력과 복잡한 지시 이행에 매우 탁월한 Meta의 최신 모델. 권장 RAM: 16GB+.",
