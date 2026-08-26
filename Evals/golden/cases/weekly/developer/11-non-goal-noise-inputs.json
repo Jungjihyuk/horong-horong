@@ -47,7 +47,7 @@
   "expectedOutcome": {
     "action": "no_goal_recommendation",
     "reason": "실행할 행동이나 측정 가능한 개발 목표가 아니라 상태 기록, 링크, 오류 출력, 감정, 미완성 메모만 있다.",
-    "itemReviews": [
+    "memoReviews": [
       {
         "memo": "m1",
         "classification": "status_or_feeling",

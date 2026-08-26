@@ -16,7 +16,7 @@
   "expectedOutcome": {
     "action": "no_goal_recommendation",
     "reason": "실행할 행동이나 측정 가능한 구직 목표가 아니라 결과 상태, 링크, 의미 없는 문자열, 고민, 대기 기록만 있다.",
-    "itemReviews": [
+    "memoReviews": [
       {"memo": "m1", "classification": "status_or_feeling", "reason": "지원 결과와 감정을 기록한 문장이다."},
       {"memo": "m2", "classification": "link_only", "reason": "링크만 있어 실행할 작업을 알 수 없다."},
       {"memo": "m3", "classification": "gibberish", "reason": "의미를 해석할 수 없는 문자열이다."},

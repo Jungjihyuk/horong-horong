@@ -46,7 +46,7 @@
   "expectedOutcome": {
     "action": "no_goal_recommendation",
     "reason": "입력에 실행할 행동이나 측정 가능한 목표가 없어 추천할 수 없다.",
-    "itemReviews": [
+    "memoReviews": [
       {
         "memo": "m1",
         "classification": "status_or_feeling",
