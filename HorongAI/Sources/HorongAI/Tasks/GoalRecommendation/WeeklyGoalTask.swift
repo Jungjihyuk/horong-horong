@@ -505,7 +505,7 @@ public enum WeeklyGoalTask {
                 maxMemoCount: maxMemoCount
             )
             clock.mark("parse")
-            trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
+            trace?.add(.parsed, parsed.result.traceText,
                        facts: parsed.diagnostics.traceFacts)
             return outcome(drafts: parsed.drafts, result: parsed.result, diagnostics: .parsed(parsed.diagnostics), usage: genOutput.usage)
         } catch {

@@ -51,6 +51,31 @@ final class MonthlyGoalDiagnosticsTests: XCTestCase {
         XCTAssertEqual(tooFew, 0)
     }
 
+    func testRunWritesGuidanceToParsedTrace() async {
+        let trace = TraceCollector(runId: "monthly-guidance", task: nil, provider: nil, model: nil, attempt: nil)
+
+        _ = await MonthlyGoalTask.run(
+            goals: goals,
+            suggestionCount: 3,
+            inputLimit: 10,
+            trace: trace,
+            generate: { _, _ in
+                """
+                {"resultType":"guidance","guidance":[
+                  {"items":["\(self.uuid(1))"],"missing":["measurable"],"suggestion":"완료 기준을 정해보세요."}
+                ]}
+                """
+            }
+        )
+
+        let parsed = trace.finish().spans.first { $0.name == .parsed }
+        XCTAssertEqual(
+            parsed?.text,
+            "- inputID=\(uuid(1).uuidString) missing=[measurable] suggestion=완료 기준을 정해보세요."
+        )
+        XCTAssertEqual(parsed?.facts?["kept"], 1)
+    }
+
     // MARK: - «초안 0개» 의 세 가지 이유
 
     /// ① **모델이 1개씩만 묶었다.** 실측에서 AFM 이 3번 그랬다.
