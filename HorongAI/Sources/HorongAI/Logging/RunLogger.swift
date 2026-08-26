@@ -66,9 +66,25 @@ public final class RunLogger {
                     try container.encode(formatter.string(from: date))
                 }
             }
-            guard let data = try? encoder.encode(record),
-                  let json = String(data: data, encoding: .utf8),
+            // 인코딩 실패를 삼키면 **행 하나가 통째로 사라진다.** 실제로 그렇게 됐다 —
+            // `scores` 에 NaN 이 하나 섞이면 `JSONEncoder` 가 던지고, 예전 `try?` 는 그걸
+            // nil 로 바꿔 조용히 return 했다. 12번의 골든셋 실행에서 6행씩 사라지는 동안
+            // 아무 신호도 없었다. 평가를 멈출 필요는 없지만 **말은 해야 한다.**
+            let data: Data
+            do {
+                data = try encoder.encode(record)
+            } catch {
+                let caseName = record.caseId ?? "(이름 없음)"
+                FileHandle.standardError.write(Data(
+                    "[RunLogger] 기록 유실 — case=\(caseName) runId=\(record.runId ?? "?"): \(error)\n".utf8
+                ))
+                return
+            }
+            guard let json = String(data: data, encoding: .utf8),
                   let line = (json + "\n").data(using: .utf8) else {
+                FileHandle.standardError.write(Data(
+                    "[RunLogger] 기록 유실 — case=\(record.caseId ?? "(이름 없음)"): UTF-8 변환 실패\n".utf8
+                ))
                 return
             }
 
