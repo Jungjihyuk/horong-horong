@@ -115,12 +115,16 @@ eval-report:
 goal-eval-matrix: generate
 	python3 Evals/run-goal-eval-matrix.py $(if $(MATRIX),--matrix "$(MATRIX)",)
 
+# 기존 골든셋 실행 결과에 의미 품질 루브릭을 적용한다. 모델 실행·결정적 채점과 분리한다.
+# 예: make llm-judge JUDGE=codex LIMIT=5 / make llm-judge JUDGE=claude
+llm-judge:
+	python3 Evals/run-llm-judge.py --judge $(or $(JUDGE),codex) $(if $(INPUT),--input "$(INPUT)",) $(if $(LIMIT),--limit "$(LIMIT)",) $(if $(COMMAND),--command "$(COMMAND)",)
+
 # 실사용(Release) DB를 디버그(Debug) DB로 복사
 copy-prod-db:
 	@mkdir -p "$$HOME/Library/Application Support/HorongHorong-Debug/Stores"
 	@cp -f "$$HOME/Library/Application Support/HorongHorong/Stores/default.store"* "$$HOME/Library/Application Support/HorongHorong-Debug/Stores/" 2>/dev/null || true
 	@cp -rf "$$HOME/Library/Application Support/HorongHorong/JourneyImages" "$$HOME/Library/Application Support/HorongHorong-Debug/" 2>/dev/null || true
 	@echo "✅ 릴리스 DB 및 이미지를 디버그 저장소(HorongHorong-Debug)로 복사했습니다."
-
 
 
