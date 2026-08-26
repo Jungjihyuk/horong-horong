@@ -84,13 +84,14 @@ def judge_input(row, case, payload, rubric):
     if dataset_type == "insufficient_information":
         criteria = ["guidance_fit", "guidance_actionability", "clarity", "grammar", "vocabulary", "tone"]
     else:
-        criteria = ["semantic_cohesion", "noise_exclusion", "clarity", "measurability", "grammar", "vocabulary", "tone"]
+        criteria = ["semantic_cohesion", "noise_exclusion", "clarity", "measurability", "time_fit", "grammar", "vocabulary", "tone"]
         if context.get("persona") or context.get("profile"):
             criteria.append("relevance")
 
     case_view = {
         "caseName": case.get("caseName"),
         "datasetType": dataset_type,
+        "task": row.get("task"),
         "context": context,
         "referenceDate": case.get("referenceDate"),
         "memos": case.get("memos"),

@@ -224,6 +224,7 @@
     "noise_exclusion": 5,
     "measurability": 3,
     "clarity": 4,
+    "time_fit": 3,
     "relevance": null,
     "grammar": 5,
     "vocabulary": 4,
