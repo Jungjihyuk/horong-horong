@@ -194,7 +194,7 @@ public enum MonthlyGoalTask {
                 maxGoalsPerSuggestion: maxGoalsPerSuggestion
             )
             clock.mark("parse")
-            trace?.add(.parsed, parsed.drafts.map { "- \($0.title)" }.joined(separator: "\n"),
+            trace?.add(.parsed, parsed.result.traceText,
                        facts: parsed.diagnostics.traceFacts)
             return outcome(drafts: parsed.drafts, result: parsed.result, failure: nil, parse: parsed.diagnostics)
         } catch {

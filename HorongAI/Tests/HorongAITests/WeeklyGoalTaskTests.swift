@@ -36,6 +36,34 @@ final class WeeklyGoalTaskTests: XCTestCase {
         XCTAssertEqual(guidance[0].missing, ["specific", "measurable"])
     }
 
+    func testRunWritesGuidanceToParsedTrace() async {
+        let first = WeeklyGoalTask.Memo(id: uuid(1), content: "취업 준비", icon: "💼", date: Date())
+        let trace = TraceCollector(runId: "weekly-guidance", task: nil, provider: nil, model: nil, attempt: nil)
+
+        _ = await WeeklyGoalTask.run(
+            memos: [first],
+            suggestionCount: 3,
+            maxMemoCount: 3,
+            inputLimit: 10,
+            budget: 4_000,
+            trace: trace,
+            generate: { _, _ in
+                """
+                {"resultType":"guidance","guidance":[
+                  {"items":[1],"missing":["specific","measurable"],"suggestion":"지원 직무와 공고를 정해보세요."}
+                ]}
+                """
+            }
+        )
+
+        let parsed = trace.finish().spans.first { $0.name == .parsed }
+        XCTAssertEqual(
+            parsed?.text,
+            "- inputID=\(first.id.uuidString) missing=[specific, measurable] suggestion=지원 직무와 공고를 정해보세요."
+        )
+        XCTAssertEqual(parsed?.facts?["kept"], 1)
+    }
+
     private func uuid(_ n: Int) -> UUID {
         UUID(uuidString: String(format: "%08X-0000-0000-0000-000000000000", n)) ?? UUID()
     }

@@ -58,4 +58,19 @@ public enum GoalRecommendationResult: Sendable, Hashable {
         guard case .suggestions(let drafts) = self else { return [] }
         return drafts
     }
+
+    /// 파싱 단계 trace에 남길 사람이 읽을 수 있는 표현.
+    var traceText: String {
+        switch self {
+        case .suggestions(let drafts):
+            return drafts.map { "- \($0.title)" }.joined(separator: "\n")
+        case .guidance(let guidance):
+            return guidance.map {
+                let missing = $0.missing.joined(separator: ", ")
+                return "- inputID=\($0.inputID.uuidString) missing=[\(missing)] suggestion=\($0.suggestion)"
+            }.joined(separator: "\n")
+        case .noSuggestion:
+            return ""
+        }
+    }
 }
