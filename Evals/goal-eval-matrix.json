@@ -30,21 +30,6 @@
       "model": "qwen3.5:9b"
     },
     {
-      "name": "Ollama · Qwen3.8 27B",
-      "provider": "ollama",
-      "model": "qwen3.8:27b"
-    },
-    {
-      "name": "Ollama · Qwen3.8 27B mlx",
-      "provider": "ollama",
-      "model": "qwen3.8:27b-mlx"
-    },
-    {
-      "name": "Ollama · Gemma4 26B",
-      "provider": "ollama",
-      "model": "gemma4:26b"
-    },
-    {
       "name": "MLX · Qwen3 1.7B",
       "provider": "mlx",
       "model": "mlx-community/Qwen3-1.7B-4bit"
@@ -68,6 +53,21 @@
       "name": "MLX · Gemma4 E4B",
       "provider": "mlx",
       "model": "mlx-community/gemma-4-e4b-it-4bit"
+    },
+    {
+      "name": "Ollama · Qwen3.8 27B",
+      "provider": "ollama",
+      "model": "qwen3.8:27b"
+    },
+    {
+      "name": "Ollama · Gemma4 26B",
+      "provider": "ollama",
+      "model": "gemma4:26b"
+    },
+    {
+      "name": "Ollama · ExaOne-deep 7.8B",
+      "provider": "ollama",
+      "model": "exaone-deep:7.8b"
     }
   ]
 }
