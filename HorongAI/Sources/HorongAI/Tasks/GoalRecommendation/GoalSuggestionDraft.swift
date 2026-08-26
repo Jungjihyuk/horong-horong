@@ -234,8 +234,12 @@ struct GoalSuggestionPayload: Codable {
         var processedText = text
         
         // 1. <think> 블록 제거
+        //    닫는 태그는 **여는 태그 뒤에서만** 찾는다. 전체에서 따로 찾으면 `</think>` 가
+        //    앞서는 출력에서 Range 가 역전돼 트랩이 난다 — exaone-deep:7.8b 가 짝 없는
+        //    `</think>` 를 수백 개 뱉다가 중간에 여는 태그를 흘리면 실제로 그렇게 된다.
         if let thinkStart = processedText.range(of: "<think>"),
-           let thinkEnd = processedText.range(of: "</think>") {
+           let thinkEnd = processedText.range(of: "</think>",
+                                              range: thinkStart.upperBound..<processedText.endIndex) {
             processedText.removeSubrange(thinkStart.lowerBound..<thinkEnd.upperBound)
         }
         

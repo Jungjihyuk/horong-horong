@@ -194,13 +194,19 @@ final class GoalSuggestionEvalTests: XCTestCase {
             let actualMissingPairs = Set(actualMissing.flatMap { inputID, fields in
                 fields.map { "\(inputID)|\($0)" }
             })
-            let missing = setCounts(expected: expectedMissingPairs, actual: actualMissingPairs)
-            scores["missingTP"] = Double(missing.truePositive)
-            scores["missingFP"] = Double(missing.falsePositive)
-            scores["missingFN"] = Double(missing.falseNegative)
-            scores["missingPrecision"] = missing.precision
-            scores["missingRecall"] = missing.recall
-            scores["missingF1"] = missing.f1
+            // 찾아낼 결손 항목이 애초에 0개인 케이스가 있다 — `non_goal_or_noise` 는
+            // «아무것도 추천하지 마라» 가 정답이라 `missing` 을 적지 않는다. 그런 케이스에
+            // 이 지표를 매기면 분모가 0 이고, **«측정 대상이 아님» 이 «0점» 으로 둔갑한다.**
+            // 지표를 빼서 리포트가 분모에서 제외하게 둔다(`guidanceF1` 과 같은 규약).
+            if !expectedMissingPairs.isEmpty {
+                let missing = setCounts(expected: expectedMissingPairs, actual: actualMissingPairs)
+                scores["missingTP"] = Double(missing.truePositive)
+                scores["missingFP"] = Double(missing.falsePositive)
+                scores["missingFN"] = Double(missing.falseNegative)
+                scores["missingPrecision"] = missing.precision
+                scores["missingRecall"] = missing.recall
+                scores["missingF1"] = missing.f1
+            }
         }
         if expectsNoSuggestion { scores["noSuggestionCorrect"] = isNoSuggestion(result) ? 1 : 0 }
 
@@ -221,10 +227,17 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let f1: Double
     }
 
+    /// 집합 두 개를 TP/FP/FN 으로 세고 P·R·F1 을 낸다.
+    ///
+    /// **0 으로 나누지 않는다.** `expected` 가 비면 `overlap / 0` 이 `NaN` 이 되고,
+    /// `NaN` 은 `== 0` 검사를 빠져나가 `f1` 까지 오염시킨 뒤 `JSONEncoder` 를 던지게 만든다.
+    /// 그 줄은 통째로 기록되지 않는다 — 실제로 6행이 그렇게 사라졌다.
+    /// 빈 쪽 처리는 `PairEvaluator.score` 의 규약을 그대로 따른다(«찾을 게 없는데
+    /// 아무것도 안 냈으면 만점»).
     private func setCounts(expected: Set<String>, actual: Set<String>) -> SetCounts {
         let overlap = Double(expected.intersection(actual).count)
-        let precision = actual.isEmpty ? 0 : overlap / Double(actual.count)
-        let recall = overlap / Double(expected.count)
+        let precision = actual.isEmpty ? (expected.isEmpty ? 1 : 0) : overlap / Double(actual.count)
+        let recall = expected.isEmpty ? (actual.isEmpty ? 1 : 0) : overlap / Double(expected.count)
         let f1 = precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall)
         return SetCounts(
             truePositive: expected.intersection(actual).count,

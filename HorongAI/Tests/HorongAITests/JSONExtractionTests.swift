@@ -32,6 +32,15 @@ final class JSONExtractionTests: XCTestCase {
         XCTAssertEqual(extract("<think>끝나지 않은 생각 \(json)"), json)
     }
 
+    /// 닫는 태그가 여는 태그보다 **앞에** 와도 죽지 않는다.
+    ///
+    /// exaone-deep:7.8b 실측(2026-08-27) — 짝 없는 `</think>` 를 400~500개씩 반복해서
+    /// 뱉고 그 사이에 여는 태그를 흘린다. 예전 코드는 두 태그를 전체 문자열에서 따로
+    /// 찾아 Range 를 만들었고, 역전된 Range 는 `EXC_BREAKPOINT` 로 **테스트 러너를 죽였다.**
+    func testSurvivesClosingThinkTagBeforeOpening() {
+        XCTAssertEqual(extract("</think>\n\(json)\n<think>다시 생각해보면…"), json)
+    }
+
     /// ② 마크다운 코드펜스에 싸서 주는 경우.
     ///
     /// 펜스를 벗긴 뒤 3단계(`{`~`}`)가 한 번 더 돌아 개행까지 정리된다 —
