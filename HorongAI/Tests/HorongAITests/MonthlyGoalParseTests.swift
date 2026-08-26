@@ -76,6 +76,26 @@ final class MonthlyGoalParseTests: XCTestCase {
         XCTAssertEqual(drafts.first?.targetValueText, "2개")
     }
 
+    func testExpandsOneGuidanceItemAcrossAllGoalIDs() {
+        let ids = sourceGoals.map { "\"\($0.id.uuidString)\"" }.joined(separator: ", ")
+        let outcome = MonthlyGoalTask.parse(
+            """
+            {"resultType":"guidance","guidance":[
+              {"goalIDs":[\(ids)],"missing":[],"suggestion":"목표로 삼기 어려운 입력이에요."}
+            ]}
+            """,
+            allowedIDs: Set(sourceGoals.map(\.id)),
+            sourceGoals: sourceGoals,
+            suggestionCount: 3
+        )
+
+        guard case .guidance(let guidance) = outcome.result else {
+            return XCTFail("다중 ID 안내가 guidance 결과로 전달되지 않았다")
+        }
+        XCTAssertEqual(guidance.map(\.inputID), sourceGoals.map(\.id))
+        XCTAssertEqual(guidance.map(\.suggestion), Array(repeating: "목표로 삼기 어려운 입력이에요.", count: 5))
+    }
+
     // MARK: - 방어 경로
 
     func testBrokenJSONReturnsEmpty() {

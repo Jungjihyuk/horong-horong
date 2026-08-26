@@ -345,7 +345,9 @@ public enum MonthlyGoalTask {
         allowedIDs: Set<UUID>
     ) -> [GoalRecommendationGuidance] {
         var used = Set<UUID>()
-        return (payload.guidance ?? []).compactMap { item in
+        return (payload.guidance ?? []).flatMap { item -> [GoalRecommendationGuidance] in
+            let suggestion = item.suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !suggestion.isEmpty else { return [] }
             let rawIDs = (item.goalIDs ?? item.items ?? item.memoIDs)?.values ?? []
             let ids = rawIDs.compactMap { value -> UUID? in
                 switch value {
@@ -356,14 +358,15 @@ public enum MonthlyGoalTask {
                     return UUID(uuidString: value)
                 }
             }.filter(allowedIDs.contains)
-            guard let id = ids.first(where: { used.insert($0).inserted }) else { return nil }
-            let suggestion = item.suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !suggestion.isEmpty else { return nil }
-            return GoalRecommendationGuidance(
-                inputID: id,
-                missing: item.missing.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
-                suggestion: suggestion
-            )
+            let missing = item.missing.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            return ids.compactMap { id in
+                guard used.insert(id).inserted else { return nil }
+                return GoalRecommendationGuidance(
+                    inputID: id,
+                    missing: missing,
+                    suggestion: suggestion
+                )
+            }
         }
     }
 
