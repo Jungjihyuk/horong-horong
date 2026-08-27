@@ -118,8 +118,10 @@ goal-eval-matrix: generate
 # 기존 골든셋 실행 결과에 의미 품질 루브릭을 적용한다. 모델 실행·결정적 채점과 분리한다.
 # MODEL은 CLI에 전달하지 않는 기록용 라벨이다. 실제 judge 모델은 CLI의 현재 선택을 따른다.
 # 예: make llm-judge JUDGE=codex MODEL=gpt-5.6-sol LIMIT=5
+# RETRY=1이면 이전 judge 실행에서 실패한 run만 다시 평가한다. 다른 judge로 이어받을 때 쓴다.
+# 예: make llm-judge JUDGE=claude MODEL=sonnet-5 RETRY=1
 llm-judge:
-	python3 Evals/run-llm-judge.py --judge $(or $(JUDGE),codex) $(if $(MODEL),--model "$(MODEL)",) $(if $(INPUT),--input "$(INPUT)",) $(if $(LIMIT),--limit "$(LIMIT)",) $(if $(COMMAND),--command "$(COMMAND)",)
+	python3 Evals/run-llm-judge.py --judge $(or $(JUDGE),codex) $(if $(MODEL),--model "$(MODEL)",) $(if $(INPUT),--input "$(INPUT)",) $(if $(LIMIT),--limit "$(LIMIT)",) $(if $(COMMAND),--command "$(COMMAND)",) $(if $(RETRY),--retry-failed,)
 
 # 실사용(Release) DB를 디버그(Debug) DB로 복사
 copy-prod-db:

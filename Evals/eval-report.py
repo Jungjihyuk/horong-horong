@@ -538,8 +538,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (jmeta) {
                 const m = judge.meta;
                 jmeta.textContent = m
-                    ? `평가자 ${m.judge} · 기록 모델 라벨 ${m.judgeModel} · ${m.rubricVersion} · ${m.count}건 · ${m.file}`
+                    ? `평가자 ${m.judge} · 기록 모델 라벨 ${m.judgeModel} · ${m.rubricVersion} · 채점 ${m.count}건`
+                      + (m.errors ? ` · judge 실패 ${m.errors}건` : '')
+                      + ` · 파일 ${m.files.length}개`
                     : '성공한 LLM judge 결과가 없습니다.';
+                if (m) jmeta.title = m.files.join('\n');
             }
             if (jtable) {
                 const labels = {
@@ -1241,17 +1244,18 @@ def load_traces():
 
 
 def load_judges():
-    """가장 최근의 성공한 LLM judge 결과를 읽는다.
+    """모든 LLM judge 결과 파일의 성공한 레코드를 합친다.
 
-    judge 실행이 실패한 파일은 리포트에 섞지 않는다. 파일명보다 각 레코드의
-    status를 기준으로 골라, 중간 실패 파일이 최신인 경우에도 정상 결과를
-    표시할 수 있게 한다.
+    judge 실행은 결과 JSONL 하나(=대개 모델 하나)를 대상으로 하므로 파일 하나만
+    고르면 나머지 모델이 리포트에서 통째로 빠진다. 실패는 파일이 아니라 레코드의
+    status로 거르고, 같은 runId가 여러 파일에 있으면 최신 파일의 결과를 쓴다.
     """
     root = os.path.join(evals_dir(), "results", "judges")
-    candidates = sorted(glob.glob(os.path.join(root, "*.jsonl")),
-                        key=lambda p: os.path.getmtime(p), reverse=True)
-    for path in candidates:
-        rows = []
+    paths = sorted(glob.glob(os.path.join(root, "*.jsonl")),
+                   key=lambda p: os.path.getmtime(p))
+    rows, files, judges, judge_models, rubrics, errors = {}, [], set(), set(), set(), 0
+    for path in paths:
+        used = False
         try:
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -1261,24 +1265,33 @@ def load_judges():
                         row = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    if row.get("status") == "ok" and row.get("runId"):
-                        rows.append(row)
+                    if not row.get("runId"):
+                        continue
+                    if row.get("status") != "ok":
+                        errors += 1
+                        continue
+                    rows[row["runId"]] = row
+                    used = True
+                    judges.add(row.get("judge") or "-")
+                    judge_models.add(row.get("judgeModel") or "-")
+                    rubrics.add(row.get("rubricVersion") or "-")
         except OSError:
             continue
-        if not rows:
-            continue
-        first = rows[0]
-        return {
-            "rows": {row["runId"]: row for row in rows},
-            "meta": {
-                "file": os.path.basename(path),
-                "judge": first.get("judge") or "-",
-                "judgeModel": first.get("judgeModel") or "-",
-                "rubricVersion": first.get("rubricVersion") or "-",
-                "count": len(rows),
-            },
-        }
-    return {"rows": {}, "meta": None}
+        if used:
+            files.append(os.path.basename(path))
+    if not rows:
+        return {"rows": {}, "meta": None}
+    return {
+        "rows": rows,
+        "meta": {
+            "files": files,
+            "judge": ", ".join(sorted(judges)),
+            "judgeModel": ", ".join(sorted(judge_models)),
+            "rubricVersion": ", ".join(sorted(rubrics)),
+            "count": len(rows),
+            "errors": errors,
+        },
+    }
 
 
 def trace_facts(trace, span_name):

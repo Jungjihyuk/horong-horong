@@ -2,7 +2,8 @@
 """기존 목표 추천 실행 결과에 LLM-as-a-Judge 루브릭을 적용한다.
 
 모델을 다시 실행하지 않고 Evals/results/*.jsonl 및 traces/*.json을 읽는다.
-기본 judge는 Codex CLI이며, Claude는 --judge claude, 기타 CLI는 --command로 연결한다.
+기본 judge는 Codex CLI이며, Claude/Grok/Antigravity는 --judge claude|grok|antigravity,
+기타 CLI는 --command로 연결한다.
 --model은 CLI에 전달하지 않는 기록용 라벨이다. 실제 모델은 각 CLI의 현재 선택/기본 설정을 따른다.
 """
 
@@ -22,13 +23,39 @@ EVALS = ROOT / "Evals"
 RUBRIC = EVALS / "judges" / "rubric-v1.md"
 
 
-def latest_results(path: Path) -> Path:
+def result_files(path: Path, use_all: bool):
+    """평가할 결과 JSONL 목록. 기본은 가장 최근 파일 하나, 재시도는 전체 파일이다."""
     if path.is_file():
-        return path
+        return [path]
     files = sorted(path.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
     if not files:
         raise SystemExit(f"결과 JSONL을 찾지 못했습니다: {path}")
-    return files[-1]
+    return files if use_all else [files[-1]]
+
+
+def failed_run_ids():
+    """judge가 시도했지만 끝내 성공하지 못한 run만 고른다.
+
+    한 번도 채점하지 않은 run은 대상이 아니다. 실패 후 다른 judge로 성공한 run도
+    제외해서, 재시도를 여러 번 이어 붙여도 남은 실패분만 계속 줄어들게 한다.
+    """
+    ok, failed = set(), set()
+    for path in sorted((EVALS / "results" / "judges").glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not row.get("runId"):
+                continue
+            (ok if row.get("status") == "ok" else failed).add(row["runId"])
+    return failed - ok
+
+
+def slug(text):
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", text or "").strip("._-") or "unknown"
 
 
 def load_cases():
@@ -140,26 +167,33 @@ def judge_input(row, case, payload, rubric):
     return json.dumps(instruction, ensure_ascii=False, indent=2)
 
 
+def run_argv(argv, stdin=""):
+    completed = subprocess.run(argv, input=stdin, text=True, capture_output=True, cwd=ROOT, timeout=300)
+    if completed.returncode:
+        raise RuntimeError(completed.stderr.strip() or f"judge 종료 코드 {completed.returncode}")
+    return completed.stdout
+
+
 def run_cli(judge, prompt, command):
     if command:
         argv = shlex.split(command)
-        completed = subprocess.run(argv, input=prompt, text=True, capture_output=True, cwd=ROOT, timeout=300)
-        if completed.returncode:
-            raise RuntimeError(completed.stderr.strip() or f"judge 종료 코드 {completed.returncode}")
-        return completed.stdout
+        # grok처럼 프롬프트를 stdin이 아니라 인자로만 받는 CLI가 있다.
+        if any("{prompt}" in arg for arg in argv):
+            return run_argv([arg.replace("{prompt}", prompt) for arg in argv])
+        return run_argv(argv, prompt)
     if judge == "codex":
         with tempfile.NamedTemporaryFile(prefix="goal-judge-", suffix=".txt") as output:
-            argv = ["codex", "exec", "--ephemeral", "--sandbox", "read-only", "--output-last-message", output.name, "-"]
-            completed = subprocess.run(argv, input=prompt, text=True, capture_output=True, cwd=ROOT, timeout=300)
-            if completed.returncode:
-                raise RuntimeError(completed.stderr.strip() or f"codex 종료 코드 {completed.returncode}")
+            run_argv(["codex", "exec", "--ephemeral", "--sandbox", "read-only",
+                      "--output-last-message", output.name, "-"], prompt)
             return Path(output.name).read_text(encoding="utf-8")
     if judge == "claude":
-        completed = subprocess.run(["claude", "-p", prompt], text=True, capture_output=True, cwd=ROOT, timeout=300)
-        if completed.returncode:
-            raise RuntimeError(completed.stderr.strip() or f"claude 종료 코드 {completed.returncode}")
-        return completed.stdout
-    raise SystemExit("antigravity 또는 사용자 CLI는 --command로 실행 명령을 지정하세요.")
+        return run_argv(["claude", "-p", prompt])
+    if judge == "grok":
+        return run_argv(["grok", "-p", prompt])
+    if judge == "antigravity":
+        return run_argv(["agy", "-p", prompt])
+    raise SystemExit("그 밖의 CLI는 --command로 실행 명령을 지정하세요. "
+                     "프롬프트를 인자로 받는 CLI는 명령 안에 {prompt} 자리표시자를 쓰세요.")
 
 
 def parse_json(text):
@@ -175,28 +209,42 @@ def parse_json(text):
 
 def main():
     parser = argparse.ArgumentParser(description="기존 목표 추천 결과에 LLM judge 적용")
-    parser.add_argument("--judge", choices=("codex", "claude", "antigravity"), default="codex")
+    parser.add_argument("--judge", choices=("codex", "claude", "grok", "antigravity"), default="codex")
     parser.add_argument("--model", help="결과 파일명과 judgeModel에 남길 기록용 모델 라벨. CLI에는 전달하지 않음")
     parser.add_argument("--input", default=str(EVALS / "results"), help="결과 JSONL 또는 results 디렉터리")
-    parser.add_argument("--output", help="judge JSONL 출력 경로")
+    parser.add_argument("--output", help="judge JSONL 출력 경로. 지정하면 평가 대상 모델과 무관하게 한 파일에 쓴다")
     parser.add_argument("--command", help="judge CLI 명령. 프롬프트는 stdin으로 전달")
-    parser.add_argument("--limit", type=int, default=20, help="평가할 최대 실행 수")
+    parser.add_argument("--limit", type=int, default=0, help="평가할 최대 실행 수. 0이면 전체")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="이전 judge 실행에서 실패한 run만 다시 평가한다. results 디렉터리 전체를 훑는다")
     parser.add_argument("--dry-run", action="store_true", help="첫 번째 judge 프롬프트만 출력")
     args = parser.parse_args()
 
-    input_path = latest_results(Path(args.input).resolve())
-    rows = [json.loads(line) for line in input_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    retry_ids = failed_run_ids() if args.retry_failed else None
+    if retry_ids is not None and not retry_ids:
+        raise SystemExit("다시 평가할 실패 레코드가 없습니다.")
+
+    paths = result_files(Path(args.input).resolve(), use_all=args.retry_failed)
+    rows = []
+    for path in paths:
+        rows += [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     cases, traces = load_cases(), load_traces()
     rubric = RUBRIC.read_text(encoding="utf-8")
-    selected = []
+    selected, seen = [], set()
     for row in rows:
+        run_id = row.get("run_id")
+        if run_id in seen or (retry_ids is not None and run_id not in retry_ids):
+            continue
         case = cases.get(row.get("case_id"))
-        payload = extracted_payload(traces.get(row.get("run_id")))
+        payload = extracted_payload(traces.get(run_id))
         if case and payload and row.get("source") != "live":
+            seen.add(run_id)
             selected.append((row, case, payload))
-    selected = selected[: max(0, args.limit)]
     if not selected:
         raise SystemExit("trace와 골든셋 케이스가 모두 있는 평가 대상을 찾지 못했습니다.")
+    found = len(selected)
+    if args.limit > 0:
+        selected = selected[: args.limit]
 
     if args.dry_run:
         print(judge_input(*selected[0], rubric))
@@ -204,23 +252,32 @@ def main():
 
     stamp = datetime.now().strftime("%Y%m%dT%H%M%S%z")
     judge_model = args.model or os.environ.get("JUDGE_MODEL") or "default"
-    model_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", judge_model).strip("._-") or "default"
-    output = Path(args.output).resolve() if args.output else EVALS / "results" / "judges" / f"{stamp}-{args.judge}-{model_slug}.jsonl"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", encoding="utf-8") as handle:
-        for index, (row, case, payload) in enumerate(selected, start=1):
-            print(f"[{index}/{len(selected)}] {row.get('model')} · {row.get('case_id')}")
-            result = {
-                "runId": row.get("run_id"), "caseId": row.get("case_id"), "model": row.get("model"),
-                "recipe": row.get("recipe"), "judge": args.judge, "judgeModel": judge_model, "rubricVersion": "v1",
-            }
-            try:
-                result["evaluation"] = parse_json(run_cli(args.judge, judge_input(row, case, payload, rubric), args.command))
-                result["status"] = "ok"
-            except (OSError, RuntimeError, json.JSONDecodeError) as error:
-                result["status"], result["error"] = "error", str(error)
-            handle.write(json.dumps(result, ensure_ascii=False) + "\n")
-    print(f"judge 결과 저장: {output}")
+    # 평가 대상 모델별로 파일을 나눈다. judge 라벨만으로는 파일명이 서로 구분되지 않는다.
+    groups = {}
+    for item in selected:
+        groups.setdefault("" if args.output else (item[0].get("model") or "unknown"), []).append(item)
+    print(f"평가 대상 {len(selected)}건 (후보 {found}건 · 출력 파일 {len(groups)}개)")
+
+    index = 0
+    for target, items in groups.items():
+        output = (Path(args.output).resolve() if args.output else EVALS / "results" / "judges" /
+                  f"{stamp}-{slug(target)}-{args.judge}-{slug(judge_model)}.jsonl")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w", encoding="utf-8") as handle:
+            for row, case, payload in items:
+                index += 1
+                print(f"[{index}/{len(selected)}] {row.get('model')} · {row.get('case_id')}")
+                result = {
+                    "runId": row.get("run_id"), "caseId": row.get("case_id"), "model": row.get("model"),
+                    "recipe": row.get("recipe"), "judge": args.judge, "judgeModel": judge_model, "rubricVersion": "v1",
+                }
+                try:
+                    result["evaluation"] = parse_json(run_cli(args.judge, judge_input(row, case, payload, rubric), args.command))
+                    result["status"] = "ok"
+                except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+                    result["status"], result["error"] = "error", str(error)
+                handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+        print(f"judge 결과 저장: {output}")
 
 
 if __name__ == "__main__":
