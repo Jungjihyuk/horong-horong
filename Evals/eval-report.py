@@ -542,7 +542,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                       + (m.errors ? ` · judge 실패 ${m.errors}건` : '')
                       + ` · 파일 ${m.files.length}개`
                     : '성공한 LLM judge 결과가 없습니다.';
-                if (m) jmeta.title = m.files.join('\n');
+                if (m) jmeta.title = m.files.join('\\n');
             }
             if (jtable) {
                 const labels = {
