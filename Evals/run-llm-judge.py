@@ -74,8 +74,20 @@ def review_without_reference_text(outcome):
     for key, id_key in (("memoReviews", "memo"), ("goalReviews", "goal")):
         for review in outcome.get(key) or []:
             if review.get(id_key):
-                reviews.append({id_key: review[id_key], "missing": review.get("missing") or []})
-    return {"action": outcome.get("action"), "reviews": reviews}
+                item = {id_key: review[id_key]}
+                if "missing" in review:
+                    item["missing"] = review.get("missing") or []
+                if "classification" in review:
+                    item["classification"] = review.get("classification")
+                if "reason" in review:
+                    item["reason"] = review.get("reason")
+                reviews.append(item)
+    result = {"action": outcome.get("action")}
+    if outcome.get("reason"):
+        result["reason"] = outcome.get("reason")
+    if reviews:
+        result["reviews"] = reviews
+    return result
 
 
 def judge_input(row, case, payload, rubric):
@@ -83,6 +95,8 @@ def judge_input(row, case, payload, rubric):
     context = case.get("context") or {}
     if dataset_type == "insufficient_information":
         criteria = ["guidance_fit", "guidance_actionability", "clarity", "grammar", "vocabulary", "tone"]
+    elif dataset_type == "non_goal_or_noise":
+        criteria = ["guidance_fit", "clarity", "grammar", "vocabulary", "tone"]
     else:
         criteria = ["semantic_cohesion", "noise_exclusion", "clarity", "measurability", "time_fit", "grammar", "vocabulary", "tone"]
         if context.get("persona") or context.get("profile"):
@@ -106,7 +120,9 @@ def judge_input(row, case, payload, rubric):
         "task": "목표 추천 결과를 루브릭에 따라 평가하라.",
         "rules": [
             "정답 문장과의 문자열 일치 여부가 아니라 의미와 유용성을 평가하라.",
-            "결정적 지표(pairF1, guidanceF1, missingF1)를 다시 계산하지 말고 루브릭의 의미 품질만 평가하라.",
+            "결정적 지표(pairF1, guidanceF1, missingF1, noSuggestionCorrect)를 다시 계산하지 말고 루브릭의 의미 품질만 평가하라.",
+            "non_goal_or_noise에서 모델이 비목표 안내(guidance)를 제공한 경우, 각 입력이 왜 목표가 아닌지(골든셋의 classification/reason)에 부합하게 잘 설명했는지를 guidance_fit으로 평가하라. 비목표 입력에는 guidance_actionability를 적용하지 않는다.",
+            "목표나 안내가 생성되지 않은(noSuggestion 등) 경우 생성물이 없으므로 관련 기준은 null로 하고 notApplicable에 넣어라.",
             "적용되지 않는 기준은 scores에서 null로 하고 notApplicable에 넣어라.",
             "각 점수에는 한 문장의 근거를 써라.",
             "JSON 객체만 출력하고 Markdown fence를 사용하지 마라.",
