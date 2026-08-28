@@ -55,22 +55,6 @@ public struct AILabView: View {
         }
     }
 
-    /// 골든셋 케이스 (레거시/실험실 비교용)
-    struct GoldenCase: Identifiable {
-        let id: String
-        let title: String
-        let levels: [GoldenLevel]
-    }
-
-    struct GoldenLevel: Identifiable {
-        let id = UUID()
-        let name: String
-        let model: String?
-        let output: String
-        let scores: [String: Double]
-        let latency: Int
-    }
-
     /// 사람이 남긴 평가 (key = "runId|attempt" 또는 "caseId|level")
     struct LabRating: Codable, Equatable {
         var verdict: String?   // "up" | "down"
@@ -88,7 +72,7 @@ public struct AILabView: View {
 
     enum TabMode: String, CaseIterable, Identifiable {
         case live = "실사용 기록"
-        case golden = "골든셋 매트릭스"
+        case golden = "골든셋 평가"
         var id: String { rawValue }
     }
 
@@ -104,13 +88,21 @@ public struct AILabView: View {
     @State private var liveFilter: LiveFilter = .all
     @State private var taskFilter: String = "전체"
     @State private var liveRunGroups: [LiveRunGroup] = []
-    @State private var goldenCases: [GoldenCase] = []
+    @State private var goldenSummary: GoldenEvalReport.Summary = .empty
+    @State private var isLoadingGolden = false
     @State private var isLoading = false
     @State private var selectedInputItemIDs: [String]? = nil
     @State private var ratings: [String: LabRating] = [:]
 
     @AppStorage(Constants.AppStorageKey.aiLabRatings)
     private var ratingsJSON: String = "{}"
+
+    /// 골든셋 채점 결과가 있는 `Evals/` 경로. 한 번 고르면 기억한다.
+    @AppStorage(Constants.AppStorageKey.aiLabEvalsDirectory)
+    private var evalsDirectory: String = ""
+
+    private let goldenModelColumnWidth: CGFloat = 168
+    private let goldenValueColumnWidth: CGFloat = 104
 
     private let caseColumnWidth: CGFloat = 200
     private let minCellWidth: CGFloat = 260
@@ -129,6 +121,7 @@ public struct AILabView: View {
         }
         .onAppear {
             loadRecords()
+            loadGoldenSummary()
         }
         // 실험실을 **열어 둔 채** 다른 창에서 추천을 돌리는 게 보통이다. 그때 새 기록이
         // 안 들어와서 «룰 시도가 안 보인다» 로 읽혔다(실측 2026-08-20). 창이 다시 앞에
@@ -224,9 +217,21 @@ public struct AILabView: View {
 
     private var goldenToolbar: some View {
         HStack(spacing: 8) {
-            summaryChip(label: "케이스", value: "\(goldenCases.count)", tint: .secondary)
+            summaryChip(label: "모델", value: "\(goldenSummary.rows.count)", tint: .secondary)
+            summaryChip(label: "모델당 실행", value: "\(goldenSummary.coverage)", tint: .secondary)
+            if !goldenSummary.excluded.isEmpty {
+                summaryChip(label: "미완주 제외", value: "\(goldenSummary.excluded.count)", tint: .orange)
+            }
             Spacer()
-            Button("평가 초기화") { ratingsJSON = "{}" }
+            Button {
+                loadGoldenSummary()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .controlSize(.small)
+            .help("채점 결과 다시 불러오기")
+
+            Button("Evals 폴더") { chooseEvalsDirectory() }
                 .controlSize(.small)
         }
     }
@@ -411,42 +416,441 @@ public struct AILabView: View {
         }
     }
 
-    // MARK: - 골든셋 매트릭스 (더미/평가용)
+    // MARK: - 골든셋 평가
 
+    /// `Evals/` 를 지정받아 채점 결과를 모델 비교표로 보여준다.
+    ///
+    /// **열 이름과 지표 정의는 `eval-report.py` 를 그대로 따른다.** 같은 데이터를 두 화면이
+    /// 다른 이름으로 부르면 이야기가 통하지 않는다.
+    ///
+    /// 폴더를 받는 이유는 **결과가 gitignore 된 산출물**이라서다(`Evals/results/`).
+    /// 앱에 번들할 수 없으니 개발 머신의 저장소를 한 번 가리켜 두고 기억한다.
     @ViewBuilder
     private var goldenMatrix: some View {
-        if goldenCases.isEmpty {
-            ContentUnavailableView("골든셋 결과가 없습니다", systemImage: "chart.bar.doc.horizontal")
+        if evalsDirectory.isEmpty {
+            ContentUnavailableView {
+                Label("Evals 폴더를 지정하세요", systemImage: "folder.badge.questionmark")
+            } description: {
+                Text("골든셋 채점 결과는 저장소의 Evals/results/ 에 있습니다.\n버전 관리에 올리지 않는 실행 산출물이라 앱에 담겨 있지 않습니다.")
+            } actions: {
+                Button("Evals 폴더 선택") { chooseEvalsDirectory() }
+            }
+        } else if isLoadingGolden {
+            VStack(spacing: 10) {
+                ProgressView()
+                Text("채점 결과와 원문을 읽는 중…").font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if goldenSummary.rows.isEmpty {
+            ContentUnavailableView {
+                Label("채점 결과가 없습니다", systemImage: "chart.bar.doc.horizontal")
+            } description: {
+                Text("\(evalsDirectory)/results/ 에서 완주한 실행을 찾지 못했습니다.\nmake goal-eval-matrix 로 골든셋을 돌린 뒤 다시 불러오세요.")
+            } actions: {
+                Button("다른 폴더 선택") { chooseEvalsDirectory() }
+            }
         } else {
-            List(goldenCases) { gCase in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(gCase.title)
-                        .font(.headline)
-                    ForEach(gCase.levels) { lvl in
-                        HStack {
-                            Text(lvl.name)
-                                .font(.subheadline.bold())
-                            if let model = lvl.model {
-                                Text("(\(model))").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(formatSeconds(lvl.latency)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("출력 (추천 결과)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.secondary)
-                            Text(lvl.output)
-                                .font(.caption)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(6)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05)))
+            // **받은 만큼만 차지한다.** 표가 필요로 하는 폭을 그대로 요구하면 그 폭이 창의
+            // 최소 너비가 되어 `NavigationSplitView` 가 사이드바를 밀어낸다(실측 2026-08-28).
+            // 넓은 표를 다루는 실사용 기록 탭과 같은 방식으로 맞춘다.
+            GeometryReader { geo in
+                ScrollView([.horizontal, .vertical]) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        goldenCapabilityGrid
+                        goldenTypeBreakdown
+                        goldenMissingBreakdown
+                        goldenJudgeTable
+                        goldenContextTable
+                        goldenParseTable
+                        goldenFootnote
                     }
+                    .padding(20)
+                    .frame(width: max(goldenWidestTable + 40, geo.size.width), alignment: .topLeading)
                 }
-                .padding(.vertical, 4)
             }
         }
+    }
+
+    /// 표마다 열 수와 이름 길이가 달라 **열 폭을 따로 잡는다.** 하나로 묶으면 긴 이름이
+    /// 중간에서 잘리거나(`context_dependen`/`t`), 열이 적은 표가 의미 없이 늘어난다.
+    private func goldenTableWidth(columns: Int, columnWidth: CGFloat) -> CGFloat {
+        goldenModelColumnWidth + columnWidth * CGFloat(columns)
+    }
+
+    /// 가로 스크롤 범위. 가장 넓은 표(LLM judge)에 맞춘다.
+    private var goldenWidestTable: CGFloat {
+        goldenTableWidth(columns: GoldenEvalReport.judgeMetrics.count + 2, columnWidth: 92)
+    }
+
+    /// 능력 격자 — 열마다 대상 집합이 다르다. 유형마다 정답의 성격이 달라
+    /// 가로로 더한 값은 정의되지 않으므로 전체 평균 열은 두지 않는다.
+    private var goldenCapabilityGrid: some View {
+        let s = goldenSummary
+        // 「안내 대상 일치도」가 가장 긴 이름이다. 여백 16pt 를 빼고도 담기는 폭.
+        let w: CGFloat = 112
+        let total = goldenTableWidth(columns: 9, columnWidth: w)
+        return VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("능력 격자", "열마다 대상 집합이 다릅니다")
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    goldenGroupCell("", width: goldenModelColumnWidth)
+                    goldenGroupCell("목표 연결", width: w * 2)
+                    goldenGroupCell("안내", width: w * 4, leadingDivider: true)
+                    goldenGroupCell("보류 및 자제", width: w * 2, leadingDivider: true)
+                    goldenGroupCell("실행 시간", width: w, leadingDivider: true)
+                }
+                .frame(width: total, alignment: .leading)
+                .padding(.top, 6)
+
+                goldenHeaderRow([
+                    ("모델", ""),
+                    ("목표 연결 점수", "\(s.groupingCount)건"),
+                    ("함정 회피", "\(s.groupingCount)건"),
+                    ("안내 대상 일치도", "\(s.guidanceCount)건"),
+                    ("정답 안내 (TP)", "\(s.guidanceCount)건"),
+                    ("잘못 안내 (FP)", "\(s.guidanceCount)건"),
+                    ("놓친 안내 (FN)", "\(s.guidanceCount)건"),
+                    ("거절", "\(s.refusalCount)건"),
+                    ("자제", "\(s.restraintCount)건"),
+                    ("초", ""),
+                ], columnWidth: w, tableWidth: total)
+
+                ForEach(Array(s.rows.enumerated()), id: \.element.id) { index, row in
+                    goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total, values: [
+                        .score(row.groupingScore), .score(row.trapAvoidance),
+                        .score(row.guidance), .count(row.guidanceTP), .count(row.guidanceFP), .count(row.guidanceFN),
+                        .score(row.refusal), .score(row.restraint),
+                        .seconds(row.seconds),
+                    ])
+                }
+            }
+            .frame(width: total, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+            goldenNote("각 지표의 정의는 eval-report 의 용어 탭과 같습니다. 「잘못 묶은 쌍 (FP)」 은 아직 넣지 않았습니다.", width: total)
+        }
+    }
+
+    /// 유형별 분해 — 경계선 왼쪽 둘은 «묶어야», 오른쪽 둘은 «묶지 말아야» 정답이다.
+    private var goldenTypeBreakdown: some View {
+        let w: CGFloat = 172
+        let total = goldenTableWidth(columns: GoldenEvalReport.typeOrder.count, columnWidth: w)
+        return VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("유형별 분해", "유형마다 주력 지표 하나")
+            VStack(spacing: 0) {
+                goldenHeaderRow([("모델", "")] + GoldenEvalReport.typeOrder.map { ($0, goldenPrimaryLabel($0)) },
+                                columnWidth: w, tableWidth: total)
+                ForEach(Array(goldenSummary.rows.enumerated()), id: \.element.id) { index, row in
+                    goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total,
+                              values: GoldenEvalReport.typeOrder.map { type in
+                                  row.byType[type].map { GoldenCell.score($0) } ?? .missing
+                              })
+                }
+            }
+            .frame(width: total, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+            goldenNote("경계선 왼쪽 두 유형은 목표를 연결해야 정답이고, 오른쪽 두 유형은 연결하지 말아야 정답입니다.", width: total)
+        }
+    }
+
+    /// 안내 기준 분해 — 메모별 `missing` 기준을 «메모 ID · 기준명» 쌍으로 비교한 결정적 지표.
+    private var goldenMissingBreakdown: some View {
+        let w: CGFloat = 150
+        let total = goldenTableWidth(columns: 4, columnWidth: w)
+        return VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("안내 기준 분해", "메모별 missing 기준 쌍 · specific · measurable · time_bound")
+            VStack(spacing: 0) {
+                goldenHeaderRow([
+                    ("모델", ""), ("정답 기준 (TP)", ""), ("잘못 추가한 기준 (FP)", ""),
+                    ("놓친 기준 (FN)", ""), ("기준 F1", ""),
+                ], columnWidth: w, tableWidth: total)
+                ForEach(Array(goldenSummary.rows.enumerated()), id: \.element.id) { index, row in
+                    goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total, values: [
+                        .count(row.missingTP), .count(row.missingFP), .count(row.missingFN), .score(row.missingF1),
+                    ])
+                }
+            }
+            .frame(width: total, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+            goldenNote("안내 문장 자체의 품질은 평가하지 않습니다. 그것은 LLM judge 가 맡습니다.", width: total)
+        }
+    }
+
+    /// LLM judge 품질 점수 — 0~5점 루브릭의 케이스별 평균.
+    @ViewBuilder
+    private var goldenJudgeTable: some View {
+        let judged = goldenSummary.rows.filter { $0.judgeCount > 0 }
+        let w: CGFloat = 92
+        let total = goldenTableWidth(columns: GoldenEvalReport.judgeMetrics.count + 2, columnWidth: w)
+        VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("LLM judge 품질 점수", goldenSummary.judgeMeta.map {
+                "\($0.judge) · \($0.judgeModel) · 루브릭 \($0.rubricVersion) · 파일 \($0.fileCount)개"
+            } ?? "판정 결과 없음")
+            if judged.isEmpty {
+                goldenNote("표시할 성공한 LLM judge 결과가 없습니다. make llm-judge 실행 후 다시 불러오세요.", width: total)
+            } else {
+                VStack(spacing: 0) {
+                    goldenHeaderRow([("모델", "")]
+                        + GoldenEvalReport.judgeMetrics.map { (GoldenEvalReport.judgeLabels[$0] ?? $0, "") }
+                        + [("평균", ""), ("건수", "")], columnWidth: w, tableWidth: total)
+                    ForEach(Array(judged.enumerated()), id: \.element.id) { index, row in
+                        goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total,
+                                  values: GoldenEvalReport.judgeMetrics.map { key in
+                                      row.judgeScores[key].map { GoldenCell.rubric($0) } ?? .missing
+                                  } + [
+                                      row.judgeAverage.map { GoldenCell.rubric($0) } ?? .missing,
+                                      .count(Double(row.judgeCount)),
+                                  ])
+                    }
+                }
+                .frame(width: total, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+                goldenNote("결정적 지표와 별도로 생성된 목표·안내 문장의 품질을 봅니다. 대시(—)는 그 항목을 적용하지 않은 경우입니다.", width: total)
+            }
+        }
+    }
+
+    /// 맥락 효과 — 같은 케이스의 두 recipe 를 짝지어 차이를 낸다.
+    private var goldenContextTable: some View {
+        let w: CGFloat = 112
+        let total = goldenTableWidth(columns: 4, columnWidth: w)
+        return VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("맥락 효과", "짝지어 비교 · 대상 \(goldenSummary.contextPairs)쌍")
+            VStack(spacing: 0) {
+                goldenHeaderRow([
+                    ("모델", ""), ("개선", "쌍"), ("무변", "쌍"), ("악화", "쌍"), ("평균 차이", ""),
+                ], columnWidth: w, tableWidth: total)
+                ForEach(Array(goldenSummary.rows.enumerated()), id: \.element.id) { index, row in
+                    goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total, values: [
+                        .count(Double(row.contextUp)), .count(Double(row.contextFlat)),
+                        .count(Double(row.contextDown)), .delta(row.contextMean),
+                    ])
+                }
+            }
+            .frame(width: total, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+            goldenNote("promptOnly 와 promptWithContext 를 같은 케이스끼리 짝지어 목표 연결 점수의 차이를 냅니다. context 키는 있으나 persona·profile 이 비어 두 프롬프트가 같아지는 케이스는 제외합니다.", width: total)
+        }
+    }
+
+    /// 파싱 진단 — 파서가 모델 응답을 후보 목록으로 바꿀 때 세는 값.
+    @ViewBuilder
+    private var goldenParseTable: some View {
+        let w: CGFloat = 120
+        let total = goldenTableWidth(columns: GoldenEvalReport.parseKeys.count, columnWidth: w)
+        VStack(alignment: .leading, spacing: 8) {
+            goldenSectionHead("파싱 진단", "모델당 \(goldenSummary.coverage)건 누적 · 원문의 parsed 단계에서 집계")
+            if !goldenSummary.hasTraces {
+                goldenNote("원문(trace) 기록을 찾지 못했습니다. Evals/results/traces/ 가 있어야 이 표를 채울 수 있습니다.", width: total)
+            } else {
+                VStack(spacing: 0) {
+                    goldenHeaderRow([("모델", "")] + GoldenEvalReport.parseKeys.map { ($0, "") },
+                                    columnWidth: w, tableWidth: total)
+                    ForEach(Array(goldenSummary.rows.enumerated()), id: \.element.id) { index, row in
+                        goldenRow(index: index, model: row.model, provider: row.provider, columnWidth: w, tableWidth: total,
+                                  values: GoldenEvalReport.parseKeys.map { key in
+                                      row.parse[key].map { GoldenCell.count(Double($0)) } ?? .missing
+                                  })
+                    }
+                }
+                .frame(width: total, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+                goldenNote("modelReturned 와 kept 의 차이가 파서에서 버려진 양입니다. 오른쪽 네 열이 버려진 이유별 내역입니다.", width: total)
+            }
+        }
+    }
+
+    private var goldenFootnote: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("모델 \(goldenSummary.rows.count)개 · 모델당 \(goldenSummary.coverage)건 · 결과 파일 \(goldenSummary.fileCount)개 · 정답지 \(goldenSummary.caseCount)개")
+            if !goldenSummary.excluded.isEmpty {
+                Text("케이스를 다 돌지 못해 제외: \(goldenSummary.excluded.joined(separator: ", "))")
+                    .foregroundStyle(.orange)
+            }
+            Text(evalsDirectory).foregroundStyle(.tertiary)
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+
+    private func goldenNote(_ text: String, width: CGFloat) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: width, alignment: .leading)
+    }
+
+    private func goldenPrimaryLabel(_ type: String) -> String {
+        switch GoldenEvalReport.primaryMetric[type] {
+        case "groupingScore": "목표 연결"
+        case "guidanceF1": "안내"
+        case "noSuggestionCorrect": "거절"
+        default: ""
+        }
+    }
+
+    private func goldenSectionHead(_ title: String, _ scope: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title).font(.headline)
+            Text(scope).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func goldenGroupCell(_ title: String, width: CGFloat, leadingDivider: Bool = false) -> some View {
+        Text(title)
+            .font(.caption2.bold())
+            .foregroundStyle(.secondary)
+            .frame(width: width)
+            .overlay(alignment: .leading) {
+                if leadingDivider { Rectangle().fill(Color.primary.opacity(0.15)).frame(width: 1) }
+            }
+    }
+
+    /// 머리글 한 줄. 아래 첨자는 **그 열의 대상 건수** — 열마다 분모가 다르다는 표시다.
+    ///
+    /// **여백은 칸 폭 안에서 뺀다.** 바깥에 두면 실제 칸이 `columnWidth + 16` 이 되어
+    /// 표 전체 폭이 선언값보다 커지고, 오른쪽 끝이 잘리며 배경 줄무늬가 어긋난다.
+    private func goldenHeaderRow(
+        _ titles: [(String, String)], columnWidth: CGFloat, tableWidth: CGFloat
+    ) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { index, item in
+                VStack(alignment: index == 0 ? .leading : .trailing, spacing: 1) {
+                    Text(item.0)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        // 식별자는 중간에서 끊기면 다른 낱말처럼 보인다. 줄바꿈 대신 꼬리를 자른다.
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(item.0)
+                    if !item.1.isEmpty {
+                        Text(item.1).font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: (index == 0 ? goldenModelColumnWidth : columnWidth) - 16,
+                       alignment: index == 0 ? .leading : .trailing)
+                .padding(.horizontal, 8)
+            }
+        }
+        .frame(width: tableWidth, alignment: .leading)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    /// 칸 하나가 무엇인가. **«측정 안 함» 과 «0점» 을 절대 같은 칸으로 그리지 않는다.**
+    private enum GoldenCell {
+        /// 0~1 점수.
+        case score(Double)
+        /// 0~5 루브릭 점수.
+        case rubric(Double)
+        case count(Double)
+        case seconds(Double)
+        /// 부호가 뜻을 가지는 차이값.
+        case delta(Double)
+        case missing
+    }
+
+    private func goldenRow(
+        index: Int, model: String, provider: String,
+        columnWidth: CGFloat, tableWidth: CGFloat, values: [GoldenCell]
+    ) -> some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(model.replacingOccurrences(of: "mlx-community/", with: "mlx/"))
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(provider).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(width: goldenModelColumnWidth - 16, alignment: .leading)
+            .padding(.horizontal, 8)
+
+            ForEach(Array(values.enumerated()), id: \.offset) { _, cell in
+                goldenCellText(cell)
+                    .frame(width: columnWidth - 16, alignment: .trailing)
+                    .padding(.horizontal, 8)
+            }
+        }
+        .frame(width: tableWidth, alignment: .leading)
+        .padding(.vertical, 7)
+        .background(index.isMultiple(of: 2) ? Color.clear : Color.primary.opacity(0.025))
+    }
+
+    @ViewBuilder
+    private func goldenCellText(_ cell: GoldenCell) -> some View {
+        switch cell {
+        case .score(let value):
+            Text(String(format: "%.3f", value))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(value >= 0.7 ? Color.green : value >= 0.4 ? Color.primary : Color.orange)
+        case .rubric(let value):
+            Text(String(format: "%.2f", value))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(value >= 4.0 ? Color.green : value >= 3.0 ? Color.primary : Color.orange)
+        case .count(let value):
+            Text(String(format: "%.0f", value))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
+        case .seconds(let value):
+            Text(String(format: "%.2f", value))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
+        case .delta(let value):
+            Text(String(format: "%+.3f", value))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(value > 0.001 ? Color.green : value < -0.001 ? Color.orange : .secondary)
+        case .missing:
+            Text("—")
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func chooseEvalsDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "선택"
+        panel.message = "저장소의 Evals 폴더를 선택하세요 (results/ 와 golden/cases/ 가 들어 있는 곳)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        evalsDirectory = url.path
+        loadGoldenSummary()
+    }
+
+    /// 원문 수천 개를 읽으므로 **화면을 잡아두지 않는다.** 집계를 백그라운드로 보내고 결과만 받는다.
+    private func loadGoldenSummary() {
+        if evalsDirectory.isEmpty, let guessed = Self.repositoryEvalsDirectory() {
+            evalsDirectory = guessed.path
+        }
+        let path = evalsDirectory
+        guard !path.isEmpty else {
+            goldenSummary = .empty
+            return
+        }
+        isLoadingGolden = true
+        Task {
+            let summary = await Task.detached(priority: .userInitiated) {
+                GoldenEvalReport.summarize(evalsDirectory: URL(fileURLWithPath: path))
+            }.value
+            goldenSummary = summary
+            isLoadingGolden = false
+        }
+    }
+
+    /// 개발 빌드에서 저장소의 `Evals/` 를 스스로 찾는다.
+    ///
+    /// `#filePath` 는 빌드한 기계의 소스 경로라 **개발 중에만** 쓸모가 있다. 릴리스에서는
+    /// 그 경로가 없으므로 자연히 실패하고 폴더 선택으로 넘어간다.
+    /// 골든셋 하네스가 저장소를 찾는 방식과 같다(→ `GoldenSet.repositoryRoot`).
+    private static func repositoryEvalsDirectory(from filePath: String = #filePath) -> URL? {
+        var url = URL(fileURLWithPath: filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            let candidate = url.appendingPathComponent("Evals", isDirectory: true)
+            if GoldenEvalReport.looksLikeEvalsDirectory(candidate) { return candidate }
+        }
+        return nil
     }
 
     // MARK: - 데이터 로딩 및 필터링
