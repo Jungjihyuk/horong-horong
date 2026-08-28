@@ -1,0 +1,29 @@
+{
+  "caseName": "포트폴리오 사례 정리와 면접 답변 준비 분리",
+  "datasetType": "general",
+  "successConditions": ["semantic_cohesion", "noise_exclusion", "over_grouping_exclusion", "measurability", "clarity", "relevance"],
+  "note": "같은 프로젝트를 소재로 하지만 포트폴리오 문서 작성과 면접 답변 준비는 서로 다른 결과다. 취업 도메인에 속해 보이지만 두 목표 어디에도 속하지 않는 관리성 할 일도 섞여 있다. 3개 묶음과 4개 묶음을 함께 평가하는 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "추천 프로젝트의 문제 상황과 해결 과정 정리하기", "icon": "📄", "deadline": "2026-08-18 12:00"},
+    {"id": "m2", "content": "프로젝트 성과를 수치로 정리하고 포트폴리오 페이지에 반영하기", "icon": "📊", "deadline": "2026-08-19 18:00"},
+    {"id": "m3", "content": "프로젝트 기술 스택과 담당 역할 설명 다듬기", "icon": "🛠️", "startDate": "2026-08-20 14:00"},
+    {"id": "m4", "content": "프로젝트 관련 예상 면접 질문 5개에 답변 작성하기", "icon": "🎤", "deadline": "2026-08-20 20:00"},
+    {"id": "m5", "content": "프로젝트 경험을 1분 자기소개에 넣어 말해보기", "icon": "🗣️", "startDate": "2026-08-21 19:00"},
+    {"id": "m6", "content": "프로젝트 면접 답변을 STAR 구조로 다시 작성하기", "icon": "🧱", "deadline": "2026-08-21 20:00"},
+    {"id": "m7", "content": "모의면접 피드백 반영하고 답변 시간 재기", "icon": "⏱️", "startDate": "2026-08-21 21:00"},
+    {"id": "m8", "content": "채용 플랫폼 알림 조건 변경하기", "icon": "🔔"},
+    {"id": "m9", "content": "받은 채용 메일 광고 정리하기", "icon": "📬"}
+  ],
+  "expectedGroups": [
+    {"type": "weekly_goal", "title": "개발 프로젝트 포트폴리오 사례 정리하기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "프로젝트 기반 면접 답변 준비하기", "memos": ["m4", "m5", "m6", "m7"]}
+  ],
+  "traps": [
+    {
+      "why": "채용 플랫폼 알림과 광고 메일 정리는 두 프로젝트 목표의 결과로 이어지지 않으며 서로도 하나의 목표가 아니다",
+      "groups": [["m8", "m9"]]
+    }
+  ]
+}

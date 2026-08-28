@@ -53,6 +53,11 @@ struct StatsSummaryView: View {
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
     @State private var hostWindow: NSWindow?
+    private let referenceDate: Date
+
+    init(referenceDate: Date = Date()) {
+        self.referenceDate = referenceDate
+    }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -360,8 +365,9 @@ struct StatsSummaryView: View {
     private func weekBar(_ day: (date: Date, durationSeconds: Int)) -> some View {
         let maxDuration = max(weekChartMaxDuration, 1)
         let height = day.durationSeconds > 0 ? max(8, CGFloat(day.durationSeconds) / CGFloat(maxDuration) * 78) : 8
-        let isToday = Calendar.current.isDateInToday(day.date)
-        let isFuture = day.date > Calendar.current.startOfDay(for: Date())
+        let calendar = Calendar.current
+        let isToday = calendar.isDate(day.date, inSameDayAs: referenceDate)
+        let isFuture = day.date > calendar.startOfDay(for: referenceDate)
         return VStack(spacing: 6) {
             ZStack(alignment: .bottom) {
                 if isToday {
@@ -473,12 +479,13 @@ struct StatsSummaryView: View {
     }
 
     private var todayWeeklySeconds: Int {
-        weeklyDailyTotals.first { Calendar.current.isDateInToday($0.date) }?.durationSeconds ?? 0
+        let calendar = Calendar.current
+        return weeklyDailyTotals.first { calendar.isDate($0.date, inSameDayAs: referenceDate) }?.durationSeconds ?? 0
     }
 
     private var weeklyActiveStreak: Int {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: referenceDate)
         let totalsByDay = Dictionary(uniqueKeysWithValues: weeklyDailyTotals.map {
             (calendar.startOfDay(for: $0.date), $0.durationSeconds)
         })
@@ -532,7 +539,7 @@ struct StatsSummaryView: View {
     }
 
     private func loadTodayData() {
-        let today = Calendar.current.startOfDay(for: Date())
+        let today = Calendar.current.startOfDay(for: referenceDate)
         guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else {
             return
         }
@@ -605,7 +612,7 @@ struct StatsSummaryView: View {
 
     private func loadWeekData() {
         let calendar = Calendar.current
-        let weekStart = Constants.mondayWeekStart(for: Date(), calendar: calendar)
+        let weekStart = Constants.mondayWeekStart(for: referenceDate, calendar: calendar)
         guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
             return
         }

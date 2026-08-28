@@ -894,20 +894,27 @@ struct MemoBrowserWindow: View {
         memo.reminderOffsetMinutes = nil
     }
 
+    /// 시작이 마감보다 뒤면 **마감을 함께 민다.** 되돌리거나 무시하지 않는 이유는,
+    /// 사용자가 방금 고른 값을 말없이 버리면 «왜 안 바뀌지» 가 되기 때문이다.
+    /// 방금 고른 쪽을 살리고 반대쪽을 따라오게 한다.
+    ///
+    /// 뒤집힌 값이 저장되면 «마감 − 시작» 이 음수가 되어, 나중에 이 값으로 소요 시간을
+    /// 재려 할 때 통계가 깨진다(실측 2026-08-20: 완료 할일 68건 중 6건이 역전 상태였다).
     private func startDateBinding(for memo: Memo) -> Binding<Date> {
         Binding {
             memo.startDate ?? Date()
         } set: { date in
-            memo.startDate = date
+            memo.setStartDate(date)
             persist(memo, syncLinkedReminder: true)
         }
     }
 
+    /// 마감을 시작보다 앞으로 당기면 **시작을 함께 당긴다.** 위와 같은 사정이다.
     private func deadlineBinding(for memo: Memo) -> Binding<Date> {
         Binding {
             memo.deadline ?? Date()
         } set: { date in
-            memo.deadline = date
+            memo.setDeadline(date)
             persist(memo, syncLinkedReminder: true)
         }
     }

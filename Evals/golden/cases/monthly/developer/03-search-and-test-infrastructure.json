@@ -1,0 +1,105 @@
+{
+  "caseName": "검색 품질 개선과 테스트 인프라 정비를 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "over_grouping_exclusion",
+    "noise_exclusion",
+    "recall",
+    "measurability",
+    "clarity"
+  ],
+  "note": "검색 결과 품질 개선과 테스트 인프라 정비는 모두 안정적인 서비스 개발을 위한 작업이지만 서로 다른 월간 결과로 이어진다. 성능·로그·자동화 같은 공통 키워드만으로 합치지 않고, 무관한 개인 일정은 제외해야 한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2027-01-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2027-01-01",
+      "dueDate": "2027-01-07",
+      "title": "검색어별 무응답 비율을 집계해 개선 우선순위 정하기",
+      "icon": "🔎"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2027-01-04",
+      "dueDate": "2027-01-14",
+      "title": "검색 결과 정렬 기준을 조정하고 대표 검색어 10개로 비교하기",
+      "icon": "📈"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2027-01-11",
+      "dueDate": "2027-01-21",
+      "title": "검색 자동완성 후보 30개를 점검해 중복·오래된 항목 제거하기",
+      "icon": "✨"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2027-01-18",
+      "dueDate": "2027-01-28",
+      "title": "검색 응답 시간을 측정하고 개선 전후 지표를 기록하기",
+      "icon": "⏱️"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2027-01-02",
+      "dueDate": "2027-01-09",
+      "title": "느린 통합 테스트를 분류하고 실행 시간을 기준선으로 남기기",
+      "icon": "🧪"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2027-01-08",
+      "dueDate": "2027-01-16",
+      "title": "테스트용 외부 API 의존성 5개를 공통 목 객체로 대체하기",
+      "icon": "🧩"
+    },
+    {
+      "id": "g7",
+      "createdAt": "2027-01-15",
+      "dueDate": "2027-01-23",
+      "title": "병렬 실행이 가능한 테스트를 분리해 CI 실행 시간 줄이기",
+      "icon": "⚡"
+    },
+    {
+      "id": "g8",
+      "createdAt": "2027-01-22",
+      "dueDate": "2027-01-30",
+      "title": "실패 로그에 원인·재현 단계 필드를 추가하고 샘플 5건 검증하기",
+      "icon": "📋"
+    },
+    {
+      "id": "g9",
+      "createdAt": "2027-01-05",
+      "dueDate": "2027-01-31",
+      "title": "다음 달 팀 워크숍 장소 후보 세 곳 비교하기",
+      "icon": "📍"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "검색 결과 품질과 응답 성능 개선하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "type": "monthly_goal",
+      "title": "테스트 인프라와 CI 실행 효율 정비하기",
+      "goals": ["g5", "g6", "g7", "g8"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "검색 응답 시간 측정과 CI 실행 시간 단축은 모두 성능 지표를 다루지만 서로 다른 시스템 결과를 개선한다.",
+      "groups": [["g4", "g7"]]
+    },
+    {
+      "why": "팀 워크숍 장소 비교는 개발자 페르소나와 관련 없는 개인·팀 일정이며 두 월간 개발 결과에 기여하지 않는다.",
+      "groups": [["g9", "g1"], ["g9", "g5"]]
+    }
+  ]
+}

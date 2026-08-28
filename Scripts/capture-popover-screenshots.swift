@@ -7,7 +7,8 @@ import AppKit
 private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achievement"]
 private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "achievement", "news", "agent", "companion", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
-private let achievementDetailModes = ["progress", "timeline-all", "journey", "records"]
+private let statsFocusModes = ["focus-daily", "focus-weekly", "focus-monthly"]
+private let achievementDetailModes = ["progress", "timeline-all", "journey", "records", "reward"]
 private let companionModes = ["chat", "schedule"]
 private let popoverThemes: [PopoverThemeOption] = [
     PopoverThemeOption(identifier: "warm-lantern", rawValue: "warmLantern"),
@@ -17,6 +18,7 @@ private let popoverThemes: [PopoverThemeOption] = [
 private let allTargets = popoverTabs.map { "popover:\($0)" }
     + ["settings:general"]
     + statsDetailModes.map { "stats-detail:\($0)" }
+    + statsFocusModes.map { "stats-detail:\($0)" }
     + ["achievement-detail"]
     + achievementDetailModes
         .filter { $0 != "progress" }
@@ -37,6 +39,7 @@ private struct PopoverThemeOption {
 private struct CaptureRequest {
     let target: String
     let theme: PopoverThemeOption?
+    let date: String?
 
     var titleIdentifier: String {
         target.replacingOccurrences(of: ":", with: "-")
@@ -54,6 +57,7 @@ private struct CaptureOptions {
     var skipBuild = false
     var derivedDataPath = URL(fileURLWithPath: "/private/tmp/horonghorong-screenshot-derived-data")
     var appPath: URL?
+    var customDate: String?
     private var baseTargets = allTargets
     private var selectedThemes: [PopoverThemeOption]?
 
@@ -64,6 +68,8 @@ private struct CaptureOptions {
             switch argument {
             case "--output":
                 outputDirectory = try Self.value(after: argument, at: &index, in: arguments).expandedFileURL
+            case "--date":
+                customDate = try Self.value(after: argument, at: &index, in: arguments)
             case "--targets":
                 let rawTargets = try Self.parseList(Self.value(after: argument, at: &index, in: arguments))
                 guard !rawTargets.isEmpty else {
@@ -105,7 +111,7 @@ private struct CaptureOptions {
             }
             index += 1
         }
-        requests = Self.makeRequests(targets: baseTargets, themes: selectedThemes)
+        requests = Self.makeRequests(targets: baseTargets, themes: selectedThemes, customDate: customDate)
     }
 
     private static func value(after option: String, at index: inout Int, in arguments: [String]) throws -> String {
@@ -148,12 +154,30 @@ private struct CaptureOptions {
         }
     }
 
-    private static func makeRequests(targets: [String], themes: [PopoverThemeOption]?) -> [CaptureRequest] {
+    private static func defaultDate(for target: String) -> String? {
+        if target == "stats-detail:focus-daily" || target == "stats-detail:focus" {
+            return "2026-08-07"
+        }
+        if target.hasPrefix("stats-detail") || target == "popover:stats" {
+            return "2026-08-13"
+        }
+        return nil
+    }
+
+    private static func makeRequests(
+        targets: [String],
+        themes: [PopoverThemeOption]?,
+        customDate: String?
+    ) -> [CaptureRequest] {
+        func requestDate(for target: String) -> String? {
+            customDate ?? defaultDate(for: target)
+        }
+
         guard let themes else {
-            return targets.map { CaptureRequest(target: $0, theme: nil) }
+            return targets.map { CaptureRequest(target: $0, theme: nil, date: requestDate(for: $0)) }
         }
         return themes.flatMap { theme in
-            targets.map { CaptureRequest(target: $0, theme: theme) }
+            targets.map { CaptureRequest(target: $0, theme: theme, date: requestDate(for: $0)) }
         }
     }
 
@@ -165,6 +189,8 @@ private struct CaptureOptions {
                 || target == "companion-schedule"
                 || target == "news-report-archive"
                 || target == "news-archive"
+                || target == "stats-detail-focus"
+                || target == "stats-focus"
         }
         switch parts[0] {
         case "popover":
@@ -173,6 +199,8 @@ private struct CaptureOptions {
             return settingsTabs.contains(parts[1])
         case "stats-detail":
             return statsDetailModes.contains(parts[1])
+                || statsFocusModes.contains(parts[1])
+                || parts[1] == "focus"
         case "achievement-detail":
             return achievementDetailModes.contains(parts[1])
         case "companion":
@@ -190,6 +218,7 @@ private struct CaptureOptions {
 
     Options:
       --output <dir>        PNG 저장 경로. 기본값: Artifacts/Screenshots
+      --date <yyyy-MM-dd>   통계 기준 날짜를 명시적으로 지정합니다. (기본값: stats-detail:focus-daily는 2026-08-07, 그 외 통계는 2026-08-13)
       --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail 전체 상태
                             예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail:timeline-all
       --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,stats,achievement
@@ -399,16 +428,21 @@ private func doubleValue(_ value: Any?) -> Double? {
     }
 }
 
-private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?) throws -> NSRunningApplication {
+private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?, date: String?) throws -> NSRunningApplication {
     let configuration = NSWorkspace.OpenConfiguration()
-    configuration.arguments = ["--screenshot-target", target]
-    configuration.activates = true
-    configuration.addsToRecentItems = false
-    configuration.createsNewApplicationInstance = true
+    var arguments = ["--screenshot-target", target]
     var environment = ["HORONGHORONG_SCREENSHOT_TARGET": target]
     if let theme {
         environment["HORONGHORONG_SCREENSHOT_POPOVER_THEME"] = theme.rawValue
     }
+    if let date {
+        arguments.append(contentsOf: ["--screenshot-date", date])
+        environment["HORONGHORONG_SCREENSHOT_DATE"] = date
+    }
+    configuration.arguments = arguments
+    configuration.activates = true
+    configuration.addsToRecentItems = false
+    configuration.createsNewApplicationInstance = true
     configuration.environment = ProcessInfo.processInfo.environment.merging(
         environment,
         uniquingKeysWith: { _, newValue in newValue }
@@ -436,7 +470,7 @@ private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?)
 
 private func capture(request: CaptureRequest, appPath: URL, outputDirectory: URL) throws {
     let title = "HorongHorong Screenshot - \(request.titleIdentifier)"
-    let runningApp = try launchApp(appPath: appPath, target: request.target, theme: request.theme)
+    let runningApp = try launchApp(appPath: appPath, target: request.target, theme: request.theme, date: request.date)
 
     defer {
         runningApp.terminate()
@@ -447,7 +481,8 @@ private func capture(request: CaptureRequest, appPath: URL, outputDirectory: URL
     let outputURL = outputDirectory.appendingPathComponent("\(request.fileIdentifier).png")
     try captureWindow(id: windowID, to: outputURL)
     let themeText = request.theme.map { " [\($0.identifier)]" } ?? ""
-    print("✓ \(request.target)\(themeText) -> \(outputURL.path)")
+    let dateText = request.date.map { " [@\($0)]" } ?? ""
+    print("✓ \(request.target)\(themeText)\(dateText) -> \(outputURL.path)")
 }
 
 do {

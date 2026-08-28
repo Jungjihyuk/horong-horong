@@ -1,0 +1,59 @@
+{
+  "caseName": "일반 영어 학습 목표와 TOEIC 목표 프로필 맥락",
+  "datasetType": "context_dependent",
+  "successConditions": [
+    "context_handling",
+    "semantic_cohesion",
+    "relevance",
+    "measurability",
+    "clarity"
+  ],
+  "note": "단어·문법·듣기·모의고사 주간 목표만으로는 학교 공부, 일반 영어 학습, 여러 시험 준비 중 어느 맥락인지 확정하기 어렵다. 사용자 프로필의 TOEIC 850점 목표가 있을 때 하나의 월간 학습 결과로 연결한다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": {
+      "source": "companion_chat",
+      "text": "TOEIC 850점 달성을 목표로 준비 중",
+      "observedAt": "2026-09-28",
+      "status": "user_confirmed"
+    }
+  },
+  "referenceDate": "2026-10-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-10-01",
+      "dueDate": "2026-10-05",
+      "title": "영어 단어 30개 암기하고 복습하기",
+      "icon": "📖"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-10-04",
+      "dueDate": "2026-10-12",
+      "title": "영어 문법 문제 20개 풀고 오답 정리하기",
+      "icon": "📝"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-10-10",
+      "dueDate": "2026-10-19",
+      "title": "영어 듣기 연습 30분씩 3회 진행하기",
+      "icon": "🎧"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-10-17",
+      "dueDate": "2026-10-30",
+      "title": "영어 모의고사 1회 풀고 점수 기록하기",
+      "icon": "📊"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "TOEIC 850점 달성을 위한 학습 이어가기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    }
+  ]
+}

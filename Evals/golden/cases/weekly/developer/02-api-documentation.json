@@ -1,0 +1,64 @@
+{
+  "caseName": "같은 사용자 프로필 API를 다루는 문서화와 구현 개선",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "over_grouping_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "개발자 페르소나에서 API 문서화 작업과 사용자 프로필 API 구현 개선 작업이 표면적으로 같은 API를 다루더라도 서로 다른 목표로 분리되는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "사용자 프로필 API 응답 필드 확인하기",
+      "icon": "🔌",
+      "deadline": "2026-08-18 10:00"
+    },
+    {
+      "id": "m2",
+      "content": "사용자 프로필 API 요청·응답 예시 작성하기",
+      "icon": "📝",
+      "startDate": "2026-08-19 14:00",
+      "deadline": "2026-08-19 15:00"
+    },
+    {
+      "id": "m3",
+      "content": "API 문서 사이트에 사용자 프로필 문서 게시하기",
+      "icon": "📚",
+      "startDate": "2026-08-20 16:00"
+    },
+    {
+      "id": "m4",
+      "content": "사용자 프로필 API 호출부 에러 처리 개선하기",
+      "icon": "🛠️",
+      "startDate": "2026-08-20 10:00",
+      "deadline": "2026-08-20 12:00"
+    },
+    {
+      "id": "m5",
+      "content": "사용자 프로필 API 응답 캐싱 적용하기",
+      "icon": "⚡",
+      "startDate": "2026-08-21 10:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "사용자 프로필 API 문서화 완료하기",
+      "memos": ["m1", "m2", "m3"]
+    },
+    {
+      "type": "weekly_goal",
+      "title": "사용자 프로필 API 동작 개선하기",
+      "memos": ["m4", "m5"]
+    }
+  ]
+}

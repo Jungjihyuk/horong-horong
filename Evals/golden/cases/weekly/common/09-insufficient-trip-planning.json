@@ -1,0 +1,82 @@
+{
+  "caseName": "여행 준비 메모지만 일정과 범위가 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability"
+  ],
+  "note": "여행을 준비한다는 영역은 보이지만 목적지, 여행 날짜, 예약 대상, 준비물 범위가 없어 구체적인 주간 목표를 만들 수 없다. 목표를 추측해 묶지 말고 각 메모를 SMART 기준에 맞게 구체화하는 예시를 제안해야 하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "여행 준비하기",
+      "icon": "🧳",
+      "deadline": "2026-08-17 23:59"
+    },
+    {
+      "id": "m2",
+      "content": "여행 계획 세우기",
+      "icon": "🗺️",
+      "deadline": "2026-08-19 23:59"
+    },
+    {
+      "id": "m3",
+      "content": "필요한 것 챙기기",
+      "icon": "🎒",
+      "startDate": "2026-08-20 20:00"
+    },
+    {
+      "id": "m4",
+      "content": "예약 확인하기",
+      "icon": "📅"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "여행 목적지와 날짜를 먼저 정하고, 각 메모의 대상·수량·완료 기준을 SMART 기준에 맞게 구체화한다. 실행 가능성과 개인의 관련성은 입력 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {
+        "memo": "m1",
+        "missing": [
+          "specific",
+          "measurable",
+          "time_bound"
+        ],
+        "suggestion": "8월 30일 부산 여행에 필요한 옷과 세면도구 목록을 만들고 짐의 80%까지 싸기처럼 목적지, 준비물 범위, 기한을 정해보세요."
+      },
+      {
+        "memo": "m2",
+        "missing": [
+          "specific",
+          "measurable",
+          "time_bound"
+        ],
+        "suggestion": "이번 주 금요일까지 부산 2박 3일 여행의 교통편과 방문 장소 3곳을 정하기처럼 기간과 결정할 항목을 정해보세요."
+      },
+      {
+        "memo": "m3",
+        "missing": [
+          "specific",
+          "measurable"
+        ],
+        "suggestion": "부산 2박 3일 여행에 가져갈 옷 3벌과 충전기·세면도구를 가방에 넣기처럼 준비물과 수량을 정해보세요."
+      },
+      {
+        "memo": "m4",
+        "missing": [
+          "specific",
+          "measurable"
+        ],
+        "suggestion": "8월 30일 부산행 기차표와 숙소 예약 상태를 확인하고 예약번호를 기록하기처럼 확인할 예약과 완료 기준을 정해보세요."
+      }
+    ]
+  }
+}

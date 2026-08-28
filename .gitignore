@@ -79,7 +79,6 @@ xcuserdata/
 ## Swift Package Manager
 .swiftpm/
 .build/
-Packages/
 
 ## CocoaPods / Carthage (사용 시 대비)
 Pods/
@@ -194,5 +193,6 @@ docs/updates/*
 Evals/.run-golden
 Evals/results/
 promptfooconfig.json
-Evals/golden/drafts/
 Evals/.provider
+Evals/.goal-eval-configuration.json
+Evals/eval-report.html

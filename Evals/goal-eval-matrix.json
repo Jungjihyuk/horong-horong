@@ -1,0 +1,73 @@
+{
+  "contextModes": [
+    "withoutContext",
+    "withContext"
+  ],
+  "models": [
+    {
+      "name": "Apple Foundation Model",
+      "provider": "appleFoundation",
+      "model": "appleFoundation"
+    },
+    {
+      "name": "Ollama · Qwen3 1.7B",
+      "provider": "ollama",
+      "model": "qwen3:1.7b"
+    },
+    {
+      "name": "Ollama · Qwen3 4B",
+      "provider": "ollama",
+      "model": "qwen3:4b"
+    },
+    {
+      "name": "Ollama · Qwen3 8B",
+      "provider": "ollama",
+      "model": "qwen3:8b"
+    },
+    {
+      "name": "Ollama · Qwen3.5 9B",
+      "provider": "ollama",
+      "model": "qwen3.5:9b"
+    },
+    {
+      "name": "MLX · Qwen3 1.7B",
+      "provider": "mlx",
+      "model": "mlx-community/Qwen3-1.7B-4bit"
+    },
+    {
+      "name": "MLX · Qwen3 4B",
+      "provider": "mlx",
+      "model": "mlx-community/Qwen3-4B-4bit"
+    },
+    {
+      "name": "MLX · Qwen3 8B",
+      "provider": "mlx",
+      "model": "mlx-community/Qwen3-8B-4bit"
+    },
+    {
+      "name": "MLX · Qwen3.5 9B 4bit",
+      "provider": "mlx",
+      "model": "mlx-community/Qwen3.5-9B-4bit"
+    },
+    {
+      "name": "MLX · Gemma4 E4B",
+      "provider": "mlx",
+      "model": "mlx-community/gemma-4-e4b-it-4bit"
+    },
+    {
+      "name": "Ollama · Qwen3.8 27B",
+      "provider": "ollama",
+      "model": "qwen3.8:27b"
+    },
+    {
+      "name": "Ollama · Gemma4 26B",
+      "provider": "ollama",
+      "model": "gemma4:26b"
+    },
+    {
+      "name": "Ollama · ExaOne-deep 7.8B",
+      "provider": "ollama",
+      "model": "exaone-deep:7.8b"
+    }
+  ]
+}

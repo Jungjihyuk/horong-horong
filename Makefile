@@ -106,3 +106,26 @@ run-metrics:
 	echo "meta : $$META"; \
 	echo "trace: $$TRACE"; \
 	cd Agents/news_report && uv run python -m evals.research_run_metrics --meta "$$META" --trace "$$TRACE"
+
+# Generate static HTML matrix dashboard from evaluation JSONL
+eval-report:
+	python3 Evals/eval-report.py $(if $(INPUT),--input "$(INPUT)",) --output Evals/eval-report.html
+
+# 모델 × 컨텍스트 조합을 순차 평가한다. 기본 조합은 Evals/goal-eval-matrix.json에서 고친다.
+goal-eval-matrix: generate
+	python3 Evals/run-goal-eval-matrix.py $(if $(MATRIX),--matrix "$(MATRIX)",)
+
+# 기존 골든셋 실행 결과에 의미 품질 루브릭을 적용한다. 모델 실행·결정적 채점과 분리한다.
+# MODEL은 CLI에 전달하지 않는 기록용 라벨이다. 실제 judge 모델은 CLI의 현재 선택을 따른다.
+# 예: make llm-judge JUDGE=codex MODEL=gpt-5.6-sol LIMIT=5
+# RETRY=1이면 이전 judge 실행에서 실패한 run만 다시 평가한다. 다른 judge로 이어받을 때 쓴다.
+# 예: make llm-judge JUDGE=claude MODEL=sonnet-5 RETRY=1
+llm-judge:
+	python3 Evals/run-llm-judge.py --judge $(or $(JUDGE),codex) $(if $(MODEL),--model "$(MODEL)",) $(if $(INPUT),--input "$(INPUT)",) $(if $(LIMIT),--limit "$(LIMIT)",) $(if $(COMMAND),--command "$(COMMAND)",) $(if $(RETRY),--retry-failed,)
+
+# 실사용(Release) DB를 디버그(Debug) DB로 복사
+copy-prod-db:
+	@mkdir -p "$$HOME/Library/Application Support/HorongHorong-Debug/Stores"
+	@cp -f "$$HOME/Library/Application Support/HorongHorong/Stores/default.store"* "$$HOME/Library/Application Support/HorongHorong-Debug/Stores/" 2>/dev/null || true
+	@cp -rf "$$HOME/Library/Application Support/HorongHorong/JourneyImages" "$$HOME/Library/Application Support/HorongHorong-Debug/" 2>/dev/null || true
+	@echo "✅ 릴리스 DB 및 이미지를 디버그 저장소(HorongHorong-Debug)로 복사했습니다."

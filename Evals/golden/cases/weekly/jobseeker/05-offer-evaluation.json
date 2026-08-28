@@ -1,0 +1,19 @@
+{
+  "caseName": "입사 제안 비교와 이직 준비 자료 보완 분리",
+  "datasetType": "general",
+  "successConditions": ["semantic_cohesion", "over_grouping_exclusion", "measurability", "clarity", "relevance"],
+  "note": "두 회사의 입사 조건 비교와 아직 진행 중인 지원 자료 보완은 모두 취업 의사결정과 관련 있지만 서로 다른 목표다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "A사와 B사 연봉·복지·근무 형태 비교표 만들기", "icon": "⚖️", "deadline": "2026-08-18 20:00"},
+    {"id": "m2", "content": "두 회사에 확인할 입사 조건 질문 정리하기", "icon": "❓", "deadline": "2026-08-19 20:00"},
+    {"id": "m3", "content": "입사 제안 수락 여부를 비교표 기준으로 결정하기", "icon": "✅", "startDate": "2026-08-20 20:00"},
+    {"id": "m4", "content": "아직 제출하지 않은 지원서의 자기소개 문항 수정하기", "icon": "✏️", "deadline": "2026-08-20 18:00"},
+    {"id": "m5", "content": "지원서에 넣을 프로젝트 성과 수치 확인하기", "icon": "📊", "startDate": "2026-08-21 17:00"}
+  ],
+  "expectedGroups": [
+    {"type": "weekly_goal", "title": "입사 제안 비교하고 수락 여부 결정하기", "memos": ["m1", "m2", "m3"]},
+    {"type": "weekly_goal", "title": "미제출 지원서 내용 보완하기", "memos": ["m4", "m5"]}
+  ]
+}

@@ -1,4 +1,5 @@
 import Foundation
+import HorongAI
 
 /// 앱에서 나열할 수 있는 사실을 코드에서 직접 만든다.
 ///
@@ -45,7 +46,7 @@ enum CompanionAppFacts {
             ),
             Fact(
                 keywords: ["설정", "설정 창", "설정창"],
-                line: "설정 페이지: " + SettingsTab.allCases
+                line: "설정 페이지: " + SettingsTab.visibleCases
                     .map(\.label)
                     .joined(separator: ", ")
             ),
@@ -148,12 +149,27 @@ enum CompanionAppFacts {
 
     /// 프롬프트에 넣을 근거. 경로가 있으면 함께 넣어 그대로 답하게 한다.
     static func matching(_ message: String, facts: [Fact]? = nil) -> String? {
-        let lines = matches(message, facts: facts).map { fact -> String in
-            guard let path = fact.path else { return fact.line }
-            return "\(fact.line)\n바꾸는 곳: \(path)"
-        }
+        let lines = evidence(for: message, facts: facts).map(\.text)
         guard !lines.isEmpty else { return nil }
         return lines.joined(separator: "\n")
+    }
+
+    /// 같은 근거를 조각 단위로. 합쳐 놓으면 어느 사실이 걸렸는지 되짚을 수 없다.
+    ///
+    /// 앱 도메인(`Constants.PopoverTheme` · `SettingsTab` · 현재 설정값)을 읽으므로
+    /// 패키지로 옮길 수 없다. 경계에서 앱이 `Evidence` 로 바꿔 넘긴다.
+    static func evidence(for message: String, facts: [Fact]? = nil) -> [Evidence] {
+        matches(message, facts: facts).map { fact in
+            let text = fact.path.map { "\(fact.line)\n바꾸는 곳: \($0)" } ?? fact.line
+            return Evidence(
+                // 첫 키워드가 사실상 이 사실의 이름이다. 줄 내용은 설정값에 따라 바뀌므로 id 로 못 쓴다.
+                id: "appFacts.\(fact.keywords.first ?? fact.line)",
+                source: "appFacts",
+                text: text,
+                // 키워드가 걸렸는지만 보므로 순위가 없다. 없는 점수를 지어내지 않는다.
+                score: nil
+            )
+        }
     }
 
     /// 답하면서 열어 보여줄 곳. 여러 개면 첫 번째만 쓴다.

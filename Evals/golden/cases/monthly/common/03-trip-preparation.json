@@ -1,0 +1,73 @@
+{
+  "caseName": "여행 준비 주간 목표 4개를 하나의 월간 결과로 통합",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity"
+  ],
+  "note": "여행지·숙소·교통·짐 준비 주간 목표가 한 달 안에 하나의 여행 준비 완료 결과로 이어지는지 평가한다. 기존 weekly/common에 없는 새로운 일상 도메인의 합성 데이터다.",
+  "context": {
+    "persona": null,
+    "profile": null
+  },
+  "referenceDate": "2026-09-30",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-09-01",
+      "dueDate": "2026-09-07",
+      "title": "가을 국내 여행지 3곳 비교하고 한 곳 정하기",
+      "icon": "🗺️"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-09-03",
+      "dueDate": "2026-09-14",
+      "title": "선택한 여행지 숙소 예약하기",
+      "icon": "🏨"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-09-10",
+      "dueDate": "2026-09-21",
+      "title": "왕복 교통편 예약하고 이동 시간 확인하기",
+      "icon": "🚆"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-09-17",
+      "dueDate": "2026-09-28",
+      "title": "여행 일정표와 짐 체크리스트 완성하기",
+      "icon": "🧳"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2026-09-05",
+      "dueDate": null,
+      "title": "다음 달 가계부 예산 입력하기",
+      "icon": "💰"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2026-09-08",
+      "dueDate": "2026-09-30",
+      "title": "건강검진 예약 날짜 확인하기",
+      "icon": "🏥"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "가을 국내 여행 준비 완료하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "가계부 예산과 건강검진 예약은 여행 준비라는 월간 결과로 이어지지 않으며 서로도 하나의 목표가 아니다",
+      "groups": [["g5", "g6"]]
+    }
+  ]
+}

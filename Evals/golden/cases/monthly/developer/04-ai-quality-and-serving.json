@@ -1,0 +1,105 @@
+{
+  "caseName": "RAG 응답 품질과 모델 서빙 안정성 개선을 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "over_grouping_exclusion",
+    "noise_exclusion",
+    "recall",
+    "measurability",
+    "clarity"
+  ],
+  "note": "AI 기능 개발이라는 공통 범위 안에서 RAG 응답 품질 개선과 모델 서빙 안정성 개선을 별도의 월간 결과로 구분한다. 평가·모니터링처럼 양쪽에 모두 등장할 수 있는 표현만으로 합치지 않고, 무관한 업무는 제외해야 한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2027-02-28",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2027-02-01",
+      "dueDate": "2027-02-07",
+      "title": "RAG 평가 질문 30개를 만들고 정답 근거를 정리하기",
+      "icon": "🧾"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2027-02-03",
+      "dueDate": "2027-02-14",
+      "title": "검색 청크 크기와 메타데이터 필터 조합별 응답 정확도 비교하기",
+      "icon": "🔍"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2027-02-10",
+      "dueDate": "2027-02-21",
+      "title": "환각 답변 20건을 분류하고 상위 원인 2개에 프롬프트 개선안 적용하기",
+      "icon": "🧠"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2027-02-17",
+      "dueDate": "2027-02-26",
+      "title": "개선된 RAG 설정으로 평가 세트를 다시 실행해 품질 변화 기록하기",
+      "icon": "📈"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2027-02-02",
+      "dueDate": "2027-02-08",
+      "title": "모델 호출별 지연 시간과 토큰 사용량을 수집하도록 계측 추가하기",
+      "icon": "⏱️"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2027-02-09",
+      "dueDate": "2027-02-15",
+      "title": "모델 호출 실패·재시도 횟수를 대시보드에 연결하고 샘플 10건 검증하기",
+      "icon": "📊"
+    },
+    {
+      "id": "g7",
+      "createdAt": "2027-02-16",
+      "dueDate": "2027-02-22",
+      "title": "트래픽 급증 시 사용할 모델 폴백과 요청 제한 정책 검증하기",
+      "icon": "🛡️"
+    },
+    {
+      "id": "g8",
+      "createdAt": "2027-02-23",
+      "dueDate": "2027-02-27",
+      "title": "비용·지연·오류율 기준의 모델 서빙 운영 점검표 10개 항목 완성하기",
+      "icon": "✅"
+    },
+    {
+      "id": "g9",
+      "createdAt": "2027-02-04",
+      "dueDate": "2027-02-28",
+      "title": "팀 독서 모임에서 생성형 AI 관련 책 한 권 토론하기",
+      "icon": "📚"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "RAG 검색·응답 품질을 평가하고 개선하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "type": "monthly_goal",
+      "title": "모델 서빙의 관측성과 장애 대응 안정성 확보하기",
+      "goals": ["g5", "g6", "g7", "g8"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "RAG 품질 평가와 모델 서빙 운영은 모두 평가 지표와 모니터링을 사용하지만, 하나는 답변 품질 결과이고 다른 하나는 서비스 운영 결과다.",
+      "groups": [["g2", "g6"], ["g4", "g8"]]
+    },
+    {
+      "why": "생성형 AI 독서 모임은 AI와 관련된 활동이지만 RAG 품질이나 모델 서빙 안정성의 산출물이 아니다.",
+      "groups": [["g9", "g1"], ["g9", "g5"]]
+    }
+  ]
+}
