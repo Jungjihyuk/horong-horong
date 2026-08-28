@@ -149,7 +149,7 @@ Collect data from channels you frequently use, such as YouTube channels/playlist
 <td width="45%" valign="middle">
 
 ### ⚡ AI Agent Experiments
-Call Codex / Claude / Antigravity / Opencode / Gemini CLI to generate an N-day experiment plan, then run only today's section from the most recent plan. The Agent tab shows three quick-select agents chosen in settings, while the default agent can be selected from all five providers. The experiment root is split automatically into `ideas` and `outputs`.
+Call Codex / Claude / Antigravity / Opencode / Hermes CLI to generate an N-day experiment plan, then run only today's section from the most recent plan. The Agent tab shows three quick-select agents chosen in settings, while the default agent can be selected from all five providers. The experiment root is split automatically into `ideas` and `outputs`.
 
 </td>
 <td width="55%" align="center">
@@ -260,9 +260,9 @@ Use this path when you want to build the app directly or contribute to the codeb
 - Python 3 — *(required for the news feature)*
 - At least one LLM CLI
   - News: `codex`, `claude`, Antigravity (`agy`), `opencode`
-  - Agent experiments: `codex`, `claude`, Antigravity (`agy`), `opencode`, `gemini`
+  - Agent experiments: `codex`, `claude`, Antigravity (`agy`), `opencode`, `hermes`
 
-<sub><font color="#6B7280">Note: Support for the news Gemini provider has been removed as of v0.2.6.</font></sub>
+<sub><font color="#6B7280">Note: Support for the Gemini provider has been removed as of v0.2.6.</font></sub>
 
 #### Build Steps
 

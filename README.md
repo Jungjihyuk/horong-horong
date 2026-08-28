@@ -151,7 +151,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <td width="45%" valign="middle">
 
 ### ⚡ AI Agent 실험
-`Codex` / `Claude` / `Antigravity` / `Opencode` / `Gemini` CLI를 호출해 N일치 실험 계획을 생성하고, 가장 최근 계획에서 오늘 날짜 섹션만 골라 즉시 실행할 수 있습니다. Agent 탭에는 설정에서 고른 빠른 선택 Agent 3개를 표시하고, 기본 Agent는 5가지 Provider 중에서 선택할 수 있습니다. 실험 루트 폴더 아래 `ideas`와 `outputs`를 자동으로 나눠 사용합니다.
+`Codex` / `Claude` / `Antigravity` / `Opencode` / `Hermes` CLI를 호출해 N일치 실험 계획을 생성하고, 가장 최근 계획에서 오늘 날짜 섹션만 골라 즉시 실행할 수 있습니다. Agent 탭에는 설정에서 고른 빠른 선택 Agent 3개를 표시하고, 기본 Agent는 5가지 Provider 중에서 선택할 수 있습니다. 실험 루트 폴더 아래 `ideas`와 `outputs`를 자동으로 나눠 사용합니다.
 
 </td>
 <td width="55%" align="center">
@@ -293,9 +293,9 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 - Python 3 — *(뉴스 기능 사용 시)*
 - LLM CLI 중 하나 이상
   - 뉴스: `codex`, `claude`, Antigravity(`agy`), `opencode`
-  - Agent 실험: `codex`, `claude`, Antigravity(`agy`), `opencode`, `gemini`
+  - Agent 실험: `codex`, `claude`, Antigravity(`agy`), `opencode`, `hermes`
 
-<sub><font color="#6B7280">참고: 뉴스 Gemini Provider는 v0.2.6 버전 이후로 지원이 제거되었습니다.</font></sub>
+<sub><font color="#6B7280">참고: Gemini Provider는 v0.2.6 버전 이후로 지원이 제거되었습니다.</font></sub>
 
 
 #### 빌드 절차

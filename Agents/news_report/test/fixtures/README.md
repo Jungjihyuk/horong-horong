@@ -95,7 +95,6 @@ ls -R /tmp/horong-news-ollama-all-sources
 | Ollama | `test/fixtures/requests/ollama-all-sources-request.json` |
 | Codex CLI | `test/fixtures/requests/codex-all-sources-request.json` |
 | Claude CLI | `test/fixtures/requests/claude-all-sources-request.json` |
-| Gemini CLI | `test/fixtures/requests/gemini-all-sources-request.json` |
 | Opencode CLI | `test/fixtures/requests/opencode-all-sources-request.json` |
 | Antigravity CLI | `test/fixtures/requests/antigravity-all-sources-request.json` |
 
@@ -112,5 +111,5 @@ cd Agents/news_report
   --trace-log /tmp/horong-codex-trace.jsonl
 ```
 
-CLI provider는 각 명령(`codex`, `claude`, `gemini`, `opencode`, `agy`)이 로컬에서
+CLI provider는 각 명령(`codex`, `claude`, `opencode`, `agy`, `hermes`)이 로컬에서
 로그인되어 있고 PATH에서 실행 가능해야 한다.

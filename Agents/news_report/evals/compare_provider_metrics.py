@@ -136,7 +136,7 @@ def provider_name(metrics: Mapping[str, object], path: Path) -> str:
         return provider
 
     job_id = string_value(metrics.get("jobId"))
-    for name in ["ollama", "codex", "claude", "gemini", "antigravity"]:
+    for name in ["ollama", "codex", "claude", "antigravity"]:
         if name in job_id.lower() or name in path.stem.lower():
             return name
     return path.stem
