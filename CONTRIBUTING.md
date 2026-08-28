@@ -20,7 +20,7 @@
 3. **흐름을 끊지 않는 UX**
    — 한 번의 단축키, 한 번의 클릭으로 도구가 뜨고 사라집니다.
 4. **벤더 종속 없는 AI 호출**
-   — LLM은 사용자가 설치한 CLI(`claude` / `codex` / `gemini` / `opencode`)를 경유합니다. SDK 직결·서버 호출은 지양합니다.
+   — LLM은 사용자가 설치한 CLI(`claude` / `codex` / `agy` / `opencode` / `hermes`)를 경유합니다. SDK 직결·서버 호출은 지양합니다.
 5. **흩어진 도구를 잇는 것 ≠ 모든 것을 다 하는 것**
    — 호롱호롱은 *생산성 슈퍼앱*을 지향하지 않습니다. *몰입의 다리* 정도입니다.
 
@@ -58,7 +58,7 @@
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 - [`uv`](https://github.com/astral-sh/uv) — *(뉴스 기능 개발 시)* `brew install uv`
 - LLM CLI 중 하나 이상 — *(뉴스 / Agent 기능 개발 시)*
-  - `claude`, `codex`, `gemini`, `opencode`
+  - `claude`, `codex`, `agy`, `opencode`, `hermes`
 
 ### 셋업
 

@@ -20,7 +20,7 @@ HorongHorong is a small lantern. It keeps to the following principles.
 3. **A UX that doesn't break flow**
    — Tools appear and disappear with one shortcut, one click.
 4. **Vendor-neutral AI calls**
-   — LLMs are invoked through user-installed CLIs (`claude` / `codex` / `gemini` / `opencode`). Direct SDK or server calls are avoided.
+   — LLMs are invoked through user-installed CLIs (`claude` / `codex` / `agy` / `opencode` / `hermes`). Direct SDK or server calls are avoided.
 5. **Connecting scattered tools ≠ doing everything**
    — HorongHorong is not a *productivity super-app*. It is closer to a *bridge for focus*.
 
@@ -58,7 +58,7 @@ Areas we don't pursue today, but that could legitimately join the project as it 
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 - [`uv`](https://github.com/astral-sh/uv) — *(when working on the news pipeline)* `brew install uv`
 - At least one LLM CLI — *(when working on news / agent features)*
-  - `claude`, `codex`, `gemini`, `opencode`
+  - `claude`, `codex`, `agy`, `opencode`, `hermes`
 
 ### Setup
 
