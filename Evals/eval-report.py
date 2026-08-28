@@ -9,82 +9,6 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime
 
-def load_golden_notes():
-    """케이스 설명(note)의 원본은 골든셋 JSON 이다.
-
-    기록(JSONL)에는 담지 않는다 — 실행마다 같은 문장을 되풀이해 저장할 이유가 없고,
-    문구를 고치면 옛 기록과 어긋난다. 보여줄 때 여기서 읽는다.
-
-    `datasetType` 과 «함정이 달렸나» 도 같이 읽는다. 지표마다 **분모가 다르기** 때문이다
-    (→ `column_summary`).
-    """
-    notes = {}
-    meta = {}
-    here = os.path.dirname(os.path.abspath(__file__))
-    for folder in ["golden/cases"]:
-        directory = os.path.join(here, folder)
-        if not os.path.isdir(directory):
-            continue
-        # 하위 폴더까지 훑는다. 케이스가 주기(weekly/monthly)와 페르소나로 갈려 있어
-        # 한 겹만 읽으면 전부 놓치고 설명이 통째로 비어 버린다.
-        for root, _, names in os.walk(directory):
-            for name in sorted(names):
-                if not name.endswith(".json"):
-                    continue
-                try:
-                    with open(os.path.join(root, name), encoding="utf-8") as f:
-                        case = json.load(f)
-                    notes[case.get("caseName", "")] = case.get("note") or ""
-                    meta[case.get("caseName", "")] = {
-                        "datasetType": case.get("datasetType"),
-                        "hasTraps": bool(case.get("traps")),
-                    }
-                except (OSError, ValueError):
-                    continue
-    return notes, meta
-
-
-GOLDEN_NOTES, GOLDEN_META = load_golden_notes()
-
-# 묶음 점수를 매길 수 있는 유형. 나머지 둘(`insufficient_information`,
-# `non_goal_or_noise`)은 정답이 «묶지 마라» 라서 `expectedGroups` 가 비어 있고,
-# 쌍 단위 채점자로는 무엇을 내든 0 이 나온다. 평균에 섞으면 «못한다» 로 읽히지만
-# 실제로는 **그 자로 잴 수 없는 것**이다.
-GROUPABLE_TYPES = {"general", "context_dependent"}
-
-
-METRIC_DESC = {
-    "honorific": "존댓말 비율",
-    "sentenceCount": "문장 수 제한",
-    "groundedness": "사실 기반",
-    "pairF1": "쌍 단위 F1 — 함정 감점 전",
-    "trapAvoidance": "함정 회피율 — 함정을 적어둔 케이스에만 뜬다",
-    "groupingScore": "목표 연결 점수 = F1 × 함정 회피 (최종)",
-    "guidanceF1": "안내 대상 일치도 — 정보가 부족한 입력에만 표시",
-    "noSuggestionCorrect": "비목표 처리 판정 — 침묵 또는 전체 안내",
-    "predictedGroups": "추천 목표 개수",
-}
-
-METRIC_SHORT = {
-    "honorific": "존대",
-    "sentenceCount": "문장",
-    "groundedness": "사실",
-    "pairF1": "F1",
-    "trapAvoidance": "함정회피",
-    "groupingScore": "목표 연결",
-    "guidanceF1": "안내",
-    "noSuggestionCorrect": "보류",
-    "predictedGroups": "개수",
-}
-
-LEVEL_DESC = {
-    "L0": "Prompt-only",
-    "L1": "Structured-context",
-    "L2": "Lexical-retrieval",
-    "L3": "Hybrid-retrieval",
-    "L4": "Graph-augmented",
-}
-
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -166,7 +90,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--panel); border: 1px solid var(--line);
         }
         .chip b { font-weight: 600; }
-        .chip.is-warn b { color: var(--warn-fg); }
         .chip.is-pass b { color: var(--pass-fg); }
         .chip.is-fail b { color: var(--fail-fg); }
         .toolbar .spacer { flex: 1; }
@@ -177,11 +100,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .filter button:last-child { border-right: none; }
         .filter button.active { background: var(--accent); color: #fff; font-weight: 600; }
-        .comparison-picker { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
-        .comparison-picker select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 5px 8px; font: inherit; }
-        .column-pager { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-        .column-pager button { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); padding: 4px 9px; cursor: pointer; font: inherit; }
-        .column-pager button:disabled { cursor: default; opacity: 0.45; }
         .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
 
         /* 표 */
@@ -204,13 +122,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--panel-alt); font-weight: 600; font-size: 13px;
             white-space: nowrap;
         }
-        thead th .lvl-desc { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
-        thead th .col-agg .denom { color: var(--faint); font-weight: 400; margin-left: 1px; }
-        thead th .col-agg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 6px; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 5px; white-space: normal; }
-        thead th .col-agg .metric { white-space: nowrap; }
-        thead th .col-agg .latency { grid-column: 1 / -1; }
-        thead th .model-provider { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
-        thead th .model-name { display: block; font-size: 13px; color: var(--ink); }
 
         .case-col { position: sticky; left: 0; z-index: 2; background: var(--panel); width: 230px; min-width: 230px; }
         thead .case-col { z-index: 4; background: var(--panel-alt); }
@@ -220,7 +131,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .case-id { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
         .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
         .dot.pass { background: var(--pass-fg); }
-        .dot.mid  { background: var(--mid-fg); }
         .dot.warn { background: var(--warn-fg); }
         .dot.fail { background: var(--fail-fg); }
         .case-q { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
@@ -230,7 +140,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             background: var(--bubble); padding: 8px 10px; border-radius: 7px;
             white-space: pre-wrap; margin-bottom: 8px;
         }
-        .score-row { display: flex; flex-wrap: wrap; gap: 4px; }
         .badge {
             display: inline-flex; align-items: baseline; gap: 4px;
             padding: 2px 7px; border-radius: 5px; font-size: 11px; white-space: nowrap;
@@ -387,29 +296,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (btn) btn.classList.add('active');
         }
 
-        function selectComparison(prefix, selectedId) {
-            document.querySelectorAll(`[id^="${prefix}-"]`).forEach(el => {
-                el.style.display = el.id === selectedId ? '' : 'none';
-            });
-        }
-
-        /** 표 안의 행을 '전체 / 주의' 로 걸러낸다. 주의 = 0.5 미만 점수 또는 실패가 있는 케이스. */
-        function filterRows(button, tableId, mode) {
-            button.parentElement.querySelectorAll('button').forEach(el => el.classList.remove('active'));
-            button.classList.add('active');
-            document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr => {
-                if (mode === 'all') {
-                    tr.style.display = '';
-                } else if (mode === 'warn') {
-                    tr.style.display = (tr.dataset.warn === '1') ? '' : 'none';
-                } else if (mode === 'fail') {
-                    tr.style.display = (tr.dataset.fail === '1') ? '' : 'none';
-                } else if (mode === 'ok') {
-                    tr.style.display = (tr.dataset.fail !== '1') ? '' : 'none';
-                }
-            });
-        }
-
         function filterLiveRows(button, tableId, group, mode) {
             button.parentElement.querySelectorAll('button').forEach(el => el.classList.remove('active'));
             button.classList.add('active');
@@ -424,28 +310,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     || (status === 'ok' && tr.dataset.fail !== '1');
                 tr.style.display = originMatch && statusMatch ? '' : 'none';
             });
-        }
-
-        function showColumnPage(tableId, page, pageSize, totalColumns) {
-            const pageCount = Math.ceil(totalColumns / pageSize);
-            const safePage = Math.max(0, Math.min(page, pageCount - 1));
-            const first = safePage * pageSize;
-            const last = first + pageSize;
-            document.querySelectorAll(`#${tableId} [data-column-index]`).forEach(el => {
-                const index = Number(el.dataset.columnIndex);
-                el.style.display = index >= first && index < last ? '' : 'none';
-            });
-            const pager = document.querySelector(`[data-pager-for="${tableId}"]`);
-            if (!pager) return;
-            pager.dataset.page = safePage;
-            pager.querySelector('[data-page-label]').textContent = `${safePage + 1} / ${pageCount}`;
-            pager.querySelector('[data-page-prev]').disabled = safePage === 0;
-            pager.querySelector('[data-page-next]').disabled = safePage >= pageCount - 1;
-        }
-
-        function moveColumnPage(tableId, delta, pageSize, totalColumns) {
-            const pager = document.querySelector(`[data-pager-for="${tableId}"]`);
-            showColumnPage(tableId, Number(pager.dataset.page || 0) + delta, pageSize, totalColumns);
         }
 
         /* ── 유형별 채점 탭 ─────────────────────────────── */
@@ -711,289 +575,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def score_class(value):
-    """AILabView 와 같은 임계값. 1.0 통과 / 0.0 실패 / 0.5 미만 주의 / 나머지 중간."""
-    if value >= 0.99:
-        return "pass"
-    if value <= 0.01:
-        return "fail"
-    if value < 0.5:
-        return "warn"
-    return "mid"
-
-
-def format_score(name, value):
-    display_name = METRIC_DESC.get(name, name)
-    short_name = METRIC_SHORT.get(name, name)
-
-    if isinstance(value, (int, float)):
-        cls = score_class(value)
-        return (
-            f"<span class='badge {cls}' title='{display_name}'>"
-            f"{short_name} <b>{value:.2f}</b></span>"
-        )
-    return f"<span class='badge mid' title='{display_name}'>{short_name} <b>{value}</b></span>"
-
-
-def visible_scores(case_id, scores):
-    """이 케이스에 **의미가 있는** 지표만 남긴다.
-
-    함정을 안 적은 케이스의 `trapAvoidance` 는 «잘 피했다» 가 아니라 **잴 것이 없었다** 는
-    뜻이라 1.0 으로 찍힌다. 그걸 그대로 보여주면 만점 배지가 붙어 잘한 것처럼 읽히고,
-    평균·경고·색칠까지 전부 끌어올린다. 없는 시험은 만점이 아니라 **무응시**다.
-    """
-    meta = GOLDEN_META.get(case_id, {})
-    result = scores
-    if meta.get("datasetType") not in GROUPABLE_TYPES and "datasetType" in meta:
-        # 이 유형의 정답은 '묶기'가 아니다. 구조적으로 0이 되는 묶음 점수를 보여주면
-        # 모델이 틀린 것이 아니라 자가 다른 것을 실패처럼 보이게 만든다.
-        result = {k: v for k, v in result.items() if k not in {"pairF1", "groupingScore", "trapAvoidance"}}
-    elif not meta.get("hasTraps", True):
-        result = {k: v for k, v in result.items() if k != "trapAvoidance"}
-    return result
-
-
-def is_warning(case_id, case_data):
-    """케이스 안에 0.5 미만 점수가 하나라도 있으면 '주의'."""
-    for result in case_data.values():
-        if is_infrastructure_failure(result):
-            return True
-        for value in visible_scores(case_id, result.get("scores", {})).values():
-            if isinstance(value, (int, float)) and value < 0.5:
-                return True
-    return False
-
-
-def worst_class(case_id, case_data):
-    if any(is_infrastructure_failure(result) for result in case_data.values()):
-        return "fail"
-    values = [
-        v
-        for result in case_data.values()
-        for v in visible_scores(case_id, result.get("scores", {})).values()
-        if isinstance(v, (int, float))
-    ]
-    return score_class(min(values)) if values else "pass"
-
-
-def is_infrastructure_failure(result):
-    """모델 품질과 무관하게 추론이 시작되지 않았거나 중단된 실행인가."""
-    return result.get("outcome") in {"generationFailed", "serverUnavailable", "modelUnavailable"}
-
-
-def format_seconds(ms):
-    if ms is None:
-        return "-"
-    sec = ms / 1000.0
-    if sec >= 10:
-        return f"{sec:.1f}s"
-    else:
-        return f"{sec:.2f}s"
-
-
-def column_summary(data_dict, column):
-    """열 머리에 붙는 요약: **지표별** 평균과 평균 지연.
-
-    지표를 한 통에 붓고 평균내면 안 된다. 세 가지가 동시에 틀린다.
-
-    - `groupingScore = pairF1 × trapAvoidance` 라 **셋은 독립이 아니다.**
-      곱한 값과 그 부품을 같이 평균내면 같은 정보를 세 번 센다
-    - `trapAvoidance` 는 함정을 안 적은 케이스에서 **자동으로 1.0** 이다.
-      전 케이스로 평균내면 «함정을 적게 적을수록 점수가 오른다» (실측 0.935 vs 0.778)
-    - `groupingScore` 는 정답이 «묶지 마라» 인 케이스에서 구조적으로 0 이다.
-      섞으면 모델 탓으로 읽힌다 (실측 31개 0.408 vs 묶음 가능 22개 0.574)
-
-    그래서 **지표마다 분모를 따로 고른다.** 괄호 안 숫자가 그 분모다.
-    """
-    pairs = [
-        (case_id, case_data[column])
-        for case_id, case_data in data_dict.items()
-        if column in case_data and not is_infrastructure_failure(case_data[column])
-    ]
-    if not pairs:
-        return "데이터 없음"
-
-    def average(key, keep):
-        picked = [
-            row["scores"][key]
-            for case_id, row in pairs
-            if isinstance(row.get("scores", {}).get(key), (int, float)) and keep(GOLDEN_META.get(case_id, {}))
-        ]
-        return (sum(picked) / len(picked), len(picked)) if picked else None
-
-    # 골든셋에 없는 케이스(옛 기록 등)는 유형을 모른다. 빼면 통째로 사라지므로 남긴다.
-    groupable = lambda m: m.get("datasetType") in GROUPABLE_TYPES or "datasetType" not in m
-    parts = []
-    for key, label, keep in (
-        ("groupingScore", "묶음", groupable),
-        ("pairF1", "F1", groupable),
-        ("trapAvoidance", "함정회피", lambda m: m.get("hasTraps", True)),
-        ("guidanceF1", "안내", lambda m: m.get("datasetType") == "insufficient_information"),
-        ("noSuggestionCorrect", "보류", lambda m: m.get("datasetType") == "non_goal_or_noise"),
-    ):
-        got = average(key, keep)
-        if got:
-            parts.append(f"<span class='metric'>{label} {got[0]:.2f}<span class='denom'>({got[1]})</span></span>")
-
-    if not parts:  # 옛 기록의 대화용 지표만 있는 경우 — 전부 평균내던 옛 동작으로 물러선다
-        scores = [v for _, row in pairs for v in row.get("scores", {}).values() if isinstance(v, (int, float))]
-        if scores:
-            parts.append(f"<span class='metric'>평균 {sum(scores) / len(scores):.2f}</span>")
-
-    avg_latency = sum(r.get("total_ms", r.get("latency_ms", 0)) for _, r in pairs) // len(pairs)
-    return "".join(parts + [f"<span class='latency'>⏱ {format_seconds(avg_latency)}</span>"])
-
-
-def model_label(model_key):
-    """저장용 공급자·모델 키를 사람이 읽는 두 줄 레이블로 바꾼다."""
-    provider, _, model = model_key.partition("|")
-    provider_name = {
-        "appleFoundation": "Apple Foundation Models",
-        "ollama": "Ollama",
-        "mlx": "MLX",
-    }.get(provider, provider or "Unknown")
-    short_model = model.removeprefix("mlx-community/")
-    if not short_model or short_model == provider:
-        short_model = "기본 모델"
-    return provider_name, short_model
-
-
-def display_column_label(column, is_level):
-    if is_level:
-        return column
-    provider, model = model_label(column)
-    return f"<span class='model-provider'>{provider}</span><span class='model-name'>{model}</span>"
-
-
-def render_table(data_dict, table_id, is_level=True, page_size=None):
-    columns = set()
-    for case_data in data_dict.values():
-        columns.update(case_data.keys())
-    sorted_cols = sorted(columns)
-
-    headers = ""
-    for index, col in enumerate(sorted_cols):
-        desc = ""
-        if is_level:
-            base_lvl = col.split(" ")[0]
-            if base_lvl in LEVEL_DESC:
-                desc = f"<span class='lvl-desc'>{LEVEL_DESC[base_lvl]}</span>"
-        headers += (
-            f"<th{' data-column-index=' + repr(index) if page_size else ''}>{display_column_label(col, is_level)}{desc}"
-            f"<span class='col-agg'>{column_summary(data_dict, col)}</span></th>"
-        )
-
-    rows = []
-    warning_count = 0
-    for case_id, case_data in sorted(data_dict.items()):
-        warn = is_warning(case_id, case_data)
-        warning_count += 1 if warn else 0
-
-        # 케이스 설명은 기록이 아니라 골든셋 JSON 이 원본이다(중복 저장하지 않는다).
-        input_text = GOLDEN_NOTES.get(case_id, "")
-
-        question = f"<div class='case-q'>{input_text}</div>" if input_text else ""
-        dataset_type = GOLDEN_META.get(case_id, {}).get("datasetType")
-        type_text = f"<span class='case-q'>{dataset_type}</span>" if dataset_type else ""
-        row = [
-            f"<td class='case-col'>"
-            f"<div class='case-id'><span class='dot {worst_class(case_id, case_data)}'></span>{case_id}</div>"
-            f"{type_text}{question}</td>"
-        ]
-
-        for index, col in enumerate(sorted_cols):
-            column_attr = f" data-column-index='{index}'" if page_size else ""
-            if col in case_data:
-                result = case_data[col]
-                output = result.get("output", "")
-                scores = result.get("scores", {})
-                latency = result.get("total_ms", result.get("latency_ms", 0))
-                outcome = result.get("outcome", "ok")
-                outcome_detail = result.get("outcome_detail")
-                if is_infrastructure_failure(result):
-                    status, tooltip = get_outcome_info(outcome, outcome_detail)
-                    cell_content = "<span class='empty'>추론 미실행</span>"
-                    score_html = f"<span class='badge fail' title='{tooltip}'>{status}</span>"
-                else:
-                    cell_content = output
-                    score_html = "".join(format_score(k, v) for k, v in sorted(visible_scores(case_id, scores).items()))
-                row.append(
-                    f"<td{column_attr}>"
-                    f"<div class='cell-content'>{cell_content}</div>"
-                    f"<div class='score-row'>{score_html}</div>"
-                    f"<div class='meta'>⏱ {format_seconds(latency)}</div>"
-                    f"</td>"
-                )
-            else:
-                row.append(f"<td class='empty'{column_attr}>데이터 없음</td>")
-        rows.append(f"<tr data-warn='{1 if warn else 0}'>{''.join(row)}</tr>")
-
-    pager = ""
-    if page_size and len(sorted_cols) > page_size:
-        pager = f"""
-        <span class="column-pager" data-pager-for="{table_id}" data-page="0">
-            <button data-page-prev onclick="moveColumnPage('{table_id}', -1, {page_size}, {len(sorted_cols)})">← 이전</button>
-            <span data-page-label>1 / {(len(sorted_cols) + page_size - 1) // page_size}</span>
-            <button data-page-next onclick="moveColumnPage('{table_id}', 1, {page_size}, {len(sorted_cols)})">다음 →</button>
-        </span>
-        """
-
-    toolbar = f"""
-    <div class="toolbar">
-        <span class="chip">케이스 <b>{len(data_dict)}</b></span>
-        <span class="chip{' is-warn' if warning_count else ''}">주의 <b>{warning_count}</b></span>
-        <span class="chip">{'레벨' if is_level else '모델'} <b>{len(sorted_cols)}</b></span>
-        {pager}
-        <span class="spacer"></span>
-        <span class="filter">
-            <button class="active" onclick="filterRows(this, '{table_id}', 'all')">전체</button>
-            <button onclick="filterRows(this, '{table_id}', 'warn')">주의만</button>
-        </span>
-    </div>
-    """
-
-    return f"""
-    {toolbar}
-    <div class="table-wrap">
-        <table id="{table_id}">
-            <thead>
-                <tr>
-                    <th class="case-col">케이스 / 질문</th>
-                    {headers}
-                </tr>
-            </thead>
-            <tbody>
-                {"".join(rows)}
-            </tbody>
-        </table>
-    </div>
-    {f"<script>showColumnPage('{table_id}', 0, {page_size}, {len(sorted_cols)});</script>" if page_size and len(sorted_cols) > page_size else ""}
-    """
-
-
-def comparison_selector(prefix, label, tables):
-    """한 비교 축을 고른 뒤, 다른 축의 표만 보인다.
-
-    컨텍스트 비교 표에 서로 다른 모델 기록을 섞거나 모델 비교 표에 서로 다른
-    컨텍스트 기록을 섞으면, 같은 열이 서로 다른 조건의 실행이 되어 비교가 무의미해진다.
-    """
-    options = "".join(
-        f"<option value='{prefix}-{index}'>{name}</option>"
-        for index, (name, _) in enumerate(tables)
-    )
-    sections = []
-    for index, (_, table) in enumerate(tables):
-        hidden = "" if index == 0 else " style='display:none'"
-        sections.append(f"<div id='{prefix}-{index}' class='comparison-table'{hidden}>{table}</div>")
-    return f"""
-    <div class="comparison-picker">
-        <label>{label}</label>
-        <select onchange="selectComparison('{prefix}', this.value)">{options}</select>
-    </div>
-    {''.join(sections)}
-    """
-
-
 def get_outcome_info(outcome, detail):
     if outcome == "ok":
         return "성공 (ok)", "목표 초안이 정상적으로 생성 및 파싱되었습니다."
@@ -1044,6 +625,16 @@ def get_outcome_info(outcome, detail):
     else:
         text = f"{outcome}:{detail}" if detail else outcome
         return text, text
+
+
+def format_seconds(ms):
+    if ms is None:
+        return "-"
+    sec = ms / 1000.0
+    if sec >= 10:
+        return f"{sec:.1f}s"
+    else:
+        return f"{sec:.2f}s"
 
 
 def render_live_table(live_runs_by_key):
@@ -1801,7 +1392,7 @@ def html_escape(text):
             .replace('"', "&quot;"))
 
 
-def generate_html(data_by_level_by_model, data_by_model_by_level, live_runs, capability=None):
+def generate_html(live_runs, capability=None):
     has_live = bool(live_runs)
     live_origin_counts = Counter()
     for attempts in live_runs.values():
@@ -1956,18 +1547,14 @@ def main():
                     record["_report_origin"] = origin
                 records.extend(loaded)
 
-    # 같은 모델·같은 케이스를 컨텍스트별로 여러 번 실행할 수 있다. 평면 딕셔너리에
-    # 넣으면 마지막 실행이 앞 결과를 덮어쓴다. 두 비교 탭이 서로 다른 축을 고를 수 있게
-    # 3차원 기록을 두 방향으로 보존한다.
-    data_by_level_by_model = defaultdict(lambda: defaultdict(dict))
-    data_by_model_by_level = defaultdict(lambda: defaultdict(dict))
     live_runs = defaultdict(dict)
 
     for row in records:
         case_id = row.get("case_id")
         source = row.get("source")
 
-        # 실사용(Live) 기록 판별: case_id가 없거나 source가 "live"
+        # 실사용(Live) 기록만 여기서 모은다. 골든셋 레코드는 `build_capability_payload`
+        # 가 `records` 에서 직접 골라 쓴다.
         if not case_id or source == "live":
             run_id = row.get("run_id") or "UNKNOWN_RUN"
             task = row.get("task") or "weekly_goal"
@@ -1975,16 +1562,6 @@ def main():
             run_key = f"{origin}:{run_id} ({task})"
             attempt = row.get("attempt", 1)
             live_runs[run_key][attempt] = row
-        else:
-            # 골든셋/평가 레코드
-            level = row.get("recipe", row.get("level", "promptOnly"))
-            provider = row.get("provider", "unknown")
-            model = row.get("model", "unknown")
-            model_key = f"{provider}|{model}"
-
-            data_by_level_by_model[model_key][case_id][level] = row
-            if model:
-                data_by_model_by_level[level][case_id][model_key] = row
 
     # 유형 정보는 `RunRecord` 에 없고 케이스 파일에만 있으므로 `case_id` 로 조인한다.
     # 원문(trace)은 있으면 쓰고 없으면 상세 탭만 비운다.
@@ -1992,7 +1569,7 @@ def main():
         records, load_case_specs(), load_traces(), load_judges()
     )
 
-    html = generate_html(data_by_level_by_model, data_by_model_by_level, live_runs, capability)
+    html = generate_html(live_runs, capability)
 
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)
