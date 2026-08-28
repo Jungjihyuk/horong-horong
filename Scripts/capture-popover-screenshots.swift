@@ -217,7 +217,7 @@ private struct CaptureOptions {
       swift Scripts/capture-popover-screenshots.swift [options]
 
     Options:
-      --output <dir>        PNG 저장 경로. 기본값: Artifacts/Screenshots
+      --output <dir>        PNG 저장 경로. 기본값: artifacts/Screenshots
       --date <yyyy-MM-dd>   통계 기준 날짜를 명시적으로 지정합니다. (기본값: stats-detail:focus-daily는 2026-08-07, 그 외 통계는 2026-08-13)
       --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail 전체 상태
                             예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail:timeline-all

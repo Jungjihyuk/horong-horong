@@ -450,7 +450,7 @@
 		B4C4A1FB37DC103E26529930 /* AchievementMonthlyStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementMonthlyStatsTests.swift; sourceTree = "<group>"; };
 		B73592AD72EC2285180B960A /* NewsDefaultsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsDefaultsTests.swift; sourceTree = "<group>"; };
 		B7A6B136440DF771D0649296 /* Chips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chips.swift; sourceTree = "<group>"; };
-		BC0E743139EFA49E2F373801 /* companion */ = {isa = PBXFileReference; lastKnownFileType = folder; name = companion; path = assets/companion; sourceTree = SOURCE_ROOT; };
+		BC0E743139EFA49E2F373801 /* companion */ = {isa = PBXFileReference; lastKnownFileType = folder; name = companion; path = Assets/companion; sourceTree = SOURCE_ROOT; };
 		BCA39CD06B92214158D8B632 /* Memo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Memo.swift; sourceTree = "<group>"; };
 		BFA980B169A5C2F9099E7DDE /* FocusScoreMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreMonitor.swift; sourceTree = "<group>"; };
 		BFC54C82F858CC10262B1A3E /* SettingsRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRoot.swift; sourceTree = "<group>"; };
@@ -480,7 +480,7 @@
 		E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalSuggestionParserTests.swift; sourceTree = "<group>"; };
 		E9588CFF18EF00481F40F06B /* NewsUsageEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsUsageEstimator.swift; sourceTree = "<group>"; };
 		EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeSettingsStore.swift; sourceTree = "<group>"; };
-		EDB2AFEB48A4D9B3BE3A07ED /* overview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = overview; path = assets/overview; sourceTree = SOURCE_ROOT; };
+		EDB2AFEB48A4D9B3BE3A07ED /* overview */ = {isa = PBXFileReference; lastKnownFileType = folder; name = overview; path = Assets/overview; sourceTree = SOURCE_ROOT; };
 		EDE1DBB9705778C054D58377 /* StatsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPage.swift; sourceTree = "<group>"; };
 		EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickMemoView.swift; sourceTree = "<group>"; };
 		F0BE61B97897A531F7A58A68 /* SettingsCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCard.swift; sourceTree = "<group>"; };

@@ -8,14 +8,14 @@ A horong is a small vessel that protects a quiet flame from going out. <br>
 That flame represents hope, aspiration, $\color{#D97706}{\textbf{focus}}$, and personal goals. <br>
 Like a horong gathers and shelters its light, this app helps hold scattered $\color{#D97706}{\textbf{focus}}$, collect $\color{#D97706}{\textbf{interests}}$ in one place, and create an $\color{#D97706}{\textbf{environment}}$ where small experiments can begin.
 
-<img src="./assets/intro/yagyong_jeong4.png" alt="HorongHorong" width="450"/>
+<img src="./Assets/intro/yagyong_jeong4.png" alt="HorongHorong" width="450"/>
 
 <br />
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-blue)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)](https://swift.org)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](assets/LICENSE)
+[![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](Assets/LICENSE)
 [![Release](https://img.shields.io/github/v/release/Jungjihyuk/horong-horong?style=flat)](https://github.com/Jungjihyuk/horong-horong/releases)
 [![Stars](https://img.shields.io/github/stars/Jungjihyuk/horong-horong?style=flat&logo=github)](https://github.com/Jungjihyuk/horong-horong)
 
@@ -57,12 +57,12 @@ The app is currently developed with a Korean UI. Memos, usage records, statistic
 <table>
 <tr>
 <td align="center" width="60%">
-<img src="./assets/overview/menubar.png" alt="HorongHorong popover from the menu bar" width="380" />
+<img src="./Assets/overview/menubar.png" alt="HorongHorong popover from the menu bar" width="380" />
 <br />
 <sub>Click the menu bar icon to open timer, memo, statistics, news, Agent, and settings in one place.</sub>
 </td>
 <td align="center" width="40%">
-<img src="./assets/logos/horonghorong.png" alt="HorongHorong app icon" width="150" />
+<img src="./Assets/logos/horonghorong.png" alt="HorongHorong app icon" width="150" />
 <br />
 <sub>HorongHorong app icon</sub>
 </td>
@@ -80,7 +80,7 @@ Manage focus and break cycles with presets: 50/5, 100/10, and custom. Choose a f
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-timer.png" alt="Timer" width="420" />
+<img src="./Assets/features/popover-timer.png" alt="Timer" width="420" />
 </td>
 </tr>
 
@@ -92,7 +92,7 @@ Open a floating input panel from anywhere with a global shortcut. The shortcut i
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-memo.png" alt="Quick memo" width="420" />
+<img src="./Assets/features/popover-memo.png" alt="Quick memo" width="420" />
 </td>
 </tr>
 
@@ -107,24 +107,24 @@ Track the active app in the background and automatically aggregate time by categ
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/popover-stats.png" alt="Summary statistics" width="190" />
+<img src="./Assets/features/popover-stats.png" alt="Summary statistics" width="190" />
 <sub>Summary</sub>
 <br />
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-daily.png" alt="Daily statistics" width="190" />
+<img src="./Assets/features/stats-detail-daily.png" alt="Daily statistics" width="190" />
 <br />
 <sub>Daily</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-weekly.png" alt="Weekly statistics" width="190" />
+<img src="./Assets/features/stats-detail-weekly.png" alt="Weekly statistics" width="190" />
 <br />
 <sub>Weekly</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-monthly.png" alt="Monthly statistics" width="190" />
+<img src="./Assets/features/stats-detail-monthly.png" alt="Monthly statistics" width="190" />
 <br />
 <sub>Monthly</sub>
 </td>
@@ -141,7 +141,7 @@ Collect data from channels you frequently use, such as YouTube channels/playlist
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-news.png" alt="News" width="420" />
+<img src="./Assets/features/popover-news.png" alt="News" width="420" />
 </td>
 </tr>
 
@@ -153,7 +153,7 @@ Call Codex / Claude / Antigravity / Opencode / Hermes CLI to generate an N-day e
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-agent.png" alt="Agent" width="420" />
+<img src="./Assets/features/popover-agent.png" alt="Agent" width="420" />
 </td>
 </tr>
 
@@ -167,7 +167,7 @@ Goal suggestions can run on **Apple's on-device model, MLX, or Ollama**. MLX and
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/settings-achievement.png" alt="Achievement suggestion models" width="420" />
+<img src="./Assets/features/settings-achievement.png" alt="Achievement suggestion models" width="420" />
 <br />
 <sub>Recommendation model management</sub>
 </td>
@@ -184,24 +184,24 @@ Group scattered memos and todos into weekly goals, then connect those to monthly
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/popover-achievement.png" alt="Achievement summary" width="190" />
+<img src="./Assets/features/popover-achievement.png" alt="Achievement summary" width="190" />
 <br />
 <sub>Summary</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-timeline-all.png" alt="Achievement timeline" width="190" />
+<img src="./Assets/features/achievement-detail-timeline-all.png" alt="Achievement timeline" width="190" />
 <br />
 <sub>Timeline</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-journey.png" alt="Journey" width="190" />
+<img src="./Assets/features/achievement-detail-journey.png" alt="Journey" width="190" />
 <br />
 <sub>Journey</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-records.png" alt="Records" width="190" />
+<img src="./Assets/features/achievement-detail-records.png" alt="Records" width="190" />
 <br />
 <sub>Records</sub>
 </td>
@@ -218,7 +218,7 @@ Talk to the companion wandering across your screen to decide what to work on nex
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/companion-chat.png" alt="Chatting with Lumirong" width="240" />
+<img src="./Assets/features/companion-chat.png" alt="Chatting with Lumirong" width="240" />
 <br />
 <sub>Chatting with Lumirong</sub>
 </td>
@@ -332,8 +332,8 @@ HorongHorong applies separate licenses to **source code** and **image/character 
 | Area | License | Summary |
 |------|----------|------|
 | Source code | [Apache License 2.0](LICENSE) | Free to use, modify, and redistribute, including patent grant |
-| Image/character assets (`assets/`) | [© All Rights Reserved](assets/LICENSE) | May only be used to identify or refer to the HorongHorong project |
-| "HorongHorong" name and logo | Unregistered trademark of Jihyeok Jung | See the [trademark policy](assets/LICENSE) |
+| Image/character assets (`Assets/`) | [© All Rights Reserved](Assets/LICENSE) | May only be used to identify or refer to the HorongHorong project |
+| "HorongHorong" name and logo | Unregistered trademark of Jihyeok Jung | See the [trademark policy](Assets/LICENSE) |
 
 ### Quick Summary
 
