@@ -7,8 +7,8 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "Evals"
+EVALS = Path(__file__).resolve().parent.parent
+ROOT = EVALS.parent
 CONFIG_PATH = EVALS / ".goal-eval-configuration.json"
 MARKER_PATH = EVALS / ".run-golden"
 VALID_PROVIDERS = {"appleFoundation", "ollama", "mlx"}
@@ -28,7 +28,7 @@ def restore_file(path, contents):
 
 def main():
     parser = argparse.ArgumentParser(description="목표 추천 골든셋 모델 매트릭스 실행기")
-    parser.add_argument("--matrix", default="Evals/goal-eval-matrix.json", help="모델 조합 JSON 파일")
+    parser.add_argument("--matrix", default="Evals/runners/goal-eval-matrix.json", help="모델 조합 JSON 파일")
     parser.add_argument("--skip-report", action="store_true", help="마지막 HTML 리포트 생성을 건너뜁니다")
     args = parser.parse_args()
 
@@ -68,7 +68,8 @@ def main():
 
     if not args.skip_report:
         subprocess.run([
-            "python3", "Evals/eval-report.py", "--input", "Evals/results", "--output", "Evals/eval-report.html",
+            "python3", "Evals/report/eval-report.py", "--input", "Evals/results",
+            "--output", "Evals/report/eval-report.html",
         ], cwd=ROOT, check=True)
 
 

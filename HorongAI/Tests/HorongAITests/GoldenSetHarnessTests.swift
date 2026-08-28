@@ -17,19 +17,19 @@ final class GoldenSetHarnessTests: XCTestCase {
     private let defaultIcon = "📝"
 
     private func goldenCases() throws -> [GoldenSet.Case] {
-        guard let root = GoldenSet.repositoryRoot() else {
-            throw XCTSkip("저장소 루트를 찾지 못했다")
+        guard let goldenDirectory = TestRepository.goldenDirectory() else {
+            throw XCTSkip("골든셋 폴더를 찾지 못했다")
         }
-        let cases = try GoldenSet.load(repositoryRoot: root)
+        let cases = try GoldenSet.load(goldenDirectory: goldenDirectory)
         try XCTSkipIf(cases.isEmpty, "골든셋 케이스가 없다")
         return cases
     }
 
     private func monthlyGoldenCases() throws -> [GoldenSet.MonthlyCase] {
-        guard let root = GoldenSet.repositoryRoot() else {
-            throw XCTSkip("저장소 루트를 찾지 못했다")
+        guard let goldenDirectory = TestRepository.goldenDirectory() else {
+            throw XCTSkip("골든셋 폴더를 찾지 못했다")
         }
-        let cases = try GoldenSet.loadMonthly(repositoryRoot: root)
+        let cases = try GoldenSet.loadMonthly(goldenDirectory: goldenDirectory)
         try XCTSkipIf(cases.isEmpty, "월간 골든셋 케이스가 없다")
         return cases
     }
@@ -96,7 +96,7 @@ final class GoldenSetHarnessTests: XCTestCase {
     }
 
     /// 월간 골든셋도 주간과 같은 «고정 응답 → 태스크 → id 매핑» 경로를 탄다.
-    /// 이 검사가 없으면 `cases/monthly` 파일은 있어도 평가에는 조용히 포함되지 않는다.
+    /// 이 검사가 없으면 `monthly` 파일은 있어도 평가에는 조용히 포함되지 않는다.
     func testPerfectMonthlyAnswerScoresFullMarksOnEveryCase() async throws {
         for goldenCase in try monthlyGoldenCases() {
             let uuidByShortID = goldenCase.identifiers.uuidByShortID

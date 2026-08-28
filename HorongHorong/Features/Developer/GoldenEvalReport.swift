@@ -147,14 +147,14 @@ enum GoldenEvalReport {
     static func looksLikeEvalsDirectory(_ url: URL) -> Bool {
         let fm = FileManager.default
         return fm.fileExists(atPath: url.appendingPathComponent("results").path)
-            || fm.fileExists(atPath: url.appendingPathComponent("golden/cases").path)
+            || fm.fileExists(atPath: url.appendingPathComponent("golden").path)
     }
 
-    /// `golden/cases/**/*.json` 에서 케이스 이름 → 유형·정답묶음·맥락 유무를 읽는다.
+    /// `golden/**/*.json` 에서 케이스 이름 → 유형·정답묶음·맥락 유무를 읽는다.
     ///
     /// 파일이 깨져 있으면 조용히 건너뛴다 — **정답지 한 장 때문에 화면 전체가 비면 안 된다.**
     static func loadCaseSpecs(evalsDirectory: URL) -> [String: CaseSpec] {
-        let root = evalsDirectory.appendingPathComponent("golden/cases", isDirectory: true)
+        let root = evalsDirectory.appendingPathComponent("golden", isDirectory: true)
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
             return [:]
         }

@@ -16,6 +16,17 @@ final class GoalSuggestionEvalTests: XCTestCase {
         let context: GoalRecommendationContext
     }
 
+    private static func repositoryRoot(from filePath: String = #filePath) -> URL? {
+        var url = URL(fileURLWithPath: filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("Evals").path) {
+                return url
+            }
+        }
+        return nil
+    }
+
     func testNoSuggestionCorrectAcceptsSilenceOrCompleteGuidance() {
         let expected = Set(["m1", "m2", "m3", "m4", "m5"])
 
@@ -42,12 +53,13 @@ final class GoalSuggestionEvalTests: XCTestCase {
     }
 
     func testGenerateGoldenSetResults() async throws {
-        let repositoryRoot = try XCTUnwrap(GoldenSet.repositoryRoot(), "저장소 루트를 찾지 못했습니다.")
+        let repositoryRoot = try XCTUnwrap(Self.repositoryRoot(), "저장소 루트를 찾지 못했습니다.")
+        let goldenDirectory = repositoryRoot.appendingPathComponent("Evals/golden", isDirectory: true)
         let marker = repositoryRoot.appendingPathComponent("Evals/.run-golden")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: marker.path), "Evals/.run-golden 없음 — 골든셋 실행을 건너뜁니다. (추론이 느려 기본 테스트에서는 제외)")
 
-        let weeklyCases = try GoldenSet.load(repositoryRoot: repositoryRoot)
-        let monthlyCases = try GoldenSet.loadMonthly(repositoryRoot: repositoryRoot)
+        let weeklyCases = try GoldenSet.load(goldenDirectory: goldenDirectory)
+        let monthlyCases = try GoldenSet.loadMonthly(goldenDirectory: goldenDirectory)
         XCTAssertFalse(weeklyCases.isEmpty, "주간 골든셋 케이스가 없습니다.")
         XCTAssertFalse(monthlyCases.isEmpty, "월간 골든셋 케이스가 없습니다.")
 

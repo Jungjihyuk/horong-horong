@@ -20,7 +20,7 @@ import Foundation
 /// | `level` | 제거 → `recipe` | 문맥 주입 레벨과 기법 조합은 같은 축이다 |
 /// | `latency_ms` | `total_ms` | 단계별(`timings`)과 단위를 맞춘다 |
 ///
-/// `Evals/eval-report.py` 와 기준선 6줄은 이 이름에 맞춰 함께 옮긴다.
+/// `Evals/report/eval-report.py` 와 기준선 6줄은 이 이름에 맞춰 함께 옮긴다.
 ///
 /// ## 여기 담지 않는 것
 ///

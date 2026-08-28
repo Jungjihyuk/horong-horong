@@ -268,15 +268,15 @@ public enum GoldenSet {
     /// 한 겹만 읽으면 폴더를 나누는 순간 케이스가 조용히 사라진다.
     ///
     /// 월간은 입력 모양이 달라 `loadMonthly`가 별도로 읽는다.
-    public static func load(repositoryRoot: URL) throws -> [Case] {
-        let root = repositoryRoot.appendingPathComponent("Evals/golden/cases/weekly", isDirectory: true)
+    public static func load(goldenDirectory: URL) throws -> [Case] {
+        let root = goldenDirectory.appendingPathComponent("weekly", isDirectory: true)
         return try jsonFiles(in: root).map { try JSONDecoder().decode(Case.self, from: Data(contentsOf: $0)) }
     }
 
-    /// `cases/monthly/`를 하위 폴더까지 읽는다. 월간 추천은 `WeeklyGoal`→`goalIDs` 경로를
+    /// `monthly/`를 하위 폴더까지 읽는다. 월간 추천은 `WeeklyGoal`→`goalIDs` 경로를
     /// 실제 태스크와 동일하게 검증해야 하므로 주간 로더에 섞지 않는다.
-    public static func loadMonthly(repositoryRoot: URL) throws -> [MonthlyCase] {
-        let root = repositoryRoot.appendingPathComponent("Evals/golden/cases/monthly", isDirectory: true)
+    public static func loadMonthly(goldenDirectory: URL) throws -> [MonthlyCase] {
+        let root = goldenDirectory.appendingPathComponent("monthly", isDirectory: true)
         return try jsonFiles(in: root).map { try JSONDecoder().decode(MonthlyCase.self, from: Data(contentsOf: $0)) }
     }
 
@@ -292,19 +292,6 @@ public enum GoldenSet {
             .sorted { $0.path < $1.path }
 
         return files
-    }
-
-    /// 부르는 파일에서 위로 거슬러 올라가 `Evals/` 가 있는 곳을 찾는다.
-    /// 패키지와 앱은 소스 깊이가 달라 고정 횟수로는 못 찾는다.
-    public static func repositoryRoot(from filePath: String = #filePath) -> URL? {
-        var url = URL(fileURLWithPath: filePath)
-        while url.pathComponents.count > 1 {
-            url.deleteLastPathComponent()
-            if FileManager.default.fileExists(atPath: url.appendingPathComponent("Evals").path) {
-                return url
-            }
-        }
-        return nil
     }
 
     // MARK: - 보조

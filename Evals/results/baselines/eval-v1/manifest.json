@@ -1,0 +1,232 @@
+{
+  "manifestVersion": 1,
+  "evalVersion": "v1",
+  "name": "Goal suggestion evaluation baseline v1",
+  "description": "주간·월간 골든셋을 13개 모델로 끝까지 실행한 첫 비교 기준이다. complete는 모든 케이스가 결과 파일에 기록됐다는 뜻이며, 개별 generationFailed 또는 decodeFailed가 없다는 뜻은 아니다.",
+  "createdAt": "2026-08-29",
+  "baseline": {
+    "runId": "baseline-v1",
+    "repositoryRevision": "ffed4965b8c92264d56e9081e8d2ebf2f53c308a",
+    "primaryModel": {
+      "provider": "appleFoundation",
+      "model": "appleFoundation"
+    },
+    "suite": {
+      "models": 13,
+      "recordsPerModel": 124,
+      "totalRecords": 1612,
+      "tasks": [
+        {
+          "name": "weekly_goal",
+          "casesPerModel": 62
+        },
+        {
+          "name": "monthly_goal",
+          "casesPerModel": 62
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "id": "attempt-v1",
+      "type": "preBaseline",
+      "period": {
+        "startedAt": "2026-08-24T23:14:24+09:00",
+        "endedAt": "2026-08-25T22:25:16+09:00"
+      },
+      "resultsPath": "../../archive/pre-baseline/v1",
+      "status": "exploratory",
+      "summary": "추천 guidance와 사용자 context를 도입한 뒤 여러 provider와 모델에서 주간·월간 평가를 처음 넓게 실행했다. 실행 도중 신뢰성 수정과 일부 재시도가 섞여 단일 기준으로 사용하지 않는다.",
+      "changesSincePrevious": [
+        "추천 불가 시 guidance를 반환하는 결과 스키마와 사용자 context 입력을 추가했다.",
+        "모델별 추천 개수 제한과 주간·월간 평가 집계를 추가했다.",
+        "실패 원인을 추적할 수 있도록 실행 trace 진단을 보강했다."
+      ],
+      "coverage": {
+        "files": 15,
+        "uniqueModels": 13,
+        "records": 1710,
+        "note": "13개 모델의 전체 실행 외에 qwen3.8:27b 부분 재시도 2건이 포함돼 있다."
+      },
+      "outcomes": {
+        "ok": 726,
+        "guidance": 102,
+        "noSuggestion": 607,
+        "generationFailed": 272,
+        "decodeFailed": 3
+      }
+    },
+    {
+      "id": "attempt-v2",
+      "type": "preBaseline",
+      "period": {
+        "startedAt": "2026-08-26T01:31:36+09:00",
+        "endedAt": "2026-08-26T03:07:35+09:00"
+      },
+      "resultsPath": "../../archive/pre-baseline/v2",
+      "repositoryRevision": "0bbf4364d3bd637922ce72d540a9216daca83807",
+      "status": "subsetComplete",
+      "summary": "구조화 출력 안정화 뒤 AFM과 Ollama 5개 모델을 다시 실행했다. 실행한 6개 모델은 각각 124건을 모두 기록했지만 MLX 모델군은 포함하지 않았다.",
+      "changesSincePrevious": [
+        "Ollama JSON Schema의 property 순서를 보존했다.",
+        "구조화 출력 enum 제약을 강제해 생성·디코딩 안정성을 높였다.",
+        "프롬프트 신뢰성과 trace 진단 정보를 보강했다."
+      ],
+      "coverage": {
+        "files": 6,
+        "uniqueModels": 6,
+        "records": 744,
+        "recordsPerModel": 124
+      },
+      "outcomes": {
+        "ok": 581,
+        "guidance": 59,
+        "noSuggestion": 104
+      }
+    },
+    {
+      "id": "attempt-v3",
+      "type": "preBaseline",
+      "period": {
+        "startedAt": "2026-08-27T03:11:33+09:00",
+        "endedAt": "2026-08-27T06:49:32+09:00"
+      },
+      "resultsPath": "../../archive/pre-baseline/v3",
+      "repositoryRevision": "5cc60809f1a08c1b123c1fcd5a0aba9bdb7e7719",
+      "status": "incomplete",
+      "summary": "guidance 진단과 LLM judge 기반 품질 분석을 추가하고 13개 모델 행렬을 시도했다. 당시 12개 모델은 118건을 기록했고 EXAONE은 92건에서 끝나 정식 기준으로 삼지 않았다.",
+      "changesSincePrevious": [
+        "guidance 결과를 trace와 리포트에 기록하고 confusion matrix와 누락 기준 분석을 추가했다.",
+        "LLM judge rubric에 시간 적합성 등 목표 추천 품질 기준을 추가했다.",
+        "EXAONE Deep 7.8B를 평가 모델 목록에 추가했다."
+      ],
+      "coverage": {
+        "files": 13,
+        "uniqueModels": 13,
+        "records": 1508,
+        "note": "12개 모델은 weekly 62건과 monthly 56건, EXAONE은 weekly 62건과 monthly 30건을 기록했다."
+      },
+      "outcomes": {
+        "ok": 925,
+        "guidance": 110,
+        "noSuggestion": 342,
+        "generationFailed": 122,
+        "decodeFailed": 9
+      }
+    },
+    {
+      "id": "baseline-v1",
+      "type": "baseline",
+      "period": {
+        "startedAt": "2026-08-27T09:18:43+09:00",
+        "endedAt": "2026-08-27T12:54:28+09:00"
+      },
+      "resultsPath": ".",
+      "repositoryRevision": "ffed4965b8c92264d56e9081e8d2ebf2f53c308a",
+      "status": "complete",
+      "summary": "파싱·평가 지표·guidance 매핑·non-goal fixture를 수정한 뒤 13개 모델 모두에서 weekly 62건과 monthly 62건을 기록했다. 이후 프롬프트와 제품 로직 개선을 비교하는 eval-v1 기준이다.",
+      "changesSincePrevious": [
+        "think tag 파싱 실패와 평가 지표의 0 나눗셈을 수정했다.",
+        "non-goal fixture와 noSuggestion 정답 판정을 바로잡았다.",
+        "guidance를 모든 target ID에 확장하고 non-goal guidance 적합성 평가를 추가했다."
+      ],
+      "coverage": {
+        "files": 13,
+        "uniqueModels": 13,
+        "records": 1612,
+        "recordsPerModel": 124
+      },
+      "outcomes": {
+        "ok": 926,
+        "guidance": 137,
+        "noSuggestion": 410,
+        "generationFailed": 125,
+        "decodeFailed": 14
+      },
+      "notes": [
+        "qwen3.8:27b의 124건은 모두 generationFailed로 기록됐다. 행렬은 완주했지만 모델 호환성 문제는 baseline에 그대로 남긴다."
+      ],
+      "artifacts": [
+        {
+          "file": "apple-foundation.jsonl",
+          "provider": "appleFoundation",
+          "model": "appleFoundation",
+          "records": 124
+        },
+        {
+          "file": "ollama--qwen3-1.7b.jsonl",
+          "provider": "ollama",
+          "model": "qwen3:1.7b",
+          "records": 124
+        },
+        {
+          "file": "ollama--qwen3-4b.jsonl",
+          "provider": "ollama",
+          "model": "qwen3:4b",
+          "records": 124
+        },
+        {
+          "file": "ollama--qwen3-8b.jsonl",
+          "provider": "ollama",
+          "model": "qwen3:8b",
+          "records": 124
+        },
+        {
+          "file": "ollama--qwen3.5-9b.jsonl",
+          "provider": "ollama",
+          "model": "qwen3.5:9b",
+          "records": 124
+        },
+        {
+          "file": "mlx--qwen3-1.7b-4bit.jsonl",
+          "provider": "mlx",
+          "model": "mlx-community/Qwen3-1.7B-4bit",
+          "records": 124
+        },
+        {
+          "file": "mlx--qwen3-4b-4bit.jsonl",
+          "provider": "mlx",
+          "model": "mlx-community/Qwen3-4B-4bit",
+          "records": 124
+        },
+        {
+          "file": "mlx--qwen3-8b-4bit.jsonl",
+          "provider": "mlx",
+          "model": "mlx-community/Qwen3-8B-4bit",
+          "records": 124
+        },
+        {
+          "file": "mlx--qwen3.5-9b-4bit.jsonl",
+          "provider": "mlx",
+          "model": "mlx-community/Qwen3.5-9B-4bit",
+          "records": 124
+        },
+        {
+          "file": "mlx--gemma-4-e4b-it-4bit.jsonl",
+          "provider": "mlx",
+          "model": "mlx-community/gemma-4-e4b-it-4bit",
+          "records": 124
+        },
+        {
+          "file": "ollama--qwen3.8-27b.jsonl",
+          "provider": "ollama",
+          "model": "qwen3.8:27b",
+          "records": 124
+        },
+        {
+          "file": "ollama--gemma4-26b.jsonl",
+          "provider": "ollama",
+          "model": "gemma4:26b",
+          "records": 124
+        },
+        {
+          "file": "ollama--exaone-deep-7.8b.jsonl",
+          "provider": "ollama",
+          "model": "exaone-deep:7.8b",
+          "records": 124
+        }
+      ]
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import XCTest
 /// 빌드는 통과하고 앱도 돌아가지만, 프롬프트가 통째로 짧아져 추천 품질이 무너진다.
 /// 앱 쪽 `PromptSnapshotTests` 도 이 사고를 잡지만 앱 타깃을 빌드해야 한다 — 여기서는 0.5초에 잡는다.
 ///
-/// 월간 프롬프트는 앱 쪽 스냅샷이 없어, 자리표시자 치환을 확인하는 곳이 여기뿐이다.
+/// 앱 스냅샷은 전체 문자열을 잡고, 여기서는 리소스 배선과 자리표시자 치환을 빠르게 확인한다.
 final class GoalPromptTests: XCTestCase {
 
     private let memos = [
