@@ -11,10 +11,10 @@ import XCTest
 final class GoldenSetSchemaTests: XCTestCase {
 
     private func goldenCases() throws -> [GoldenSet.Case] {
-        guard let root = GoldenSet.repositoryRoot() else {
-            throw XCTSkip("저장소 루트를 찾지 못했다")
+        guard let goldenDirectory = TestRepository.goldenDirectory() else {
+            throw XCTSkip("골든셋 폴더를 찾지 못했다")
         }
-        let cases = try GoldenSet.load(repositoryRoot: root)
+        let cases = try GoldenSet.load(goldenDirectory: goldenDirectory)
         try XCTSkipIf(cases.isEmpty, "골든셋 케이스가 없다")
         return cases
     }

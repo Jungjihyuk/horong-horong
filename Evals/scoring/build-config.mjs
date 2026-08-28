@@ -1,13 +1,14 @@
 // 골든셋 케이스에서 promptfooconfig.yaml 을 생성한다.
 //
 // 정답(expectedGroups)을 YAML 에 손으로 복사하면 골든셋과 어긋나기 시작한다.
-// 단일 출처는 Evals/golden/cases/weekly/**/*.json 이고, 이 스크립트가 기계적으로 옮긴다.
+// 단일 출처는 Evals/golden/weekly/**/*.json 이고, 이 스크립트가 기계적으로 옮긴다.
 import fs from 'node:fs';
 import path from 'node:path';
 
-const root = path.resolve(import.meta.dirname, '..');
+const evals = path.resolve(import.meta.dirname, '..');
+const root = path.resolve(evals, '..');
 // weekly/ 만 읽는다 — monthly 는 memos 대신 weeklyGoals 를 받아 입력 모양이 다르다.
-const caseRoot = path.join(root, 'Evals/golden/cases/weekly');
+const caseRoot = path.join(evals, 'golden/weekly');
 
 /** 하위 폴더까지 훑는다. 케이스가 페르소나별로 갈려 있어 한 겹만 읽으면 전부 놓친다. */
 function jsonFilesUnder(dir) {
@@ -26,9 +27,9 @@ const cases = jsonFilesUnder(caseRoot)
 const config = {
   description: '성취탭 주간 목표 추천 — 골든셋 평가',
   prompts: ['{{caseName}}'],
-  providers: [{ id: 'exec:./Evals/replay.sh', label: 'AFM (replay)' }],
+  providers: [{ id: 'exec:./Evals/runners/replay.sh', label: 'AFM (replay)' }],
   defaultTest: {
-    assert: [{ type: 'javascript', value: 'file://Evals/assert-grouping.mjs' }],
+    assert: [{ type: 'javascript', value: 'file://Evals/scoring/assert-grouping.mjs' }],
   },
   tests: cases.map((c) => ({
     description: c.caseName,

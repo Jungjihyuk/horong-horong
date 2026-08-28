@@ -14,12 +14,14 @@
 ## 폴더 구조
 
 ```
-cases/
-  weekly/          할일 → 주간 목표
-    common/        페르소나를 안 타는 공통 상황
-    developer/
-    jobseeker/
-  monthly/         주간 목표 → 월간 목표 (아직 없음)
+weekly/          할일 → 주간 목표
+  common/        페르소나를 안 타는 공통 상황
+  developer/
+  jobseeker/
+monthly/         주간 목표 → 월간 목표
+  common/
+  developer/
+  jobseeker/
 ```
 
 **주간과 월간은 입력이 다르다.** 주간은 할일(`memos`)을 받고, 월간은 `MonthlyGoalTask` 가
@@ -28,7 +30,7 @@ cases/
 
 ## 케이스 형식 (weekly)
 
-`cases/weekly/**/*.json` 파일 하나가 케이스 하나다.
+`weekly/**/*.json` 파일 하나가 케이스 하나다.
 
 ```json
 {
@@ -52,11 +54,13 @@ cases/
 }
 ```
 
-### 날짜 — `startDate` 와 `deadline` 둘뿐이다
+### 날짜 — 저장되는 일정 필드는 `startDate` 와 `deadline` 둘뿐이다
 
-앱에는 `date` 라는 저작 필드가 없다. `AchievementDataBuilder.memoDate` 가
-`deadline ?? startDate ?? updatedAt` 로 **파생시킨다.** 골든셋만 갖고 있던 가짜 필드였고,
-`WeeklyGoalTask.prompt` 는 그 값을 한 번도 읽지 않아 **아무 데도 안 닿았다.**
+앱의 저장 모델 `Memo` 에는 `startDate` 와 `deadline` 이 있지만, 이 둘과 별개인 `date` 라는
+일정 저장 필드는 없다. AI 태스크 입력 타입 `WeeklyGoalTask.Memo` 에는 `date` 가 남아 있으나,
+앱이 `deadline ?? startDate ?? updatedAt` 로 **파생해서** 채우는 대표 날짜다. 사용자가 따로
+입력하는 값이 아니며 `WeeklyGoalTask.prompt` 도 읽지 않는다. 따라서 과거 골든셋의
+`memos[].date` 는 실제 앱에 없는 독립 입력을 흉내 낸 필드라 제거했다.
 
 **넷 다 나와야 한다** — 실제 할일이 그렇기 때문이다.
 
@@ -232,3 +236,42 @@ cases/
 | `groupingScore` | **묶음 일치도** — 최종 점수 |
 
 함정을 안 적은 케이스는 회피율이 `1.0` 이라 **예전과 똑같이 채점된다.**
+
+### 안내 대상 채점
+
+골든셋이 «이 입력은 바로 목표로 묶지 말고, 무엇을 보완할지 안내해야 한다»고 지정한 경우에만
+`guidance*` 점수를 기록한다. 정답은 `expectedOutcome` 의 리뷰 대상 id, 예측은 모델이
+`guidance` 를 반환한 입력 id의 집합이다.
+
+| 키 | 뜻 |
+| --- | --- |
+| `guidanceTP` | 안내가 필요하다고 지정했고 모델도 안내한 입력 수 |
+| `guidanceFP` | 안내 대상이 아닌데 모델이 안내한 입력 수 |
+| `guidanceFN` | 안내가 필요한데 모델이 안내하지 않은 입력 수 |
+| `guidancePrecision` | `TP / (TP + FP)` — 모델이 안내한 대상 중 맞은 비율 |
+| `guidanceRecall` | `TP / (TP + FN)` — 안내해야 할 대상 중 찾아낸 비율 |
+| `guidanceF1` | `guidancePrecision` 과 `guidanceRecall` 의 조화평균 |
+
+### 결손 항목 채점
+
+안내 대상만 맞히는 것으로는 «왜 아직 목표로 묶을 수 없는가»를 제대로 찾았는지 알 수 없다.
+그래서 `(입력 id, missing 항목)` 쌍을 정답과 예측에서 만들어 다시 비교한다. 골든셋에 정답
+`missing` 항목이 하나 이상 있는 케이스에만 `missing*` 점수를 기록한다.
+
+| 키 | 뜻 |
+| --- | --- |
+| `missingTP` | 입력 id와 결손 항목을 모두 정확히 맞힌 쌍의 수 |
+| `missingFP` | 모델만 결손이라고 판단한 쌍의 수 |
+| `missingFN` | 골든셋에는 있지만 모델이 찾지 못한 쌍의 수 |
+| `missingPrecision` | `TP / (TP + FP)` — 모델이 제시한 결손 쌍 중 맞은 비율 |
+| `missingRecall` | `TP / (TP + FN)` — 찾아야 할 결손 쌍 중 찾아낸 비율 |
+| `missingF1` | `missingPrecision` 과 `missingRecall` 의 조화평균 |
+
+### 목표를 추천하지 않아야 하는 경우
+
+| 키 | 뜻 |
+| --- | --- |
+| `noSuggestionCorrect` | 골든셋의 정답 행동이 `no_goal_recommendation` 일 때만 기록한다. 모델이 아무것도 추천하지 않았거나, 안내가 필요한 모든 입력을 빠짐없이 안내하고 목표를 추천하지 않았으면 `1.0`; 목표를 추천했거나 안내 대상이 빠지거나 더해졌으면 `0.0` |
+
+`guidance*`, `missing*`, `noSuggestionCorrect` 가 없는 케이스에서는 해당 점수를 `0` 으로
+기록하지 않고 키 자체를 생략한다. 리포트는 이를 실패가 아니라 **측정 대상이 아님**으로 취급한다.
