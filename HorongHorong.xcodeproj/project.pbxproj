@@ -18,6 +18,7 @@
 		048CC6DBF3A20A7A124DABFA /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E2F4B47B282506A742D35E /* AILabView.swift */; };
 		05DC5734A43326DF0D03A03D /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
 		0705492BE897BFE74FD3CD76 /* GoldenEvalReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */; };
+		08A34D6966BE8F0921CB8FAF /* AppActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787C53144DC4B755B4A4CF7A /* AppActivation.swift */; };
 		09619039881101584971BCB1 /* FocusNudgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6D5BA5101B147375D58C23 /* FocusNudgeCatalog.swift */; };
 		09A0D81D790A874E6630F035 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
 		09A98D5F1062E14379916B06 /* companion in Resources */ = {isa = PBXBuildFile; fileRef = BC0E743139EFA49E2F373801 /* companion */; };
@@ -238,6 +239,7 @@
 		B8489D142F842BFC636C359D /* NewsUsageEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9588CFF18EF00481F40F06B /* NewsUsageEstimator.swift */; };
 		B8975E412D2FEA7E1E6773D8 /* TrackerStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D229B2D61814B74FA649C1 /* TrackerStateStore.swift */; };
 		B993B2B4F9A1B5B33F7810B8 /* SettingsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BE61B97897A531F7A58A68 /* SettingsCard.swift */; };
+		BAA04FFFA12BBF3CF71B632F /* AppActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787C53144DC4B755B4A4CF7A /* AppActivation.swift */; };
 		BAA52319ADE2AD6A2E5CAEEE /* FocusNudgeEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDF8123B9CEEA21DE7E0CC4 /* FocusNudgeEngineTests.swift */; };
 		BD616B01DF26BD6082F4FD0E /* TelemetryConsentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */; };
 		BD847A6912FC9DA6AAC5753F /* FocusPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655CFFAFA153975887808698 /* FocusPage.swift */; };
@@ -405,6 +407,7 @@
 		76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoldenEvalReport.swift; sourceTree = "<group>"; };
 		76F8304E7734BEF0D16FEAE2 /* CompanionRegionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionRegionPicker.swift; sourceTree = "<group>"; };
 		77E2F4B47B282506A742D35E /* AILabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AILabView.swift; sourceTree = "<group>"; };
+		787C53144DC4B755B4A4CF7A /* AppActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppActivation.swift; sourceTree = "<group>"; };
 		7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongApp.swift; sourceTree = "<group>"; };
 		7A59CA307E918C76373B3D5E /* CompanionOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionOnboarding.swift; sourceTree = "<group>"; };
 		7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsDetailWindow.swift; sourceTree = "<group>"; };
@@ -637,6 +640,7 @@
 			isa = PBXGroup;
 			children = (
 				B26226EB1C35C0C49F368472 /* AIRunLog.swift */,
+				787C53144DC4B755B4A4CF7A /* AppActivation.swift */,
 				9AD2B9A40F64AE287864546C /* AppIconManager.swift */,
 				AA25DD516AA5500C0E0491CE /* Constants.swift */,
 				58D9A64B8220C19A57ED4BE0 /* HotKeyManager.swift */,
@@ -1145,6 +1149,7 @@
 				4489E2BAA5A45734059C8C3E /* AchievementGoalRecord.swift in Sources */,
 				FCF61CDE25B4A3C4E6965FC3 /* AchievementViews.swift in Sources */,
 				138134C030882AFF017AC890 /* AgentPage.swift in Sources */,
+				BAA04FFFA12BBF3CF71B632F /* AppActivation.swift in Sources */,
 				533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */,
 				D88330AC99C573527FBF05B7 /* AppIconManager.swift in Sources */,
 				0C9BD0C654A4E26439111DD6 /* AppState.swift in Sources */,
@@ -1281,6 +1286,7 @@
 				78AAA0FBAE47B61AB2C8C4F6 /* AchievementGoalRecord.swift in Sources */,
 				9F078A825024A0C21A665F45 /* AchievementViews.swift in Sources */,
 				8004232786078535BE1E6842 /* AgentPage.swift in Sources */,
+				08A34D6966BE8F0921CB8FAF /* AppActivation.swift in Sources */,
 				9187F8ED3C5941A72C6CF2C8 /* AppCategoryRule.swift in Sources */,
 				4D4F6B8CD6BB8C6DDAE31FB2 /* AppIconManager.swift in Sources */,
 				5F9575D56F909341E5F91036 /* AppState.swift in Sources */,
