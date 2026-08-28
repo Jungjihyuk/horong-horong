@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-08-29
+
 ### 추가
 
 - AI 모델의 실제 실행 기록을 공급자·모델·주간/월간 작업별로 살펴보고 성공 여부, 실행 방식, 입력과 파싱 결과를 확인하거나 직접 평가할 수 있는 «AI 실험실»을 추가했습니다.
@@ -233,7 +235,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.9
 [0.2.8]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.8
 [0.2.7]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.7
 [0.2.6]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.6
