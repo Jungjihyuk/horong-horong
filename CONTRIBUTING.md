@@ -20,7 +20,7 @@
 3. **흐름을 끊지 않는 UX**
    — 한 번의 단축키, 한 번의 클릭으로 도구가 뜨고 사라집니다.
 4. **벤더 종속 없는 AI 호출**
-   — LLM은 사용자가 설치한 CLI(`claude` / `codex` / `gemini` / `opencode`)를 경유합니다. SDK 직결·서버 호출은 지양합니다.
+   — LLM은 사용자가 설치한 CLI(`claude` / `codex` / `agy` / `opencode` / `hermes`)를 경유합니다. SDK 직결·서버 호출은 지양합니다.
 5. **흩어진 도구를 잇는 것 ≠ 모든 것을 다 하는 것**
    — 호롱호롱은 *생산성 슈퍼앱*을 지향하지 않습니다. *몰입의 다리* 정도입니다.
 
@@ -58,7 +58,7 @@
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) — `brew install xcodegen`
 - [`uv`](https://github.com/astral-sh/uv) — *(뉴스 기능 개발 시)* `brew install uv`
 - LLM CLI 중 하나 이상 — *(뉴스 / Agent 기능 개발 시)*
-  - `claude`, `codex`, `gemini`, `opencode`
+  - `claude`, `codex`, `agy`, `opencode`, `hermes`
 
 ### 셋업
 
@@ -92,10 +92,13 @@ HorongHorong/
 │   └── HorongHorongApp.swift
 ├── HorongHorongTests/   ← 단위 테스트
 ├── Agents/              ← Python 기반 뉴스 / Agent 파이프라인
-├── Shared/              ← 코드 외 공유 자산
-├── assets/              ← README·홍보용 이미지 (별도 라이센스 — assets/LICENSE 참고)
+├── Contracts/           ← Swift ↔ Python 간 JSON 규격 (JSON Schema)
+├── Analytics/           ← Metabase BI 대시보드 (docker-compose · SQL · 카드 생성 스크립트)
+├── Assets/              ← README·홍보용 이미지 (별도 라이센스 — Assets/LICENSE 참고)
 └── docs/                ← 기획·설계·운영 문서
 ```
+
+루트 디렉터리 이름은 **프로젝트가 직접 작성한 디렉터리는 PascalCase**(`Agents/`, `Analytics/`, `Assets/`, `Contracts/`, `Evals/`, `Scripts/`), **생성물이나 관례로 굳은 디렉터리는 소문자**(`artifacts/`, `build/`, `dist/`, `docs/`)를 씁니다.
 
 ---
 
@@ -256,7 +259,7 @@ Claude를 사용하는 경우 다음 스킬로 이슈, 커밋, PR 문안을 프�
 ## 📄 라이센스
 
 - 코드 기여는 [Apache License 2.0](LICENSE) 하에 배포되는 것에 동의하는 것으로 간주됩니다.
-- 이미지·캐릭터 자산은 별도 라이센스([`assets/LICENSE`](assets/LICENSE))를 따릅니다 — *기여 시 권리 이전이 필요할 수 있으므로 사전에 이슈로 논의해주세요.*
+- 이미지·캐릭터 자산은 별도 라이센스([`Assets/LICENSE`](Assets/LICENSE))를 따릅니다 — *기여 시 권리 이전이 필요할 수 있으므로 사전에 이슈로 논의해주세요.*
 
 ---
 
