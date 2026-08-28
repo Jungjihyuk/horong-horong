@@ -1,4 +1,4 @@
-#!/usr/bin/env node | node ops/metabase/create-cards.mjs
+#!/usr/bin/env node | node Analytics/create-cards.mjs
 
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -43,12 +43,12 @@ if (missing.length > 0) {
   console.error("METABASE_PASSWORD='your-metabase-password' \\");
   console.error("METABASE_DATABASE_NAME='Horong Supabase' \\");
   console.error("METABASE_DASHBOARD_ID='1' \\");
-  console.error("node ops/metabase/create-cards.mjs");
+  console.error("node Analytics/create-cards.mjs");
   process.exit(1);
 }
 
 if (placeholders.length > 0) {
-  console.error(`Replace placeholder values in ops/metabase/.env.local: ${placeholders.map(([key]) => key).join(", ")}`);
+  console.error(`Replace placeholder values in Analytics/.env.local: ${placeholders.map(([key]) => key).join(", ")}`);
   process.exit(1);
 }
 

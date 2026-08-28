@@ -14,7 +14,7 @@
 
 ## 1. Supabase 분석 뷰 만들기
 
-Supabase 대시보드에서 `SQL Editor`를 열고 `ops/metabase/views.sql` 내용을 실행합니다.
+Supabase 대시보드에서 `SQL Editor`를 열고 `Analytics/views.sql` 내용을 실행합니다.
 
 이 SQL은 원본 테이블을 수정하지 않고 아래 읽기 전용 뷰만 추가합니다.
 
@@ -44,7 +44,7 @@ Supabase 대시보드에서 `SQL Editor`를 열고 `ops/metabase/views.sql` 내�
 Docker가 실행 중인 상태에서 프로젝트 루트에서 실행합니다.
 
 ```bash
-docker compose -f ops/metabase/docker-compose.yml up -d
+docker compose -f Analytics/docker-compose.yml up -d
 ```
 
 그 다음 브라우저에서 엽니다.
@@ -74,11 +74,11 @@ Supabase 대시보드에서 DB 접속 정보는 보통 `Project Settings > Datab
 
 ## 4. 질문 만들기
 
-Metabase에서 `New > SQL query`를 눌러 `ops/metabase/questions.sql`의 각 블록을 하나씩 질문으로 저장합니다.
+Metabase에서 `New > SQL query`를 눌러 `Analytics/questions.sql`의 각 블록을 하나씩 질문으로 저장합니다.
 
 반복 작업을 줄이려면 Metabase API 스크립트로 한 번에 질문을 생성할 수 있습니다.
 
-먼저 `ops/metabase/.env.local`에 로컬 Metabase 값을 채웁니다.
+먼저 `Analytics/.env.local`에 로컬 Metabase 값을 채웁니다.
 
 ```bash
 METABASE_URL=http://localhost:3000
@@ -91,7 +91,7 @@ METABASE_DASHBOARD_ID=1
 그 다음 실행합니다.
 
 ```bash
-node ops/metabase/create-cards.mjs
+node Analytics/create-cards.mjs
 ```
 
 또는 파일에 저장하지 않고 일회성 환경변수로 실행할 수도 있습니다.
@@ -102,7 +102,7 @@ METABASE_EMAIL='you@example.com' \
 METABASE_PASSWORD='your-metabase-password' \
 METABASE_DATABASE_NAME='Horong Supabase' \
 METABASE_DASHBOARD_ID='1' \
-node ops/metabase/create-cards.mjs
+node Analytics/create-cards.mjs
 ```
 
 `METABASE_DATABASE_NAME`은 Metabase에 추가한 Supabase DB 표시 이름입니다.
@@ -149,7 +149,7 @@ node ops/metabase/create-cards.mjs
 
 대시보드 이름은 `Horong Focus Feedback` 또는 `호롱 집중 피드백`을 권장합니다.
 
-상세 배치는 `ops/metabase/dashboard-layout.md`를 기준으로 합니다.
+상세 배치는 `Analytics/dashboard-layout.md`를 기준으로 합니다.
 
 추천 탭:
 

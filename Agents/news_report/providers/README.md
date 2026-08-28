@@ -1,6 +1,6 @@
 # providers
 
-Codex, Claude, Gemini, Ollama, MLX 같은 LLM/agent 실행 구현체를 제공한다.
+Codex, Claude, Opencode, Ollama, MLX 같은 LLM/agent 실행 구현체를 제공한다.
 
 ## 여기에 둔다
 

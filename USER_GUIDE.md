@@ -9,10 +9,9 @@
 뉴스와 Agent 기능 중 하나라도 쓰려면 아래 CLI 중 필요한 것을 설치합니다.
 
 ```bash
-# 뉴스: claude, codex, gemini, opencode 중 하나 이상
+# 뉴스: claude, codex, opencode 중 하나 이상
 npm install -g @anthropic-ai/claude-code
 npm install -g @openai/codex
-npm install -g @google/gemini-cli
 npm install -g opencode-ai
 ```
 
@@ -21,7 +20,6 @@ npm install -g opencode-ai
 ```bash
 claude --version
 codex --version
-gemini --version
 opencode --version
 ```
 
@@ -54,7 +52,7 @@ Agent 기능은 Terminal 앱을 열어 CLI 명령을 실행합니다. 처음 사
 
 - **소스**: YouTube 채널, YouTube 재생목록, Google News, YOZM IT, Hacker News, RSS를 추가하거나 끕니다.
 - **관심 키워드**: 뉴스 수집과 관련도 필터링에 사용할 키워드를 칩으로 관리합니다. Agent 관심사와는 별개입니다.
-- **요약 에이전트**: 기본 Provider를 `claude`, `codex`, `gemini`, `opencode` 중에서 고릅니다.
+- **요약 에이전트**: 기본 Provider를 `claude`, `codex`, `opencode` 중에서 고릅니다.
 - **소스당 최대 항목 수**: 한 번에 가져올 기사 수를 조정합니다.
 - **일일 리포트 저장 위치**: 마크다운 리포트, 메타데이터, 로그가 저장될 위치를 바꿉니다.
 
@@ -81,7 +79,7 @@ Agent 탭은 관심사와 아이디어 파일을 바탕으로 며칠짜리 실�
 **설정 → AI Agent**에서 아래 항목을 정합니다.
 
 - **실험 루트 폴더**: 앱이 이 폴더 아래에 `ideas`와 `outputs`를 자동으로 만듭니다.
-- **기본 Agent**: `Codex`, `Claude`, `Gemini` 중 하나를 고릅니다.
+- **기본 Agent**: `Codex`, `Claude`, `Antigravity`, `Opencode`, `Hermes` 중 하나를 고릅니다.
 - **계획 일수**: 한 번에 만들 실험 계획 기간을 정합니다.
 - **관심사**: 실험 계획에 반영할 키워드를 칩으로 관리합니다. 뉴스 관심 키워드와는 별개입니다.
 
