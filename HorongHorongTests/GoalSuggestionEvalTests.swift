@@ -64,7 +64,8 @@ final class GoalSuggestionEvalTests: XCTestCase {
             outputURL: outputFile,
             timestampStyle: .koreaStandardTime
         )
-        let runID = "G-\(stamp)"
+        // 접두사를 여기서 또 적으면 앱의 판별(`AIRunLog.isGoldenRun`)과 조용히 어긋난다.
+        let runID = "\(AIRunLog.goldenRunIDPrefix)\(stamp)"
         let configuration = evaluationConfiguration(repositoryRoot: repositoryRoot)
         let provider = selectedProvider(configuration: configuration, repositoryRoot: repositoryRoot)
         let model = configuration?.model ?? selectedModel(for: provider)

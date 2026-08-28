@@ -473,6 +473,17 @@ public struct AILabView: View {
         }
     }
 
+    /// 골든셋 하네스가 남긴 기록인가. **실사용 기록 탭은 이것을 세면 안 된다.**
+    ///
+    /// 골든셋은 제품 코드 경로를 그대로 지나 앱 실행 기록에도 쌓인다. 실측 2026-08-28:
+    /// 7,610행 중 6,962행(91.5%)이 골든셋이었고 실사용은 648행뿐이었다.
+    ///
+    /// `source` 와 실행 id 를 함께 보는 이유는 **이미 쌓인 기록 때문**이다.
+    /// 태그를 붙이기 전에 남은 줄은 전부 `source == "live"` 라 id 접두사로만 가려낼 수 있다.
+    private static func isGoldenRecord(_ record: RunRecord) -> Bool {
+        record.source == "golden" || AIRunLog.isGoldenRun(record.runId)
+    }
+
     private func loadRecords() {
         isLoading = true
         defer { isLoading = false }
@@ -493,7 +504,8 @@ public struct AILabView: View {
                     for line in content.split(separator: "\n") {
                         if let data = line.data(using: .utf8),
                            let record = try? decoder.decode(RunRecord.self, from: data),
-                           let runId = record.runId {
+                           let runId = record.runId,
+                           !Self.isGoldenRecord(record) {
                             let taskName = record.task ?? "weekly_goal"
                             let groupKey = "\(runId)|\(taskName)"
                             runs[groupKey, default: []].append(record)
@@ -513,7 +525,8 @@ public struct AILabView: View {
                     for line in content.split(separator: "\n") {
                         if let data = line.data(using: .utf8),
                            let record = try? decoder.decode(RunRecord.self, from: data),
-                           let runId = record.runId {
+                           let runId = record.runId,
+                           !Self.isGoldenRecord(record) {
                             let taskName = record.task ?? "weekly_goal"
                             let groupKey = "\(runId)|\(taskName)"
                             // 중복 체크 후 추가
