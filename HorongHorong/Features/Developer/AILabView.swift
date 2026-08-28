@@ -812,7 +812,7 @@ public struct AILabView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "선택"
-        panel.message = "저장소의 Evals 폴더를 선택하세요 (results/ 와 golden/cases/ 가 들어 있는 곳)"
+        panel.message = "저장소의 Evals 폴더를 선택하세요 (results/ 와 golden/ 이 들어 있는 곳)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         evalsDirectory = url.path
         loadGoldenSummary()
@@ -842,7 +842,7 @@ public struct AILabView: View {
     ///
     /// `#filePath` 는 빌드한 기계의 소스 경로라 **개발 중에만** 쓸모가 있다. 릴리스에서는
     /// 그 경로가 없으므로 자연히 실패하고 폴더 선택으로 넘어간다.
-    /// 골든셋 하네스가 저장소를 찾는 방식과 같다(→ `GoldenSet.repositoryRoot`).
+    /// 테스트 전용 경로 탐색과 같은 방식으로 개발 저장소만 찾는다.
     private static func repositoryEvalsDirectory(from filePath: String = #filePath) -> URL? {
         var url = URL(fileURLWithPath: filePath)
         while url.pathComponents.count > 1 {

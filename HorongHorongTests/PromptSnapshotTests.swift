@@ -46,6 +46,36 @@ final class PromptSnapshotTests: XCTestCase {
         ]
     }
 
+    private var sampleGoals: [MonthlyGoalTask.Goal] {
+        [
+            MonthlyGoalTask.Goal(
+                id: Self.deterministicUUID(for: "g1"),
+                title: "주간 리포트 자동화",
+                emoji: "📝",
+                rule: "연결한 할일 3개 완료",
+                done: 2,
+                total: 3,
+                sourceMemoIDs: [
+                    Self.deterministicUUID(for: "m1"),
+                    Self.deterministicUUID(for: "m2"),
+                ],
+                roleName: "기획자",
+                vision: "반복 업무를 줄인다"
+            ),
+            MonthlyGoalTask.Goal(
+                id: Self.deterministicUUID(for: "g2"),
+                title: "체력 회복 루틴",
+                emoji: "🏃",
+                rule: "주 3회 운동",
+                done: 1,
+                total: 3,
+                sourceMemoIDs: [Self.deterministicUUID(for: "m3")],
+                roleName: "",
+                vision: ""
+            ),
+        ]
+    }
+
     // MARK: - 컴패니언 대화
 
     func testCompanionInstructionsSnapshot() throws {
@@ -137,6 +167,17 @@ final class PromptSnapshotTests: XCTestCase {
             maxMemoCount: 3
         )
         try assertSnapshot(rendered, named: "weekly_goal_suggestion")
+    }
+
+    // MARK: - 월간 목표 추천
+
+    func testMonthlyGoalPromptSnapshot() throws {
+        let rendered = MonthlyGoalTask.prompt(
+            for: sampleGoals,
+            suggestionCount: 2,
+            maxGoalsPerSuggestion: 3
+        )
+        try assertSnapshot(rendered, named: "monthly_goal_suggestion")
     }
 
     // MARK: - 스냅샷 비교
