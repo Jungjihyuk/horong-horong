@@ -7,8 +7,7 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 // weekly/ 만 읽는다 — monthly 는 memos 대신 weeklyGoals 를 받아 입력 모양이 다르다.
-// drafts/ 도 포함한다. 각색 전이라 커밋은 못 하지만 로컬 채점은 가능해야 한다.
-const caseDirs = ['Evals/golden/cases/weekly', 'Evals/golden/drafts'].map((d) => path.join(root, d));
+const caseRoot = path.join(root, 'Evals/golden/cases/weekly');
 
 /** 하위 폴더까지 훑는다. 케이스가 페르소나별로 갈려 있어 한 겹만 읽으면 전부 놓친다. */
 function jsonFilesUnder(dir) {
@@ -20,8 +19,7 @@ function jsonFilesUnder(dir) {
   });
 }
 
-const cases = caseDirs
-  .flatMap(jsonFilesUnder)
+const cases = jsonFilesUnder(caseRoot)
   .sort()
   .map((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
 

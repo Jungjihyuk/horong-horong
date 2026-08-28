@@ -268,11 +268,6 @@ public enum GoldenSet {
     /// 한 겹만 읽으면 폴더를 나누는 순간 케이스가 조용히 사라진다.
     ///
     /// 월간은 입력 모양이 달라 `loadMonthly`가 별도로 읽는다.
-    ///
-    /// **`drafts/` 도 읽지 않는다.** 거기 있는 것은 각색·라벨링 전의 초안이라 정답이 없고,
-    /// 채점에 섞이면 «만들다 만 것» 이 «모델이 틀린 것» 으로 집계된다
-    /// (실측 2026-08-21: 6건 중 2건이 항상 0점이라 평균이 0.47 로 눌려 있었다. 실제는 0.70).
-    /// 초안은 사람이 눈으로 참고하는 재료로만 둔다.
     public static func load(repositoryRoot: URL) throws -> [Case] {
         let root = repositoryRoot.appendingPathComponent("Evals/golden/cases/weekly", isDirectory: true)
         return try jsonFiles(in: root).map { try JSONDecoder().decode(Case.self, from: Data(contentsOf: $0)) }

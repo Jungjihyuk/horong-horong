@@ -20,7 +20,6 @@ cases/
     developer/
     jobseeker/
   monthly/         주간 목표 → 월간 목표 (아직 없음)
-drafts/            각색 전 초안. 채점에 안 쓴다
 ```
 
 **주간과 월간은 입력이 다르다.** 주간은 할일(`memos`)을 받고, 월간은 `MonthlyGoalTask` 가
