@@ -17,7 +17,7 @@ final class RunRecordingTests: XCTestCase {
         )
     }
 
-    /// JSONL 은 나중에 리포트 도구(`Evals/eval-report.py`)가 읽는다.
+    /// JSONL 은 나중에 리포트 도구(`Evals/report/eval-report.py`)가 읽는다.
     /// **키 이름이 계약이다** — snake_case 로 나가야 한다.
     func testResultEncodesSnakeCaseKeys() throws {
         let data = try JSONEncoder().encode(makeResult())

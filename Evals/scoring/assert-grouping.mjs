@@ -6,9 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { score } from './score.mjs';
 
-// `cases/monthly/` 도 안 읽는다 — 월간은 할일이 아니라 주간 목표를 입력으로 받아 모양이 다르다.
+// `monthly/` 도 안 읽는다 — 월간은 할일이 아니라 주간 목표를 입력으로 받아 모양이 다르다.
 // 하위 폴더까지 훑는다(`weekly/developer/` 처럼 페르소나로 나뉜다).
-const caseRoot = path.resolve(import.meta.dirname, 'golden/cases/weekly');
+const caseRoot = path.resolve(import.meta.dirname, '../golden/weekly');
 
 /** 하위 폴더까지 훑어 .json 파일 경로를 모은다. */
 function jsonFilesUnder(dir) {

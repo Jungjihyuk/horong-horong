@@ -18,8 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
-EVALS = ROOT / "Evals"
+EVALS = Path(__file__).resolve().parent.parent
+ROOT = EVALS.parent
 RUBRIC = EVALS / "judges" / "rubric-v1.md"
 
 
@@ -60,7 +60,7 @@ def slug(text):
 
 def load_cases():
     cases = {}
-    for path in (EVALS / "golden" / "cases").rglob("*.json"):
+    for path in (EVALS / "golden").rglob("*.json"):
         try:
             case = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):

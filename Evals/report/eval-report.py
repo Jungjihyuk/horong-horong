@@ -833,13 +833,13 @@ TRACE_TEXT_CAP = 6000
 
 
 def evals_dir():
-    return os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def load_case_specs():
     """골든셋 케이스 파일에서 유형·정답묶음 유무·맥락 내용 유무를 읽는다."""
     specs = {}
-    root = os.path.join(evals_dir(), "golden", "cases")
+    root = os.path.join(evals_dir(), "golden")
     for path in sorted(glob.glob(os.path.join(root, "**", "*.json"), recursive=True)):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -1520,8 +1520,8 @@ def main():
         "--output", "-o", type=str,
         # 상대 경로로 두면 **부른 위치에 따라 결과물이 다른 데 떨어진다.**
         # 저장소 루트에서 인자 없이 부른 실행이 루트에 19MB 사본을 남겼다(2026-08-27).
-        default=os.path.join(evals_dir(), "eval-report.html"),
-        help="출력 HTML 파일 경로 (기본: Evals/eval-report.html)"
+        default=os.path.join(evals_dir(), "report", "eval-report.html"),
+        help="출력 HTML 파일 경로 (기본: Evals/report/eval-report.html)"
     )
     args = parser.parse_args()
 
@@ -1540,7 +1540,7 @@ def main():
                 record["_report_origin"] = origin
             records.extend(loaded)
     else:
-        here = os.path.dirname(os.path.abspath(__file__))
+        here = evals_dir()
         default_paths = [
             (os.path.expanduser("~/Library/Application Support/HorongHorong/runs"), "release"),
             (os.path.expanduser("~/Library/Application Support/HorongHorong-Debug/runs"), "debug"),

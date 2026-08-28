@@ -195,4 +195,4 @@ Evals/results/
 promptfooconfig.json
 Evals/.provider
 Evals/.goal-eval-configuration.json
-Evals/eval-report.html
+Evals/report/eval-report.html
