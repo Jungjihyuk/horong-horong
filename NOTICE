@@ -13,14 +13,14 @@ The Apache License 2.0 in this repository applies to source code only.
 The following are NOT covered by Apache License 2.0 and are licensed
 separately:
 
-  - assets/                — Image, illustration, and visual assets
-                             See: assets/LICENSE
+  - Assets/                — Image, illustration, and visual assets
+                             See: Assets/LICENSE
                              © 2026 Jungjihyuk. All Rights Reserved.
 
   - "HorongHorong" / "호롱호롱" name, logo, and character marks
                            — Unregistered trademarks of Jungjihyuk.
                              Use governed by trademark policy described in
-                             assets/LICENSE.
+                             Assets/LICENSE.
 
 ================================================================================
 THIRD-PARTY COMPONENTS

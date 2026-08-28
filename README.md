@@ -8,14 +8,14 @@
 그 불빛은 희망이자 열망이며, $\color{#D97706}{\textbf{몰입}}$과 목표를 상징합니다. <br>
 호롱이 그 빛을 모아 오래 머물게 하듯, 이 앱은 흩어진 $\color{#D97706}{\textbf{몰입}}$을 이어 붙잡고, $\color{#D97706}{\textbf{관심사}}$를 한곳에 $\color{#D97706}{\textbf{모으며}}$, 작은 실험이 시작될 수 있는 $\color{#D97706}{\textbf{환경}}$을 만듭니다.
 
-<img src="./assets/intro/yagyong_jeong4.png" alt="HorongHorong" width="450"/>
+<img src="./Assets/intro/yagyong_jeong4.png" alt="HorongHorong" width="450"/>
 
 <br />
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014.0%2B-blue)](#요구-사항)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)](https://swift.org)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](assets/LICENSE)
+[![Assets: All Rights Reserved](https://img.shields.io/badge/assets-All%20Rights%20Reserved-red)](Assets/LICENSE)
 [![Release](https://img.shields.io/github/v/release/Jungjihyuk/horong-horong?style=flat)](https://github.com/Jungjihyuk/horong-horong/releases)
 [![Stars](https://img.shields.io/github/stars/Jungjihyuk/horong-horong?style=flat&logo=github)](https://github.com/Jungjihyuk/horong-horong)
 
@@ -59,12 +59,12 @@
 <table>
 <tr>
 <td align="center" width="60%">
-<img src="./assets/overview/menubar.png" alt="메뉴바에서 열리는 호롱호롱 팝오버" width="380" />
+<img src="./Assets/overview/menubar.png" alt="메뉴바에서 열리는 호롱호롱 팝오버" width="380" />
 <br />
 <sub>메뉴바 아이콘을 클릭하면 타이머, 메모, 성취, 통계, 뉴스, Agent, 설정을 한 곳에서 열 수 있습니다.</sub>
 </td>
 <td align="center" width="40%">
-<img src="./assets/overview/app-icon.png" alt="호롱호롱 앱 아이콘" width="150" />
+<img src="./Assets/overview/app-icon.png" alt="호롱호롱 앱 아이콘" width="150" />
 <br />
 <sub>호롱호롱 앱 아이콘</sub>
 </td>
@@ -82,7 +82,7 @@
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-timer.png" alt="타이머" width="420" />
+<img src="./Assets/features/popover-timer.png" alt="타이머" width="420" />
 </td>
 </tr>
 
@@ -94,7 +94,7 @@
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-memo.png" alt="퀵 메모" width="420" />
+<img src="./Assets/features/popover-memo.png" alt="퀵 메모" width="420" />
 </td>
 </tr>
 
@@ -109,24 +109,24 @@
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/popover-stats.png" alt="요약 통계" width="190" />
+<img src="./Assets/features/popover-stats.png" alt="요약 통계" width="190" />
 <sub>요약 통계</sub>
 <br />
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-daily.png" alt="일간 통계" width="190" />
+<img src="./Assets/features/stats-detail-daily.png" alt="일간 통계" width="190" />
 <br />
 <sub>일간</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-weekly.png" alt="주간 통계" width="190" />
+<img src="./Assets/features/stats-detail-weekly.png" alt="주간 통계" width="190" />
 <br />
 <sub>주간</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/stats-detail-monthly.png" alt="월간 통계" width="190" />
+<img src="./Assets/features/stats-detail-monthly.png" alt="월간 통계" width="190" />
 <br />
 <sub>월간</sub>
 </td>
@@ -143,7 +143,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-news.png" alt="뉴스" width="420" />
+<img src="./Assets/features/popover-news.png" alt="뉴스" width="420" />
 </td>
 </tr>
 
@@ -155,7 +155,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/popover-agent.png" alt="Agent" width="420" />
+<img src="./Assets/features/popover-agent.png" alt="Agent" width="420" />
 </td>
 </tr>
 
@@ -172,12 +172,12 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/settings-general.png" alt="설정" width="200" />
+<img src="./Assets/features/settings-general.png" alt="설정" width="200" />
 <br />
 <sub>설정</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/settings-achievement.png" alt="성취 추천 모델" width="200" />
+<img src="./Assets/features/settings-achievement.png" alt="성취 추천 모델" width="200" />
 <br />
 <sub>추천 모델 관리</sub>
 </td>
@@ -187,17 +187,17 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <table>
 <tr>
 <td align="center" width="33%">
-<img src="./assets/features/popover-timer-warm-lantern.png" alt="따뜻한 등불 테마" width="130" />
+<img src="./Assets/features/popover-timer-warm-lantern.png" alt="따뜻한 등불 테마" width="130" />
 <br />
 <sub>따뜻한 등불</sub>
 </td>
 <td align="center" width="33%">
-<img src="./assets/features/popover-timer-wine-lantern.png" alt="와인 랜턴 테마" width="130" />
+<img src="./Assets/features/popover-timer-wine-lantern.png" alt="와인 랜턴 테마" width="130" />
 <br />
 <sub>와인 랜턴</sub>
 </td>
 <td align="center" width="33%">
-<img src="./assets/features/popover-timer-game-pixel.png" alt="게임 픽셀 테마" width="130" />
+<img src="./Assets/features/popover-timer-game-pixel.png" alt="게임 픽셀 테마" width="130" />
 <br />
 <sub>게임 픽셀</sub>
 </td>
@@ -217,24 +217,24 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/popover-achievement.png" alt="성취 요약" width="190" />
+<img src="./Assets/features/popover-achievement.png" alt="성취 요약" width="190" />
 <br />
 <sub>성취 요약</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-timeline-all.png" alt="성취 타임라인" width="190" />
+<img src="./Assets/features/achievement-detail-timeline-all.png" alt="성취 타임라인" width="190" />
 <br />
 <sub>성취 타임라인</sub>
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-journey.png" alt="여정" width="190" />
+<img src="./Assets/features/achievement-detail-journey.png" alt="여정" width="190" />
 <br />
 <sub>여정</sub>
 </td>
 <td align="center" width="50%">
-<img src="./assets/features/achievement-detail-records.png" alt="달성 기록" width="190" />
+<img src="./Assets/features/achievement-detail-records.png" alt="달성 기록" width="190" />
 <br />
 <sub>달성 기록</sub>
 </td>
@@ -251,7 +251,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 
 </td>
 <td width="55%" align="center">
-<img src="./assets/features/companion-chat.png" alt="루미롱과 대화" width="240" />
+<img src="./Assets/features/companion-chat.png" alt="루미롱과 대화" width="240" />
 <br />
 <sub>루미롱과 대화</sub>
 </td>
@@ -366,8 +366,8 @@ make app-test
 | 영역 | 라이센스 | 요약 |
 |------|----------|------|
 | 소스 코드 | [Apache License 2.0](LICENSE) | 자유로운 사용·수정·재배포 가능 (특허 그랜트 포함) |
-| 이미지·캐릭터 (`assets/`) | [© All Rights Reserved](assets/LICENSE) | 호롱호롱 프로젝트 식별 용도로만 사용 가능 |
-| "호롱호롱" 명칭·로고 | 정지혁의 비등록 상표 | [상표 정책](assets/LICENSE) 참고 |
+| 이미지·캐릭터 (`Assets/`) | [© All Rights Reserved](Assets/LICENSE) | 호롱호롱 프로젝트 식별 용도로만 사용 가능 |
+| "호롱호롱" 명칭·로고 | 정지혁의 비등록 상표 | [상표 정책](Assets/LICENSE) 참고 |
 
 ### 핵심 요약
 

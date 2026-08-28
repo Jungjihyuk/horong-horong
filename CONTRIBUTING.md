@@ -94,11 +94,11 @@ HorongHorong/
 ├── Agents/              ← Python 기반 뉴스 / Agent 파이프라인
 ├── Contracts/           ← Swift ↔ Python 간 JSON 규격 (JSON Schema)
 ├── Analytics/           ← Metabase BI 대시보드 (docker-compose · SQL · 카드 생성 스크립트)
-├── assets/              ← README·홍보용 이미지 (별도 라이센스 — assets/LICENSE 참고)
+├── Assets/              ← README·홍보용 이미지 (별도 라이센스 — Assets/LICENSE 참고)
 └── docs/                ← 기획·설계·운영 문서
 ```
 
-루트 디렉터리 이름은 **프로젝트가 직접 작성한 디렉터리는 PascalCase**(`Agents/`, `Analytics/`, `Artifacts/`, `Contracts/`, `Evals/`, `Scripts/`), **생성물이나 관례로 굳은 디렉터리는 소문자**(`build/`, `dist/`, `docs/`)를 씁니다.
+루트 디렉터리 이름은 **프로젝트가 직접 작성한 디렉터리는 PascalCase**(`Agents/`, `Analytics/`, `Assets/`, `Contracts/`, `Evals/`, `Scripts/`), **생성물이나 관례로 굳은 디렉터리는 소문자**(`artifacts/`, `build/`, `dist/`, `docs/`)를 씁니다.
 
 ---
 
@@ -259,7 +259,7 @@ Claude를 사용하는 경우 다음 스킬로 이슈, 커밋, PR 문안을 프�
 ## 📄 라이센스
 
 - 코드 기여는 [Apache License 2.0](LICENSE) 하에 배포되는 것에 동의하는 것으로 간주됩니다.
-- 이미지·캐릭터 자산은 별도 라이센스([`assets/LICENSE`](assets/LICENSE))를 따릅니다 — *기여 시 권리 이전이 필요할 수 있으므로 사전에 이슈로 논의해주세요.*
+- 이미지·캐릭터 자산은 별도 라이센스([`Assets/LICENSE`](Assets/LICENSE))를 따릅니다 — *기여 시 권리 이전이 필요할 수 있으므로 사전에 이슈로 논의해주세요.*
 
 ---
 

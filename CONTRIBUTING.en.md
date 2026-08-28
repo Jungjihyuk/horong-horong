@@ -94,11 +94,11 @@ HorongHorong/
 ├── Agents/              ← Python-based news / agent pipelines
 ├── Contracts/           ← JSON contracts between Swift and Python (JSON Schema)
 ├── Analytics/           ← Metabase BI dashboard (docker-compose, SQL, card-creation script)
-├── assets/              ← README / promo images (separately licensed — see assets/LICENSE)
+├── Assets/              ← README / promo images (separately licensed — see Assets/LICENSE)
 └── docs/                ← planning, design, and operations docs
 ```
 
-Root directory names follow one rule: **directories authored by this project use PascalCase** (`Agents/`, `Analytics/`, `Artifacts/`, `Contracts/`, `Evals/`, `Scripts/`), while **generated or conventional directories stay lowercase** (`build/`, `dist/`, `docs/`).
+Root directory names follow one rule: **directories authored by this project use PascalCase** (`Agents/`, `Analytics/`, `Assets/`, `Contracts/`, `Evals/`, `Scripts/`), while **generated or conventional directories stay lowercase** (`artifacts/`, `build/`, `dist/`, `docs/`).
 
 ---
 
@@ -259,7 +259,7 @@ Please read the Code of Conduct before participating in this project.
 ## 📄 License
 
 - Code contributions are deemed to be licensed under the [Apache License 2.0](LICENSE).
-- Image and character assets are governed by a separate license ([`assets/LICENSE`](assets/LICENSE)) — *contributing such assets may require a rights transfer, so please discuss in an issue first.*
+- Image and character assets are governed by a separate license ([`Assets/LICENSE`](Assets/LICENSE)) — *contributing such assets may require a rights transfer, so please discuss in an issue first.*
 
 ---
 
