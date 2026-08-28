@@ -14,12 +14,14 @@
 ## 폴더 구조
 
 ```
-cases/
-  weekly/          할일 → 주간 목표
-    common/        페르소나를 안 타는 공통 상황
-    developer/
-    jobseeker/
-  monthly/         주간 목표 → 월간 목표 (아직 없음)
+weekly/          할일 → 주간 목표
+  common/        페르소나를 안 타는 공통 상황
+  developer/
+  jobseeker/
+monthly/         주간 목표 → 월간 목표
+  common/
+  developer/
+  jobseeker/
 ```
 
 **주간과 월간은 입력이 다르다.** 주간은 할일(`memos`)을 받고, 월간은 `MonthlyGoalTask` 가
@@ -28,7 +30,7 @@ cases/
 
 ## 케이스 형식 (weekly)
 
-`cases/weekly/**/*.json` 파일 하나가 케이스 하나다.
+`weekly/**/*.json` 파일 하나가 케이스 하나다.
 
 ```json
 {

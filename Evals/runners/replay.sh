@@ -7,7 +7,7 @@
 # 인자: $1 = caseName (promptfooconfig 의 prompt 가 "{{caseName}}" 이므로 그대로 넘어온다)
 set -euo pipefail
 CASE_NAME="${1:-}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LATEST="$(ls -1 "$ROOT"/Evals/results/*.jsonl 2>/dev/null | sort | tail -1)"
 
 if [ -z "$LATEST" ]; then
