@@ -224,6 +224,15 @@ struct StatsPage: View {
                         .foregroundStyle(.secondary)
                     DatePicker("", selection: $newVacationStart, displayedComponents: .date)
                         .labelsHidden()
+                        .onChange(of: newVacationStart) { oldValue, newValue in
+                            let cal = Calendar.current
+                            let oldStartDay = cal.startOfDay(for: oldValue)
+                            let oldEndDay = cal.startOfDay(for: newVacationEnd)
+                            let newStartDay = cal.startOfDay(for: newValue)
+                            if oldEndDay < newStartDay || oldEndDay == oldStartDay {
+                                newVacationEnd = newValue
+                            }
+                        }
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("종료")
@@ -231,6 +240,14 @@ struct StatsPage: View {
                         .foregroundStyle(.secondary)
                     DatePicker("", selection: $newVacationEnd, in: newVacationStart..., displayedComponents: .date)
                         .labelsHidden()
+                        .onChange(of: newVacationEnd) { _, newValue in
+                            let cal = Calendar.current
+                            let startDay = cal.startOfDay(for: newVacationStart)
+                            let endDay = cal.startOfDay(for: newValue)
+                            if endDay < startDay {
+                                newVacationEnd = newVacationStart
+                            }
+                        }
                 }
             }
 
@@ -270,12 +287,14 @@ struct StatsPage: View {
                     showAddVacation = false
                 }
                 Button("추가") {
+                    let start = min(newVacationStart, newVacationEnd)
+                    let end = max(newVacationStart, newVacationEnd)
                     if newVacationDeletesExisting {
-                        deleteRecords(start: newVacationStart, end: newVacationEnd)
+                        deleteRecords(start: start, end: end)
                     }
                     trackerStore.addVacation(
-                        start: newVacationStart,
-                        end: newVacationEnd,
+                        start: start,
+                        end: end,
                         label: newVacationLabel
                     )
                     showAddVacation = false
@@ -296,8 +315,8 @@ struct StatsPage: View {
 
     private func dateBounds(start: Date, end: Date) -> (Date, Date) {
         let cal = Calendar.current
-        let s = cal.startOfDay(for: start)
-        let e = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: end)) ?? end
+        let s = cal.startOfDay(for: min(start, end))
+        let e = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: max(start, end))) ?? max(start, end)
         return (s, e)
     }
 

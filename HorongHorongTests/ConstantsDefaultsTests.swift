@@ -5271,6 +5271,48 @@ final class ConstantsDefaultsTests: XCTestCase {
         try legacyContainer.mainContext.save()
         return segment.id
     }
+
+    func testVacationRangeSingleDayHasCountOneAndContainsExactDate() {
+        let cal = Calendar.current
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 8
+        comps.day = 1
+        comps.hour = 14
+        comps.minute = 30
+        let date = cal.date(from: comps)!
+
+        let range = VacationRange(start: date, end: date, label: "하루 휴가")
+        XCTAssertEqual(range.dayCount, 1)
+        XCTAssertEqual(range.start, cal.startOfDay(for: date))
+        XCTAssertEqual(range.end, cal.startOfDay(for: date))
+        XCTAssertTrue(range.contains(date))
+
+        let nextDay = cal.date(byAdding: .day, value: 1, to: date)!
+        XCTAssertFalse(range.contains(nextDay))
+
+        let prevDay = cal.date(byAdding: .day, value: -1, to: date)!
+        XCTAssertFalse(range.contains(prevDay))
+    }
+
+    func testVacationRangeMultiDayHasCorrectDayCount() {
+        let cal = Calendar.current
+        var startComps = DateComponents(year: 2026, month: 8, day: 1)
+        var endComps = DateComponents(year: 2026, month: 8, day: 5)
+        let startDate = cal.date(from: startComps)!
+        let endDate = cal.date(from: endComps)!
+
+        let range = VacationRange(start: startDate, end: endDate, label: "여름휴가")
+        XCTAssertEqual(range.dayCount, 5)
+        XCTAssertTrue(range.contains(startDate))
+        XCTAssertTrue(range.contains(endDate))
+
+        let midDate = cal.date(byAdding: .day, value: 2, to: startDate)!
+        XCTAssertTrue(range.contains(midDate))
+
+        let outsideDate = cal.date(byAdding: .day, value: 6, to: startDate)!
+        XCTAssertFalse(range.contains(outsideDate))
+    }
 }
 
 private enum LegacyPomodoroSchema {
