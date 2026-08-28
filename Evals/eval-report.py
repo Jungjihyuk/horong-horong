@@ -1516,7 +1516,13 @@ def main():
         default=None,
         help="입력 JSONL 파일 또는 디렉터리 경로 (미지정 시 Application Support runs 및 Evals/results 자동 로드)"
     )
-    parser.add_argument("--output", "-o", type=str, default="eval-report.html", help="출력 HTML 파일 경로")
+    parser.add_argument(
+        "--output", "-o", type=str,
+        # 상대 경로로 두면 **부른 위치에 따라 결과물이 다른 데 떨어진다.**
+        # 저장소 루트에서 인자 없이 부른 실행이 루트에 19MB 사본을 남겼다(2026-08-27).
+        default=os.path.join(evals_dir(), "eval-report.html"),
+        help="출력 HTML 파일 경로 (기본: Evals/eval-report.html)"
+    )
     args = parser.parse_args()
 
     records = []
