@@ -1,0 +1,63 @@
+{
+  "caseName": "CI 실패 해결과 실행 시간 단축 작업 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "over_grouping_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "CI 실패 원인 분석·수정 작업과 CI 실행 시간 단축 작업이 같은 CI 도메인을 다루더라도 서로 다른 목표로 분리되는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": "developer",
+    "profile": null
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "CI에서 실패한 테스트 로그 확인하기",
+      "icon": "🚦",
+      "deadline": "2026-08-18 10:00"
+    },
+    {
+      "id": "m2",
+      "content": "실패한 테스트를 로컬 브랜치에서 재현하기",
+      "icon": "🔍",
+      "startDate": "2026-08-19 10:00",
+      "deadline": "2026-08-19 11:00"
+    },
+    {
+      "id": "m3",
+      "content": "수정 사항 반영하고 CI 다시 실행하기",
+      "icon": "🔧",
+      "startDate": "2026-08-20 15:00"
+    },
+    {
+      "id": "m4",
+      "content": "CI 의존성 캐시 설정 점검하기",
+      "icon": "⚡",
+      "startDate": "2026-08-20 10:00",
+      "deadline": "2026-08-20 11:00"
+    },
+    {
+      "id": "m5",
+      "content": "CI 테스트 병렬 실행 설정하기",
+      "icon": "🧵",
+      "startDate": "2026-08-21 10:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "CI 실패 원인 해결하고 통과시키기",
+      "memos": ["m1", "m2", "m3"]
+    },
+    {
+      "type": "weekly_goal",
+      "title": "CI 실행 시간 단축하기",
+      "memos": ["m4", "m5"]
+    }
+  ]
+}

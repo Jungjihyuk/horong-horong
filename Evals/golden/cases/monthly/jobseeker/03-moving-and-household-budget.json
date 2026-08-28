@@ -1,0 +1,98 @@
+{
+  "caseName": "구직 활동과 이사 준비를 함께 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "over_grouping_exclusion",
+    "noise_exclusion",
+    "recall",
+    "measurability",
+    "clarity"
+  ],
+  "note": "구직자 입력에 취업 준비와 일반 생활 작업이 함께 들어온다. 구직 활동은 지원 파이프라인이라는 월간 결과로, 일반 작업은 이사 준비라는 월간 결과로 각각 묶으며, 두 영역을 억지로 합치지 않는다. 반려동물 병원 예약은 두 결과와 무관한 항목으로 제외한다. 합성 데이터.",
+  "context": {
+    "persona": "jobseeker",
+    "profile": null
+  },
+  "referenceDate": "2028-02-29",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2028-02-01",
+      "dueDate": "2028-02-07",
+      "title": "관심 직무 공고 8개를 비교해 지원 우선순위 정하기",
+      "icon": "🔎"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2028-02-04",
+      "dueDate": "2028-02-14",
+      "title": "이력서 경력 bullet 5개를 성과 중심으로 수정하기",
+      "icon": "📄"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2028-02-11",
+      "dueDate": "2028-02-21",
+      "title": "관심 기업 3곳에 맞춘 자기소개서 초안 작성하기",
+      "icon": "✍️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2028-02-18",
+      "dueDate": "2028-02-28",
+      "title": "지원 현황을 기록하고 이번 달 지원 3건 제출하기",
+      "icon": "📤"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2028-02-02",
+      "dueDate": "2028-02-08",
+      "title": "이사할 집의 가구 배치와 수납용품 목록 10개 정하기",
+      "icon": "🏠"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2028-02-09",
+      "dueDate": "2028-02-16",
+      "title": "사용하지 않는 물건 30개를 처분하고 이삿짐 분류하기",
+      "icon": "📦"
+    },
+    {
+      "id": "g7",
+      "createdAt": "2028-02-17",
+      "dueDate": "2028-02-25",
+      "title": "이사업체 3곳의 견적을 비교해 계약 후보 정하기",
+      "icon": "🚚"
+    },
+    {
+      "id": "g8",
+      "createdAt": "2028-02-05",
+      "dueDate": "2028-02-29",
+      "title": "반려동물 정기검진 예약하고 이동장 준비하기",
+      "icon": "🐾"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "관심 직무 지원 파이프라인을 만들고 지원 3건 완료하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "type": "monthly_goal",
+      "title": "이사 준비와 새 집 정착 계획 완료하기",
+      "goals": ["g5", "g6", "g7"]
+    }
+  ],
+  "traps": [
+    {
+      "why": "지원서 작성과 이사 준비는 모두 준비 작업이라는 표현을 공유하지만, 하나는 구직 지원 결과이고 다른 하나는 주거 이동 결과다.",
+      "groups": [["g2", "g5"], ["g3", "g6"]]
+    },
+    {
+      "why": "반려동물 정기검진은 생활 관리에 해당하지만 이사나 생활비 월간 결과를 완성하지 않는 별도 목표다.",
+      "groups": [["g8", "g1"], ["g8", "g5"]]
+    }
+  ]
+}

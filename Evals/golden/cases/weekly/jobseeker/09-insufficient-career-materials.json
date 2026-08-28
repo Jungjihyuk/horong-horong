@@ -1,0 +1,25 @@
+{
+  "caseName": "경력 자료 보완 메모지만 대상과 완료 기준이 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": ["ambiguity_detection", "abstention_when_ambiguous", "clarity", "measurability", "relevance"],
+  "note": "포트폴리오·이력서·경력 자료라는 영역은 알 수 있지만 어떤 문서와 프로젝트를 어떤 수준까지 보완할지 부족하다. 목표를 추측하지 않고 메모별 SMART 구체화 예시를 제안해야 한다. 합성 데이터.",
+  "context": {"persona": "jobseeker", "profile": null},
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {"id": "m1", "content": "포트폴리오 보완하기", "icon": "🗂️", "deadline": "2026-08-18 23:59"},
+    {"id": "m2", "content": "이력서 업데이트하기", "icon": "📄", "deadline": "2026-08-20 23:59"},
+    {"id": "m3", "content": "경력 자료 정리하기", "icon": "📊", "startDate": "2026-08-21 19:00"},
+    {"id": "m4", "content": "프로젝트 설명 다듬기", "icon": "✏️"}
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "대상 문서와 프로젝트, 수정할 항목, 수량과 완료 기준을 정해 각 메모를 SMART 목표로 구체화한다. 실행 가능성은 입력 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {"memo": "m1", "missing": ["specific", "measurable"], "suggestion": "습관관리 앱 프로젝트의 문제·해결·성과 섹션을 작성하고 피드백 1회를 받기처럼 대상을 정해보세요."},
+      {"memo": "m2", "missing": ["specific", "measurable"], "suggestion": "프론트엔드 경력 이력서의 프로젝트 2개 성과 문장을 수치로 수정하기처럼 수정 범위를 정해보세요."},
+      {"memo": "m3", "missing": ["specific", "measurable"], "suggestion": "최근 프로젝트 3개의 기술 스택·담당 역할·성과를 표로 정리하기처럼 자료 범위와 개수를 정해보세요."},
+      {"memo": "m4", "missing": ["specific", "measurable", "time_bound"], "suggestion": "습관관리 앱의 알림 기능 설명을 500자 이내로 금요일까지 작성하기처럼 프로젝트와 분량·기한을 정해보세요."}
+    ]
+  }
+}

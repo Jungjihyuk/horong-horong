@@ -1,0 +1,73 @@
+{
+  "caseName": "추상적인 주간 목표만 있어 월간 목표를 만들 수 없는 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability"
+  ],
+  "note": "주간 목표라는 형식은 갖췄지만 대상, 산출물, 수량, 완료 기준이 추상적이라 월간 목표로 묶을 근거가 부족하다. 월간 목표를 추측하지 않고 각 주간 목표를 SMART 기준으로 구체화하는 안내를 반환해야 한다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": null
+  },
+  "referenceDate": "2026-10-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-10-01",
+      "dueDate": "2026-10-07",
+      "title": "프로젝트 개선하기",
+      "icon": "🛠️"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-10-04",
+      "dueDate": "2026-10-14",
+      "title": "업무 효율 높이기",
+      "icon": "⚡"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-10-10",
+      "dueDate": "2026-10-21",
+      "title": "새로운 기술 익히기",
+      "icon": "📚"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-10-17",
+      "dueDate": "2026-10-28",
+      "title": "네트워킹하기",
+      "icon": "🤝"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_weekly_goals_with_smart_guidance",
+    "guidance": "주간 목표의 대상, 행동, 산출물, 수량과 완료 기준이 없어 월간 목표를 정할 수 없다. 각 목표를 구체적인 주간 실행 목표로 먼저 바꾼다.",
+    "goalReviews": [
+      {
+        "goal": "g1",
+        "missing": ["specific", "measurable"],
+        "suggestion": "사용자 프로필 화면의 빈 상태 UI를 개선하고 주요 화면 3곳에 적용하기처럼 대상 기능과 완료 범위를 정해보세요."
+      },
+      {
+        "goal": "g2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "반복 업무 2개를 자동화해 주간 처리 시간을 2시간 줄이기처럼 개선할 업무와 측정 기준을 정해보세요."
+      },
+      {
+        "goal": "g3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "관심 기술의 입문 강의 3개를 듣고 예제 프로젝트 1개 실행하기처럼 학습 범위와 산출물을 정해보세요."
+      },
+      {
+        "goal": "g4",
+        "missing": ["specific", "measurable"],
+        "suggestion": "관심 직무의 현직자 2명에게 커피챗을 요청하고 질문 5개를 준비하기처럼 대상과 횟수를 정해보세요."
+      }
+    ]
+  }
+}

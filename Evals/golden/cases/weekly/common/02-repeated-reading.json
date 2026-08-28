@@ -1,0 +1,70 @@
+{
+  "caseName": "반복 독서 3회 + 무관한 일회성 잡무",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "time_boundary"
+  ],
+  "note": "같은 주에 반복한 독서 3건을 읽은 분량과 횟수가 드러나는 주간 목표로 묶고, 무관한 일회성 잡무는 제외한다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "소설 20쪽 읽기",
+      "icon": "📖",
+      "startDate": "2026-08-17 21:00",
+      "deadline": "2026-08-17 21:30"
+    },
+    {
+      "id": "m2",
+      "content": "소설 20쪽 읽기",
+      "icon": "📖",
+      "deadline": "2026-08-19 21:30"
+    },
+    {
+      "id": "m3",
+      "content": "소설 20쪽 읽기",
+      "icon": "📖",
+      "startDate": "2026-08-21 21:00"
+    },
+    {
+      "id": "m4",
+      "content": "택배 보내기",
+      "icon": "📦",
+      "deadline": "2026-08-18 18:00"
+    },
+    {
+      "id": "m5",
+      "content": "휴대폰 케이스 주문하기",
+      "icon": "🛒"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "주 3회 소설 20쪽 읽기",
+      "memos": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    }
+  ],
+  "traps": [
+    {
+      "why": "서로 관련 없는 일회성 잡무를 하나의 목표로 묶으면 안 된다",
+      "groups": [
+        [
+          "m4",
+          "m5"
+        ]
+      ]
+    }
+  ]
+}

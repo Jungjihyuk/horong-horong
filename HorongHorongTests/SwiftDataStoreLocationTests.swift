@@ -108,16 +108,14 @@ final class SwiftDataStoreLocationTests: XCTestCase {
         )
     }
 
-    func testDevelopmentStoreIsIsolatedFromProductionData() throws {
+    func testDevelopmentStoreSeedsFromProductionDataAndIsIsolated() throws {
         let applicationSupportDirectory = temporaryApplicationSupportDirectory()
-        try writeStoreFiles(
-            at: applicationSupportDirectory
-                .appendingPathComponent("HorongHorong", isDirectory: true)
-                .appendingPathComponent("default.store", isDirectory: false)
-        )
-        try writeStoreFiles(
-            at: applicationSupportDirectory.appendingPathComponent("default.store")
-        )
+        let prodStoreURL = applicationSupportDirectory
+            .appendingPathComponent("HorongHorong", isDirectory: true)
+            .appendingPathComponent("Stores", isDirectory: true)
+            .appendingPathComponent("default.store", isDirectory: false)
+
+        try writeStoreFiles(at: prodStoreURL, storeContents: "prod_data")
 
         let developmentStoreURL = try SwiftDataStoreLocation.storeURL(
             applicationSupportDirectory: applicationSupportDirectory,
@@ -131,9 +129,16 @@ final class SwiftDataStoreLocationTests: XCTestCase {
                 scope: .development
             )
         )
-        XCTAssertFalse(
+        // 1. 최초 실행 시 프로덕션 데이터가 디버그 저장소로 시드 복사됨
+        XCTAssertTrue(
             FileManager.default.fileExists(atPath: developmentStoreURL.path)
         )
+        XCTAssertEqual(try String(contentsOf: developmentStoreURL), "prod_data")
+
+        // 2. 디버그 저장소 수정 시 프로덕션 원본은 영향을 받지 않음 (격리 보장)
+        try "debug_modified".write(to: developmentStoreURL, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try String(contentsOf: prodStoreURL), "prod_data")
+        XCTAssertEqual(try String(contentsOf: developmentStoreURL), "debug_modified")
     }
 
     func testExistingStoreIsBackedUpOncePerBuild() throws {

@@ -69,8 +69,16 @@ struct StatsDetailWindow: View {
     )
     private static let loadCacheLimit = 6
 
-    init(initialViewMode: StatsViewMode = .daily) {
+    init(
+        initialViewMode: StatsViewMode = .daily,
+        initialContentMode: StatsContentMode = .period,
+        initialSelectedDate: Date? = nil
+    ) {
         _viewMode = State(initialValue: initialViewMode)
+        _contentMode = State(initialValue: initialContentMode)
+        if let initialSelectedDate {
+            _selectedDate = State(initialValue: initialSelectedDate)
+        }
     }
 
     private var showsVacationIllustration: Bool {

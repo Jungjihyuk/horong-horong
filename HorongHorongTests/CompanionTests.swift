@@ -1,4 +1,5 @@
 import AppKit
+import HorongAI
 import SwiftUI
 import XCTest
 import SwiftData
@@ -470,17 +471,17 @@ final class CompanionChatComposerTests: XCTestCase {
     /// 할일 질문이 아니면 프롬프트를 건드리지 않아 짧은 컨텍스트를 아낀다.
     func testModelInputIsUntouchedWithoutADigest() {
         XCTAssertEqual(
-            CompanionChatComposer.modelInput(userMessage: "안녕", taskDigest: nil),
+            CompanionChatTask.modelInput(userMessage: "안녕", taskDigest: nil),
             "안녕"
         )
         XCTAssertEqual(
-            CompanionChatComposer.modelInput(userMessage: "안녕", taskDigest: ""),
+            CompanionChatTask.modelInput(userMessage: "안녕", taskDigest: ""),
             "안녕"
         )
     }
 
     func testDigestIsPrependedToTheModelInput() {
-        let input = CompanionChatComposer.modelInput(
+        let input = CompanionChatTask.modelInput(
             userMessage: "오늘 할일 뭐 있어?",
             taskDigest: "오늘 등록된 할일:\n- 보고서"
         )
@@ -1418,40 +1419,40 @@ final class CompanionGuideTests: XCTestCase {
     """
 
     func testSectionsAreSplitByHeading() {
-        let sections = CompanionGuide.sections(from: sample)
+        let sections = GuideRetriever.sections(from: sample)
 
         XCTAssertEqual(sections.map(\.title), ["4. 타이머 탭", "5. 메모 탭"])
     }
 
     func testEmptySectionIsDropped() {
-        let sections = CompanionGuide.sections(from: "## 빈 섹션\n\n## 내용 있음\n본문")
+        let sections = GuideRetriever.sections(from: "## 빈 섹션\n\n## 내용 있음\n본문")
 
         XCTAssertEqual(sections.map(\.title), ["내용 있음"])
     }
 
     func testBestMatchPrefersTitleHit() {
-        let sections = CompanionGuide.sections(from: sample)
-        let match = CompanionGuide.bestMatch(for: "메모 탭이 뭐야?", in: sections)
+        let sections = GuideRetriever.sections(from: sample)
+        let match = GuideRetriever.bestMatch(for: "메모 탭이 뭐야?", in: sections)
 
         XCTAssertEqual(match?.title, "5. 메모 탭")
     }
 
     /// 조사가 붙어도 걸려야 한다.
     func testKoreanParticlesAreStripped() {
-        let tokens = CompanionGuide.searchTokens(in: "테마를 바꾸려면?")
+        let tokens = SearchTokens.from("테마를 바꾸려면?")
 
         XCTAssertTrue(tokens.contains("테마"))
     }
 
     /// 근거가 없으면 아무것도 주지 않아 모델이 지어내지 않게 한다.
     func testNoMatchReturnsNil() {
-        let sections = CompanionGuide.sections(from: sample)
+        let sections = GuideRetriever.sections(from: sample)
 
-        XCTAssertNil(CompanionGuide.bestMatch(for: "김치찌개 끓이는 법", in: sections))
+        XCTAssertNil(GuideRetriever.bestMatch(for: "김치찌개 끓이는 법", in: sections))
     }
 
     func testLongSectionIsClipped() {
-        let clipped = CompanionGuide.clipped(String(repeating: "가", count: 900), limit: 100)
+        let clipped = GuideRetriever.clipped(String(repeating: "가", count: 900), limit: 100)
 
         XCTAssertTrue(clipped.count < 200)
         XCTAssertTrue(clipped.hasSuffix("(이하 생략)"))
@@ -1469,11 +1470,16 @@ final class CompanionGuideTests: XCTestCase {
 }
 
 final class CompanionEvidencePromptTests: XCTestCase {
+
+    private func evidence(_ text: String, source: String = "appFacts") -> Evidence {
+        Evidence(id: "\(source).test", source: source, text: text)
+    }
+
     /// 근거를 넣으면 "이 안에서만 답하라" 는 지시가 함께 들어가야 한다.
     func testEvidencePromptForbidsInvention() {
-        let input = CompanionChatComposer.modelInput(
+        let input = CompanionChatTask.modelInput(
             userMessage: "무슨 테마가 있어?",
-            appFacts: "팝오버 테마: 따뜻한 등불"
+            evidence: [evidence("팝오버 테마: 따뜻한 등불")]
         )
 
         XCTAssertTrue(input.contains("따뜻한 등불"))
@@ -1481,30 +1487,55 @@ final class CompanionEvidencePromptTests: XCTestCase {
     }
 
     func testFactsAndGuideAreBothIncluded() {
-        let input = CompanionChatComposer.modelInput(
+        let input = CompanionChatTask.modelInput(
             userMessage: "테마 바꾸는 법",
-            appFacts: "팝오버 테마: 게임 픽셀",
-            guideSection: "7. 설정 창\n외관에서 바꿉니다."
+            evidence: [
+                evidence("팝오버 테마: 게임 픽셀"),
+                evidence("7. 설정 창\n외관에서 바꿉니다.", source: "guide"),
+            ]
         )
 
         XCTAssertTrue(input.contains("게임 픽셀"))
         XCTAssertTrue(input.contains("외관에서 바꿉니다"))
     }
 
+    /// 조각 사이는 빈 줄로 띄운다. 출처가 무엇이든 규칙이 하나다.
+    func testEvidencePiecesAreSeparatedByABlankLine() {
+        let input = CompanionChatTask.modelInput(
+            userMessage: "테마 어떻게 바꿔?",
+            evidence: [
+                evidence("팝오버 테마: 게임 픽셀"),
+                evidence("관련 설정은 설정 → 외관 에 있다.", source: "settingsIndex"),
+            ]
+        )
+
+        XCTAssertTrue(input.contains("팝오버 테마: 게임 픽셀\n\n관련 설정은"))
+    }
+
+    /// 빈 조각은 실리지 않는다. 실리면 빈 줄만 두 번 들어가 근거가 끊겨 보인다.
+    func testEmptyEvidenceTextIsDropped() {
+        let input = CompanionChatTask.modelInput(
+            userMessage: "안녕",
+            evidence: [evidence("")]
+        )
+
+        XCTAssertEqual(input, "안녕")
+    }
+
     /// 근거가 없으면 사용자 말을 그대로 보낸다.
     func testNoEvidenceLeavesMessageUntouched() {
         XCTAssertEqual(
-            CompanionChatComposer.modelInput(userMessage: "안녕"),
+            CompanionChatTask.modelInput(userMessage: "안녕"),
             "안녕"
         )
     }
 
     /// 할일 질문은 기존 경로를 그대로 쓴다.
     func testTaskDigestTakesPrecedence() {
-        let input = CompanionChatComposer.modelInput(
+        let input = CompanionChatTask.modelInput(
             userMessage: "오늘 할일 뭐야?",
             taskDigest: "오늘 등록된 할일: 없음",
-            appFacts: "팝오버 테마: 게임 픽셀"
+            evidence: [evidence("팝오버 테마: 게임 픽셀")]
         )
 
         XCTAssertTrue(input.contains("오늘 등록된 할일"))
@@ -1566,7 +1597,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 카드마다 식별자를 손으로 달지 않고, 제목이 가장 잘 맞는 카드가 스스로 강조돼야 한다.
     func testBestMatchingCardWins() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "휴가 때 기록 안 남기려면?"))
+        center.beginCardSearch(tokens: SearchTokens.from("휴가 때 기록 안 남기려면?"))
 
         center.registerCard("타임라인 표시")
         center.registerCard("보관")
@@ -1580,7 +1611,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 등록 순서와 무관하게 같은 카드가 뽑혀야 한다.
     func testOrderDoesNotChangeTheWinner() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "미리알림 연동"))
+        center.beginCardSearch(tokens: SearchTokens.from("미리알림 연동"))
 
         center.registerCard("미리알림 가져오기")
         center.registerCard("퀵 메모")
@@ -1593,7 +1624,7 @@ final class CompanionCardHighlightTests: XCTestCase {
     /// 맞는 카드가 없으면 아무것도 강조하지 않는다.
     func testNoMatchLeavesNothingHighlighted() {
         let center = CompanionHighlightCenter.shared
-        center.beginCardSearch(tokens: CompanionGuide.searchTokens(in: "김치찌개 끓이는 법"))
+        center.beginCardSearch(tokens: SearchTokens.from("김치찌개 끓이는 법"))
 
         center.registerCard("타임라인 표시")
         center.registerCard("보관")

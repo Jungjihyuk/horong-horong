@@ -1,4 +1,6 @@
 import AppKit
+import HorongAI
+import HorongAIMLX
 import OSLog
 import SwiftData
 import SwiftUI
@@ -6,6 +8,23 @@ import UniformTypeIdentifiers
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
+
+/*
+ 성취 탭의 화면과 앱 도메인 연결을 담당한다.
+
+ 이 파일의 책임
+ - 목표·할일을 화면에 표시하고, 목표 생성·수정·연결을 SwiftData에 반영한다.
+ - 목표 추천의 후보를 고른다: 앱 설정을 적용해 할일/주간 목표를 필터링하고 스냅샷으로 만든다.
+ - 추천 실행 흐름을 조율한다: 공급자 선택, 주간·월간 실행 순서, 룰 기반 폴백, 화면 상태와 실행 기록을 맡는다.
+
+ 이 파일의 책임이 아닌 것
+ - 프롬프트 구성, 입력 예산 적용, 모델 응답 JSON 파싱·검증은 `HorongAI`의
+   `WeeklyGoalTask`·`MonthlyGoalTask`가 담당한다.
+ - 공급자별 생성기(MLX·Ollama·Apple Foundation Models)의 실제 모델 호출은 각 생성기 타입이 담당한다.
+
+ 추천 관련 정책이 화면 상태와 무관해지거나 다른 기능에서도 재사용될 때는 이 파일에 쌓지 말고
+ 별도 정책 타입 또는 `HorongAI`로 옮긴다.
+ */
 
 private enum AchievementTodoStatus {
     case done
@@ -432,6 +451,16 @@ func achievementModelErrorDescription(_ error: Error) -> String {
 /// 이 중 약 1,671자는 지시문 템플릿이 고정으로 쓰므로 메모에 남는 공간은 그만큼 적다.
 let achievementPromptCharacterBudget = Constants.achievementPromptCharacterBudget(for: .appleFoundation)
 
+/// 월간 응답의 토큰 상한.
+///
+/// 900 이던 시절 실측(2026-08-20)에서 응답이 2,000자를 넘겨 잘렸다 — 최근 20건 중 2건이
+/// `decodeFailed/truncated` 였고 **둘 다 월간**이었다. 모델이 `reason`·`scheduleText` 를
+/// 프롬프트 예시(18자)보다 네 배씩 길게 쓴다.
+///
+/// 주간은 `scheduleText`·`criterion` 을 응답에서 받지 않아 훨씬 짧고 잘린 적이 없다.
+/// 그래서 **월간만** 올린다 — 상한을 올리면 실패했을 때 그만큼 더 오래 기다린다.
+let achievementMonthlyMaxTokens = 1_800
+
 /// 필터 단계에서 후보가 탈락한 이유
 enum AchievementSuggestionRejection {
     case shortTitle
@@ -514,6 +543,16 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     /// 목표 타입 (주간 목표 / 월간 목표)
     let cadence: AchievementGoalCadence
     let source: AchievementGoalSuggestionSource
+    /// 룰 기반이면 **어느 룰**이 만들었나(`context` · `keyword` · `fallback`). 모델 결과는 `nil`.
+    ///
+    /// 룰 폴백은 오래도록 기록에 한 줄도 안 남았다 — 화면에는 뜨는데 AI 실험실에는 없었다.
+    /// 어느 룰이 얼마나 쓰이는지 재려면 이름이 필요하다.
+    let ruleName: String?
+    /// 이 카드를 만든 **추천 실행**. 사용자가 채택하면 목표에 그대로 옮겨 심는다.
+    ///
+    /// 카드가 자기 출처를 모르면 «이 목표가 어느 추천에서 왔나» 를 이을 수 없고,
+    /// 그러면 채택률을 낼 수 없다(→ 평가 문서 [4]).
+    let runID: String?
 
     init(
         id: UUID = UUID(),
@@ -526,7 +565,9 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         targetValueText: String,
         emoji: String,
         cadence: AchievementGoalCadence = .weekly,
-        source: AchievementGoalSuggestionSource
+        source: AchievementGoalSuggestionSource,
+        ruleName: String? = nil,
+        runID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -539,6 +580,8 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
         self.emoji = emoji
         self.cadence = cadence
         self.source = source
+        self.ruleName = ruleName
+        self.runID = runID
     }
 
     /// 파서를 AFM 경로와 공유하므로 MLX 결과도 `.foundationModel` 로 붙는다.
@@ -555,8 +598,85 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
             targetValueText: targetValueText,
             emoji: emoji,
             cadence: cadence,
-            source: source
+            source: source,
+            ruleName: ruleName,
+            runID: runID
         )
+    }
+}
+
+/// 화면·실험실·골든셋 실행기가 함께 소비하는 추천 결과.
+///
+/// 빈 배열만 반환하면 `guidance`와 모델 실패가 구분되지 않아, 안내를 규칙 기반 추천으로
+/// 덮어쓰게 된다. 공급자 경계에서 이 타입을 끝까지 유지한다.
+enum AchievementGoalRecommendationResult: Sendable {
+    case suggestions([AchievementGoalSuggestion])
+    case guidance([GoalRecommendationGuidance])
+    case noSuggestion
+    /// 공급자·전송·파싱 실패. `noSuggestion`과 달리 다음 공급자로 내려갈 수 있다.
+    case failure(reason: String?)
+
+    var suggestions: [AchievementGoalSuggestion] {
+        guard case .suggestions(let suggestions) = self else { return [] }
+        return suggestions
+    }
+
+    var guidance: [GoalRecommendationGuidance] {
+        guard case .guidance(let guidance) = self else { return [] }
+        return guidance
+    }
+
+    /// 폴백을 멈춰야 하는 유효한 모델 결과인가.
+    var hasModelResult: Bool {
+        switch self {
+        case .suggestions(let suggestions): return !suggestions.isEmpty
+        case .guidance(let guidance): return !guidance.isEmpty
+        case .noSuggestion, .failure(_): return false
+        }
+    }
+
+    var shouldFallbackToNextProvider: Bool {
+        if case .failure(_) = self { return true }
+        return false
+    }
+
+    /// `guidance`와 `noSuggestion`은 모델이 정상적으로 내린 결론이다. 실행 실패처럼
+    /// 기록하면 AI 실험실의 실패율과 골든셋 결과가 왜곡된다.
+    var recordedOutcome: String {
+        switch self {
+        case .suggestions(let suggestions): return suggestions.isEmpty ? "noSuggestion" : "ok"
+        case .guidance: return "guidance"
+        case .noSuggestion: return "noSuggestion"
+        case .failure(let reason):
+            if reason == "modelUnavailable" || reason == "serverUnavailable" { return reason! }
+            if reason == "noJSON" || reason == "malformed" { return "decodeFailed" }
+            return "generationFailed"
+        }
+    }
+
+    /// 생성 자체가 시작되지 못했거나 실패했을 때의 구체적 이유.
+    /// 골든셋은 이 값을 `outcome_detail`로 남겨, 0점과 인프라 실패를 구분한다.
+    var outcomeDetail: String? {
+        guard case let .failure(reason) = self else { return nil }
+        return reason
+    }
+
+    static func from(
+        _ result: GoalRecommendationResult,
+        cadence: AchievementGoalCadence,
+        source: AchievementGoalSuggestionSource,
+        runID: String
+    ) -> AchievementGoalRecommendationResult {
+        switch result {
+        case .suggestions(let drafts):
+            return .suggestions(
+                drafts.map { $0.suggestion(cadence: cadence, runID: runID).retagged(as: source) }
+            )
+        case .guidance(let guidance):
+            return .guidance(guidance)
+        case .noSuggestion:
+            return .noSuggestion
+        }
     }
 }
 
@@ -617,7 +737,8 @@ enum AchievementGoalSuggestionBuilder {
 
     static func monthlyRuleBasedSuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int
     ) -> [AchievementGoalSuggestion] {
         let candidates = goals.filter { goal in
             goal.monthGoal?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
@@ -625,9 +746,9 @@ enum AchievementGoalSuggestionBuilder {
         let source = candidates.count >= 2 ? candidates : goals
         var suggestions: [AchievementGoalSuggestion] = []
 
-        suggestions.append(contentsOf: groupedMonthlyByContext(from: source))
-        suggestions.append(contentsOf: groupedMonthlyByKeyword(from: source))
-        suggestions.append(contentsOf: groupedMonthlyFallback(from: source))
+        suggestions.append(contentsOf: groupedMonthlyByContext(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
+        suggestions.append(contentsOf: groupedMonthlyByKeyword(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
+        suggestions.append(contentsOf: groupedMonthlyFallback(from: source, maxGoalsPerSuggestion: maxGoalsPerSuggestion))
 
         return deduplicatedMonthly(suggestions)
             .sorted { lhs, rhs in
@@ -858,7 +979,7 @@ enum AchievementGoalSuggestionBuilder {
         return false
     }
 
-    private static func groupedMonthlyByContext(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyByContext(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         let groups = Dictionary(grouping: goals) { goal in
             [
                 goal.roleName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -870,18 +991,19 @@ enum AchievementGoalSuggestionBuilder {
 
         return groups.compactMap { key, items in
             guard !key.isEmpty, items.count >= 2 else { return nil }
-            let limited = limitedGoals(items)
+            let limited = limitedGoals(items, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
             return monthlySuggestion(
                 title: monthlyTitle(for: limited, context: key),
                 reason: "같은 페르소나나 비전으로 이어지는 주간 목표 \(limited.count)개를 묶었습니다.",
                 goals: limited,
                 emoji: limited.first?.emoji ?? "📅",
-                source: .rule
+                source: .rule,
+                ruleName: "context"
             )
         }
     }
 
-    private static func groupedMonthlyByKeyword(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyByKeyword(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         let keywordGroups: [(keywords: [String], emoji: String)] = [
             (["이력서", "포트폴리오", "지원", "면접", "채용", "커리어"], "💼"),
             (["개발", "구현", "버그", "릴리즈", "v0", "앱", "호롱"], "🚀"),
@@ -898,27 +1020,29 @@ enum AchievementGoalSuggestionBuilder {
                 }
             }
             guard items.count >= 2 else { return nil }
-            let limited = limitedGoals(items)
+            let limited = limitedGoals(items, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
             return monthlySuggestion(
                 title: monthlyTitle(for: limited),
                 reason: "비슷한 방향의 주간 목표 \(limited.count)개를 한 달 목표로 묶었습니다.",
                 goals: limited,
                 emoji: group.emoji,
-                source: .rule
+                source: .rule,
+                ruleName: "keyword"
             )
         }
     }
 
-    private static func groupedMonthlyFallback(from goals: [AchievementGoalSnapshot]) -> [AchievementGoalSuggestion] {
+    private static func groupedMonthlyFallback(from goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSuggestion] {
         guard goals.count >= 2 else { return [] }
-        let limited = limitedGoals(goals)
+        let limited = limitedGoals(goals, maxGoalsPerSuggestion: maxGoalsPerSuggestion)
         return [
             monthlySuggestion(
                 title: monthlyTitle(for: limited),
                 reason: "이번 달에 함께 밀어야 할 주간 목표 \(limited.count)개를 묶었습니다.",
                 goals: limited,
                 emoji: "📅",
-                source: .rule
+                source: .rule,
+                ruleName: "fallback"
             ),
         ]
     }
@@ -928,7 +1052,8 @@ enum AchievementGoalSuggestionBuilder {
         reason: String,
         goals: [AchievementGoalSnapshot],
         emoji: String,
-        source: AchievementGoalSuggestionSource
+        source: AchievementGoalSuggestionSource,
+        ruleName: String? = nil
     ) -> AchievementGoalSuggestion {
         let count = goals.count
         let memoIDs = Array(Set(goals.flatMap(\.sourceMemoIDs)))
@@ -942,11 +1067,12 @@ enum AchievementGoalSuggestionBuilder {
             targetValueText: "\(count)개",
             emoji: emoji,
             cadence: .monthly,
-            source: source
+            source: source,
+            ruleName: ruleName
         )
     }
 
-    private static func limitedGoals(_ goals: [AchievementGoalSnapshot]) -> [AchievementGoalSnapshot] {
+    private static func limitedGoals(_ goals: [AchievementGoalSnapshot], maxGoalsPerSuggestion: Int) -> [AchievementGoalSnapshot] {
         Array(goals.sorted { lhs, rhs in
             if lhs.done == lhs.total, rhs.done != rhs.total {
                 return false
@@ -958,7 +1084,7 @@ enum AchievementGoalSuggestionBuilder {
                 return lhs.title < rhs.title
             }
             return lhs.total > rhs.total
-        }.prefix(4))
+        }.prefix(maxGoalsPerSuggestion))
     }
 
     private static func deduplicated(_ suggestions: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
@@ -984,20 +1110,6 @@ enum AchievementGoalSuggestionBuilder {
     }
 }
 
-private struct AchievementFoundationSuggestionPayload: Codable {
-    let suggestions: [Item]
-
-    struct Item: Codable {
-        let title: String
-        let reason: String
-        let memoIDs: [String]?
-        let goalIDs: [String]?
-        let scheduleText: String
-        let criterion: String
-        let emoji: String?
-    }
-}
-
 enum AchievementFoundationGoalSuggestionProvider {
     /// 설정에서 고른 공급자로 추천을 만든다. 실패하면 다음 단계로 내려간다.
     ///
@@ -1005,35 +1117,66 @@ enum AchievementFoundationGoalSuggestionProvider {
     ///
     /// MLX가 실패하는 경우는 대체로 모델 미준비이거나 Intel 맥이다. 둘 다 사용자가
     /// 당장 손쓸 수 없으므로 조용히 AFM으로 내려가는 편이 낫다.
+    /// - Parameters:
+    ///   - runID: 버튼 한 번에 붙는 id. 주간·월간이 같은 값을 받아 한 실행으로 묶인다.
+    ///   - candidateCount: 필터를 통과한 **전체** 후보 수. 태스크는 이 값을 모른다 —
+    ///     `memos` 는 이미 걸러진 뒤라, 얼마나 걸러졌는지는 앱만 안다.
     static func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
-    ) async -> [AchievementGoalSuggestion] {
-        switch selectedProvider {
+        maxMemoCount: Int,
+        runID: String = AIRunLog.newRunID(),
+        candidateCount: Int? = nil,
+        variant: String? = nil,
+        recommendationContext: GoalRecommendationContext = .empty,
+        modelOverride: String? = nil,
+        allowFallback: Bool = true,
+        // 실행당 **한 번** 읽은 값을 받는다. 여기서 다시 읽으면 주간과 월간이 서로 다른
+        // 공급자를 볼 수 있다 — 순차로 돌면 두 읽기 사이가 수십 초까지 벌어진다
+        // (실측 2026-08-19: 주간 mlx, 7초 뒤 월간 appleFoundation).
+        provider: Constants.AchievementSuggestionProviderKind
+    ) async -> AchievementGoalRecommendationResult {
+        let context = RunContext(
+            runID: runID,
+            task: "weekly_goal",
+            candidateCount: candidateCount ?? memos.count,
+            variant: variant
+        )
+
+        switch provider {
         case .mlx:
             let fromMLX = await mlxSuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context.attempt(1),
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromMLX.isEmpty { return fromMLX }
+            if !fromMLX.shouldFallbackToNextProvider || !allowFallback { return fromMLX }
             achievementSuggestionLog.info("weekly provider fallback=mlx→afm")
         case .ollama:
             let fromOllama = await ollamaSuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context.attempt(1),
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
             )
-            if !fromOllama.isEmpty { return fromOllama }
+            if !fromOllama.shouldFallbackToNextProvider || !allowFallback { return fromOllama }
             achievementSuggestionLog.info("weekly provider fallback=ollama→afm")
         case .appleFoundation:
             break
         }
+        // AFM 이 첫 시도인지 폴백인지에 따라 순번이 달라진다. 그래야 기록에서
+        // "Ollama 가 실패해 내려온 AFM"과 "처음부터 AFM"이 구분된다.
         return await appleFoundationSuggestions(
             from: memos,
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
+            maxMemoCount: maxMemoCount,
+            context: context.attempt(provider == .appleFoundation ? 1 : 2),
+            recommendationContext: recommendationContext
         )
     }
 
@@ -1046,175 +1189,668 @@ enum AchievementFoundationGoalSuggestionProvider {
     private static func mlxSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
-    ) async -> [AchievementGoalSuggestion] {
+        maxMemoCount: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
+    ) async -> AchievementGoalRecommendationResult {
         #if canImport(MLXLLM)
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
                 ?? Constants.defaultAchievementSuggestionMLXModel
-            return await MLXGoalSuggestionProvider(model: model).suggestions(
+            let generator = MLXTextGenerator(model: model)
+            let temperature = 0.2
+            let maxTokens = 1_200
+            return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                provider: .mlx,
+                model: model,
+                source: .mlx,
+                context: context,
+                recommendationContext: recommendationContext,
+                parameters: [
+                    "temperature": temperature,
+                    "max_tokens": Double(maxTokens)
+                ],
+                // 안 받아 둔 모델이면 프롬프트를 만들 필요가 없다. 그대로 보내면 생성 단계에서
+                // `MLXChatError.notPrepared` 가 나는데, 그건 기록에 `inferenceError` 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다 — Ollama 404 와 똑같은 사정이다.
+                //
+                // Apple Silicon 이 아닌 기기도 같은 값으로 묶는다. 그 기기에서는 **모든** MLX
+                // 실행이 이렇게 나오므로 기록 한 건만 봐도 구분된다.
+                preflight: {
+                    MLXModelStore.isSupported && MLXModelStore.isKnownPrepared(model)
+                        ? nil
+                        : "modelUnavailable"
+                },
+                generate: { prompt, instructions in
+                    let text = try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens
+                    )
+                    return WeeklyGoalTask.GenerationOutput(text: text, usage: nil)
+                }
             )
         }
         #endif
         achievementSuggestionLog.error("weekly mlx failure=unavailable")
-        return []
+        return .failure(reason: nil)
     }
 
     private static func ollamaSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
-    ) async -> [AchievementGoalSuggestion] {
+        maxMemoCount: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
+    ) async -> AchievementGoalRecommendationResult {
         if #available(macOS 26.0, *) {
-            let model = UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
                 ?? Constants.defaultAchievementSuggestionOllamaModel
             let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
                 ?? Constants.defaultNewsOllamaEndpoint
-            return await OllamaGoalSuggestionProvider(model: model, endpoint: endpoint).suggestions(
+            let generator = OllamaTextGenerator(endpoint: endpoint, model: model)
+            
+            let temperature = 0.3
+            let repeatPenalty = 1.15
+            let presencePenalty = 0.0
+            let frequencyPenalty = 0.0
+            let maxTokens = 1_200
+            
+            return await weeklySuggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                provider: .ollama,
+                model: model,
+                source: .ollama,
+                context: context,
+                recommendationContext: recommendationContext,
+                parameters: [
+                    "temperature": temperature,
+                    "repeat_penalty": repeatPenalty,
+                    "presence_penalty": presencePenalty,
+                    "frequency_penalty": frequencyPenalty,
+                    "max_tokens": Double(maxTokens)
+                ],
+                // 서버가 꺼져 있거나 **모델을 안 받아 뒀으면** 프롬프트를 만들어 보낼 필요가 없다.
+                // 보내 보면 Ollama 가 404 를 주는데, 그건 기록에 «추론 실패» 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다(실측 2026-08-19).
+                preflight: {
+                    switch await OllamaChatClient.readiness(endpoint: endpoint, model: model) {
+                    case .ready:            return nil
+                    case .serverUnavailable: return "serverUnavailable"
+                    case .modelNotInstalled: return "modelUnavailable"
+                    }
+                },
+                generate: { prompt, instructions in
+                    let output = try await generator.generateWithUsage(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens,
+                        repeatPenalty: repeatPenalty,
+                        presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty,
+                        // 프롬프트로 부탁만 하지 않고 **모양을 강제한다.**
+                        format: WeeklyGoalTask.responseSchema,
+                        // 태스크 쪽 벽시계와 **같은 값**이어야 한다. 한쪽만 길면 짧은 쪽이 새 벽이 된다.
+                        timeoutInterval: Constants.achievementSuggestionTimeout
+                    )
+                    return WeeklyGoalTask.GenerationOutput(text: output.text, usage: output.usage)
+                }
             )
         }
-        return []
+        return .failure(reason: nil)
+    }
+
+    /// MLX·Ollama 가 공유하는 주간 추천 흐름.
+    ///
+    /// 두 공급자의 고유 코드는 `generate` 한 덩어리뿐이고 나머지(입력 고르기 · 프롬프트 ·
+    /// 파싱 · 로그 · 재태깅)는 완전히 같았다. 두 파일로 나눠 두면 한쪽만 고치는 실수가 난다.
+    /// AFM 은 세션 생성 방식이 달라(`LanguageModelSession`) 아직 합치지 않았다.
+    ///
+    /// `@available` 은 프롬프트·파서를 AFM 구현체에서 빌려 쓰기 때문에 따라온 것이다.
+    /// 삭제한 두 파일도 같은 이유로 같은 제약을 달고 있었다.
+    @available(macOS 26.0, *)
+    private static func weeklySuggestions(
+        from memos: [AchievementMemoSnapshot],
+        suggestionCount: Int,
+        maxMemoCount: Int,
+        provider: Constants.AchievementSuggestionProviderKind,
+        model: String,
+        source: AchievementGoalSuggestionSource,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        parameters: [String: Double] = [:],
+        /// 실행 전에 막을 이유가 있으면 **기록할 결과 이름**을 돌려준다. 막을 이유가 없으면 `nil`.
+        ///
+        /// `Bool` 로 두면 «왜 막혔나» 가 사라져, 서버가 꺼진 것과 모델을 안 받아 둔 것이
+        /// 기록에서 한 칸으로 뭉친다. 사용자가 할 일은 서로 다르다.
+        preflight: () async -> String? = { nil },
+        // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> WeeklyGoalTask.GenerationOutput
+    ) async -> AchievementGoalRecommendationResult {
+        let label = provider.rawValue
+        let startedAt = Date()
+        // 묶음당 상한을 기록에 싣는다. 없으면 AI 실험실이 «3개 잘림» 만 보여줄 수 있고,
+        // **설정이 몇이라 잘렸는지**를 못 말한다.
+        let parameters = parameters.merging(["max_items_per_goal": Double(maxMemoCount)]) { a, _ in a }
+
+        if let blocked = await preflight() {
+            achievementSuggestionLog.error(
+                "weekly \(label, privacy: .public) failure=\(blocked, privacy: .public)"
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: blocked,
+                    parameters: parameters
+                )
+            )
+            return .failure(reason: blocked)
+        }
+
+        // 원문 기록. 개발자 모드가 아니면 nil 이라 아무 비용도 들지 않는다.
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: label,
+            model: model,
+            attempt: context.attemptNumber
+        )
+        let outcome = await WeeklyGoalTask.run(
+            memos: memos.map(\.taskMemo),
+            suggestionCount: suggestionCount,
+            maxMemoCount: maxMemoCount,
+            inputLimit: max(8, min(provider == .ollama || provider == .appleFoundation ? 15 : 24, suggestionCount * maxMemoCount * 2)),
+            budget: Constants.achievementPromptCharacterBudget(for: provider),
+            context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
+            onPromptBuilt: { characters, memoCount in
+                achievementSuggestionLog.info(
+                    """
+                    weekly \(label, privacy: .public) prompt chars=\(characters, privacy: .public) \
+                    memos=\(memoCount, privacy: .public) model=\(model, privacy: .public)
+                    """
+                )
+            },
+            trace: trace,
+            generate: generate
+        )
+        if let trace { TraceRecorder.shared?.record(trace) }
+
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly, runID: context.runID).retagged(as: source) }
+
+        switch outcome.diagnostics {
+        case .parsed(let diagnostics):
+            logWeeklyParse(diagnostics)
+            if outcome.drafts.isEmpty {
+                achievementSuggestionLog.error(
+                    """
+                    weekly \(label, privacy: .public) \
+                    failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)
+                    """
+                )
+            }
+        case .generationFailed(let error):
+            achievementSuggestionLog.error(
+                """
+                weekly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(String(describing: error).prefix(300), privacy: .public)
+                """
+            )
+        }
+
+        let result: AchievementGoalRecommendationResult
+        switch outcome.diagnostics {
+        case .generationFailed, .parsed(.decodeFailed):
+            result = .failure(reason: outcome.diagnostics.outcomeDetail)
+        case .parsed:
+            result = AchievementGoalRecommendationResult.from(
+                outcome.result, cadence: .weekly, source: source, runID: context.runID
+            )
+        }
+
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: label,
+                model: model,
+                outcome: result.recordedOutcome,
+                outcomeDetail: outcome.diagnostics.outcomeDetail,
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: outcome.diagnostics.parseSummary,
+                usage: outcome.usage,
+                timings: outcome.timings,
+                parameters: parameters
+            )
+        )
+
+        // 태스크는 어느 공급자가 답했는지 모른다. 실제 공급자로 태깅해 폴백 비율 집계를 맞춘다.
+        return result
+    }
+
+    /// 파서 진단을 로그 한 줄로. AFM 경로(`FoundationModelsGoalSuggestionProvider.parse`)와 같은 문구를 쓴다.
+    fileprivate static func logWeeklyParse(_ diagnostics: WeeklyGoalTask.ParseOutcome.Diagnostics) {
+        switch diagnostics {
+        case let .decodeFailed(characters, reason):
+            achievementSuggestionLog.error(
+                """
+                weekly parse failure=decode chars=\(characters, privacy: .public) \
+                reason=\(reason, privacy: .public)
+                """
+            )
+        case let .decoded(modelReturned, kept, requestedIDs, badID, alreadyUsed, overMaxMemo, tooFewIDs):
+            achievementSuggestionLog.info(
+                """
+                weekly parse modelReturned=\(modelReturned, privacy: .public) \
+                kept=\(kept, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
+                badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
+                overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
+                """
+            )
+        }
     }
 
     private static func appleFoundationSuggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
-    ) async -> [AchievementGoalSuggestion] {
+        maxMemoCount: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext
+    ) async -> AchievementGoalRecommendationResult {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await FoundationModelsGoalSuggestionProvider().suggestions(
                 from: memos,
                 suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
+                maxMemoCount: maxMemoCount,
+                context: context,
+                recommendationContext: recommendationContext
             )
         }
         #endif
-        return []
+        return .failure(reason: nil)
     }
 
     static func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) async -> [AchievementGoalSuggestion] {
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
+        runID: String = AIRunLog.newRunID(),
+        candidateCount: Int? = nil,
+        variant: String? = nil,
+        recommendationContext: GoalRecommendationContext = .empty,
+        modelOverride: String? = nil,
+        allowFallback: Bool = true,
+        /// 주간(`suggestions`)과 같은 사정이다 — 실행당 한 번 읽은 값을 받는다.
+        provider: Constants.AchievementSuggestionProviderKind
+    ) async -> AchievementGoalRecommendationResult {
+        let context = RunContext(
+            runID: runID,
+            task: "monthly_goal",
+            candidateCount: candidateCount ?? goals.count,
+            variant: variant
+        )
+
+        // 주간과 같은 설정값(`achievementSuggestionProvider`)을 따른다. 8/2 에 Ollama 를 붙일 때
+        // 주간 경로에만 분기를 달아서, 설정에서 Ollama 를 골라도 월간은 계속 AFM 으로만 돌았다.
+        switch provider {
+        case .mlx:
+            let fromMLX = await monthlyMLXSuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+                context: context.attempt(1),
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
+            )
+            if !fromMLX.shouldFallbackToNextProvider || !allowFallback { return fromMLX }
+            achievementSuggestionLog.info("monthly provider fallback=mlx→afm")
+        case .ollama:
+            let fromOllama = await monthlyOllamaSuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+                context: context.attempt(1),
+                recommendationContext: recommendationContext,
+                modelOverride: modelOverride
+            )
+            if !fromOllama.shouldFallbackToNextProvider || !allowFallback { return fromOllama }
+            achievementSuggestionLog.info("monthly provider fallback=ollama→afm")
+        case .appleFoundation:
+            break
+        }
+
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
             return await FoundationModelsGoalSuggestionProvider().monthlySuggestions(
                 from: goals,
-                suggestionCount: suggestionCount
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+                context: context.attempt(provider == .appleFoundation ? 1 : 2),
+                recommendationContext: recommendationContext
             )
         }
         #endif
-        return []
+        return .failure(reason: nil)
+    }
+
+    private static func monthlyMLXSuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
+    ) async -> AchievementGoalRecommendationResult {
+        #if canImport(MLXLLM)
+        if #available(macOS 26.0, *) {
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionMLXModel)
+                ?? Constants.defaultAchievementSuggestionMLXModel
+            let generator = MLXTextGenerator(model: model)
+            let temperature = 0.25
+            let maxTokens = achievementMonthlyMaxTokens
+            return await sharedMonthlySuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+                provider: .mlx,
+                model: model,
+                source: .mlx,
+                context: context,
+                recommendationContext: recommendationContext,
+                parameters: [
+                    "temperature": temperature,
+                    "max_tokens": Double(maxTokens)
+                ],
+                // 주간 MLX 경로와 같은 판단이다.
+                preflight: {
+                    MLXModelStore.isSupported && MLXModelStore.isKnownPrepared(model)
+                        ? nil
+                        : "modelUnavailable"
+                },
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens
+                    )
+                }
+            )
+        }
+        #endif
+        achievementSuggestionLog.error("monthly mlx failure=unavailable")
+        return .failure(reason: nil)
+    }
+
+    private static func monthlyOllamaSuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        modelOverride: String?
+    ) async -> AchievementGoalRecommendationResult {
+        if #available(macOS 26.0, *) {
+            let model = modelOverride ?? UserDefaults.standard.string(forKey: Constants.AppStorageKey.achievementSuggestionOllamaModel)
+                ?? Constants.defaultAchievementSuggestionOllamaModel
+            let endpoint = UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
+                ?? Constants.defaultNewsOllamaEndpoint
+            let generator = OllamaTextGenerator(endpoint: endpoint, model: model)
+
+            // 온도·토큰은 AFM 월간 경로와 맞춘다 — 공급자를 바꿔도 같은 질문이어야 비교가 된다.
+            // 반복 페널티는 주간 Ollama 경로와 같은 이유다(같은 생성기라 같은 루프 위험을 진다).
+            let temperature = 0.25
+            let repeatPenalty = 1.15
+            let presencePenalty = 0.0
+            let frequencyPenalty = 0.0
+            let maxTokens = achievementMonthlyMaxTokens
+
+            return await sharedMonthlySuggestions(
+                from: goals,
+                suggestionCount: suggestionCount,
+                maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+                provider: .ollama,
+                model: model,
+                source: .ollama,
+                context: context,
+                recommendationContext: recommendationContext,
+                parameters: [
+                    "temperature": temperature,
+                    "repeat_penalty": repeatPenalty,
+                    "presence_penalty": presencePenalty,
+                    "frequency_penalty": frequencyPenalty,
+                    "max_tokens": Double(maxTokens)
+                ],
+                // 서버가 꺼져 있거나 **모델을 안 받아 뒀으면** 프롬프트를 만들어 보낼 필요가 없다.
+                // 보내 보면 Ollama 가 404 를 주는데, 그건 기록에 «추론 실패» 로 남아
+                // «모델을 안 받았다» 는 진짜 원인이 가려진다(실측 2026-08-19).
+                preflight: {
+                    switch await OllamaChatClient.readiness(endpoint: endpoint, model: model) {
+                    case .ready:            return nil
+                    case .serverUnavailable: return "serverUnavailable"
+                    case .modelNotInstalled: return "modelUnavailable"
+                    }
+                },
+                generate: { prompt, instructions in
+                    try await generator.generate(
+                        prompt: prompt,
+                        instructions: instructions,
+                        temperature: temperature,
+                        maxTokens: maxTokens,
+                        repeatPenalty: repeatPenalty,
+                        presencePenalty: presencePenalty,
+                        frequencyPenalty: frequencyPenalty,
+                        format: MonthlyGoalTask.responseSchema,
+                        // 태스크 쪽 벽시계와 **같은 값**이어야 한다. 한쪽만 길면 짧은 쪽이 새 벽이 된다.
+                        timeoutInterval: Constants.achievementSuggestionTimeout
+                    )
+                }
+            )
+        }
+        return .failure(reason: nil)
+    }
+
+    /// MLX·Ollama 가 공유하는 월간 추천 흐름. 주간의 `weeklySuggestions` 와 짝이다.
+    ///
+    /// 이름이 `monthlySuggestions` 가 아닌 이유는 **바깥에 같은 이름의 분배기가 있어서**다.
+    /// 둘을 같은 이름으로 두면 호출부에서 어느 쪽이 불리는지 눈으로 가릴 수 없다.
+    @available(macOS 26.0, *)
+    private static func sharedMonthlySuggestions(
+        from goals: [AchievementGoalSnapshot],
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int,
+        provider: Constants.AchievementSuggestionProviderKind,
+        model: String,
+        source: AchievementGoalSuggestionSource,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext,
+        parameters: [String: Double] = [:],
+        /// 주간(`weeklySuggestions`)과 같은 규약이다 — 막을 이유가 있으면 기록할 결과 이름.
+        preflight: () async -> String? = { nil },
+        // 태스크가 타임아웃을 태스크 그룹으로 재므로 클로저가 탈출한다.
+        generate: @escaping (_ prompt: String, _ instructions: String) async throws -> String
+    ) async -> AchievementGoalRecommendationResult {
+        let label = provider.rawValue
+        let startedAt = Date()
+        // 주간과 같은 사정이다. 월간 상한은 설정이 아니라 상수(`maxGoalsPerSuggestion`)다.
+        let parameters = parameters.merging(
+            ["max_items_per_goal": Double(maxGoalsPerSuggestion)]
+        ) { a, _ in a }
+
+        if let blocked = await preflight() {
+            achievementSuggestionLog.error(
+                "monthly \(label, privacy: .public) failure=\(blocked, privacy: .public)"
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: blocked,
+                    parameters: parameters
+                )
+            )
+            return .failure(reason: blocked)
+        }
+
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: label,
+            model: model,
+            attempt: context.attemptNumber
+        )
+        let outcome = await MonthlyGoalTask.run(
+            goals: goals.map(\.taskGoal),
+            suggestionCount: suggestionCount,
+            inputLimit: max(3, min(30, suggestionCount * 6)),
+            maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+            context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
+            trace: trace,
+            generate: generate
+        )
+        if let trace { TraceRecorder.shared?.record(trace) }
+
+        if let error = outcome.failure {
+            achievementSuggestionLog.error(
+                """
+                monthly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
+                error=\(achievementModelErrorDescription(error), privacy: .public)
+                """
+            )
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: label,
+                    model: model,
+                    outcome: "generationFailed",
+                    outcomeDetail: error.detailedFailureReason,
+                    selectedIDs: outcome.selectedIDs,
+                    promptCharacters: outcome.promptCharacters,
+                    timings: outcome.timings,
+                    parameters: parameters
+                )
+            )
+            return .failure(reason: error.detailedFailureReason)
+        }
+        if outcome.drafts.isEmpty {
+            achievementSuggestionLog.error(
+                """
+                monthly \(label, privacy: .public) \
+                failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)
+                """
+            )
+        }
+
+        // 파서를 AFM 경로와 공유하므로 초안은 `.foundationModel` 로 붙어 나온다. 실제 공급자로 다시 태깅한다.
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly, runID: context.runID).retagged(as: source) }
+        // 주간과 **같은 그릇**에 담아 같은 헬퍼로 읽는다. `parse` 가 비는 건 생성 자체가
+        // 실패했을 때뿐인데, 그건 위에서 이미 돌아갔다.
+        let diagnostics = WeeklyGoalTask.RunOutcome.Diagnostics.parsed(
+            outcome.parse ?? .decoded(
+                modelReturned: 0, kept: 0, requestedIDs: 0,
+                badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0
+            )
+        )
+        let result: AchievementGoalRecommendationResult
+        if case .decodeFailed = outcome.parse {
+            result = .failure(reason: diagnostics.outcomeDetail)
+        } else {
+            result = AchievementGoalRecommendationResult.from(
+                outcome.result, cadence: .monthly, source: source, runID: context.runID
+            )
+        }
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: label,
+                model: model,
+                // 왜 그만큼만 남았는지는 태스크가 안다. 여기서 다시 짐작하면
+                // «잘려서 0개» 와 «묶을 게 없어 0개» 가 한 칸으로 뭉친다.
+                outcome: result.recordedOutcome,
+                outcomeDetail: diagnostics.outcomeDetail,
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: diagnostics.parseSummary,
+                timings: outcome.timings,
+                parameters: parameters
+            )
+        )
+        return result
     }
 }
 
-enum AchievementPromptTemplate {
-    static func weeklyGoalSuggestion(
-        suggestionCount: Int,
-        maxMemoCount: Int,
-        items: String
-    ) -> String {
-        render(
-            fileName: "achievement_weekly_goal_suggestion",
-            fallback: weeklyGoalSuggestionFallback,
-            values: [
-                "suggestionCount": "\(suggestionCount)",
-                "maxMemoCount": "\(maxMemoCount)",
-                "items": items,
-            ]
+/// 앱 도메인 타입을 패키지 태스크의 입력으로 바꾼다.
+///
+/// 패키지는 `AchievementMemoSnapshot` 을 알면 안 되므로 경계에서 앱이 변환한다.
+/// 아이콘 기본값처럼 **앱이 정하는 값**도 여기서 채운다.
+private extension AchievementMemoSnapshot {
+    var taskMemo: WeeklyGoalTask.Memo {
+        WeeklyGoalTask.Memo(
+            id: id,
+            content: content,
+            icon: icon ?? MemoIcon.defaultIcon,
+            date: date,
+            startDate: startDate,
+            deadline: deadline,
+            isCompleted: isCompleted
         )
     }
+}
 
-    static func monthlyGoalSuggestion(
-        suggestionCount: Int,
-        items: String
-    ) -> String {
-        render(
-            fileName: "achievement_monthly_goal_suggestion",
-            fallback: monthlyGoalSuggestionFallback,
-            values: [
-                "suggestionCount": "\(suggestionCount)",
-                "items": items,
-            ]
+/// 패키지가 만든 초안을 앱 도메인 값으로 바꾼다.
+///
+/// `reason` 을 여기서 줄이는 이유는 72자 제한이 **화면 사정**이기 때문이다 — 파서가 정할 일이 아니다.
+/// 추천 카드가 이유를 2줄까지만 보여준다(`AchievementViews.swift` 의 `lineLimit(2)`).
+extension GoalSuggestionDraft {
+    func suggestion(cadence: AchievementGoalCadence, runID: String? = nil) -> AchievementGoalSuggestion {
+        AchievementGoalSuggestion(
+            title: title,
+            reason: AchievementDataBuilder.shortText(reason, limit: 72),
+            memoIDs: memoIDs,
+            childGoalIDs: childGoalIDs,
+            scheduleText: scheduleText,
+            criterion: criterion,
+            targetValueText: targetValueText,
+            emoji: emoji,
+            cadence: cadence,
+            source: .foundationModel,
+            runID: runID
         )
     }
+}
 
-    private static func render(
-        fileName: String,
-        fallback: String,
-        values: [String: String]
-    ) -> String {
-        var result = load(fileName: fileName) ?? fallback
-        for (key, value) in values {
-            result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
-        }
-        return result
+private extension AchievementGoalSnapshot {
+    var taskGoal: MonthlyGoalTask.Goal {
+        MonthlyGoalTask.Goal(
+            id: id,
+            title: title,
+            emoji: emoji,
+            rule: rule,
+            done: done,
+            total: total,
+            sourceMemoIDs: sourceMemoIDs,
+            roleName: roleName,
+            vision: vision
+        )
     }
-
-    private static func load(fileName: String) -> String? {
-        guard let url = Bundle.main.url(forResource: fileName, withExtension: "md") else {
-            return nil
-        }
-        return try? String(contentsOf: url, encoding: .utf8)
-    }
-
-    private static let weeklyGoalSuggestionFallback = """
-    아래 할일들을 의미, 아이콘, 시작일, 마감일, 완료 상태를 함께 보고 주간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    목표 후보 하나에는 할일을 최대 {{maxMemoCount}}개까지만 넣어.
-    각 후보는 사용자가 수정할 수 있는 초안이어야 하고, 같은 할일을 여러 후보에 중복해서 넣지 마.
-    존재하는 id만 memoIDs에 넣어.
-    scheduleText는 실제 startDate, deadline, date를 고려해 짧게 작성해.
-
-    JSON 형식:
-    {
-      "suggestions": [
-        {
-          "title": "목표명",
-          "reason": "묶은 이유",
-          "memoIDs": ["UUID"],
-          "scheduleText": "월/수/금에 나눠 진행",
-          "criterion": "연결한 할일 3개 완료",
-          "emoji": "🎯"
-        }
-      ]
-    }
-
-    할일:
-    {{items}}
-    """
-
-    private static let monthlyGoalSuggestionFallback = """
-    아래 주간 목표들을 의미, 달성 기준, 페르소나, 비전, 연결된 할일 수를 함께 보고 월간 목표 후보를 최대 {{suggestionCount}}개 제안해줘.
-    월간 목표 하나에는 주간 목표를 2개 이상 4개 이하로 넣어.
-    title은 입력된 주간 목표들의 실제 내용에서만 추론해 새로 작성해.
-    입력에 없는 구체적인 숫자, 회사 수, 횟수, 마감 조건은 만들지 마.
-    같은 주간 목표를 여러 월간 후보에 중복해서 넣지 마.
-    존재하는 id만 goalIDs에 넣어.
-
-    JSON 형식:
-    {
-      "suggestions": [
-        {
-          "title": "월간 목표명",
-          "reason": "묶은 이유",
-          "goalIDs": ["UUID"],
-          "scheduleText": "이번 달에 주간 목표 3개로 나눠 진행",
-          "criterion": "연결한 주간 목표 3개 달성",
-          "emoji": "📅"
-        }
-      ]
-    }
-
-    주간 목표:
-    {{items}}
-    """
 }
 
 #if canImport(FoundationModels)
@@ -1223,315 +1859,224 @@ struct FoundationModelsGoalSuggestionProvider {
     func suggestions(
         from memos: [AchievementMemoSnapshot],
         suggestionCount: Int,
-        maxMemoCount: Int
-    ) async -> [AchievementGoalSuggestion] {
-        let model = SystemLanguageModel.default
-        guard model.isAvailable else {
+        maxMemoCount: Int,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext
+    ) async -> AchievementGoalRecommendationResult {
+        let startedAt = Date()
+        let generator = AppleFoundationModelsTextGenerator()
+        guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "weekly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
             )
-            return []
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "modelUnavailable"
+                )
+            )
+        return .failure(reason: nil)
         }
 
-        let session = LanguageModelSession(
-            model: model,
-            instructions: "너는 사용자의 할일을 목표 지향적으로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
+        // 추론이 거부되면 그 자리를 다시 남긴다. 로그 문구는 인시던트 2026-07-31 의 진단 서명이라 유지한다.
+        var promptSummary = ""
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: "appleFoundation",
+            attempt: context.attemptNumber
         )
-        let inputLimit = max(8, min(40, suggestionCount * maxMemoCount * 2))
-        // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
-        // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
-        let selectedMemos = memosWithinPromptBudget(
-            Array(memos.prefix(inputLimit)),
+        let outcome = await WeeklyGoalTask.run(
+            memos: memos.map(\.taskMemo),
             suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
+            maxMemoCount: maxMemoCount,
+            // 개수만으로 자르면 메모가 길 때 프롬프트가 커져 추론이 통째로 거부된다.
+            // (측정: 3,424자는 통과, 5,203자는 실패 — 에러는 unsupportedLanguageOrLocale로 오분류되어 나온다)
+            inputLimit: max(8, min(15, suggestionCount * maxMemoCount * 2)),
+            budget: achievementPromptCharacterBudget,
+            context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
+            onPromptBuilt: { characters, memoCount in
+                promptSummary = "weekly prompt chars=\(characters) memos=\(memoCount)"
+                achievementSuggestionLog.info(
+                    "weekly prompt chars=\(characters, privacy: .public) memos=\(memoCount, privacy: .public)"
+                )
+            },
+            trace: trace,
+            generate: { prompt, instructions in
+                try await generator.generate(
+                    prompt: prompt,
+                    instructions: instructions,
+                    temperature: 0.2,
+                    maxTokens: 900
+                )
+            }
         )
-        let prompt = prompt(
-            for: selectedMemos,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount
-        )
+        if let trace { TraceRecorder.shared?.record(trace) }
 
-        achievementSuggestionLog.info(
-            "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
-        )
-
-        do {
-            let response = try await session.respond(
-                to: prompt,
-                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 900)
-            )
-            let parsed = Array(parse(
-                response.content,
-                allowedIDs: Set(memos.map(\.id)),
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
-            ).prefix(suggestionCount))
-            if parsed.isEmpty {
+        switch outcome.diagnostics {
+        case .parsed(let diagnostics):
+            AchievementFoundationGoalSuggestionProvider.logWeeklyParse(diagnostics)
+            if outcome.drafts.isEmpty {
                 achievementSuggestionLog.error(
                     "weekly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
                 )
             }
-            return parsed
-        } catch {
+        case .generationFailed(let error):
             achievementSuggestionLog.error(
                 """
                 weekly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
                 error=\(achievementModelErrorDescription(error), privacy: .public)
                 """
             )
-            achievementSuggestionLog.error(
-                "weekly prompt chars=\(prompt.count, privacy: .public) memos=\(selectedMemos.count, privacy: .public)"
-            )
-            return []
+            achievementSuggestionLog.error("\(promptSummary, privacy: .public)")
         }
+
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .weekly, runID: context.runID) }
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: "appleFoundation",
+                model: nil,
+                outcome: AchievementGoalRecommendationResult.from(
+                    outcome.result, cadence: .weekly, source: .foundationModel, runID: context.runID
+                ).recordedOutcome,
+                outcomeDetail: outcome.diagnostics.outcomeDetail,
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: outcome.diagnostics.parseSummary,
+                usage: outcome.usage,
+                timings: outcome.timings,
+                parameters: ["temperature": 0.2, "max_tokens": 900, "max_items_per_goal": Double(maxMemoCount)]
+            )
+        )
+        return AchievementGoalRecommendationResult.from(
+            outcome.result,
+            cadence: .weekly,
+            source: .foundationModel,
+            runID: context.runID
+        )
     }
 
     func monthlySuggestions(
         from goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) async -> [AchievementGoalSuggestion] {
-        let model = SystemLanguageModel.default
-        guard model.isAvailable else {
+        suggestionCount: Int,
+        maxGoalsPerSuggestion: Int = MonthlyGoalTask.maxGoalsPerSuggestion,
+        context: RunContext,
+        recommendationContext: GoalRecommendationContext
+    ) async -> AchievementGoalRecommendationResult {
+        let startedAt = Date()
+        let generator = AppleFoundationModelsTextGenerator()
+        guard generator.isAvailable else {
             achievementSuggestionLog.error(
                 "monthly model failure=\(AchievementSuggestionModelFailure.modelUnavailable.rawValue, privacy: .public)"
             )
-            return []
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "modelUnavailable",
+                    parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
+                )
+            )
+        return .failure(reason: nil)
         }
 
-        let session = LanguageModelSession(
-            model: model,
-            instructions: "너는 사용자의 주간 목표를 더 큰 월간 목표로 묶어주는 생산성 앱 도우미다. 응답은 반드시 유효한 JSON만 출력한다."
+        let trace = TraceRecorder.shared?.makeCollector(
+            runId: context.runID,
+            task: context.task,
+            provider: "appleFoundation",
+            attempt: context.attemptNumber
         )
-        let inputLimit = max(3, min(30, suggestionCount * 6))
-        let prompt = monthlyPrompt(
-            for: Array(goals.prefix(inputLimit)),
-            suggestionCount: suggestionCount
-        )
-
-        do {
-            let response = try await session.respond(
-                to: prompt,
-                options: GenerationOptions(temperature: 0.25, maximumResponseTokens: 900)
-            )
-            let parsed = Array(parseMonthly(
-                response.content,
-                allowedIDs: Set(goals.map(\.id)),
-                sourceGoals: goals,
-                suggestionCount: suggestionCount
-            ).prefix(suggestionCount))
-            if parsed.isEmpty {
-                achievementSuggestionLog.error(
-                    "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
+        let outcome = await MonthlyGoalTask.run(
+            goals: goals.map(\.taskGoal),
+            suggestionCount: suggestionCount,
+            inputLimit: max(3, min(30, suggestionCount * 6)),
+            maxGoalsPerSuggestion: maxGoalsPerSuggestion,
+            context: recommendationContext,
+            timeoutInterval: Constants.achievementSuggestionTimeout,
+            trace: trace,
+            generate: { prompt, instructions in
+                try await generator.generate(
+                    prompt: prompt,
+                    instructions: instructions,
+                    temperature: 0.25,
+                    maxTokens: achievementMonthlyMaxTokens
                 )
             }
-            return parsed
-        } catch {
+        )
+        if let trace { TraceRecorder.shared?.record(trace) }
+
+        if let error = outcome.failure {
             achievementSuggestionLog.error(
                 """
                 monthly model failure=\(AchievementSuggestionModelFailure.inferenceFailed.rawValue, privacy: .public) \
                 error=\(achievementModelErrorDescription(error), privacy: .public)
                 """
             )
-            return []
+            AIRunLog.record(
+                context.record(
+                    startedAt: startedAt,
+                    provider: "appleFoundation",
+                    model: nil,
+                    outcome: "generationFailed",
+                    outcomeDetail: error.detailedFailureReason,
+                    selectedIDs: outcome.selectedIDs,
+                    promptCharacters: outcome.promptCharacters,
+                    timings: outcome.timings,
+                    parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
+                )
+            )
+        return .failure(reason: nil)
         }
-    }
-
-    /// 프롬프트가 문자 예산을 넘지 않는 선까지만 메모를 담는다.
-    /// 메모 길이는 사용자마다 제각각이라 "개수" 상한만으로는 크기를 보장할 수 없다.
-    func memosWithinPromptBudget(
-        _ memos: [AchievementMemoSnapshot],
-        suggestionCount: Int,
-        maxMemoCount: Int,
-        budget: Int = achievementPromptCharacterBudget
-    ) -> [AchievementMemoSnapshot] {
-        // 묶으려면 최소 2개는 있어야 하므로 예산을 넘더라도 2개는 유지한다.
-        let minimumCount = min(2, memos.count)
-        var selected = memos
-        while selected.count > minimumCount {
-            let size = prompt(
-                for: selected,
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxMemoCount
-            ).count
-            if size <= budget { break }
-            selected.removeLast()
-        }
-        return selected
-    }
-
-    func prompt(
-        for memos: [AchievementMemoSnapshot],
-        suggestionCount: Int,
-        maxMemoCount: Int
-    ) -> String {
-        // 프롬프트 크기가 추론 성패를 가르므로(인시던트 2026-07-31) 값이 없는 필드는 생략한다.
-        // "없음"으로 채우면 메모당 30자 이상을 정보 없이 소비한다.
-        let lines = memos.map { memo in
-            var fields = [
-                "- id: \(memo.id.uuidString)",
-                "  text: \(memo.content)",
-                "  icon: \(memo.icon ?? MemoIcon.defaultIcon)",
-                "  date: \(dateText(memo.date))",
-            ]
-            if memo.startDate != nil {
-                fields.append("  startDate: \(dateText(memo.startDate))")
-            }
-            if memo.deadline != nil {
-                fields.append("  deadline: \(dateText(memo.deadline))")
-            }
-            // 미완료 할일만 입력으로 들어오므로 기본값일 때는 생략한다.
-            if memo.isCompleted {
-                fields.append("  completed: true")
-            }
-            return fields.joined(separator: "\n")
-        }.joined(separator: "\n")
-
-        return AchievementPromptTemplate.weeklyGoalSuggestion(
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxMemoCount,
-            items: lines
-        )
-    }
-
-    private func monthlyPrompt(
-        for goals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) -> String {
-        let lines = goals.map { goal in
-            [
-                "- id: \(goal.id.uuidString)",
-                "  title: \(goal.title)",
-                "  emoji: \(goal.emoji)",
-                "  rule: \(goal.rule)",
-                "  progress: \(goal.done)/\(goal.total)",
-                "  role: \(goal.roleName.isEmpty ? "없음" : goal.roleName)",
-                "  vision: \(goal.vision.isEmpty ? "없음" : goal.vision)",
-                "  linkedTodoCount: \(goal.sourceMemoIDs.count)",
-            ].joined(separator: "\n")
-        }.joined(separator: "\n")
-
-        return AchievementPromptTemplate.monthlyGoalSuggestion(
-            suggestionCount: suggestionCount,
-            items: lines
-        )
-    }
-
-    func parse(
-        _ text: String,
-        allowedIDs: Set<UUID>,
-        suggestionCount: Int,
-        maxMemoCount: Int
-    ) -> [AchievementGoalSuggestion] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let jsonText = extractJSONObject(from: trimmed)
-        guard let data = jsonText.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
-            achievementSuggestionLog.error("weekly parse failure=decode chars=\(trimmed.count, privacy: .public)")
-            return []
-        }
-
-        // 모델이 낸 개수와 파서가 살린 개수를 구분해야 "모델이 적게 냄"과 "파서가 버림"을 나눌 수 있다.
-        var badID = 0
-        var alreadyUsed = 0
-        var overMaxMemo = 0
-        var tooFewIDs = 0
-        var requestedIDs = 0
-        var used = Set<UUID>()
-        let result = payload.suggestions.compactMap { item -> AchievementGoalSuggestion? in
-            let raw = item.memoIDs ?? []
-            requestedIDs += raw.count
-            let parsedIDs = raw.compactMap(UUID.init(uuidString:)).filter { allowedIDs.contains($0) }
-            badID += raw.count - parsedIDs.count
-            let unused = parsedIDs.filter { !used.contains($0) }
-            alreadyUsed += parsedIDs.count - unused.count
-            let ids = unused.prefix(maxMemoCount)
-            overMaxMemo += unused.count - ids.count
-            guard ids.count >= 2 else {
-                tooFewIDs += 1
-                return nil
-            }
-            used.formUnion(ids)
-            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
-            return AchievementGoalSuggestion(
-                title: title.isEmpty ? "추천 목표" : title,
-                reason: AchievementDataBuilder.shortText(item.reason, limit: 72),
-                memoIDs: Array(ids),
-                scheduleText: item.scheduleText.isEmpty ? "이번 주에 나눠 진행" : item.scheduleText,
-                criterion: criterion.isEmpty ? "연결한 할일 \(ids.count)개 완료" : criterion,
-                targetValueText: "\(ids.count)개",
-                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "🎯",
-                source: .foundationModel
+        if outcome.drafts.isEmpty {
+            achievementSuggestionLog.error(
+                "monthly model failure=\(AchievementSuggestionModelFailure.parsedEmpty.rawValue, privacy: .public)"
             )
         }
-        achievementSuggestionLog.info(
-            """
-            weekly parse modelReturned=\(payload.suggestions.count, privacy: .public) \
-            kept=\(result.count, privacy: .public) requestedIDs=\(requestedIDs, privacy: .public) \
-            badID=\(badID, privacy: .public) alreadyUsed=\(alreadyUsed, privacy: .public) \
-            overMaxMemo=\(overMaxMemo, privacy: .public) tooFewIDs=\(tooFewIDs, privacy: .public)
-            """
-        )
-        return Array(result.prefix(suggestionCount))
-    }
-
-    private func parseMonthly(
-        _ text: String,
-        allowedIDs: Set<UUID>,
-        sourceGoals: [AchievementGoalSnapshot],
-        suggestionCount: Int
-    ) -> [AchievementGoalSuggestion] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let jsonText = extractJSONObject(from: trimmed)
-        guard let data = jsonText.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AchievementFoundationSuggestionPayload.self, from: data) else {
-            return []
-        }
-
-        let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
-        var used = Set<UUID>()
-        return payload.suggestions.compactMap { item in
-            let ids = (item.goalIDs ?? []).compactMap(UUID.init(uuidString:))
-                .filter { allowedIDs.contains($0) && !used.contains($0) }
-                .prefix(4)
-            guard ids.count >= 2 else { return nil }
-            used.formUnion(ids)
-            let goals = ids.compactMap { goalByID[$0] }
-            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            let criterion = item.criterion.trimmingCharacters(in: .whitespacesAndNewlines)
-            let scheduleText = item.scheduleText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return AchievementGoalSuggestion(
-                title: title.isEmpty ? "추천 월간 목표" : title,
-                reason: AchievementDataBuilder.shortText(item.reason, limit: 72),
-                memoIDs: Array(Set(goals.flatMap(\.sourceMemoIDs))),
-                childGoalIDs: Array(ids),
-                scheduleText: scheduleText.isEmpty ? "이번 달에 주간 목표 \(ids.count)개로 나눠 진행" : scheduleText,
-                criterion: criterion.isEmpty ? "연결한 주간 목표 \(ids.count)개 달성" : criterion,
-                targetValueText: "\(ids.count)개",
-                emoji: item.emoji?.isEmpty == false ? String(item.emoji!.prefix(1)) : "📅",
-                cadence: .monthly,
-                source: .foundationModel
+        let suggestions = outcome.drafts.map { $0.suggestion(cadence: .monthly, runID: context.runID) }
+        // 주간과 **같은 그릇**에 담아 같은 헬퍼로 읽는다. `parse` 가 비는 건 생성 자체가
+        // 실패했을 때뿐인데, 그건 위에서 이미 돌아갔다.
+        let diagnostics = WeeklyGoalTask.RunOutcome.Diagnostics.parsed(
+            outcome.parse ?? .decoded(
+                modelReturned: 0, kept: 0, requestedIDs: 0,
+                badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0
             )
-        }
-        .prefix(suggestionCount)
-        .map { $0 }
+        )
+        AIRunLog.record(
+            context.record(
+                startedAt: startedAt,
+                provider: "appleFoundation",
+                model: nil,
+                // 왜 그만큼만 남았는지는 태스크가 안다. 여기서 다시 짐작하면
+                // «잘려서 0개» 와 «묶을 게 없어 0개» 가 한 칸으로 뭉친다.
+                outcome: AchievementGoalRecommendationResult.from(
+                    outcome.result, cadence: .monthly, source: .foundationModel, runID: context.runID
+                ).recordedOutcome,
+                outcomeDetail: diagnostics.outcomeDetail,
+                titles: suggestions.map(\.title),
+                selectedIDs: outcome.selectedIDs,
+                promptCharacters: outcome.promptCharacters,
+                parse: diagnostics.parseSummary,
+                timings: outcome.timings,
+                parameters: ["temperature": 0.25, "max_tokens": Double(achievementMonthlyMaxTokens),
+                     "max_items_per_goal": Double(maxGoalsPerSuggestion)]
+            )
+        )
+        return AchievementGoalRecommendationResult.from(
+            outcome.result,
+            cadence: .monthly,
+            source: .foundationModel,
+            runID: context.runID
+        )
     }
 
-    func extractJSONObject(from text: String) -> String {
-        guard let start = text.firstIndex(of: "{"),
-              let end = text.lastIndex(of: "}") else {
-            return text
-        }
-        return String(text[start...end])
-    }
-
-    private func dateText(_ date: Date?) -> String {
-        guard let date else { return "없음" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy-MM-dd E HH:mm"
-        return formatter.string(from: date)
-    }
 }
 #endif
 
@@ -1644,6 +2189,15 @@ private enum AchievementDataBuilder {
             let goalProgress = progress(for: record)
             let done = goalProgress.total > 0 ? min(goalProgress.done, goalProgress.total) : 0
             let total = goalProgress.total
+            // 달성을 **사건으로** 남긴다. 여기가 달성 여부를 아는 유일한 자리다 —
+            // `done`·`total` 은 지금 남아 있는 할일로부터 계산되므로, 나중에 할일을 더하거나
+            // 지우면 답이 바뀐다. 처음 참이 된 순간을 찍어 두지 않으면 그 사실을 잃는다.
+            //
+            // 한 번 찍은 값은 되돌리지 않는다. 달성이 풀리는 일(할일 추가)은 있어도
+            // «그때 달성했었다» 는 사실은 변하지 않는다.
+            if total > 0, done >= total, record.completedAt == nil {
+                record.completedAt = Date()
+            }
             return AchievementGoal(
                 id: record.id,
                 emoji: record.emoji,
@@ -4038,7 +4592,7 @@ struct AchievementDetailWindow: View {
         let wGoals = goals.filter { $0.cadence == "주간" && $0.monthGoal == goal.title }
         let wGoalMemoIDs = Set(wGoals.flatMap { $0.sourceMemoIDs })
         let directMemos = linkedMemos(for: goal).filter { !wGoalMemoIDs.contains($0.id) }
-        
+
         if !wGoals.isEmpty || !directMemos.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -4179,7 +4733,7 @@ struct AchievementDetailWindow: View {
             slots.append(nil)
         }
         let validSlots = Array(slots.prefix(clampedJourneyMaxFlagCount))
-        
+
         return validSlots.enumerated().sorted {
             let lhsGoal = $0.element
             let rhsGoal = $1.element
@@ -7323,6 +7877,12 @@ private struct AchievementMemoPickerSection: Identifiable {
 }
 
 private struct AchievementGoalComposerSheet: View {
+    /// 지금 폼에 채워 넣은 추천. «적용» 을 눌렀을 때만 채워진다.
+    ///
+    /// 적용과 저장은 **다른 순간**이다 — 적용은 폼을 채울 뿐이고 목표는 저장에서 생긴다.
+    /// 적용만 하고 닫으면 채택이 아니므로, 출처를 여기 들고 있다가 **저장할 때** 심는다.
+    @State private var appliedSuggestion: AchievementGoalSuggestion?
+
     let memos: [Memo]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
@@ -7330,13 +7890,17 @@ private struct AchievementGoalComposerSheet: View {
     let onSave: (AchievementGoalRecord, Set<UUID>, [String]) throws -> Void
 
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
-    private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
+    private var weeklySuggestionLimit: Int = Constants.defaultAchievementSuggestionCount
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
-    private var suggestionMaxTodoCount: Int = Constants.defaultAchievementSuggestionMaxTodoCount
+    private var maxTodosPerWeeklyGoal: Int = Constants.defaultAchievementSuggestionMaxTodoCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
-    private var monthlySuggestionMinWeeklyGoalCount: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
+    private var minWeeklyGoalsForMonthlySuggestions: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionCount)
-    private var monthlySuggestionCount: Int = Constants.defaultAchievementMonthlySuggestionCount
+    private var monthlySuggestionLimit: Int = Constants.defaultAchievementMonthlySuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementMinTodosForWeeklySuggestions)
+    private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
+    @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
+    private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
     @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementDismissedSuggestionKeys)
@@ -7356,6 +7920,7 @@ private struct AchievementGoalComposerSheet: View {
     @State private var selectedMemoIDs = Set<UUID>()
     @State private var validationMessage: String?
     @State private var suggestions: [AchievementGoalSuggestion] = []
+    @State private var guidance: [GoalRecommendationGuidance] = []
     @State private var isLoadingSuggestions = false
     @State private var suggestionMessage: String?
     @State private var didLoadSuggestions = false
@@ -7421,16 +7986,22 @@ private struct AchievementGoalComposerSheet: View {
                 loadGoalSuggestions()
             }
         }
-        .onChange(of: suggestionCount) { _, _ in
+        .onChange(of: weeklySuggestionLimit) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: suggestionMaxTodoCount) { _, _ in
+        .onChange(of: maxTodosPerWeeklyGoal) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: monthlySuggestionMinWeeklyGoalCount) { _, _ in
+        .onChange(of: minWeeklyGoalsForMonthlySuggestions) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
-        .onChange(of: monthlySuggestionCount) { _, _ in
+        .onChange(of: monthlySuggestionLimit) { _, _ in
+            reloadSuggestionsAfterSettingsChange()
+        }
+        .onChange(of: minTodosForWeeklySuggestions) { _, _ in
+            reloadSuggestionsAfterSettingsChange()
+        }
+        .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
         .onChange(of: excludedMemoIconsRaw) { _, _ in
@@ -7536,6 +8107,15 @@ private struct AchievementGoalComposerSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+            } else if !guidance.isEmpty {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("목표로 묶기 전에 조금만 구체화해 보세요")
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                    ForEach(guidance) { item in
+                        guidanceCard(item)
+                    }
+                }
             } else if suggestions.isEmpty {
                 Text("추천할 묶음이 없습니다. 직접 입력에서 할일을 선택해 목표로 만들 수 있습니다.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -7572,12 +8152,10 @@ private struct AchievementGoalComposerSheet: View {
                     .font(.system(size: 18))
                     .frame(width: 28, height: 28)
                     .background(PopoverChrome.accentSoft.opacity(0.7), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(suggestion.title)
-                            .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.ink)
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 4) {
+                    // 배지는 폭이 고정이라 제목과 한 줄을 나눠 쓰면 **제목이 먼저 잘린다.**
+                    // 위로 올려 제목이 카드 폭을 통째로 쓰게 한다.
+                    HStack(spacing: 5) {
                         Text(suggestion.cadence.rawValue)
                             .font(.system(size: 9.5, weight: .bold, design: .rounded))
                             .foregroundStyle(suggestion.cadence == .monthly ? PopoverChrome.accent : PopoverChrome.inkSecondary)
@@ -7587,21 +8165,41 @@ private struct AchievementGoalComposerSheet: View {
                                 (suggestion.cadence == .monthly ? PopoverChrome.accentSoft : PopoverChrome.surfaceAlt).opacity(0.76),
                                 in: Capsule()
                             )
-                        #if DEBUG
-                        // 이 카드가 모델 결과인지 룰 기반 폴백인지 개발 중에 즉시 구분하기 위한 배지
-                        Text(suggestion.source.rawValue)
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkSecondary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(PopoverChrome.surfaceAlt.opacity(0.6), in: Capsule())
-                        #endif
+                        // 룰 기반은 **항상** 표시한다. 사용자가 «AI 추천» 을 직접 골랐는데
+                        // 규칙이 만든 결과를 받으면서 모른다면, 기대한 것과 다른 걸 준 것이다.
+                        // 어느 공급자였는지는 개발 중에만 궁금하므로 나머지는 DEBUG 로 둔다.
+                        if suggestion.source == .rule {
+                            Text("규칙")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(PopoverChrome.surfaceAlt.opacity(0.6), in: Capsule())
+                                .help("AI가 묶음을 만들지 못해 규칙으로 묶은 초안입니다.")
+                        } else {
+                            #if DEBUG
+                            Text(suggestion.source.rawValue)
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkSecondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(PopoverChrome.surfaceAlt.opacity(0.6), in: Capsule())
+                            #endif
+                        }
                     }
+                    Text(suggestion.title)
+                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                        // 줄 수를 막지 않는다 — 잘린 제목은 어느 목표인지 알 수 없게 만든다.
+                        // `fixedSize` 가 없으면 높이가 좁다고 판단해 그대로 말줄임으로 돌아간다.
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(suggestion.reason)
                         .font(.system(size: 11.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .lineLimit(2)
                 }
+                // 남는 폭을 제목이 갖게 한다. 이게 없으면 텍스트 열과 `Spacer` 가 폭을 나눠 갖는다.
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 4)
                 Button {
                     dismissSuggestion(suggestion)
@@ -7701,6 +8299,29 @@ private struct AchievementGoalComposerSheet: View {
         .padding(12)
         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
+    }
+
+    private func guidanceCard(_ item: GoalRecommendationGuidance) -> some View {
+        let inputTitle = memos.first(where: { $0.id == item.inputID })?.content
+            ?? existingGoals.first(where: { $0.id == item.inputID })?.title
+            ?? "입력 항목"
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(inputTitle)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(2)
+            if !item.missing.isEmpty {
+                Text("보완할 점: \(item.missing.joined(separator: ", "))")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+            Text(item.suggestion)
+                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
     }
 
     private var directInputForm: some View {
@@ -8361,20 +8982,28 @@ private struct AchievementGoalComposerSheet: View {
         return unlinked
     }
 
-    private var clampedSuggestionCount: Int {
-        clamped(suggestionCount, in: Constants.achievementSuggestionCountRange)
+    private var clampedWeeklySuggestionLimit: Int {
+        clamped(weeklySuggestionLimit, in: Constants.achievementSuggestionCountRange)
     }
 
-    private var clampedSuggestionMaxTodoCount: Int {
-        clamped(suggestionMaxTodoCount, in: Constants.achievementSuggestionMaxTodoCountRange)
+    private var clampedMaxTodosPerWeeklyGoal: Int {
+        clamped(maxTodosPerWeeklyGoal, in: Constants.achievementSuggestionMaxTodoCountRange)
     }
 
-    private var clampedMonthlyMinWeeklyGoalCount: Int {
-        clamped(monthlySuggestionMinWeeklyGoalCount, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
+    private var clampedMinWeeklyGoalsForMonthlySuggestions: Int {
+        clamped(minWeeklyGoalsForMonthlySuggestions, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
     }
 
-    private var clampedMonthlySuggestionCount: Int {
-        clamped(monthlySuggestionCount, in: Constants.achievementMonthlySuggestionCountRange)
+    private var clampedMonthlySuggestionLimit: Int {
+        clamped(monthlySuggestionLimit, in: Constants.achievementMonthlySuggestionCountRange)
+    }
+
+    private var clampedMinTodosForWeeklySuggestions: Int {
+        clamped(minTodosForWeeklySuggestions, in: Constants.achievementMinTodosForWeeklySuggestionsRange)
+    }
+
+    private var clampedMaxWeeklyGoalsPerMonthlyGoal: Int {
+        clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
     }
 
     private func memo(for id: UUID) -> Memo? {
@@ -8387,87 +9016,197 @@ private struct AchievementGoalComposerSheet: View {
 
     private func loadGoalSuggestions(force: Bool = false) {
         guard force || !isLoadingSuggestions else { return }
-        let snapshots = AchievementGoalSuggestionBuilder.snapshots(from: suggestionSourceMemos)
-        let suggestionCount = clampedSuggestionCount
-        let maxTodoCount = clampedSuggestionMaxTodoCount
-        let weeklyGoalSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: weeklyGoalsForMonthlySuggestions)
-        let monthlyMinWeeklyCount = clampedMonthlyMinWeeklyGoalCount
-        let monthlySuggestionCount = clampedMonthlySuggestionCount
-        let shouldSuggestMonthly = weeklyGoalSnapshots.count >= monthlyMinWeeklyCount
-        let ruleSuggestions = AchievementGoalSuggestionBuilder.ruleBasedSuggestions(
-            from: snapshots,
-            suggestionCount: suggestionCount,
-            maxMemoCount: maxTodoCount
-        )
-        let monthlyRuleSuggestions = shouldSuggestMonthly
-            ? AchievementGoalSuggestionBuilder.monthlyRuleBasedSuggestions(
-                from: weeklyGoalSnapshots,
-                suggestionCount: monthlySuggestionCount
-            )
-            : []
+        // weekly
+        let minTodosForWeeklySuggestions = clampedMinTodosForWeeklySuggestions // 추천 시작 기준: 할 일이 N개 이상일 때
+        let weeklySuggestionLimit = clampedWeeklySuggestionLimit // 한 번에 보여줄 최대 주간 목표 수
+        let maxTodosPerWeeklyGoal = clampedMaxTodosPerWeeklyGoal // 주간 목표 하나에 묶을 최대 할 일 수
+        let weeklyTodoSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: suggestionSourceMemos) // 주간 할 일 스냅샷. (주간 목표 추천 시 입력 데이터 복사본/필터를 통과한 할 일 목록)
+        // monthly
+        let minWeeklyGoalsForMonthlySuggestions = clampedMinWeeklyGoalsForMonthlySuggestions // 추천 시작 기준: 주간 목표가 N개 이상일 때
+        let monthlySuggestionLimit = clampedMonthlySuggestionLimit // 한 번에 보여줄 최대 월간 목표 수
+        let maxWeeklyGoalsPerMonthlyGoal = clampedMaxWeeklyGoalsPerMonthlyGoal // 월간 목표 하나에 묶을 최대 주간 목표 수
+        let weeklyGoalSnapshots = AchievementGoalSuggestionBuilder.snapshots(from: weeklyGoalsForMonthlySuggestions) // 주간 목표 스냅샷. (월간 목표 추천 시 입력 데이터 복사본/필터를 통과한 주간 목표 목록)
+
+        // 후보 할일이 너무 적으면 하나의 주간 목표로 의미 있게 묶을 수 없으므로 추천을 시작하지 않는다.
+        let canSuggestWeekly = weeklyTodoSnapshots.count >= minTodosForWeeklySuggestions
+        // 주간 목표가 충분히 쌓였을 때만, 그것들을 더 큰 월간 목표로 묶어 본다.
+        let canSuggestMonthly = weeklyGoalSnapshots.count >= minWeeklyGoalsForMonthlySuggestions
 
         suggestions = []
-        suggestionMessage = shouldSuggestMonthly
+        guidance = []
+        suggestionMessage = canSuggestMonthly
             ? "할일과 주간 목표의 의미를 분석하고 있습니다."
             : "할일의 의미를 분석하고 있습니다."
-        isLoadingSuggestions = true
+        isLoadingSuggestions = true // '추천 중' 로딩 표시를 위한 플래그
         didLoadSuggestions = true
 
+        // 버튼 한 번에 붙는 id. 주간·월간이 이 값을 공유해야 기록에서 한 실행으로 묶인다.
+        let runID = AIRunLog.newRunID()
+        // 목표 추천에는 사용자가 직접 남긴 참고 사항만 보탠다. 닉네임은 추천 근거가 아니므로
+        // 컨텍스트에 넣지 않는다.
+        let recommendationContext = GoalRecommendationContext(profile: CompanionUserProfile.load().note)
+
         Task {
-            async let modelSuggestions = AchievementFoundationGoalSuggestionProvider.suggestions(
-                from: snapshots,
-                suggestionCount: suggestionCount,
-                maxMemoCount: maxTodoCount
-            )
-            async let monthlyModelSuggestions = shouldSuggestMonthly
-                ? AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
-                    from: weeklyGoalSnapshots,
-                    suggestionCount: monthlySuggestionCount
+            // 앞선 실행이 걸어 둔 언로드 예약을 취소한다. 지금 쓸 모델을 밑에서 걷어내면 안 된다.
+            await SuggestionModelUnloader.shared.beginRun()
+            // 공급자를 **여기서 한 번만** 읽는다. 주간·월간이 각자 읽으면 순차로 돌 때
+            // 두 읽기 사이가 수십 초까지 벌어져, 그사이 설정을 바꾸면 한 실행 안에서
+            // 공급자가 갈린다(실측 2026-08-19: 주간 mlx → 7초 뒤 월간 appleFoundation).
+            // 버튼 한 번은 한 공급자로 끝나야 기록도 비교도 성립한다.
+            let provider = AchievementFoundationGoalSuggestionProvider.selectedProvider
+            // 어떻게 돌렸는지는 **기록에 남는다**(`RunRecord.variant`). 어느 쪽이 빠른지는
+            // 공급자마다 다른데 지금 기본값은 관측에 기댄 추측이라, 뒤집어 재 볼 수 있어야 한다.
+            let strategy = SuggestionExecutionStrategy.resolved(provider: provider)
+
+            @Sendable func weeklyRun() async -> AchievementGoalRecommendationResult {
+                guard canSuggestWeekly else { return .noSuggestion }
+                return await AchievementFoundationGoalSuggestionProvider.suggestions(
+                    from: weeklyTodoSnapshots,
+                    suggestionCount: weeklySuggestionLimit,
+                    maxMemoCount: maxTodosPerWeeklyGoal,
+                    runID: runID,
+                    candidateCount: weeklyTodoSnapshots.count,
+                    variant: strategy.rawValue,
+                    recommendationContext: recommendationContext,
+                    provider: provider
                 )
-                : []
-            let (weeklyModelValues, monthlyModelValues) = await (modelSuggestions, monthlyModelSuggestions)
+            }
+            @Sendable func monthlyRun() async -> AchievementGoalRecommendationResult {
+                guard canSuggestMonthly else { return .noSuggestion }
+                return await AchievementFoundationGoalSuggestionProvider.monthlySuggestions(
+                    from: weeklyGoalSnapshots,
+                    suggestionCount: monthlySuggestionLimit,
+                    maxGoalsPerSuggestion: maxWeeklyGoalsPerMonthlyGoal,
+                    runID: runID,
+                    candidateCount: weeklyGoalSnapshots.count,
+                    variant: strategy.rawValue,
+                    recommendationContext: recommendationContext,
+                    provider: provider
+                )
+            }
+
+            // 주간·월간을 동시에 보낼지, 하나씩 보낼지는 **공급자가 정한다.**
+            //
+            // 로컬 모델(Ollama·MLX)은 요청을 하나씩만 처리한다(실측 2026-08-19: 같은 모델에
+            // 두 요청을 동시에 보내면 뒤엣것이 18.6초를 한 글자도 못 받고 기다렸다). 그런데
+            // 60초 타임아웃은 **보낸 순간부터** 도므로, 기다린 시간이 자기 몫에서 깎여 나간다.
+            // 실측에서 타임아웃 14건 중 11건이 이 모양이었다 — 같은 실행의 다른 태스크가
+            // 같은 공급자로 성공하는 동안 이쪽은 큐에서 예산을 다 쓰고 죽었다.
+            //
+            // 순차로 바꿔도 **총 시간은 그대로다.** 어차피 하나씩 처리되고 있었고,
+            // 달라지는 건 타이머가 자기 차례에 시작한다는 것뿐이다.
+            //
+            // AFM 은 반대다. 앱 밖(시스템)에서 돌아 진짜로 겹쳐 실행되고(실측: 24.0초짜리와
+            // 43.8초짜리가 겹쳐서 43.8초에 끝났다), 105건 중 타임아웃이 0건이다. 여기까지
+            // 순차로 만들면 얻는 것 없이 느려지기만 한다.
+            let weeklyModelValue: AchievementGoalRecommendationResult
+            let monthlyModelValue: AchievementGoalRecommendationResult
+            switch strategy {
+            case .parallel:
+                async let weekly = weeklyRun()
+                async let monthly = monthlyRun()
+                (weeklyModelValue, monthlyModelValue) = await (weekly, monthly)
+            case .sequential:
+                weeklyModelValue = await weeklyRun()
+                monthlyModelValue = await monthlyRun()
+            }
+            // 주간·월간이 **모두** 돌아온 뒤에 유예 타이머를 건다. 한쪽만 끝났을 때 걸면
+            // 아직 도는 쪽이 쓰던 모델을 30초 뒤에 뺏는다.
+            await SuggestionModelUnloader.shared.endRun()
             await MainActor.run {
                 let weeklyModel = mergeSuggestions(
-                    weeklyModelValues,
+                    weeklyModelValue.suggestions,
                     cadence: .weekly,
-                    displayLimit: suggestionCount
+                    displayLimit: weeklySuggestionLimit
                 )
                 let monthlyModel = mergeSuggestions(
-                    monthlyModelValues,
+                    monthlyModelValue.suggestions,
                     cadence: .monthly,
-                    displayLimit: monthlySuggestionCount
+                    displayLimit: monthlySuggestionLimit
                 )
+
+                // AI 결과가 유효하지 않을 때만 규칙 기반 폴백을 만든다.
+                let weeklyGuidance = weeklyModelValue.guidance
+                let monthlyGuidance = monthlyModelValue.guidance
+                let weeklyRuleSuggestions = weeklyModelValue.shouldFallbackToNextProvider && canSuggestWeekly
+                    ? AchievementGoalSuggestionBuilder.ruleBasedSuggestions(
+                        from: weeklyTodoSnapshots,
+                        suggestionCount: weeklySuggestionLimit,
+                        maxMemoCount: maxTodosPerWeeklyGoal
+                    )
+                    : []
+                let monthlyRuleSuggestions = monthlyModelValue.shouldFallbackToNextProvider && canSuggestMonthly
+                    ? AchievementGoalSuggestionBuilder.monthlyRuleBasedSuggestions(
+                        from: weeklyGoalSnapshots,
+                        suggestionCount: monthlySuggestionLimit,
+                        maxGoalsPerSuggestion: maxWeeklyGoalsPerMonthlyGoal
+                    )
+                    : []
+
                 let weekly = weeklyModel.suggestions.isEmpty
-                    ? mergeSuggestions(ruleSuggestions, cadence: .weekly, displayLimit: suggestionCount).suggestions
+                    ? mergeSuggestions(weeklyRuleSuggestions, cadence: .weekly, displayLimit: weeklySuggestionLimit).suggestions
                     : weeklyModel.suggestions
                 let monthly = monthlyModel.suggestions.isEmpty
-                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionCount).suggestions
+                    ? mergeSuggestions(monthlyRuleSuggestions, cadence: .monthly, displayLimit: monthlySuggestionLimit).suggestions
                     : monthlyModel.suggestions
+
+                // 룰이 대신 만든 경우도 **기록에 남긴다.** 오래도록 안 남겨서, 화면에는 떴는데
+                // AI 실험실에는 없는 상태였다 — «모델이 실패했는데 사용자는 결과를 봤다» 가
+                // 통째로 안 보였다. 채택률을 룰과 모델로 나눠 재려면 이 줄이 있어야 한다.
+                if weeklyModel.suggestions.isEmpty && weeklyGuidance.isEmpty {
+                    AIRunLog.recordRuleFallback(
+                        runID: runID, task: "weekly_goal",
+                        candidateCount: weeklyTodoSnapshots.count, suggestions: weekly
+                    )
+                }
+                if canSuggestMonthly, monthlyModel.suggestions.isEmpty && monthlyGuidance.isEmpty {
+                    AIRunLog.recordRuleFallback(
+                        runID: runID, task: "monthly_goal",
+                        candidateCount: weeklyGoalSnapshots.count, suggestions: monthly
+                    )
+                }
                 logSuggestionFunnel(
                     cadence: .weekly,
-                    inputCount: snapshots.count,
-                    modelParsed: weeklyModelValues.count,
+                    inputCount: weeklyTodoSnapshots.count,
+                    modelParsed: weeklyModelValue.suggestions.count,
                     stats: weeklyModel.stats,
                     shownCount: weekly.count
                 )
-                if shouldSuggestMonthly {
+                if canSuggestMonthly {
                     logSuggestionFunnel(
                         cadence: .monthly,
                         inputCount: weeklyGoalSnapshots.count,
-                        modelParsed: monthlyModelValues.count,
+                        modelParsed: monthlyModelValue.suggestions.count,
                         stats: monthlyModel.stats,
                         shownCount: monthly.count
                     )
                 }
                 suggestions = weekly + monthly
+                guidance = weeklyGuidance + monthlyGuidance
                 isLoadingSuggestions = false
-                if weeklyModel.suggestions.isEmpty && monthlyModel.suggestions.isEmpty {
+                if !guidance.isEmpty {
+                    suggestionMessage = "지금 입력만으로는 목표를 묶기 어려워, 항목별로 구체화할 방법을 안내합니다."
+                } else if weeklyModel.suggestions.isEmpty && monthlyModel.suggestions.isEmpty {
                     suggestionMessage = finalRuleSuggestionMessage(
                         weeklyCount: weekly.count,
                         monthlyCount: monthly.count,
-                        shouldSuggestMonthly: shouldSuggestMonthly,
-                        monthlyMinWeeklyCount: monthlyMinWeeklyCount
+                        canSuggestWeekly: canSuggestWeekly,
+                        weeklyTodoMinimum: minTodosForWeeklySuggestions,
+                        canSuggestMonthly: canSuggestMonthly,
+                        monthlyMinWeeklyCount: minWeeklyGoalsForMonthlySuggestions
                     )
+                } else if weeklyModel.suggestions.isEmpty || (canSuggestMonthly && monthlyModel.suggestions.isEmpty) {
+                    // 모델이 못 만들어 **규칙이 대신한** 경우. 예전에는 «만들었습니다» 라고만 해서
+                    // 사용자가 AI 결과를 받은 줄 알았다.
+                    suggestionMessage = "AI가 묶음을 만들지 못해 규칙으로 묶었습니다. 다시 시도하면 달라질 수 있습니다."
+                } else if canSuggestMonthly && monthly.isEmpty {
+                    // 월간을 시도했는데 하나도 못 만든 경우. 예전에는 «만들었습니다» 라고만 해서
+                    // 사용자가 **월간이 왜 없는지 모른 채** 빈 자리를 봤다.
+                    //
+                    // 이유까지는 말하지 않는다. 실측(2026-08-19/20)에서 원인이 셋으로 갈렸는데
+                    // (묶을 게 없음 · 응답 잘림 · 산문만 냄), 사용자가 할 수 있는 일은
+                    // «다시 눌러 보기» 로 같다. 원인은 기록(`RunRecord.parse`)에 남는다.
+                    suggestionMessage = "주간 목표 초안을 만들었습니다. 이번엔 함께 묶을 만한 주간 목표를 찾지 못해 월간 목표는 비워 뒀습니다."
                 } else {
                     suggestionMessage = "할일과 주간 목표의 의미를 보고 목표 초안을 만들었습니다."
                 }
@@ -8488,8 +9227,8 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func mergeSuggestions(_ values: [AchievementGoalSuggestion]) -> [AchievementGoalSuggestion] {
-        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedSuggestionCount)
-        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionCount)
+        let weekly = mergeSuggestions(values, cadence: .weekly, displayLimit: clampedWeeklySuggestionLimit)
+        let monthly = mergeSuggestions(values, cadence: .monthly, displayLimit: clampedMonthlySuggestionLimit)
         return weekly.suggestions + monthly.suggestions
     }
 
@@ -8550,6 +9289,9 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func dismissSuggestion(_ suggestion: AchievementGoalSuggestion) {
+        // 명시적 거절은 **무반응과 다른 신호**다. 그냥 안 고른 것은 «못 봤다» 일 수도 있지만
+        // ✕ 를 누른 것은 «보고 버렸다» 이다.
+        AIRunLog.recordDismissal(suggestion: suggestion)
         let key = suggestionKey(for: suggestion)
         var keys = dismissedSuggestionKeys
         keys.insert(key)
@@ -8622,6 +9364,7 @@ private struct AchievementGoalComposerSheet: View {
     }
 
     private func applySuggestion(_ suggestion: AchievementGoalSuggestion) {
+        appliedSuggestion = suggestion
         selectedInputMode = "직접 입력"
         selectedTargetLevel = suggestion.cadence.levelName
         selectedEmoji = suggestion.emoji
@@ -8652,9 +9395,9 @@ private struct AchievementGoalComposerSheet: View {
         return first
     }
 
-    private func initialSuggestionMessage(weeklyCount: Int, monthlyCount: Int, shouldSuggestMonthly: Bool) -> String {
+    private func initialSuggestionMessage(weeklyCount: Int, monthlyCount: Int, canSuggestMonthly: Bool) -> String {
         if weeklyCount == 0 && monthlyCount == 0 {
-            return shouldSuggestMonthly
+            return canSuggestMonthly
                 ? "직접 선택할 수 있는 목표는 있지만 자동 묶음은 아직 없습니다."
                 : "주간 목표가 더 쌓이면 월간 목표 추천도 함께 보여줍니다."
         }
@@ -8667,11 +9410,16 @@ private struct AchievementGoalComposerSheet: View {
     private func finalRuleSuggestionMessage(
         weeklyCount: Int,
         monthlyCount: Int,
-        shouldSuggestMonthly: Bool,
+        canSuggestWeekly: Bool,
+        weeklyTodoMinimum: Int,
+        canSuggestMonthly: Bool,
         monthlyMinWeeklyCount: Int
     ) -> String {
         if weeklyCount == 0 && monthlyCount == 0 {
-            return shouldSuggestMonthly
+            if !canSuggestWeekly {
+                return "할일이 (weeklyTodoMinimum)개 이상 쌓이면 주간 목표를 추천합니다."
+            }
+            return canSuggestMonthly
                 ? "추천할 묶음이 없습니다. 직접 목표를 선택해 만들 수 있습니다."
                 : "주간 목표가 \(monthlyMinWeeklyCount)개 이상 쌓이면 월간 목표도 추천합니다."
         }
@@ -8889,8 +9637,14 @@ private struct AchievementGoalComposerSheet: View {
             monthGoal: hierarchy.monthGoal,
             linkedMemoIDs: linkedMemoIDs
         )
+        // 추천에서 온 목표면 출처를 심는다. 직접 만든 목표는 `nil` 로 남아 둘이 갈린다.
+        record.sourceRunID = appliedSuggestion?.runID
+        record.sourceSuggestionID = appliedSuggestion?.id
         do {
             try onSave(record, selectedChildGoalIDs, pendingNewChildTitles)
+            if let applied = appliedSuggestion {
+                AIRunLog.recordAdoption(suggestion: applied, goalID: record.id, titleEdited: applied.title != trimmedTitle)
+            }
             onClose()
         } catch {
             validationMessage = "목표 저장에 실패했습니다: \(error.localizedDescription)"
