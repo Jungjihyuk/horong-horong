@@ -6,7 +6,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { score } from './score.mjs';
 
-// `drafts/` 는 읽지 않는다 — 각색·라벨링 전이라 정답이 없어 채점하면 항상 0점이 된다.
 // `cases/monthly/` 도 안 읽는다 — 월간은 할일이 아니라 주간 목표를 입력으로 받아 모양이 다르다.
 // 하위 폴더까지 훑는다(`weekly/developer/` 처럼 페르소나로 나뉜다).
 const caseRoot = path.resolve(import.meta.dirname, 'golden/cases/weekly');

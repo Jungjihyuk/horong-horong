@@ -21,7 +21,7 @@ def load_golden_notes():
     notes = {}
     meta = {}
     here = os.path.dirname(os.path.abspath(__file__))
-    for folder in ["golden/cases"]: # "golden/drafts"
+    for folder in ["golden/cases"]:
         directory = os.path.join(here, folder)
         if not os.path.isdir(directory):
             continue
