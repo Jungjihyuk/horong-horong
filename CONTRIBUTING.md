@@ -92,10 +92,13 @@ HorongHorong/
 │   └── HorongHorongApp.swift
 ├── HorongHorongTests/   ← 단위 테스트
 ├── Agents/              ← Python 기반 뉴스 / Agent 파이프라인
-├── Shared/              ← 코드 외 공유 자산
+├── Contracts/           ← Swift ↔ Python 간 JSON 규격 (JSON Schema)
+├── Analytics/           ← Metabase BI 대시보드 (docker-compose · SQL · 카드 생성 스크립트)
 ├── assets/              ← README·홍보용 이미지 (별도 라이센스 — assets/LICENSE 참고)
 └── docs/                ← 기획·설계·운영 문서
 ```
+
+루트 디렉터리 이름은 **프로젝트가 직접 작성한 디렉터리는 PascalCase**(`Agents/`, `Analytics/`, `Artifacts/`, `Contracts/`, `Evals/`, `Scripts/`), **생성물이나 관례로 굳은 디렉터리는 소문자**(`build/`, `dist/`, `docs/`)를 씁니다.
 
 ---
 

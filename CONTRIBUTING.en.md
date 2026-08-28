@@ -92,10 +92,13 @@ HorongHorong/
 │   └── HorongHorongApp.swift
 ├── HorongHorongTests/   ← unit tests
 ├── Agents/              ← Python-based news / agent pipelines
-├── Shared/              ← non-code shared assets
+├── Contracts/           ← JSON contracts between Swift and Python (JSON Schema)
+├── Analytics/           ← Metabase BI dashboard (docker-compose, SQL, card-creation script)
 ├── assets/              ← README / promo images (separately licensed — see assets/LICENSE)
 └── docs/                ← planning, design, and operations docs
 ```
+
+Root directory names follow one rule: **directories authored by this project use PascalCase** (`Agents/`, `Analytics/`, `Artifacts/`, `Contracts/`, `Evals/`, `Scripts/`), while **generated or conventional directories stay lowercase** (`build/`, `dist/`, `docs/`).
 
 ---
 

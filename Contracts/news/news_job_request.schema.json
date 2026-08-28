@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NewsJobRequest",
+  "description": "Swift 앱이 --request 파일로 Python 뉴스 에이전트에 전달하는 실행 요청. 구현: HorongHorong/Services/News/NewsPipelineService.swift, Agents/news_report/contracts/news_job_request.py",
+  "type": "object",
+  "required": ["jobId", "requestedAt", "provider", "interestKeywords", "maxItemsPerSource", "dateRangeHours", "sources"],
+  "properties": {
+    "jobId": { "type": "string", "minLength": 1 },
+    "requestedAt": { "type": "string", "format": "date-time" },
+    "provider": { "type": "string", "enum": ["codex", "claude", "opencode", "antigravity", "hermes", "ollama"] },
+    "providerOptions": {
+      "type": "object",
+      "description": "provider 구현체에 전달할 선택 옵션.",
+      "properties": {
+        "model": { "type": ["string", "null"], "minLength": 3 },
+        "endpoint": { "type": ["string", "null"], "minLength": 1 },
+        "timeout": { "type": ["number", "null"], "exclusiveMinimum": 0 }
+      }
+    },
+    "interestKeywords": { "type": "array", "items": { "type": "string" } },
+    "maxItemsPerSource": { "type": "integer", "minimum": 1, "maximum": 50 },
+    "dateRangeHours": { "type": "integer", "minimum": 1, "maximum": 168 },
+    "outputDir": { "type": "string", "minLength": 1 },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "enabled"],
+        "properties": {
+          "type": { "type": "string", "enum": ["youtube", "google_news", "linkedin", "yozm_it", "rss", "hacker_news"] },
+          "enabled": { "type": "boolean" },
+          "channelId": { "type": ["string", "null"] },
+          "channelIds": { "type": "array", "items": { "type": "string" } },
+          "playlists": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["playlistId"],
+              "properties": {
+                "name": { "type": ["string", "null"] },
+                "playlistId": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "keywords": { "type": "array", "items": { "type": "string" } },
+          "profiles": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

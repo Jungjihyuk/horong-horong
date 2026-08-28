@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NewsJobResult",
+  "description": "Python 뉴스 에이전트가 result 파일로 돌려주는 실행 결과. 구현: Agents/news_report/runner.py, HorongHorong/Services/News/NewsPipelineService.swift (NewsJobResultPayload)",
+  "type": "object",
+  "required": ["jobId", "status"],
+  "properties": {
+    "jobId": { "type": "string" },
+    "status": { "type": "string", "enum": ["queued", "running", "success", "partial_success", "failed"] },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "endedAt": { "type": ["string", "null"], "format": "date-time" },
+    "reportPath": { "type": ["string", "null"] },
+    "metaPath": { "type": ["string", "null"] },
+    "sourceStats": {
+      "type": ["object", "null"],
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "fetched": { "type": "integer" },
+          "used": { "type": "integer" },
+          "failed": { "type": "integer" }
+        }
+      }
+    },
+    "topItems": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "importanceScore": { "type": "integer" },
+          "category": { "type": "string" }
+        }
+      }
+    },
+    "warnings": { "type": ["array", "null"], "items": { "type": "string" } },
+    "usage": {
+      "type": ["object", "null"],
+      "description": "리포트 실행 1회의 누적 소모량. 사용량을 보고하지 않는 provider는 null.",
+      "required": ["inputTokens", "outputTokens", "cachedInputTokens", "cacheWriteInputTokens", "reasoningOutputTokens", "callCount", "rateLimitsFirst", "rateLimits"],
+      "properties": {
+        "inputTokens": { "type": "integer" },
+        "outputTokens": { "type": "integer" },
+        "cachedInputTokens": { "type": "integer" },
+        "cacheWriteInputTokens": { "type": "integer" },
+        "reasoningOutputTokens": { "type": "integer" },
+        "totalCostUSD": { "type": ["number", "null"] },
+        "callCount": { "type": "integer" },
+        "rateLimitsFirst": { "$ref": "#/definitions/rateLimitSnapshot" },
+        "rateLimits": { "$ref": "#/definitions/rateLimitSnapshot" }
+      }
+    },
+    "errorCode": { "type": ["string", "null"] },
+    "errorMessage": { "type": ["string", "null"] }
+  },
+  "definitions": {
+    "rateLimitSnapshot": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scope"],
+        "properties": {
+          "scope": { "type": "string" },
+          "usedPercent": { "type": ["number", "null"] },
+          "windowMinutes": { "type": ["integer", "null"] },
+          "resetsAt": { "type": ["integer", "null"] },
+          "planType": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
