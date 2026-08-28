@@ -17,6 +17,7 @@
 		043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF7167773C553C08A59165D /* MLXModelPicker.swift */; };
 		048CC6DBF3A20A7A124DABFA /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E2F4B47B282506A742D35E /* AILabView.swift */; };
 		05DC5734A43326DF0D03A03D /* BreakTransitionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEA31DB9D71D16804640B11 /* BreakTransitionIntent.swift */; };
+		0705492BE897BFE74FD3CD76 /* GoldenEvalReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */; };
 		09619039881101584971BCB1 /* FocusNudgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6D5BA5101B147375D58C23 /* FocusNudgeCatalog.swift */; };
 		09A0D81D790A874E6630F035 /* CategoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE525D349FF0055233F37CE /* CategoryManager.swift */; };
 		09A98D5F1062E14379916B06 /* companion in Resources */ = {isa = PBXBuildFile; fileRef = BC0E743139EFA49E2F373801 /* companion */; };
@@ -216,6 +217,7 @@
 		ABCFAC777A6429C27CFDE63E /* CompanionOnboardingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7521BD98E14B3101B278FF5 /* CompanionOnboardingPresenter.swift */; };
 		AE4CD4E3CE1BA7DFF05BB123 /* SuggestionModelUnloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0E21E76F99C264A651BB5 /* SuggestionModelUnloader.swift */; };
 		AF3E184FEF65C636229D5247 /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9C509737BC3EE111F4612B /* CompanionCharacter.swift */; };
+		AF94E1EE9DE47B958FEB021E /* GoldenEvalReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */; };
 		AFED5C415142D67BF18348E0 /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F7CEFF27A23967523929A0 /* SettingsRow.swift */; };
 		B05C72919DCDF746B16E76A7 /* DataPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93C3B4093C76333C488BBFBF /* DataPage.swift */; };
 		B064B92F7102CC859E6090B0 /* SuggestionModelUnloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0E21E76F99C264A651BB5 /* SuggestionModelUnloader.swift */; };
@@ -400,6 +402,7 @@
 		74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflectionEditSheet.swift; sourceTree = "<group>"; };
 		755CC7B681C8323E2C35C1FD /* IdleThresholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleThresholdStore.swift; sourceTree = "<group>"; };
 		76B92287537E68101A2064BE /* MemoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoListView.swift; sourceTree = "<group>"; };
+		76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoldenEvalReport.swift; sourceTree = "<group>"; };
 		76F8304E7734BEF0D16FEAE2 /* CompanionRegionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionRegionPicker.swift; sourceTree = "<group>"; };
 		77E2F4B47B282506A742D35E /* AILabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AILabView.swift; sourceTree = "<group>"; };
 		7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongApp.swift; sourceTree = "<group>"; };
@@ -653,6 +656,7 @@
 			isa = PBXGroup;
 			children = (
 				77E2F4B47B282506A742D35E /* AILabView.swift */,
+				76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */,
 			);
 			path = Developer;
 			sourceTree = "<group>";
@@ -1195,6 +1199,7 @@
 				44D9797D84B677ADC0CDFF21 /* FocusSession.swift in Sources */,
 				F6B88F3E1063A778E745ACAF /* FocusTrend.swift in Sources */,
 				1A6C7DA23BA0F48C7DEFCC48 /* GeneralPage.swift in Sources */,
+				AF94E1EE9DE47B958FEB021E /* GoldenEvalReport.swift in Sources */,
 				44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */,
 				CE1BF3D54B1C542F8E34A3A6 /* HotKeyManager.swift in Sources */,
 				D7282E6EE4EE7518C643767E /* HotkeyPage.swift in Sources */,
@@ -1331,6 +1336,7 @@
 				853DD6929C384C8932D1626E /* FocusSession.swift in Sources */,
 				D267A1F7EE53DE6896C4AF36 /* FocusTrend.swift in Sources */,
 				6255BEFEB2A8D1DE41BD3A09 /* GeneralPage.swift in Sources */,
+				0705492BE897BFE74FD3CD76 /* GoldenEvalReport.swift in Sources */,
 				46A453BF1EF4944AB3ABC7D7 /* HorongHorongApp.swift in Sources */,
 				A350A5EAE13EA123D76BFB02 /* HotKeyManager.swift in Sources */,
 				0026DFF52574A7D11D6AE0E4 /* HotkeyPage.swift in Sources */,

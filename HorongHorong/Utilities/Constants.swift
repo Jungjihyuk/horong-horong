@@ -963,6 +963,11 @@ enum Constants {
         static let companionBubbleSize = "companion.bubbleSize"
         /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.
         static let aiLabRatings = "ailab.ratings"
+        /// 골든셋 채점 결과가 있는 `Evals/` 폴더 경로.
+        ///
+        /// 결과(`Evals/results/`)는 gitignore 된 실행 산출물이라 앱에 번들할 수 없다.
+        /// 사용자가 한 번 지정하면 기억한다. 앱 샌드박스가 꺼져 있어 경로만으로 충분하다.
+        static let aiLabEvalsDirectory = "ailab.evalsDirectory"
         /// 개발자 전용 탭(AI 실험실) 노출 여부. Release 빌드에서 직접 켤 때만 쓰는 숨김 플래그.
         /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
         static let aiLabEnabled = "ailab.enabled"
