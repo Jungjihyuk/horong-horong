@@ -62,12 +62,31 @@ enum AIRunLog {
         recorder.purgeExpired(now: now)
     }
 
+    /// 앱이 실제로 돌린 실행에 붙는 접두사.
+    static let liveRunIDPrefix = "R-"
+
+    /// 골든셋 하네스가 돌린 실행에 붙는 접두사(→ `GoalSuggestionEvalTests`).
+    ///
+    /// **골든셋은 제품 코드 경로를 그대로 지나므로** 앱의 실행 기록에도 한 줄씩 쌓인다.
+    /// 그것을 실사용으로 세면 숫자가 통째로 뒤집힌다 — 실측 2026-08-28: 7,610행 중
+    /// 6,962행(91.5%)이 골든셋이었고 진짜 실사용은 648행뿐이었다.
+    /// 기록에 남는 표식은 실행 id 접두사뿐이라 여기서 한 번만 정한다.
+    static let goldenRunIDPrefix = "G-"
+
+    /// 이 실행이 골든셋 하네스에서 나온 것인가.
+    ///
+    /// 이미 쌓인 기록은 `source` 가 전부 `"live"` 라 소급해 고칠 수 없다.
+    /// 그래서 읽는 쪽도 이 판별을 쓴다(→ `AILabView.loadRecords`).
+    static func isGoldenRun(_ runID: String?) -> Bool {
+        runID?.hasPrefix(goldenRunIDPrefix) ?? false
+    }
+
     /// 버튼 한 번에 붙는 id. 주간·월간이 이 값을 공유해 한 실행으로 묶인다.
     static func newRunID(now: Date = Date()) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "R-\(formatter.string(from: now))-\(UUID().uuidString.prefix(4))"
+        return "\(liveRunIDPrefix)\(formatter.string(from: now))-\(UUID().uuidString.prefix(4))"
     }
 }
 
@@ -122,7 +141,9 @@ struct RunContext {
             runId: runID,
             startedAt: startedAt,
             task: task,
-            source: "live",
+            // 골든셋 하네스도 이 경로를 그대로 지난다. 그때까지 "live" 로 찍혀
+            // 실사용 기록을 91.5% 오염시켰다(2026-08-28).
+            source: AIRunLog.isGoldenRun(runID) ? "golden" : "live",
             recipe: recipe,
             variant: variant,
             provider: provider,
