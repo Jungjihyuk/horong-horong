@@ -1,0 +1,649 @@
+{
+  "$defs": {
+    "CategoryAssignment": {
+      "description": "채택된 소스 후보가 어떤 카테고리에 배치됐는지에 대한 결과.",
+      "properties": {
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "category_id": {
+          "minLength": 1,
+          "title": "Category Id",
+          "type": "string"
+        },
+        "category_name": {
+          "minLength": 1,
+          "title": "Category Name",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "method": {
+          "default": "llm",
+          "enum": [
+            "llm",
+            "embedding",
+            "rule",
+            "hybrid"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "taxonomy_id": {
+          "minLength": 1,
+          "title": "Taxonomy Id",
+          "type": "string"
+        },
+        "taxonomy_version": {
+          "minLength": 1,
+          "title": "Taxonomy Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "category_id",
+        "category_name",
+        "confidence",
+        "reason",
+        "taxonomy_id",
+        "taxonomy_version"
+      ],
+      "title": "CategoryAssignment",
+      "type": "object"
+    },
+    "CategoryDefinition": {
+      "description": "이번 run에서 사용할 카테고리 1개에 대한 정의.",
+      "properties": {
+        "category_id": {
+          "minLength": 1,
+          "title": "Category Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        }
+      },
+      "required": [
+        "category_id",
+        "name",
+        "description"
+      ],
+      "title": "CategoryDefinition",
+      "type": "object"
+    },
+    "CategoryTaxonomy": {
+      "description": "사용자 관심사 키워드로부터 만든 이번 run의 카테고리 체계.",
+      "properties": {
+        "taxonomy_id": {
+          "minLength": 1,
+          "title": "Taxonomy Id",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "generated_from_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Generated From Keywords",
+          "type": "array"
+        },
+        "method": {
+          "default": "llm",
+          "enum": [
+            "llm",
+            "embedding",
+            "rule",
+            "hybrid"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "categories": {
+          "items": {
+            "$ref": "#/$defs/CategoryDefinition"
+          },
+          "title": "Categories",
+          "type": "array"
+        }
+      },
+      "required": [
+        "taxonomy_id",
+        "version"
+      ],
+      "title": "CategoryTaxonomy",
+      "type": "object"
+    },
+    "GenerationContext": {
+      "description": "리포트를 생성할 당시의 AI 모델 구동 환경 정보.",
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "title": "GenerationContext",
+      "type": "object"
+    },
+    "InsightBundle": {
+      "description": "여러 SourceInsight를 하나의 기준으로 묶은 분석 묶음.",
+      "properties": {
+        "bundle_id": {
+          "minLength": 1,
+          "title": "Bundle Id",
+          "type": "string"
+        },
+        "bundle_type": {
+          "enum": [
+            "category",
+            "topic",
+            "all",
+            "manual"
+          ],
+          "title": "Bundle Type",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "source_insight_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Insight Ids",
+          "type": "array"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "key_takeaways": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Takeaways",
+          "type": "array"
+        },
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Id"
+        }
+      },
+      "required": [
+        "bundle_id",
+        "bundle_type",
+        "title",
+        "summary"
+      ],
+      "title": "InsightBundle",
+      "type": "object"
+    },
+    "KeywordInsight": {
+      "description": "특정 범위에서 추출한 키워드 분석 결과.",
+      "properties": {
+        "keyword_insight_id": {
+          "minLength": 1,
+          "title": "Keyword Insight Id",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "source",
+            "bundle",
+            "report"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "scope_id": {
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        }
+      },
+      "required": [
+        "keyword_insight_id",
+        "scope",
+        "scope_id"
+      ],
+      "title": "KeywordInsight",
+      "type": "object"
+    },
+    "ReportContent": {
+      "description": "리포트 템플릿에 넣을 최종 데이터.",
+      "properties": {
+        "report_id": {
+          "minLength": 1,
+          "title": "Report Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "generated_at": {
+          "minLength": 1,
+          "title": "Generated At",
+          "type": "string"
+        },
+        "interest_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Interest Keywords",
+          "type": "array"
+        },
+        "bundle_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Bundle Ids",
+          "type": "array"
+        },
+        "keyword_insight_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keyword Insight Ids",
+          "type": "array"
+        },
+        "trend_insight_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trend Insight Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "report_id",
+        "title",
+        "generated_at"
+      ],
+      "title": "ReportContent",
+      "type": "object"
+    },
+    "SourceCandidate": {
+      "description": "연관성 기준을 통과해 리포트 분석 대상으로 채택된 소스 글.",
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "youtube",
+            "google_news",
+            "linkedin",
+            "yozm_it"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "configured_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Configured Source Id"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "relevance_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Relevance Score",
+          "type": "number"
+        },
+        "threshold": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Threshold",
+          "type": "number"
+        },
+        "matched_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Matched Keywords",
+          "type": "array"
+        },
+        "selected_reason": {
+          "title": "Selected Reason",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "selection_rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selection Rank"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "item_id",
+        "source_type",
+        "title",
+        "url",
+        "relevance_score",
+        "threshold",
+        "selected_reason"
+      ],
+      "title": "SourceCandidate",
+      "type": "object"
+    },
+    "SourceInsight": {
+      "description": "채택된 소스 1개에서 리포트에 쓸 분석 결과.",
+      "properties": {
+        "source_insight_id": {
+          "minLength": 1,
+          "title": "Source Insight Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category Id"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "key_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Points",
+          "type": "array"
+        },
+        "importance_score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Importance Score",
+          "type": "number"
+        },
+        "why_it_matters": {
+          "minLength": 1,
+          "title": "Why It Matters",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_insight_id",
+        "candidate_id",
+        "summary",
+        "importance_score",
+        "why_it_matters"
+      ],
+      "title": "SourceInsight",
+      "type": "object"
+    },
+    "TrendInsight": {
+      "description": "여러 소스 또는 묶음에서 관찰한 트렌드 신호.",
+      "properties": {
+        "trend_id": {
+          "minLength": 1,
+          "title": "Trend Id",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "source",
+            "bundle",
+            "report"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "scope_id": {
+          "minLength": 1,
+          "title": "Scope Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "trend_type": {
+          "enum": [
+            "emerging",
+            "repeated",
+            "declining",
+            "ongoing"
+          ],
+          "title": "Trend Type",
+          "type": "string"
+        },
+        "source_insight_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Insight Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "trend_id",
+        "scope",
+        "scope_id",
+        "title",
+        "summary",
+        "trend_type",
+        "confidence"
+      ],
+      "title": "TrendInsight",
+      "type": "object"
+    }
+  },
+  "description": "한 번의 리포트 실행에서 생성되는 모든 아티팩트 데이터를 묶은 최종 덤프 형식.",
+  "properties": {
+    "schemaVersion": {
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "jobId": {
+      "title": "Jobid",
+      "type": "string"
+    },
+    "reportDate": {
+      "title": "Reportdate",
+      "type": "string"
+    },
+    "generationContext": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GenerationContext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "taxonomy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CategoryTaxonomy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/SourceCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "assignments": {
+      "items": {
+        "$ref": "#/$defs/CategoryAssignment"
+      },
+      "title": "Assignments",
+      "type": "array"
+    },
+    "sourceInsights": {
+      "items": {
+        "$ref": "#/$defs/SourceInsight"
+      },
+      "title": "Sourceinsights",
+      "type": "array"
+    },
+    "keywordInsights": {
+      "items": {
+        "$ref": "#/$defs/KeywordInsight"
+      },
+      "title": "Keywordinsights",
+      "type": "array"
+    },
+    "trends": {
+      "items": {
+        "$ref": "#/$defs/TrendInsight"
+      },
+      "title": "Trends",
+      "type": "array"
+    },
+    "bundles": {
+      "items": {
+        "$ref": "#/$defs/InsightBundle"
+      },
+      "title": "Bundles",
+      "type": "array"
+    },
+    "reportContent": {
+      "$ref": "#/$defs/ReportContent"
+    }
+  },
+  "required": [
+    "jobId",
+    "reportDate",
+    "reportContent"
+  ],
+  "title": "ReportArtifacts",
+  "type": "object"
+}

@@ -37,6 +37,7 @@ struct CompanionChatMessage: Identifiable {
     /// 값이 있으면 메모 저장 완료 말풍선이며 메모 탭으로 가는 버튼을 보여준다.
     var memoDestinationID: UUID?
     var allowsMemoSave = true
+    var isHovered = false
 }
 
 /// 오버레이 창이 그리는 내용. 컨트롤러가 값을 밀어 넣고 뷰는 표시·입력 전달만 한다.
@@ -187,7 +188,11 @@ struct CompanionView: View {
                 // 스프라이트를 못 찾아도 창이 사라지지 않도록 자리만 유지한다.
                 Color.clear
             } else {
-                Image(nsImage: frames[min(state.frameIndex, frames.count - 1)])
+                // **양쪽을 다 조인다.** `min` 만 두면 음수 프레임 번호가 그대로 통과해
+                // 앱이 죽는다(크래시 2026-08-19: 시계가 뒤로 가 프레임 번호가 음수가 됐다).
+                // 프레임을 정하는 쪽(`CompanionController`)에서도 막지만, 화면이 죽는 것보다
+                // 잠깐 첫 프레임이 보이는 편이 낫다.
+                Image(nsImage: frames[min(max(state.frameIndex, 0), frames.count - 1)])
                     .resizable()
                     .interpolation(.high)
                     .brightness(state.isHovering ? 0.10 : 0)
@@ -542,7 +547,7 @@ private struct CompanionChatMessageRow: View {
             }
             .buttonStyle(.plain)
             .disabled(message.savedMemoID != nil || isStreaming)
-            .opacity(isHovering || isShowingMemoOptions ? 1 : 0)
+            .opacity(isHovering || isShowingMemoOptions || message.isHovered ? 1 : 0)
             .onHover(perform: updateHover)
             .help(message.savedMemoID == nil ? "메모로 저장" : "이미 메모로 저장됨")
             .popover(isPresented: $isShowingMemoOptions, arrowEdge: .bottom) {

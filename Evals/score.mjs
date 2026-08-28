@@ -26,15 +26,40 @@ export function pairsOfAll(groups) {
   return out;
 }
 
+/** 함정 하나가 금지하는 쌍들.
+ *  - 묶음이 하나면  → 그 안의 항목들이 서로 묶이면 안 된다
+ *  - 묶음이 둘 이상 → 그 묶음들이 합쳐지면 안 된다 (묶음 안은 판단하지 않는다) */
+export function pairsOfTrap(trap) {
+  const groups = (trap.groups ?? []).filter((g) => g.length > 0);
+  if (groups.length < 2) return pairsOfAll(groups);
+  const out = new Set();
+  for (let i = 0; i < groups.length; i += 1) {
+    for (let j = i + 1; j < groups.length; j += 1) {
+      for (const a of groups[i]) {
+        for (const b of groups[j]) {
+          if (a !== b) out.add([a, b].sort().join('|'));
+        }
+      }
+    }
+  }
+  return out;
+}
+
+export function pairsOfAllTraps(traps) {
+  const out = new Set();
+  for (const t of traps ?? []) for (const p of pairsOfTrap(t)) out.add(p);
+  return out;
+}
+
 /**
  * @param {string[][]} expectedGroups 정답 묶음들
  * @param {string[][]} predictedGroups 모델이 낸 묶음들
- * @param {string[][]} shouldNotGroup 같이 묶이면 안 되는 조합들
+ * @param {{why?: string, groups: string[][]}[]} traps 특히 틀리기 쉬운 자리
  */
-export function score(expectedGroups, predictedGroups, shouldNotGroup = []) {
+export function score(expectedGroups, predictedGroups, traps = []) {
   const expected = pairsOfAll(expectedGroups);
   const predicted = pairsOfAll(predictedGroups);
-  const forbidden = pairsOfAll(shouldNotGroup);
+  const forbidden = pairsOfAllTraps(traps);
 
   let hit = 0;
   let violations = 0;
@@ -56,5 +81,11 @@ export function score(expectedGroups, predictedGroups, shouldNotGroup = []) {
     expectedPairs: expected.size,
     predictedPairs: predicted.size,
     violations,
+    trapPairs: forbidden.size,
+    // 함정을 얼마나 피했나. 함정이 없으면 1.
+    trapAvoidance: forbidden.size ? 1 - violations / forbidden.size : 1,
+    // **묶음 일치도** — 최종 점수. 함정 쌍은 이미 precision 을 한 번 깎지만,
+    // 함정은 보통 실수보다 무거우므로(그 케이스가 존재하는 이유다) 한 번 더 곱한다.
+    groupingScore: f1 * (forbidden.size ? 1 - violations / forbidden.size : 1),
   };
 }

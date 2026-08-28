@@ -143,7 +143,8 @@ struct OllamaModelPicker: View {
         let hardcodedNames = Set(options.map(\.name))
         
         let customInstalled = installedModels.keys
-            .filter { !hardcodedNames.contains($0) }
+            // `latest` 는 같은 모델의 기본 태그 별칭이라, 버전·크기 태그와 함께 보이면 중복된다.
+            .filter { !hardcodedNames.contains($0) && !$0.hasSuffix(":latest") }
             .sorted()
         
         for name in customInstalled {

@@ -1,0 +1,81 @@
+{
+  "caseName": "절약 관련 메모지만 목표 범위가 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability"
+  ],
+  "note": "지출과 절약이라는 영역은 알 수 있지만 줄일 금액, 대상 지출, 측정 기준이 없어 구체적인 주간 목표를 만들 수 없다. 목표를 추측해 묶지 말고 필요한 정보를 요청해야 하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "이번 주 지출 줄이기",
+      "icon": "💰",
+      "deadline": "2026-08-17 23:59"
+    },
+    {
+      "id": "m2",
+      "content": "불필요한 소비 줄이기",
+      "icon": "💳",
+      "deadline": "2026-08-19 23:59"
+    },
+    {
+      "id": "m3",
+      "content": "생활비 점검하기",
+      "icon": "📊",
+      "startDate": "2026-08-20 20:00"
+    },
+    {
+      "id": "m4",
+      "content": "돈 아끼는 방법 찾아보기",
+      "icon": "🔎"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_memos_with_smart_guidance",
+    "guidance": "각 메모의 영역은 유지하되, 무엇을 얼마나 줄일지 SMART 기준에 맞게 구체화한다. 실행 가능성과 개인의 관련성은 입력 정보가 없어 판정하지 않는다.",
+    "memoReviews": [
+      {
+        "memo": "m1",
+        "missing": [
+          "specific",
+          "measurable"
+        ],
+        "suggestion": "이번 주 식비를 10만원 이하로 쓰기처럼 지출 항목과 금액을 정해보세요."
+      },
+      {
+        "memo": "m2",
+        "missing": [
+          "specific",
+          "measurable"
+        ],
+        "suggestion": "이번 주 배달 음식 주문을 2회 이하로 줄이기처럼 줄일 소비 항목과 횟수를 정해보세요."
+      },
+      {
+        "memo": "m3",
+        "missing": [
+          "specific",
+          "measurable"
+        ],
+        "suggestion": "이번 주 지출을 식비·교통비·쇼핑으로 분류하고 각 항목의 금액을 확인하기처럼 점검 범위와 기준을 정해보세요."
+      },
+      {
+        "memo": "m4",
+        "missing": [
+          "specific",
+          "measurable",
+          "time_bound"
+        ],
+        "suggestion": "이번 주 금요일까지 배달비를 2만원 이하로 줄일 방법 3개 찾아보기처럼 대상, 수량, 기한을 정해보세요."
+      }
+    ]
+  }
+}

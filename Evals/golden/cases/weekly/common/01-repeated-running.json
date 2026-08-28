@@ -1,0 +1,69 @@
+{
+  "caseName": "반복 러닝 3회 + 무관한 생활 잡무",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability"
+  ],
+  "note": "같은 주에 반복한 러닝 3건만 묶어 빈도와 시간을 포함한 주간 목표를 만든다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "아침 러닝 30분",
+      "icon": "🏃",
+      "startDate": "2026-08-17 07:00",
+      "deadline": "2026-08-17 07:30"
+    },
+    {
+      "id": "m2",
+      "content": "저녁 러닝 30분",
+      "icon": "🏃",
+      "deadline": "2026-08-19 20:30"
+    },
+    {
+      "id": "m3",
+      "content": "공원 러닝 30분",
+      "icon": "🏃",
+      "startDate": "2026-08-21 07:00"
+    },
+    {
+      "id": "m4",
+      "content": "세탁세제 사기",
+      "icon": "🛒"
+    },
+    {
+      "id": "m5",
+      "content": "공과금 납부",
+      "icon": "💳",
+      "deadline": "2026-08-20 23:59"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "주 3회 30분 러닝하기",
+      "memos": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    }
+  ],
+  "traps": [
+    {
+      "why": "서로 다른 일회성 생활 잡무를 억지로 묶으면 안 된다",
+      "groups": [
+        [
+          "m4",
+          "m5"
+        ]
+      ]
+    }
+  ]
+}

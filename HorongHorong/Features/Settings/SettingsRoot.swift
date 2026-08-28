@@ -1,3 +1,5 @@
+import HorongAI
+import HorongAIMLX
 import SwiftUI
 
 struct SettingsRoot: View {
@@ -66,7 +68,8 @@ struct SettingsRoot: View {
             // 온보딩이 설명하는 페이지로 옮겨준다.
             guard let action = notification.object as? String,
                   action.hasPrefix("settings.show:"),
-                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count)))
+                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count))),
+                  SettingsTab.visibleCases.contains(tab)
             else { return }
             selection = tab
         }
@@ -142,6 +145,7 @@ struct SettingsRoot: View {
         case .memo:       MemoPage()
         case .data:       DataPage()
         case .about:      AboutPage()
+        case .ailab:      AILabView()
         }
     }
 
@@ -250,13 +254,17 @@ struct SettingsRoot: View {
 
 private struct AchievementPage: View {
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
-    private var suggestionCount: Int = Constants.defaultAchievementSuggestionCount
+    private var weeklySuggestionLimit: Int = Constants.defaultAchievementSuggestionCount
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
-    private var suggestionMaxTodoCount: Int = Constants.defaultAchievementSuggestionMaxTodoCount
+    private var maxTodosPerWeeklyGoal: Int = Constants.defaultAchievementSuggestionMaxTodoCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
-    private var monthlySuggestionMinWeeklyGoalCount: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
+    private var minWeeklyGoalsForMonthlySuggestions: Int = Constants.defaultAchievementMonthlySuggestionMinWeeklyGoalCount
     @AppStorage(Constants.AppStorageKey.achievementMonthlySuggestionCount)
-    private var monthlySuggestionCount: Int = Constants.defaultAchievementMonthlySuggestionCount
+    private var monthlySuggestionLimit: Int = Constants.defaultAchievementMonthlySuggestionCount
+    @AppStorage(Constants.AppStorageKey.achievementMinTodosForWeeklySuggestions)
+    private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
+    @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
+    private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
     @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
     private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -319,83 +327,48 @@ private struct AchievementPage: View {
                 }
             }
 
-            SettingsGroupCard("목표 추천") {
+            SettingsGroupCard("주간 목표 추천") {
                 SettingsRow(
-                    "주간 목표 추천 개수",
-                    subtitle: "할일을 묶어 한 번에 보여줄 주간 목표 초안 수입니다."
+                    "추천 시작 기준",
+                    subtitle: "할일이 이 개수 이상 있을 때부터 주간 목표 추천을 보여줍니다."
                 ) {
-                    Text("\(clampedSuggestionCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedSuggestionCount)개",
-                        value: Binding(
-                            get: { clampedSuggestionCount },
-                            set: { suggestionCount = clamped($0, in: Constants.achievementSuggestionCountRange) }
-                        ),
-                        in: Constants.achievementSuggestionCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $minTodosForWeeklySuggestions, range: Constants.achievementMinTodosForWeeklySuggestionsRange)
+                }
+                SettingsRow(
+                    "한 번에 보여줄 최대 주간 목표 수",
+                    subtitle: "할일을 묶어 한 번에 보여줄 주간 목표 초안의 최대 개수입니다."
+                ) {
+                    suggestionStepper(value: $weeklySuggestionLimit, range: Constants.achievementSuggestionCountRange)
                 }
 
                 SettingsRow(
-                    "묶음당 할일 최대 개수",
-                    subtitle: "추천 목표 하나에 포함할 할일 수를 제한합니다. 값이 클수록 더 큰 목표 초안이 만들어집니다."
+                    "주간 목표 하나에 묶을 최대 할일 수",
+                    subtitle: "값이 클수록 더 큰 주간 목표 초안이 만들어집니다."
                 ) {
-                    Text("\(clampedMaxTodoCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMaxTodoCount)개",
-                        value: Binding(
-                            get: { clampedMaxTodoCount },
-                            set: { suggestionMaxTodoCount = clamped($0, in: Constants.achievementSuggestionMaxTodoCountRange) }
-                        ),
-                        in: Constants.achievementSuggestionMaxTodoCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $maxTodosPerWeeklyGoal, range: Constants.achievementSuggestionMaxTodoCountRange)
                 }
             }
 
             SettingsGroupCard("월간 목표 추천") {
                 SettingsRow(
-                    "활성화 기준",
+                    "추천 시작 기준",
                     subtitle: "주간 목표가 이 개수 이상 있을 때부터 월간 목표 추천을 함께 보여줍니다."
                 ) {
-                    Text("\(clampedMonthlyMinWeeklyGoalCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMonthlyMinWeeklyGoalCount)개",
-                        value: Binding(
-                            get: { clampedMonthlyMinWeeklyGoalCount },
-                            set: { monthlySuggestionMinWeeklyGoalCount = clamped($0, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange) }
-                        ),
-                        in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $minWeeklyGoalsForMonthlySuggestions, range: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
                 }
 
                 SettingsRow(
-                    "월간 목표 추천 개수",
+                    "한 번에 보여줄 최대 월간 목표 수",
                     subtitle: "주간 목표들을 다시 묶어 제안할 월간 목표 초안의 최대 개수입니다."
                 ) {
-                    Text("\(clampedMonthlySuggestionCount)개")
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 40, alignment: .trailing)
-                    Stepper(
-                        "\(clampedMonthlySuggestionCount)개",
-                        value: Binding(
-                            get: { clampedMonthlySuggestionCount },
-                            set: { monthlySuggestionCount = clamped($0, in: Constants.achievementMonthlySuggestionCountRange) }
-                        ),
-                        in: Constants.achievementMonthlySuggestionCountRange
-                    )
-                    .labelsHidden()
+                    suggestionStepper(value: $monthlySuggestionLimit, range: Constants.achievementMonthlySuggestionCountRange)
+                }
+
+                SettingsRow(
+                    "월간 목표 하나에 묶을 최대 주간 목표 수",
+                    subtitle: "값이 클수록 더 큰 월간 목표 초안이 만들어집니다."
+                ) {
+                    suggestionStepper(value: $maxWeeklyGoalsPerMonthlyGoal, range: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
                 }
             }
 
@@ -482,13 +455,71 @@ private struct AchievementPage: View {
             }
         }
         .onAppear(perform: normalizeValues)
-        .onChange(of: suggestionCount) { _, _ in normalizeValues() }
-        .onChange(of: suggestionMaxTodoCount) { _, _ in normalizeValues() }
-        .onChange(of: monthlySuggestionMinWeeklyGoalCount) { _, _ in normalizeValues() }
-        .onChange(of: monthlySuggestionCount) { _, _ in normalizeValues() }
+        .onChange(of: weeklySuggestionLimit) { _, _ in normalizeValues() }
+        .onChange(of: maxTodosPerWeeklyGoal) { _, _ in normalizeValues() }
+        .onChange(of: minWeeklyGoalsForMonthlySuggestions) { _, _ in normalizeValues() }
+        .onChange(of: monthlySuggestionLimit) { _, _ in normalizeValues() }
+        .onChange(of: minTodosForWeeklySuggestions) { _, _ in normalizeValues() }
+        .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in normalizeValues() }
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
         .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
+        // 공급자를 떠나면 그쪽이 붙잡고 있던 가중치를 내린다. 안 내리면 Ollama 로 한 번 돌린 뒤
+        // MLX 로 바꿔도 Ollama 쪽 모델이 그대로 남는다(실측 2026-08-19: 1.9GB, 만료 16시간 뒤).
+        .onChange(of: suggestionProvider) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            unloadSuggestionModel(of: oldValue)
+        }
+        .onChange(of: suggestionOllamaModel) { oldValue, newValue in
+            guard suggestionProvider == Constants.AchievementSuggestionProviderKind.ollama.rawValue,
+                  oldValue != newValue else { return }
+            unloadOllamaSuggestionModel(oldValue)
+        }
+        .onChange(of: suggestionMLXModel) { oldValue, newValue in
+            guard suggestionProvider == Constants.AchievementSuggestionProviderKind.mlx.rawValue,
+                  oldValue != newValue else { return }
+            unloadMLXSuggestionModel()
+        }
+    }
+
+    private var normalizedOllamaEndpoint: String {
+        let trimmed = ollamaEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Constants.defaultNewsOllamaEndpoint : trimmed
+    }
+
+    /// 떠난 공급자가 붙잡고 있던 모델을 내린다.
+    ///
+    /// **새 공급자의 모델을 미리 올리지는 않는다.** 컴패니언(`CompanionPage`)은 대화가 즉답이라
+    /// 미리 올려 두지만, 성취는 추천 버튼을 누를 때만 쓴다 — 설정 화면에서 골라 보기만 해도
+    /// 수 GB 가 메모리에 올라오면 안 된다. 화면에 적어 둔 약속이 그것이다:
+    /// «추천 받을 때만 잠깐 모델을 메모리에 올리고 사용이 끝나면 해제합니다».
+    private func unloadSuggestionModel(of provider: String) {
+        switch Constants.AchievementSuggestionProviderKind(rawValue: provider) {
+        case .ollama:
+            unloadOllamaSuggestionModel(suggestionOllamaModel)
+        case .mlx:
+            unloadMLXSuggestionModel()
+        case .appleFoundation, .none:
+            // AFM 은 시스템이 들고 있다. 앱이 내릴 수 있는 것이 없다.
+            break
+        }
+    }
+
+    /// Ollama 는 가중치가 남의 프로세스에 살아서 `keep_alive: 0` 한 줄로 내린다.
+    ///
+    /// 유휴 타임아웃에 기대지 않는 이유: 그 값은 **서버 설정**이라 앱이 모른다.
+    /// 기본은 5분이지만 실측한 이 맥은 16시간을 잡고 있었다.
+    private func unloadOllamaSuggestionModel(_ model: String) {
+        guard !model.isEmpty else { return }
+        let endpoint = normalizedOllamaEndpoint
+        Task { await OllamaChatClient.unload(endpoint: endpoint, model: model) }
+    }
+
+    /// MLX 는 가중치가 **이 앱의 메모리**에 올라오므로, 놓아 주지 않으면 앱이 살아 있는 내내 남는다.
+    private func unloadMLXSuggestionModel() {
+        #if canImport(MLXLLM)
+        Task { await MLXModelStore.shared.unload() }
+        #endif
     }
 
     /// 전체 폭이 필요한 컨트롤용 블록. `SettingsRow` 는 컨트롤을 오른쪽 좁은 슬롯에 두므로
@@ -514,21 +545,16 @@ private struct AchievementPage: View {
         .padding(.vertical, 10)
     }
 
-    private var clampedSuggestionCount: Int {
-        clamped(suggestionCount, in: Constants.achievementSuggestionCountRange)
+    private func suggestionStepper(value: Binding<Int>, range: ClosedRange<Int>) -> some View {
+        HStack {
+            Text("\(clamped(value.wrappedValue, in: range))개")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+            Stepper("", value: value, in: range).labelsHidden()
+        }
     }
 
-    private var clampedMaxTodoCount: Int {
-        clamped(suggestionMaxTodoCount, in: Constants.achievementSuggestionMaxTodoCountRange)
-    }
-
-    private var clampedMonthlyMinWeeklyGoalCount: Int {
-        clamped(monthlySuggestionMinWeeklyGoalCount, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
-    }
-
-    private var clampedMonthlySuggestionCount: Int {
-        clamped(monthlySuggestionCount, in: Constants.achievementMonthlySuggestionCountRange)
-    }
 
     private var clampedJourneyMaxFlagCount: Int {
         clamped(journeyMaxFlagCount, in: Constants.achievementJourneyMaxFlagCountRange)
@@ -550,10 +576,12 @@ private struct AchievementPage: View {
     }
 
     private func normalizeValues() {
-        suggestionCount = clampedSuggestionCount
-        suggestionMaxTodoCount = clampedMaxTodoCount
-        monthlySuggestionMinWeeklyGoalCount = clampedMonthlyMinWeeklyGoalCount
-        monthlySuggestionCount = clampedMonthlySuggestionCount
+        weeklySuggestionLimit = clamped(weeklySuggestionLimit, in: Constants.achievementSuggestionCountRange)
+        maxTodosPerWeeklyGoal = clamped(maxTodosPerWeeklyGoal, in: Constants.achievementSuggestionMaxTodoCountRange)
+        minWeeklyGoalsForMonthlySuggestions = clamped(minWeeklyGoalsForMonthlySuggestions, in: Constants.achievementMonthlySuggestionMinWeeklyGoalCountRange)
+        monthlySuggestionLimit = clamped(monthlySuggestionLimit, in: Constants.achievementMonthlySuggestionCountRange)
+        minTodosForWeeklySuggestions = clamped(minTodosForWeeklySuggestions, in: Constants.achievementMinTodosForWeeklySuggestionsRange)
+        maxWeeklyGoalsPerMonthlyGoal = clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
         journeyMaxFlagCount = clampedJourneyMaxFlagCount
         rewardWeeklyGoalPoints = clampedRewardWeeklyGoalPoints
         excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)

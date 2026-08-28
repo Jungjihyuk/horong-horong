@@ -824,15 +824,35 @@ enum Constants {
 
     /// 프롬프트 문자 예산. 이 이상은 추론이 거부되거나 품질이 떨어진다.
     /// AFM 값은 실측(3,424자 통과 / 5,203자 실패)에 여유를 둔 것이다.
+    /// Ollama 실측: 10,815자 주입 시 60초 타임아웃/noJSON 실패 발생 -> 4,500자로 다이어트하여 5~10초 내 생성 유도.
     static func achievementPromptCharacterBudget(
         for provider: AchievementSuggestionProviderKind
     ) -> Int {
         switch provider {
         case .appleFoundation: return 4_000
-        case .mlx: return 16_000
-        case .ollama: return 16_000
+        case .mlx: return 6_000
+        case .ollama: return 4_500
         }
     }
+
+    /// 목표 추천 생성의 벽시계 상한(초).
+    ///
+    /// **제품과 평가는 요구가 반대라 값이 하나일 수 없다.** 제품은 사용자를 기다리게 하는
+    /// 자리라 상한이 짧아야 하고, 골든셋은 품질을 재는 자리라 속도 제약이 결과를 오염시키면
+    /// 안 된다 — 상한에 걸린 케이스는 «모델이 틀렸다» 가 아니라 «머신이 느렸다» 인데
+    /// 점수에는 똑같이 0으로 남는다.
+    ///
+    /// 기본값은 제품 값이고 **`GoalSuggestionEvalTests` 만 이 값을 올려 잡는다.**
+    /// `TraceRecorder.shared` 와 같은 방식이다 — 호출 사슬 네 겹에 인자를 뚫는 대신
+    /// 평가가 시작할 때 한 번 쓰고 끝나면 되돌린다.
+    nonisolated(unsafe) static var achievementSuggestionTimeout: TimeInterval = 180
+
+    /// 골든셋이 쓰는 상한.
+    ///
+    /// 실측(2026-08-25) 27B 모델이 GPU 에 다 안 올라가 `18% CPU` 로 새면 0.68 tok/s 까지
+    /// 떨어져 한 건에 **322초**가 걸렸다. 관측 최댓값 바로 위에 둔 값이라 여유가 크지 않다 —
+    /// 근본 해결은 모델을 GPU 에 온전히 올리는 것이다(`iogpu.wired_limit_mb`).
+    static let achievementSuggestionEvalTimeout: TimeInterval = 350
 
     static let defaultCompanionChatProvider = CompanionChatProviderKind.appleFoundation.rawValue
     /// 뉴스 기능과 같은 엔드포인트를 쓴다.
@@ -882,8 +902,13 @@ enum Constants {
         static let achievementSuggestionMaxTodoCount = "achievement.suggestionMaxTodoCount"
         static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
+        static let achievementMinTodosForWeeklySuggestions = "achievement.minTodosForWeeklySuggestions"
+        static let achievementMaxWeeklyGoalsPerMonthlyGoal = "achievement.maxWeeklyGoalsPerMonthlyGoal"
         static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
         static let achievementSuggestionProvider = "achievement.suggestionProvider"
+        /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
+        /// `defaults write com.horonghorong.app achievement.executionStrategy -string sequential`
+        static let achievementExecutionStrategy = "achievement.executionStrategy"
         static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
         static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
@@ -933,8 +958,19 @@ enum Constants {
         static let companionOllamaModel = "companion.ollamaModel"
         static let companionMLXModel = "companion.mlxModel"
         /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
+        /// 실제로 읽고 쓰는 쪽은 `HorongAIMLX` 의 `MLXModelStore.preparedModelsDefaultsKey` 다. 값이 같아야 한다.
         static let companionMLXPreparedModels = "companion.mlxPreparedModels"
         static let companionBubbleSize = "companion.bubbleSize"
+        /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.
+        static let aiLabRatings = "ailab.ratings"
+        /// 골든셋 채점 결과가 있는 `Evals/` 폴더 경로.
+        ///
+        /// 결과(`Evals/results/`)는 gitignore 된 실행 산출물이라 앱에 번들할 수 없다.
+        /// 사용자가 한 번 지정하면 기억한다. 앱 샌드박스가 꺼져 있어 경로만으로 충분하다.
+        static let aiLabEvalsDirectory = "ailab.evalsDirectory"
+        /// 개발자 전용 탭(AI 실험실) 노출 여부. Release 빌드에서 직접 켤 때만 쓰는 숨김 플래그.
+        /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
+        static let aiLabEnabled = "ailab.enabled"
     }
 
     // MARK: - 메뉴바 표시 형식
@@ -1004,6 +1040,8 @@ enum Constants {
     static let defaultAchievementSuggestionMaxTodoCount = 5
     static let defaultAchievementMonthlySuggestionMinWeeklyGoalCount = 3
     static let defaultAchievementMonthlySuggestionCount = 2
+    static let defaultAchievementMinTodosForWeeklySuggestions = 2
+    static let defaultAchievementMaxWeeklyGoalsPerMonthlyGoal = 4
     static let legacyAchievementSuggestionExcludedMemoIconsRaw = "☕️,💡,📜"
     static let defaultAchievementSuggestionExcludedMemoIcons = ["☕️", "🌱", "📜"]
     static let defaultAchievementSuggestionExcludedMemoIconsRaw = defaultAchievementSuggestionExcludedMemoIcons.joined(separator: ",")
@@ -1011,6 +1049,8 @@ enum Constants {
     static let achievementSuggestionMaxTodoCountRange = 2...12
     static let achievementMonthlySuggestionMinWeeklyGoalCountRange = 2...8
     static let achievementMonthlySuggestionCountRange = 1...6
+    static let achievementMinTodosForWeeklySuggestionsRange = 2...12
+    static let achievementMaxWeeklyGoalsPerMonthlyGoalRange = 2...8
     static let defaultAchievementJourneyMaxFlagCount = 5
     static let achievementJourneyMaxFlagCountRange = 1...8
 
@@ -1033,7 +1073,7 @@ enum Constants {
     static var defaultNewsOllamaModel: String {
         recommendedNewsOllamaModel()
     }
-    static let defaultNewsOllamaEndpoint = "http://localhost:11434"
+    static let defaultNewsOllamaEndpoint = "http://127.0.0.1:11434"
     static let defaultNewsOllamaTimeout = 120.0
     static var newsHardwareMemoryGB: Int {
         memoryGB(forPhysicalMemoryBytes: ProcessInfo.processInfo.physicalMemory)
@@ -1058,6 +1098,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .primary,
                 "qwen3.6:27b-mlx": .quality,
                 "qwen3.6:27b-q4_K_M": .quality,
+                "qwen3.8:27b": .quality,
+                "qwen3.8:27b-mlx": .quality,
                 "qwen3.5:9b": .lightweight,
             ]
         case 48..<64:
@@ -1071,6 +1113,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .quality,
                 "qwen3.6:27b-mlx": .primary,
                 "qwen3.6:27b-q4_K_M": .primary,
+                "qwen3.8:27b": .primary,
+                "qwen3.8:27b-mlx": .primary,
                 "qwen3.5:9b": .lightweight,
             ]
         case 24..<48:
@@ -1088,6 +1132,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .caution,
                 "qwen3.6:27b-q4_K_M": .caution,
+                "qwen3.8:27b": .caution,
+                "qwen3.8:27b-mlx": .caution,
                 "qwen3.5:9b": .primary,
             ]
         case 16..<24:
@@ -1105,6 +1151,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .quality,
             ]
         case 12..<16:
@@ -1124,6 +1172,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .caution,
             ]
         default:
@@ -1143,6 +1193,8 @@ enum Constants {
                 "qwen3.6:35b-mlx": .unsupported,
                 "qwen3.6:27b-mlx": .unsupported,
                 "qwen3.6:27b-q4_K_M": .unsupported,
+                "qwen3.8:27b": .unsupported,
+                "qwen3.8:27b-mlx": .unsupported,
                 "qwen3.5:9b": .unsupported,
             ]
         }
@@ -1251,6 +1303,20 @@ enum Constants {
             isRecommended: false
         ),
         NewsOllamaModelOption(
+            name: "qwen3.8:27b",
+            label: "Qwen3.8 27B",
+            detail: "장점: 최신 Qwen3.8 27B로 긴 지시와 구조화 출력 품질을 비교하기 좋습니다. 대형 모델이라 목표 추천 품질 검증용으로 권장. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: true
+        ),
+        NewsOllamaModelOption(
+            name: "qwen3.8:27b-mlx",
+            label: "Qwen3.8 27B MLX",
+            detail: "장점: Apple Silicon에서 Ollama의 MLX 엔진을 사용해 응답 속도와 메모리 효율을 높인 Qwen3.8 27B입니다. M칩 Mac의 목표 추천 품질 검증용으로 권장. 권장 RAM: 32GB+.",
+            availability: .local,
+            isRecommended: true
+        ),
+        NewsOllamaModelOption(
             name: "qwen3.6:35b-a3b-q4_K_M",
             label: "Qwen3.6 35B-A3B Q4_K_M",
             detail: "장점: Qwen 3.6 35B. 대형 양자화 모델로 높은 품질과 효율성 제공. 권장 RAM: 48GB+.",
@@ -1282,6 +1348,13 @@ enum Constants {
             name: "exaone3:7.8b",
             label: "EXAONE 3.0 7.8B",
             detail: "장점: 한국어와 영어에 매우 특화되어 있으며 어휘력이 유창함. 권장 RAM: 16GB+.",
+            availability: .local,
+            isRecommended: false
+        ),
+        NewsOllamaModelOption(
+            name: "exaone-deep:7.8b",
+            label: "EXAONE Deep 7.8B",
+            detail: "장점: 한국어 중심의 깊은 추론과 문제 해결에 강한 모델. 권장 RAM: 16GB+.",
             availability: .local,
             isRecommended: false
         ),

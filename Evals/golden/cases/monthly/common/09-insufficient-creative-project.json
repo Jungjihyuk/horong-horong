@@ -1,0 +1,73 @@
+{
+  "caseName": "창작 프로젝트 주간 목표지만 작품과 산출물이 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability"
+  ],
+  "note": "창작 활동이라는 영역은 보이지만 작품의 종류, 대상, 결과물과 완료 기준이 없어 한 달 목표를 만들 수 없다. 월간 목표를 추측하지 않고 각 주간 목표를 SMART 기준으로 구체화해야 하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": null
+  },
+  "referenceDate": "2026-10-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-10-01",
+      "dueDate": "2026-10-07",
+      "title": "작품 만들기",
+      "icon": "🎨"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-10-04",
+      "dueDate": "2026-10-14",
+      "title": "아이디어 정리하기",
+      "icon": "💡"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-10-10",
+      "dueDate": "2026-10-21",
+      "title": "피드백 받기",
+      "icon": "💬"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-10-17",
+      "dueDate": "2026-10-28",
+      "title": "홍보하기",
+      "icon": "📣"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_weekly_goals_with_smart_guidance",
+    "guidance": "작품의 종류와 대상, 결과물의 수량, 피드백 기준과 홍보 채널이 없어 월간 목표를 정할 수 없다. 각 주간 목표를 구체적인 산출물과 완료 기준이 있는 목표로 먼저 바꾼다.",
+    "goalReviews": [
+      {
+        "goal": "g1",
+        "missing": ["specific", "measurable"],
+        "suggestion": "수채화 엽서 3장을 완성하고 사진으로 기록하기처럼 작품 종류와 결과물 수를 정해보세요."
+      },
+      {
+        "goal": "g2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "10월에 만들 수채화 엽서 주제 5개를 정하고 최종 주제 1개를 선택하기처럼 아이디어 수와 결정 기준을 정해보세요."
+      },
+      {
+        "goal": "g3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "완성한 엽서를 지인 3명에게 보여주고 색상·구성 피드백을 각각 1개씩 기록하기처럼 대상과 피드백 기준을 정해보세요."
+      },
+      {
+        "goal": "g4",
+        "missing": ["specific", "measurable", "time_bound"],
+        "suggestion": "완성한 엽서 사진을 SNS에 2회 게시하고 게시물별 반응을 기록하기처럼 채널, 횟수와 기한을 정해보세요."
+      }
+    ]
+  }
+}

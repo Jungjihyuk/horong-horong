@@ -152,6 +152,13 @@ class InsightBundle(BaseModel):
     category_id: str | None = None  # category 기반 묶음일 때만 사용
 
 
+class GenerationContext(BaseModel):
+    """리포트를 생성할 당시의 AI 모델 구동 환경 정보."""
+
+    provider: str
+    model: str | None = None
+
+
 class ReportContent(BaseModel):
     """리포트 템플릿에 넣을 최종 데이터."""
 
@@ -162,3 +169,19 @@ class ReportContent(BaseModel):
     bundle_ids: list[str] = Field(default_factory=list)  # 리포트에 포함할 InsightBundle 목록
     keyword_insight_ids: list[str] = Field(default_factory=list)  # 리포트에 포함할 KeywordInsight 목록
     trend_insight_ids: list[str] = Field(default_factory=list)  # 리포트에 포함할 TrendInsight 목록
+
+class ReportArtifacts(BaseModel):
+    """한 번의 리포트 실행에서 생성되는 모든 아티팩트 데이터를 묶은 최종 덤프 형식."""
+
+    schemaVersion: int = 1
+    jobId: str
+    reportDate: str
+    generationContext: GenerationContext | None = None
+    taxonomy: CategoryTaxonomy | None = None
+    candidates: list[SourceCandidate] = Field(default_factory=list)
+    assignments: list[CategoryAssignment] = Field(default_factory=list)
+    sourceInsights: list[SourceInsight] = Field(default_factory=list)
+    keywordInsights: list[KeywordInsight] = Field(default_factory=list)
+    trends: list[TrendInsight] = Field(default_factory=list)
+    bundles: list[InsightBundle] = Field(default_factory=list)
+    reportContent: ReportContent

@@ -1,0 +1,87 @@
+{
+  "caseName": "취미 창작과 모임 준비를 별도 월간 목표로 분리",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "over_grouping_exclusion",
+    "measurability",
+    "clarity"
+  ],
+  "note": "수채화 엽서 창작 주간 목표 4개와 친구 모임 준비 주간 목표 4개를 각각 독립된 월간 결과로 묶는다. 취미와 모임이라는 일상 활동을 하나의 막연한 여가 목표로 합치지 않는지 평가하는 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": null
+  },
+  "referenceDate": "2026-10-31",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2026-10-01",
+      "dueDate": "2026-10-05",
+      "title": "수채화 엽서 시리즈의 주제와 완성 기준 정하기",
+      "icon": "🎨"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2026-10-03",
+      "dueDate": "2026-10-12",
+      "title": "수채화 엽서 3장 밑그림 완성하기",
+      "icon": "✏️"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2026-10-10",
+      "dueDate": "2026-10-19",
+      "title": "수채화 엽서 채색 작품 3장 완성하기",
+      "icon": "🖌️"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2026-10-17",
+      "dueDate": "2026-10-26",
+      "title": "완성한 수채화 엽서 사진과 작업 설명 정리하기",
+      "icon": "🖼️"
+    },
+    {
+      "id": "g5",
+      "createdAt": "2026-10-02",
+      "dueDate": "2026-10-06",
+      "title": "친구 모임 날짜와 장소 확정하기",
+      "icon": "📅"
+    },
+    {
+      "id": "g6",
+      "createdAt": "2026-10-05",
+      "dueDate": "2026-10-12",
+      "title": "모임 참석자 6명에게 초대 메시지 보내기",
+      "icon": "💬"
+    },
+    {
+      "id": "g7",
+      "createdAt": "2026-10-12",
+      "dueDate": "2026-10-19",
+      "title": "모임 진행 순서와 준비 역할 정하기",
+      "icon": "🤝"
+    },
+    {
+      "id": "g8",
+      "createdAt": "2026-10-19",
+      "dueDate": "2026-10-30",
+      "title": "모임 후 사진 공유하고 다음 만남 제안하기",
+      "icon": "📸"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "monthly_goal",
+      "title": "수채화 엽서 창작 프로젝트 완성하기",
+      "goals": ["g1", "g2", "g3", "g4"]
+    },
+    {
+      "type": "monthly_goal",
+      "title": "친구 모임 준비하고 이어가기",
+      "goals": ["g5", "g6", "g7", "g8"]
+    }
+  ]
+}

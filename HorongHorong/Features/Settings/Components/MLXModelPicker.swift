@@ -1,3 +1,4 @@
+import HorongAIMLX
 import SwiftUI
 
 /// MLX 모델 선택기. `OllamaModelPicker` 와 같은 카드 목록 형태로 맞춰

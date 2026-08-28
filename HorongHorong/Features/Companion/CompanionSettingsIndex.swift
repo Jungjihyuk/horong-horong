@@ -1,4 +1,5 @@
 import Foundation
+import HorongAI
 
 /// 설정 항목을 찾아주는 색인.
 ///
@@ -15,14 +16,24 @@ enum CompanionSettingsIndex {
         var evidence: String {
             "관련 설정은 설정 → \(tab.label) 에 있다."
         }
+
+        /// 같은 근거를 조각으로. 이쪽은 검색기가 매긴 점수를 그대로 달고 나간다.
+        var evidenceItem: Evidence {
+            Evidence(
+                id: "settingsIndex.\(tab.rawValue)",
+                source: "settingsIndex",
+                text: evidence,
+                score: Double(score)
+            )
+        }
     }
 
     /// 질문과 가장 많이 겹치는 설정 페이지. 겹치는 게 없으면 nil.
     static func bestMatch(
         for question: String,
-        tabs: [SettingsTab] = SettingsTab.allCases
+        tabs: [SettingsTab] = SettingsTab.visibleCases
     ) -> Match? {
-        let tokens = CompanionGuide.searchTokens(in: question)
+        let tokens = SearchTokens.from(question)
         guard !tokens.isEmpty else { return nil }
 
         var best: Match?

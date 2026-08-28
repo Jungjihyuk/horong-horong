@@ -1,0 +1,63 @@
+{
+  "caseName": "운동·식단 할 일과 체중 감량 목표 맥락",
+  "datasetType": "context_dependent",
+  "successConditions": [
+    "context_handling",
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity",
+    "relevance"
+  ],
+  "note": "운동과 식단 기록만으로는 일반적인 건강관리인지 체중 감량 계획인지 확정하기 어렵다. 사용자 프로필의 체중 감량 목표를 활용해 하나의 주간 실행 목표로 구체화하는지 평가한다. 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": {
+      "source": "companion_chat",
+      "text": "한 달 안에 체중 3kg 감량을 목표로 함",
+      "observedAt": "2026-08-20",
+      "status": "user_confirmed"
+    }
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "아침 5km 러닝하기",
+      "icon": "🏃",
+      "startDate": "2026-08-17 07:00",
+      "deadline": "2026-08-17 08:00"
+    },
+    {
+      "id": "m2",
+      "content": "하체 스쿼트 50회 하기",
+      "icon": "🏋️",
+      "deadline": "2026-08-19 20:00"
+    },
+    {
+      "id": "m3",
+      "content": "저녁 식사 사진과 메뉴 기록하기",
+      "icon": "🥗",
+      "startDate": "2026-08-20 19:00"
+    },
+    {
+      "id": "m4",
+      "content": "이번 주 식단에서 줄일 음식 정하기",
+      "icon": "🥦",
+      "deadline": "2026-08-21 20:00"
+    },
+    {
+      "id": "m5",
+      "content": "건강검진 예약하기",
+      "icon": "🏥",
+      "deadline": "2026-08-18 18:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "체중 3kg 감량을 위한 운동·식단 실천하기",
+      "memos": ["m1", "m2", "m3", "m4"]
+    }
+  ]
+}

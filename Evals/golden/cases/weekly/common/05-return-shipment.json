@@ -1,0 +1,70 @@
+{
+  "caseName": "택배 반품 처리 단계 3개 + 무관한 생활 잡무",
+  "datasetType": "general",
+  "successConditions": [
+    "semantic_cohesion",
+    "noise_exclusion",
+    "measurability",
+    "clarity"
+  ],
+  "note": "반품 신청, 상품 포장, 택배 접수가 하나의 반품 완료 결과로 이어지는지 평가한다. 일반적인 일상 처리 흐름의 합성 데이터.",
+  "context": {
+    "persona": null,
+    "profile": []
+  },
+  "referenceDate": "2026-08-21",
+  "memos": [
+    {
+      "id": "m1",
+      "content": "온라인 주문 상품 반품 신청하기",
+      "icon": "↩️",
+      "deadline": "2026-08-18 20:00"
+    },
+    {
+      "id": "m2",
+      "content": "반품할 상품 포장하고 송장 붙이기",
+      "icon": "📦",
+      "startDate": "2026-08-19 19:00",
+      "deadline": "2026-08-19 19:30"
+    },
+    {
+      "id": "m3",
+      "content": "편의점에서 반품 택배 접수하기",
+      "icon": "🏪",
+      "startDate": "2026-08-20 18:00"
+    },
+    {
+      "id": "m4",
+      "content": "화분에 물 주기",
+      "icon": "🪴"
+    },
+    {
+      "id": "m5",
+      "content": "받은 이메일 읽고 보관하기",
+      "icon": "✉️",
+      "deadline": "2026-08-21 21:00"
+    }
+  ],
+  "expectedGroups": [
+    {
+      "type": "weekly_goal",
+      "title": "주문 상품 반품 완료하기",
+      "memos": [
+        "m1",
+        "m2",
+        "m3"
+      ]
+    }
+  ],
+  "traps": [
+    {
+      "why": "서로 관련 없는 일회성 생활 잡무를 하나의 목표로 묶으면 안 된다",
+      "groups": [
+        [
+          "m4",
+          "m5"
+        ]
+      ]
+    }
+  ]
+}

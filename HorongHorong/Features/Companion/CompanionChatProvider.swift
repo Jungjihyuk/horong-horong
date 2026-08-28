@@ -1,5 +1,15 @@
+import HorongAI
+import HorongAIMLX
 import Foundation
+import OSLog
 import SwiftData
+
+/// 어느 공급자가 뽑혔는지. 사용자가 고른 값과 실제로 쓰인 값이 다를 수 있어(폴백) 둘 다 남긴다.
+/// 모델 이름은 설정 화면에 그대로 보이는 값이라 `.public` 이다 — 사용자 내용이 아니다.
+let companionProviderLog = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "HorongHorong",
+    category: "companion-provider"
+)
 
 /// 대화 세션을 만들 때 필요한 것들. 인자가 늘어나도 시그니처가 번지지 않도록 한데 묶는다.
 struct CompanionChatContext {
@@ -40,30 +50,47 @@ enum CompanionChatProviderFactory {
             forKey: Constants.AppStorageKey.companionChatProvider
         ) ?? Constants.defaultCompanionChatProvider
 
-        NSLog("[PROVIDER] selected=\(selected) ollamaReachable=\(ollamaReachable)")
+        companionProviderLog.info(
+            """
+            select requested=\(selected, privacy: .public) \
+            ollamaReachable=\(ollamaReachable, privacy: .public)
+            """
+        )
         if selected == Constants.CompanionChatProviderKind.ollama.rawValue {
-            let provider = OllamaCompanionChatProvider(
+            let provider = PackageChatProvider(OllamaProvider(
                 endpoint: UserDefaults.standard.string(
                     forKey: Constants.NewsStorageKey.ollamaEndpoint
                 ) ?? Constants.defaultNewsOllamaEndpoint,
                 model: UserDefaults.standard.string(
                     forKey: Constants.AppStorageKey.companionOllamaModel
                 ) ?? Constants.defaultCompanionOllamaModel,
-                reachable: ollamaReachable
+                reachable: ollamaReachable,
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .ollama)
+                )
+            ))
+            companionProviderLog.info(
+                "select resolved=ollama model=\(provider.displayName, privacy: .public)"
             )
-            NSLog("[PROVIDER] Ollama 공급자 반환 model=\(provider.displayName)")
             return provider
         }
 
         #if canImport(MLXLLM)
         if selected == Constants.CompanionChatProviderKind.mlx.rawValue {
-            let provider = MLXCompanionChatProvider(
-                model: UserDefaults.standard.string(
-                    forKey: Constants.AppStorageKey.companionMLXModel
-                ) ?? Constants.defaultCompanionMLXModel
-            )
+            let model = UserDefaults.standard.string(
+                forKey: Constants.AppStorageKey.companionMLXModel
+            ) ?? Constants.defaultCompanionMLXModel
+            let provider = PackageChatProvider(MLXProvider(
+                model: model,
+                modelLabel: Constants.companionMLXModelLabel(for: model),
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .mlx)
+                )
+            ))
             if provider.isAvailable {
-                NSLog("[PROVIDER] MLX 공급자 반환 model=\(provider.displayName)")
+                companionProviderLog.info(
+                    "select resolved=mlx model=\(provider.displayName, privacy: .public)"
+                )
                 return provider
             }
         }
@@ -71,7 +98,11 @@ enum CompanionChatProviderFactory {
 
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
-            let provider = FoundationModelsCompanionChatProvider()
+            let provider = PackageChatProvider(AppleFoundationModelsProvider(
+                capabilities: ProviderCapabilities(
+                    maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .appleFoundation)
+                )
+            ))
             if provider.isAvailable { return provider }
         }
         #endif

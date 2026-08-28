@@ -1,0 +1,79 @@
+{
+  "caseName": "백엔드 운영 목표지만 대상과 완료 기준이 부족한 입력",
+  "datasetType": "insufficient_information",
+  "successConditions": [
+    "ambiguity_detection",
+    "abstention_when_ambiguous",
+    "clarity",
+    "measurability",
+    "relevance"
+  ],
+  "note": "B2B 주문 관리 플랫폼 백엔드라는 프로필 맥락은 있지만, 어떤 운영 문제를 해결하는지와 측정 지표·완료 산출물이 없어 월간 목표를 만들 수 없다. 프로필을 활용해 가이드의 후보 범위를 좁히되 장애 원인이나 보안 범위를 추측하지 않고 각 목표를 SMART 기준으로 구체화해야 하는 합성 데이터.",
+  "context": {
+    "persona": "backend_developer",
+    "profile": {
+      "source": "companion_chat",
+      "text": "B2B 주문 관리 플랫폼의 백엔드 운영과 품질 개선을 담당하고 있음",
+      "observedAt": "2027-10-30",
+      "status": "user_confirmed"
+    }
+  },
+  "referenceDate": "2027-11-30",
+  "weeklyGoals": [
+    {
+      "id": "g1",
+      "createdAt": "2027-11-01",
+      "dueDate": "2027-11-07",
+      "title": "모니터링 개선하기",
+      "icon": "📊"
+    },
+    {
+      "id": "g2",
+      "createdAt": "2027-11-04",
+      "dueDate": "2027-11-14",
+      "title": "보안 강화하기",
+      "icon": "🔒"
+    },
+    {
+      "id": "g3",
+      "createdAt": "2027-11-10",
+      "dueDate": "2027-11-21",
+      "title": "코드 품질 높이기",
+      "icon": "🧹"
+    },
+    {
+      "id": "g4",
+      "createdAt": "2027-11-17",
+      "dueDate": "2027-11-28",
+      "title": "협업 준비하기",
+      "icon": "🤝"
+    }
+  ],
+  "expectedGroups": [],
+  "expectedOutcome": {
+    "action": "rewrite_weekly_goals_with_smart_guidance",
+    "guidance": "대상 서비스와 문제 상황, 변경 범위, 측정할 지표, 완료 산출물과 기한이 없어 월간 목표를 정할 수 없다. 먼저 각 주간 목표를 구체적인 결과와 검증 기준이 있는 형태로 바꾼다.",
+    "goalReviews": [
+      {
+        "goal": "g1",
+        "missing": ["specific", "measurable"],
+        "suggestion": "주문 생성·결제·배송 상태 API 중 대상을 정하고, 지연 시간·오류율·알림 누락률 중 지표와 목표값을 정해 운영 대시보드 1개를 완성해보세요."
+      },
+      {
+        "goal": "g2",
+        "missing": ["specific", "measurable"],
+        "suggestion": "주문·고객 정보 API 중 대상을 정하고, 인증·권한·민감정보 마스킹 중 적용할 항목과 검증 테스트 수를 정해보세요."
+      },
+      {
+        "goal": "g3",
+        "missing": ["specific", "measurable"],
+        "suggestion": "주문 상태 변경 모듈이나 중복 코드를 지정하고, 제거할 함수 수 또는 테스트 커버리지 목표와 통과 기준을 적어보세요."
+      },
+      {
+        "goal": "g4",
+        "missing": ["specific", "measurable", "time_bound"],
+        "suggestion": "프론트엔드·운영팀과 공유할 주문 API 계약서·개발 환경 문서·인수 체크리스트 중 무엇을 언제까지 완성할지 정해보세요."
+      }
+    ]
+  }
+}
