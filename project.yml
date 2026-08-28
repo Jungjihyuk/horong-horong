@@ -67,10 +67,10 @@ targets:
         excludes:
           - "**/*.entitlements"
           - "Info-AppStore.plist"
-      - path: assets/companion
+      - path: Assets/companion
         type: folder
         buildPhase: resources
-      - path: assets/overview
+      - path: Assets/overview
         type: folder
         buildPhase: resources
       - path: HorongHorong/Resources/Guide
@@ -144,10 +144,10 @@ targets:
           - "**/*.entitlements"
           - "Info.plist"
           - "Services/AppUpdate/**"
-      - path: assets/companion
+      - path: Assets/companion
         type: folder
         buildPhase: resources
-      - path: assets/overview
+      - path: Assets/overview
         type: folder
         buildPhase: resources
       - path: HorongHorong/Resources/Guide
