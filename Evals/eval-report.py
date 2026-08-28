@@ -21,7 +21,7 @@ def load_golden_notes():
     notes = {}
     meta = {}
     here = os.path.dirname(os.path.abspath(__file__))
-    for folder in ("golden/cases", "golden/drafts"):
+    for folder in ["golden/cases"]: # "golden/drafts"
         directory = os.path.join(here, folder)
         if not os.path.isdir(directory):
             continue
@@ -273,7 +273,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .cap-body { padding: 14px 16px; }
         .cap-def { margin: 12px 0 0; color: var(--muted); font-size: 12.5px; max-width: 80ch; line-height: 1.6; }
         .cap-wrap { overflow-x: auto; }
-        .cap-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+        .cap-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; min-width: 1080px; }
         .cap-table th, .cap-table td { text-align: right; padding: 7px 10px; white-space: nowrap; }
         .cap-table th {
             font-family: monospace; font-size: 10.5px; font-weight: 700; color: var(--muted);
@@ -289,12 +289,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .cap-table th:first-child, .cap-table td:first-child { text-align: left; }
         .cap-table thead tr:nth-child(2) th:first-child { text-align: right; }
         .cap-table td { border-bottom: 1px solid var(--panel-alt); font-size: 12.5px; }
+        .cap-table th.cap-col-model, .cap-table td.cap-name {
+            width: 230px; min-width: 210px; max-width: 260px;
+            text-align: left;
+        }
+        .cap-table tfoot tr { background: var(--panel-alt); }
         .cap-table tfoot td {
             border-bottom: 0; border-top: 1px solid var(--line);
-            font-family: monospace; font-size: 10.5px; color: var(--faint);
+            font-family: monospace; font-size: 10.5px; color: var(--muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 0; padding: 8px 6px;
         }
-        .cap-name { font-family: monospace; font-size: 12px; }
+        .cap-table tfoot td:first-child {
+            font-weight: 700; color: var(--ink); max-width: none;
+        }
+        .cap-name {
+            font-family: monospace; font-size: 12px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: block; max-width: 100%;
+        }
+        .cap-org { color: var(--muted); font-weight: 400; opacity: 0.85; }
+        .cap-best-model {
+            display: inline-block; max-width: 100%;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            vertical-align: middle; font-size: 10.5px; color: var(--accent); font-weight: 600;
+        }
+        .cap-th-model {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 140px; min-width: 90px;
+        }
         .cap-cell { font-family: monospace; font-weight: 700; border-radius: 3px; }
+        .cap-cell.cap-avg { color: var(--accent); }
         .cap-split { border-left: 1px solid var(--line); }
         .cap-grouphead td {
             background: var(--panel-alt); font-family: monospace; font-size: 10.5px;
@@ -302,7 +327,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .cap-caseid { font-size: 12px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 
-        .cap-ctxrow { display: grid; grid-template-columns: 150px 1fr 82px; align-items: center; gap: 12px; padding: 5px 0; }
+        .cap-ctxrow { display: grid; grid-template-columns: 210px 1fr 82px; align-items: center; gap: 12px; padding: 5px 0; }
         .cap-bar { display: flex; height: 15px; border-radius: 3px; overflow: hidden; gap: 2px; }
         .cap-up { background: var(--pass-fg); }
         /* 발산형 막대의 중립 구간. `--bubble` 은 패널 배경과 거의 같아 막대가 끊겨 보인다. */
@@ -429,6 +454,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const capF2 = v => (v === null || v === undefined) ? '' : Number(v).toFixed(2);
         const capVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
+        function capModelHtml(model) {
+            if (!model) return '';
+            const raw = String(model);
+            if (raw.startsWith('mlx-community/')) {
+                return `<span class="cap-org">mlx/</span>${capEsc(raw.slice(14))}`;
+            }
+            return capEsc(raw);
+        }
+
         /* 열 안의 상대 농도 — 한 색상 sequential. reverse 열은 낮을수록 진하다. */
         function capPaint(td, v, lo, hi, reverse) {
             let t = (hi === lo) ? 0.5 : (v - lo) / (hi - lo);
@@ -447,7 +481,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const rg = cols.map(c => capRange(rows.map(r => getter(r, c.key))));
             rows.forEach(r => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="cap-name">${capEsc(r.model)}</td>`;
+                tr.innerHTML = `<td class="cap-name" title="${capEsc(r.model)}">${capModelHtml(r.model)}</td>`;
                 cols.forEach((c, i) => {
                     const v = getter(r, c.key);
                     const td = document.createElement('td');
@@ -470,10 +504,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (tf) {
                 const best = cols.map((c, i) => {
                     const target = c.reverse ? rg[i][0] : rg[i][1];
-                    return rows.find(r => getter(r, c.key) === target).model;
+                    const row = rows.find(r => getter(r, c.key) === target);
+                    return { model: row ? row.model : '-', val: target };
                 });
                 tf.innerHTML = '<tr><td>열 최고</td>' +
-                    cols.map((c, i) => `<td class="${c.split ? 'cap-split' : ''}">${capEsc(best[i])}</td>`).join('') +
+                    cols.map((c, i) => {
+                        const b = best[i];
+                        const valStr = c.integer ? String(b.val) : capF2(b.val);
+                        return `<td class="${c.split ? 'cap-split ' : ''}cap-best" title="열 최고: ${capEsc(b.model)} (${valStr})">` +
+                            `<span class="cap-best-model">${capModelHtml(b.model)}</span></td>`;
+                    }).join('') +
                     ((labels && labels.tail) ? '<td class="cap-split"></td>' : '') + '</tr>';
             }
         }
@@ -502,7 +542,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     const c = d.ctx, n = Math.max(1, c.up + c.flat + c.down);
                     const row = document.createElement('div');
                     row.className = 'cap-ctxrow';
-                    row.innerHTML = `<span class="cap-name">${capEsc(d.model)}</span>
+                    row.innerHTML = `<span class="cap-name" title="${capEsc(d.model)}">${capModelHtml(d.model)}</span>
                         <span class="cap-bar">
                           <span class="cap-up" style="width:${c.up / n * 100}%" title="개선 ${c.up}쌍"></span>
                           <span class="cap-flat" style="width:${c.flat / n * 100}%" title="무변 ${c.flat}쌍"></span>
@@ -517,7 +557,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             if (ft) {
                 const keys = ['modelReturned','kept','badID','tooFewIDs','alreadyUsed','overMaxMemo'];
                 ft.innerHTML = CAP.models.map(d =>
-                    `<tr><td class="cap-name">${capEsc(d.model)}</td>` + keys.map((k, i) =>
+                    `<tr><td class="cap-name" title="${capEsc(d.model)}">${capModelHtml(d.model)}</td>` + keys.map((k, i) =>
                         `<td class="${i === 2 ? 'cap-split' : ''}" style="font-family:monospace;color:${d.fmt[k] === 0 ? capVar('--faint') : capVar('--ink')}">${d.fmt[k]}</td>`
                     ).join('') + '</tr>').join('');
             }
@@ -525,7 +565,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const mt = document.querySelector('#cap-missing tbody');
             if (mt) {
                 mt.innerHTML = CAP.models.map(d =>
-                    `<tr><td class="cap-name">${capEsc(d.model)}</td>` +
+                    `<tr><td class="cap-name" title="${capEsc(d.model)}">${capModelHtml(d.model)}</td>` +
                     `<td>${d.missingTP}</td><td>${d.missingFP}</td><td>${d.missingFN}</td>` +
                     `<td>${capF2(d.missingF1)}</td></tr>`
                 ).join('');
@@ -551,14 +591,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     guidance_actionability:'안내 실행성', grammar:'문법', vocabulary:'어휘', tone:'어투'
                 };
                 const metrics = judge.metrics || [];
-                jtable.innerHTML = (judge.models || []).map(d =>
-                    `<tr><td class="cap-name">${capEsc(d.model)}</td>` +
-                    metrics.map(k => `<td class="cap-cell">${d.judge[k] == null ? '—' : capF2(d.judge[k])}</td>`).join('') +
-                    `<td class="cap-muted">${d.judgeCount}건</td></tr>`
-                ).join('');
+                jtable.innerHTML = (judge.models || []).map(d => {
+                    const vals = metrics.map(k => d.judge[k]).filter(v => v != null);
+                    const avg = d.judgeAvg != null ? d.judgeAvg : (vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null);
+                    return `<tr><td class="cap-name" title="${capEsc(d.model)}">${capModelHtml(d.model)}</td>` +
+                        metrics.map(k => `<td class="cap-cell">${d.judge[k] == null ? '—' : capF2(d.judge[k])}</td>`).join('') +
+                        `<td class="cap-cell cap-split cap-avg">${avg == null ? '—' : capF2(avg)}</td>` +
+                        `<td class="cap-muted">${d.judgeCount}건</td></tr>`;
+                }).join('');
                 if (jempty) jempty.hidden = Boolean((judge.models || []).length);
                 const head = document.querySelector('#cap-judge thead tr');
-                if (head) head.innerHTML = '<th>모델</th>' + metrics.map(k => `<th>${labels[k] || k}<span>${k}</span></th>`).join('') + '<th>건수</th>';
+                if (head) head.innerHTML = '<th class="cap-col-model">모델</th>' +
+                    metrics.map(k => `<th>${labels[k] || k}<span>${k}</span></th>`).join('') +
+                    '<th class="cap-split">평균 점수<span>average</span></th>' +
+                    '<th>건수</th>';
             }
         }
 
@@ -569,7 +615,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const task = document.getElementById('cap-f-task').value;
             const type = document.getElementById('cap-f-type').value;
             table.querySelector('thead').innerHTML =
-                '<tr><th>케이스</th>' + CAP.modelKeys.map(m => `<th>${capEsc(m)}</th>`).join('') + '</tr>';
+                '<tr><th>케이스</th>' + CAP.modelKeys.map(m => `<th class="cap-th-model" title="${capEsc(m)}">${capModelHtml(m)}</th>`).join('') + '</tr>';
             const tb = table.querySelector('tbody');
             tb.innerHTML = '';
             let group = null;
@@ -1448,6 +1494,8 @@ def build_capability_payload(records, specs, traces, judges=None, max_detail_run
             key: round(_mean(judge_values[key]), 2) if judge_values.get(key) else None
             for key in judge_metric_order
         }
+        valid_judge_scores = [v for v in judge_scores.values() if v is not None]
+        judge_avg = round(_mean(valid_judge_scores), 2) if valid_judge_scores else None
 
         payload_models.append({
             "model": model,
@@ -1482,6 +1530,7 @@ def build_capability_payload(records, specs, traces, judges=None, max_detail_run
             },
             "fmt": dict(fmt),
             "judge": judge_scores,
+            "judgeAvg": judge_avg,
             "judgeCount": judge_count,
         })
 
@@ -1549,7 +1598,7 @@ def build_capability_payload(records, specs, traces, judges=None, max_detail_run
 
 
 def render_capability_tabs(payload):
-    """집계 · 케이스별 · 실행 상세 · 용어 네 탭. 값 해석 문장은 넣지 않는다 —
+    """모델별 · 케이스별 · 실행 상세 · 용어 네 탭. 값 해석 문장은 넣지 않는다 —
     다음 실행에서 스크립트가 다시 만들 수 없는 문장은 리포트에 남기지 않는다."""
     run = payload["run"]
     counts = payload["counts"]
@@ -1558,12 +1607,12 @@ def render_capability_tabs(payload):
     excluded = run["cases"] - ctx_total
 
     run_options = "".join(
-        f'<option value="{i}">{html_escape(r["model"])} · {html_escape(r["case"])} · {html_escape(r["recipe"] or "")}</option>'
+        f'<option value="{i}">{html_escape(r["model"].replace("mlx-community/", "mlx/"))} · {html_escape(r["case"])} · {html_escape(r["recipe"] or "")}</option>'
         for i, r in enumerate(payload["runs"])
     )
 
     buttons = [
-        '<button class="tab-button active" data-tab="tab-capability" onclick="openTab(\'tab-capability\')">집계</button>',
+        '<button class="tab-button active" data-tab="tab-capability" onclick="openTab(\'tab-capability\')">모델별</button>',
         '<button class="tab-button" data-tab="tab-cases" onclick="openTab(\'tab-cases\')">케이스별</button>',
         '<button class="tab-button" data-tab="tab-detail" onclick="openTab(\'tab-detail\')">실행 상세</button>',
         '<button class="tab-button" data-tab="tab-glossary" onclick="openTab(\'tab-glossary\')">용어</button>',
@@ -1572,28 +1621,11 @@ def render_capability_tabs(payload):
     aggregate = f"""
     <div id="tab-capability" class="tab-content active">
         <div class="cap-panel">
-            <div class="cap-head"><h2>안내 기준 분해</h2><span class="cap-scope">메모별 missing 기준 쌍 · specific · measurable · time_bound</span></div>
-            <div class="cap-body">
-                <div class="cap-wrap"><table class="cap-table" id="cap-missing"><thead><tr>
-                    <th>모델</th><th>정답 기준 (TP)</th><th>잘못 추가한 기준 (FP)</th><th>놓친 기준 (FN)</th><th>기준 F1</th>
-                </tr></thead><tbody></tbody></table></div>
-                <p class="cap-def">각 메모의 <code>missing</code> 기준을 <code>메모 ID · 기준명</code> 쌍으로 비교한 결정적 지표입니다. 안내 문장 자체의 품질은 평가하지 않습니다.</p>
-            </div>
-        </div>
-        <div class="cap-panel">
-            <div class="cap-head"><h2>LLM judge 품질 점수</h2><span class="cap-scope" id="cap-judge-meta">성공한 judge 결과를 자동 선택합니다</span></div>
-            <div class="cap-body">
-                <div class="cap-wrap"><table class="cap-table" id="cap-judge"><thead><tr></tr></thead><tbody></tbody></table></div>
-                <p class="cap-def" id="cap-judge-empty">표시할 성공한 LLM judge 결과가 없습니다. <code>make llm-judge JUDGE=codex LIMIT=5</code> 실행 후 리포트를 다시 생성하세요.</p>
-                <p class="cap-def">0–5점 루브릭의 케이스별 평균입니다. 결정적 지표(목표 연결·안내 대상 F1)와 별도로 생성된 목표·안내 문장의 품질을 평가하며, 관련성은 페르소나/프로필이 있는 케이스에서만 채점됩니다. 대시(—)는 해당 케이스에 적용하지 않은 항목입니다.</p>
-            </div>
-        </div>
-        <div class="cap-panel">
             <div class="cap-head"><h2>능력 격자</h2><span class="cap-scope">열마다 대상 집합이 다릅니다 · 색 농도는 열 안에서의 상대값입니다</span></div>
             <div class="cap-body">
                 <div class="cap-wrap"><table class="cap-table" id="cap-grid"><thead>
                     <tr>
-                        <th rowspan="2">모델</th>
+                        <th rowspan="2" class="cap-col-model">모델</th>
                         <th colspan="3" class="cap-group">목표 연결</th>
                         <th colspan="4" class="cap-group cap-split">안내</th>
                         <th colspan="2" class="cap-group cap-split">보류 및 자제</th>
@@ -1618,13 +1650,30 @@ def render_capability_tabs(payload):
             <div class="cap-head"><h2>유형별 분해</h2><span class="cap-scope">유형마다 주력 지표 하나</span></div>
             <div class="cap-body">
                 <div class="cap-wrap"><table class="cap-table" id="cap-bytype"><thead><tr>
-                    <th>모델</th>
+                    <th class="cap-col-model">모델</th>
                     <th>general<span>목표 연결</span></th>
                     <th>context_dependent<span>목표 연결</span></th>
                     <th class="cap-split">insufficient_information<span>안내</span></th>
                     <th>non_goal_or_noise<span>거절</span></th>
                 </tr></thead><tbody></tbody></table></div>
                 <p class="cap-def">경계선 왼쪽 두 유형은 <b>목표를 연결해야</b> 정답이고, 오른쪽 두 유형은 <b>연결하지 말아야</b> 정답입니다.</p>
+            </div>
+        </div>
+        <div class="cap-panel">
+            <div class="cap-head"><h2>안내 기준 분해</h2><span class="cap-scope">메모별 missing 기준 쌍 · specific · measurable · time_bound</span></div>
+            <div class="cap-body">
+                <div class="cap-wrap"><table class="cap-table" id="cap-missing"><thead><tr>
+                    <th class="cap-col-model">모델</th><th>정답 기준 (TP)</th><th>잘못 추가한 기준 (FP)</th><th>놓친 기준 (FN)</th><th>기준 F1</th>
+                </tr></thead><tbody></tbody></table></div>
+                <p class="cap-def">각 메모의 <code>missing</code> 기준을 <code>메모 ID · 기준명</code> 쌍으로 비교한 결정적 지표입니다. 안내 문장 자체의 품질은 평가하지 않습니다.</p>
+            </div>
+        </div>
+        <div class="cap-panel">
+            <div class="cap-head"><h2>LLM judge 품질 점수</h2><span class="cap-scope" id="cap-judge-meta">성공한 judge 결과를 자동 선택합니다</span></div>
+            <div class="cap-body">
+                <div class="cap-wrap"><table class="cap-table" id="cap-judge"><thead><tr></tr></thead><tbody></tbody></table></div>
+                <p class="cap-def" id="cap-judge-empty">표시할 성공한 LLM judge 결과가 없습니다. <code>make llm-judge JUDGE=codex LIMIT=5</code> 실행 후 리포트를 다시 생성하세요.</p>
+                <p class="cap-def">0–5점 루브릭의 케이스별 평균입니다. <b>평균 점수</b>는 모델별로 평가된 항목들의 종합 평균입니다. 결정적 지표(목표 연결·안내 대상 F1)와 별도로 생성된 목표·안내 문장의 품질을 평가하며, 관련성은 페르소나/프로필이 있는 케이스에서만 채점됩니다. 대시(—)는 해당 케이스에 적용하지 않은 항목입니다.</p>
             </div>
         </div>
         <div class="cap-panel">
@@ -1639,7 +1688,7 @@ def render_capability_tabs(payload):
             <div class="cap-head"><h2>파싱 진단</h2><span class="cap-scope">모델당 {run['perModel']}건 누적 · trace의 parsed 단계에서 집계</span></div>
             <div class="cap-body">
                 <div class="cap-wrap"><table class="cap-table" id="cap-fmt"><thead><tr>
-                    <th>모델</th><th>modelReturned</th><th>kept</th>
+                    <th class="cap-col-model">모델</th><th>modelReturned</th><th>kept</th>
                     <th class="cap-split">badID</th><th>tooFewIDs</th><th>alreadyUsed</th><th>overMaxMemo</th>
                 </tr></thead><tbody></tbody></table></div>
                 <p class="cap-def"><code>modelReturned</code>과 <code>kept</code>의 차이가 파서에서 버려진 양입니다. 오른쪽 네 열이 버려진 이유별 내역입니다. 각 용어의 뜻은 <b>용어</b> 탭에 있습니다.</p>
