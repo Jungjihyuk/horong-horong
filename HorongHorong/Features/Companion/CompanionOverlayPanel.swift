@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import OSLog
 
 enum CompanionOverlayMousePolicy {
     static func shouldIgnoreMouseEvents(
@@ -29,6 +30,7 @@ final class CompanionOverlayPanel {
     private var contentFrame: CGRect = .zero
     private var mouseMonitors: [Any] = []
     private var clickThroughTimer: Timer?
+    private static let log = Logger(subsystem: "com.horonghorong.app", category: "CompanionHit")
     /// 말풍선을 캐릭터 아래에 그리는 중인지. 화면 위쪽에 붙어 자리가 없을 때 뒤집는다.
     private var isCardBelow = false
 
@@ -112,6 +114,7 @@ final class CompanionOverlayPanel {
             rootView: CompanionView(state: state) { [weak self] frame in
                 guard let self, self.contentFrame != frame else { return }
                 self.contentFrame = frame
+                Self.log.notice("contentFrame=\(NSStringFromRect(frame), privacy: .public) winSize=\(NSStringFromSize(self.currentSize), privacy: .public) expanded=\(self.isExpanded) chatting=\(self.state.isChatting)")
                 // 카드 높이를 알아야 위/아래를 정할 수 있다. 창이 열릴 때는 아직 재기 전이다.
                 self.applyFrame()
             }
@@ -150,6 +153,7 @@ final class CompanionOverlayPanel {
         // 그리는데 창만 작아져 카드가 창 밖으로 나가고, contentRect 가 어긋나 카드 영역의
         // 클릭이 통과된다(커서도 안 뜨고 닫기 버튼도 안 눌린다).
         let expanded = expanded || state.isChatting
+        Self.log.notice("setPresentation expanded=\(expanded) acceptsInput=\(acceptsInput || self.state.isChatting) chatting=\(self.state.isChatting) menu=\(self.state.isMenuVisible)")
         let sizeChanged = isExpanded != expanded
         isExpanded = expanded
         if sizeChanged { applyFrame() }
@@ -262,6 +266,7 @@ final class CompanionOverlayPanel {
         // 값이 같아도 대입하면 그때마다 윈도우 서버까지 다녀와 커서가 끊긴다.
         guard panel.ignoresMouseEvents != shouldIgnoreMouseEvents else { return }
         panel.ignoresMouseEvents = shouldIgnoreMouseEvents
+        Self.log.notice("clickThrough=\(shouldIgnoreMouseEvents) point=\(NSStringFromPoint(point), privacy: .public) sprite=\(NSStringFromRect(self.spriteRect), privacy: .public) content=\(NSStringFromRect(self.contentRect), privacy: .public) winSize=\(NSStringFromSize(self.currentSize), privacy: .public) chatting=\(self.state.isChatting) menu=\(self.state.isMenuVisible)")
     }
 
     /// 커서가 캐릭터 안팎을 드나드는지 짧은 주기로 직접 확인한다.
