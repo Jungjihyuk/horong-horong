@@ -154,7 +154,7 @@ htmlcov/
 # graphify-out/
 
 ## MCP 
-.codegraph/*
+.codegraph/
 .mcp*
 
 
