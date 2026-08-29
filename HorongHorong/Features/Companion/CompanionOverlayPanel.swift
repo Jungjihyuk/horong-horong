@@ -150,6 +150,10 @@ final class CompanionOverlayPanel {
         isExpanded = expanded
         if sizeChanged { applyFrame() }
 
+        // 말풍선·메뉴는 창 크기만 바꾸면 된다. 그때 입력까지 끄면 대화가 열려 있는데 입력만
+        // 죽는다. 되살리는 경로가 beginChat 뿐인데 그쪽은 대화 중이면 guard 에 막혀 교착된다.
+        let acceptsInput = acceptsInput || state.isChatting
+
         guard panel.isChatMode != acceptsInput else { return }
         panel.isChatMode = acceptsInput
 
@@ -159,7 +163,10 @@ final class CompanionOverlayPanel {
             // nonactivatingPanel 은 앱을 앞으로 끌어내지 않고도 키 윈도우가 될 수 있다.
             panel.makeKeyAndOrderFront(nil)
         } else {
-            panel.resignKey()
+            // key 는 직접 내려놓을 수 없다. resignKey() 는 «너 key 아니게 됐다» 를 알리는
+            // override point 라, 창만 정리되고 NSApp 의 key 등록은 그대로 남는다.
+            // 내렸다 다시 올리면 AppKit 이 다음 key 를 정상적으로 고른다.
+            if panel.isKeyWindow { panel.orderOut(nil) }
             panel.orderFrontRegardless()
         }
     }
