@@ -57,6 +57,11 @@ final class CompanionOverlayPanel {
         )
     }
 
+    /// 카드(메뉴·대화·말풍선)가 화면에 있는 상태인지. `CompanionView.card` 의 분기와 같은 조건.
+    private var isCardVisible: Bool {
+        state.isMenuVisible || state.isChatting || state.bubble != nil
+    }
+
     /// 말풍선·대화창·메뉴가 그려진 자리를 창 좌표(아래 기준)로 바꾼 것.
     private var contentRect: CGRect {
         guard !contentFrame.isEmpty else { return .zero }
@@ -113,6 +118,10 @@ final class CompanionOverlayPanel {
         let hostingView = NSHostingView(
             rootView: CompanionView(state: state) { [weak self] frame in
                 guard let self, self.contentFrame != frame else { return }
+                // 카드가 떠 있는 동안 들어오는 0 크기 보고는, 사라지는 옛 레이아웃이 뒤늦게
+                // 남기는 값이다(작은 창 기준 좌표로 도착한다). 그대로 받으면 카드 자리가
+                // 지워져 카드 위 클릭이 아래 창으로 통과한다 — 입력란도 닫기 버튼도 죽는다.
+                if frame.isEmpty, self.isCardVisible { return }
                 self.contentFrame = frame
                 Self.log.notice("contentFrame=\(NSStringFromRect(frame), privacy: .public) winSize=\(NSStringFromSize(self.currentSize), privacy: .public) expanded=\(self.isExpanded) chatting=\(self.state.isChatting)")
                 // 카드 높이를 알아야 위/아래를 정할 수 있다. 창이 열릴 때는 아직 재기 전이다.
