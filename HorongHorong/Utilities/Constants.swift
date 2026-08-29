@@ -916,6 +916,7 @@ enum Constants {
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
         static let achievementVisionOrder = "achievement.visionOrder"
+        static let achievementTimelineSortOrder = "achievement.timelineSortOrder"
         static let menubarLabelStyle = "menubar.labelStyle"
         static let menubarTimeStyle = "menubar.timeStyle"
         static let menubarIcon = "menubar.icon"
@@ -1053,6 +1054,41 @@ enum Constants {
     static let achievementMaxWeeklyGoalsPerMonthlyGoalRange = 2...8
     static let defaultAchievementJourneyMaxFlagCount = 5
     static let achievementJourneyMaxFlagCountRange = 1...8
+
+    /// 성취 타임라인 컬럼 안에서 할일 카드를 위→아래로 어떤 순서로 쌓을지.
+    /// rawValue 는 UserDefaults 에 저장되므로 표시 문구와 분리해 둔다.
+    enum AchievementTimelineSortOrder: String, CaseIterable, Identifiable {
+        case ascending
+        case descending
+        case completedFirst
+        case completedLast
+
+        var id: String { rawValue }
+
+        /// 타임라인 부제목 한 줄에 붙는 짧은 표기
+        var label: String {
+            switch self {
+            case .ascending:      return "오름차순"
+            case .descending:     return "내림차순"
+            case .completedFirst: return "완료 먼저"
+            case .completedLast:  return "완료 나중"
+            }
+        }
+
+        var menuLabel: String {
+            switch self {
+            case .ascending, .descending: return label
+            case .completedFirst, .completedLast: return "\(label) · 오름차순"
+            }
+        }
+
+        /// 완료 상태에 기대는 옵션인지. '남은 것' 필터에서는 고를 수 없다.
+        var dependsOnCompletion: Bool {
+            self == .completedFirst || self == .completedLast
+        }
+    }
+
+    static let defaultAchievementTimelineSortOrder = AchievementTimelineSortOrder.ascending
 
     // MARK: - 보상 포인트
     static let defaultRewardWeeklyGoalPoints = 10
