@@ -354,16 +354,15 @@ struct MenuBarPopover: View {
     private var bottomBar: some View {
         HStack(spacing: 10) {
             Button {
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
                 openSettings()
-                // openSettings 직후엔 윈도우가 아직 background 일 수 있어 다음 런루프에서 강제 전면화.
+                // openSettings 직후엔 윈도우가 아직 background 일 수 있어 다음 런루프에서 전면화.
                 DispatchQueue.main.async {
                     for window in NSApp.windows {
                         let id = window.identifier?.rawValue ?? ""
                         let title = window.title
                         if id.contains("com_apple_SwiftUI_Settings") || title.localizedCaseInsensitiveContains("설정") {
-                            window.makeKeyAndOrderFront(nil)
-                            window.orderFrontRegardless()
+                            AppActivation.front(window)
                         }
                     }
                 }

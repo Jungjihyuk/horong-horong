@@ -55,6 +55,11 @@ final class CompanionOverlayPanel {
         )
     }
 
+    /// 카드(메뉴·대화·말풍선)가 화면에 있는 상태인지. `CompanionView.card` 의 분기와 같은 조건.
+    private var isCardVisible: Bool {
+        state.isMenuVisible || state.isChatting || state.bubble != nil
+    }
+
     /// 말풍선·대화창·메뉴가 그려진 자리를 창 좌표(아래 기준)로 바꾼 것.
     private var contentRect: CGRect {
         guard !contentFrame.isEmpty else { return .zero }
@@ -111,6 +116,10 @@ final class CompanionOverlayPanel {
         let hostingView = NSHostingView(
             rootView: CompanionView(state: state) { [weak self] frame in
                 guard let self, self.contentFrame != frame else { return }
+                // 카드가 떠 있는 동안 들어오는 0 크기 보고는, 사라지는 옛 레이아웃이 뒤늦게
+                // 남기는 값이다(작은 창 기준 좌표로 도착한다). 그대로 받으면 카드 자리가
+                // 지워져 카드 위 클릭이 아래 창으로 통과한다 — 입력란도 닫기 버튼도 죽는다.
+                if frame.isEmpty, self.isCardVisible { return }
                 self.contentFrame = frame
                 // 카드 높이를 알아야 위/아래를 정할 수 있다. 창이 열릴 때는 아직 재기 전이다.
                 self.applyFrame()
@@ -146,9 +155,17 @@ final class CompanionOverlayPanel {
             isExpanded = expanded
             return
         }
+        // 창 크기 조건은 CompanionView.overlaySize 와 같아야 한다. 어긋나면 뷰는 큰 레이아웃으로
+        // 그리는데 창만 작아져 카드가 창 밖으로 나가고, contentRect 가 어긋나 카드 영역의
+        // 클릭이 통과된다(커서도 안 뜨고 닫기 버튼도 안 눌린다).
+        let expanded = expanded || state.isChatting
         let sizeChanged = isExpanded != expanded
         isExpanded = expanded
         if sizeChanged { applyFrame() }
+
+        // 말풍선·메뉴는 창 크기만 바꾸면 된다. 그때 입력까지 끄면 대화가 열려 있는데 입력만
+        // 죽는다. 되살리는 경로가 beginChat 뿐인데 그쪽은 대화 중이면 guard 에 막혀 교착된다.
+        let acceptsInput = acceptsInput || state.isChatting
 
         guard panel.isChatMode != acceptsInput else { return }
         panel.isChatMode = acceptsInput
@@ -159,7 +176,10 @@ final class CompanionOverlayPanel {
             // nonactivatingPanel 은 앱을 앞으로 끌어내지 않고도 키 윈도우가 될 수 있다.
             panel.makeKeyAndOrderFront(nil)
         } else {
-            panel.resignKey()
+            // key 는 직접 내려놓을 수 없다. resignKey() 는 «너 key 아니게 됐다» 를 알리는
+            // override point 라, 창만 정리되고 NSApp 의 key 등록은 그대로 남는다.
+            // 내렸다 다시 올리면 AppKit 이 다음 key 를 정상적으로 고른다.
+            if panel.isKeyWindow { panel.orderOut(nil) }
             panel.orderFrontRegardless()
         }
     }
