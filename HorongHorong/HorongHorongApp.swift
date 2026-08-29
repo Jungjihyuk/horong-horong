@@ -938,15 +938,14 @@ private struct MenuBarLabel: View {
             NotificationCenter.default.publisher(for: .companionOnboardingPerform)
         ) { notification in
             guard notification.object as? String == "settings.open" else { return }
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             openSettings()
             DispatchQueue.main.async {
                 for window in NSApp.windows {
                     let id = window.identifier?.rawValue ?? ""
                     if id.contains("com_apple_SwiftUI_Settings")
                         || window.title.localizedCaseInsensitiveContains("설정") {
-                        window.makeKeyAndOrderFront(nil)
-                        window.orderFrontRegardless()
+                        AppActivation.front(window)
                     }
                 }
             }

@@ -379,15 +379,12 @@ struct MemoPage: View {
 
     private func refocusSettingsWindow() {
         DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            if let settingsWindow = NSApp.windows.first(where: { window in
+            NSApp.activate()
+            AppActivation.front(NSApp.windows.first { window in
                 let identifier = window.identifier?.rawValue ?? ""
                 return identifier.contains("com_apple_SwiftUI_Settings")
                     || window.title.localizedCaseInsensitiveContains("설정")
-            }) {
-                settingsWindow.makeKeyAndOrderFront(nil)
-                settingsWindow.orderFrontRegardless()
-            }
+            })
         }
     }
 }
