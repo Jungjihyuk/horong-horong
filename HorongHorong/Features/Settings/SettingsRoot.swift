@@ -215,6 +215,7 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
+            defaults.removeObject(forKey: Constants.AppStorageKey.achievementTimelineSortOrder)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementDismissedSuggestionKeys)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyMaxFlagCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionProvider)
