@@ -133,26 +133,19 @@ htmlcov/
 
 
 # ====================== 5. AI / Agent Tools =========================
+.agents/
 
 ## Claude
-.claude/*
-.claude/settings.local.json
-.claude/docs-file.json
-.claude/**/*.bak.*
+.claude/
 
 ## Codex
-.codex/*
-.codex/docs-file.json
+.codex/
 
 ## Antigravity 
-.antigravitycli/*
-
-## Gemini
-# .gemini/
+.antigravitycli/
 
 ## Opencode
-.agents/
-# .opencode/
+.opencode/
 
 ## Sisyphus
 # .sisyphus/
