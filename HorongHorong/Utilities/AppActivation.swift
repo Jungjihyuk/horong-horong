@@ -24,8 +24,6 @@ enum AppActivation {
             log.error("전면화할 창을 찾지 못했다")
             return
         }
-        // 실패했을 때만 남기면 «로그가 없다» 가 성공인지 미호출인지 구분되지 않는다.
-        log.notice("front 요청 — 창: \(describe(window), privacy: .public)")
         window.makeKeyAndOrderFront(nil)
         verify(window, step: 0, startedAt: Date())
     }
