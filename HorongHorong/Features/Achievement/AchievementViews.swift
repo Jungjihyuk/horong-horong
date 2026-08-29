@@ -220,6 +220,10 @@ private struct AchievementTimelineTodo: Identifiable {
     let meta: String
     let isCompleted: Bool
     let isFuture: Bool
+    /// 화면에 그리지 않고 정렬에만 쓰는 기준 시각. `startDate ?? deadline`.
+    let sortDate: Date?
+    /// 시작 시각 없이 마감만 있는 일은 «그 날 안에 언제든» 이라 칸 아래로 내린다.
+    let hasStartTime: Bool
 }
 
 private enum AchievementTimelineDragPayload {
@@ -2291,7 +2295,9 @@ private enum AchievementDataBuilder {
                         title: shortText(memo.content, limit: 200),
                         meta: todoMetaText(for: memo),
                         isCompleted: memo.isCompletedValue,
-                        isFuture: todoStatus(for: memo, referenceDate: referenceDate) == .future
+                        isFuture: todoStatus(for: memo, referenceDate: referenceDate) == .future,
+                        sortDate: timelineDate(memo),
+                        hasStartTime: memo.startDate != nil
                     )
                 },
                 isCompleted: isCompletedDay || hasReward,
@@ -2301,7 +2307,13 @@ private enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goals: [AchievementGoal], memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(
+        for goals: [AchievementGoal],
+        memos: [Memo],
+        weekStarting weekStart: Date,
+        referenceDate: Date = Date(),
+        sortOrder: Constants.AchievementTimelineSortOrder = .ascending
+    ) -> [AchievementTimelineItem] {
         guard !goals.isEmpty else { return [] }
 
         let timelines = goals.map { goal in
@@ -2313,18 +2325,23 @@ private enum AchievementDataBuilder {
                 timeline.items.indices.contains(index) ? (timeline.goal, timeline.items[index]) : nil
             }
             let baseItem = dayItems.first?.1
-            let todos = dayItems.flatMap { goal, item in
-                item.todos.map { todo in
-                    AchievementTimelineTodo(
-                        id: UUID(),
-                        memoID: todo.memoID,
-                        title: "\(goal.emoji) \(todo.title)",
-                        meta: todo.meta,
-                        isCompleted: todo.isCompleted,
-                        isFuture: todo.isFuture
-                    )
-                }
-            }
+            let todos = sortedTodos(
+                dayItems.flatMap { goal, item in
+                    item.todos.map { todo in
+                        AchievementTimelineTodo(
+                            id: UUID(),
+                            memoID: todo.memoID,
+                            title: "\(goal.emoji) \(todo.title)",
+                            meta: todo.meta,
+                            isCompleted: todo.isCompleted,
+                            isFuture: todo.isFuture,
+                            sortDate: todo.sortDate,
+                            hasStartTime: todo.hasStartTime
+                        )
+                    }
+                },
+                by: sortOrder
+            )
 
             return AchievementTimelineItem(
                 date: baseItem?.date ?? Date(),
@@ -2361,8 +2378,48 @@ private enum AchievementDataBuilder {
         memo.deadline ?? memo.startDate ?? memo.updatedAt
     }
 
+    /// 카드가 어느 요일 칸에 놓일지, 칸 안에서 몇 번째로 놓일지를 함께 정하는 기준.
+    /// 타임라인은 «언제 하는 일인지»를 읽는 화면이라 시작 시각을 먼저 본다.
     private static func timelineDate(_ memo: Memo) -> Date? {
-        memo.deadline ?? memo.startDate
+        memo.startDate ?? memo.deadline
+    }
+
+    /// 하루 컬럼 안에서 할일 카드가 위→아래로 쌓이는 순서.
+    ///
+    /// 시작 시각이 있는 일이 항상 위, 마감만 있는 일이 그 아래 그룹으로 간다.
+    /// 시작 시각과 마감 시각은 의미가 다른 시각이라 한 줄에 섞으면 같은 축처럼 읽히기 때문이고,
+    /// 이 계층은 오름/내림·완료 기준 선택과 무관하게 고정이다. 선택한 정렬은 각 그룹 안에서만 적용된다.
+    ///
+    /// 시각이 같으면 제목으로 한 번 더 가른다. `sorted(by:)` 는 안정 정렬이 아니라서
+    /// 이 동점 처리가 없으면 다시 그릴 때마다 같은 시각 카드들의 위아래가 뒤바뀐다.
+    private static func sortedTodos(
+        _ todos: [AchievementTimelineTodo],
+        by order: Constants.AchievementTimelineSortOrder
+    ) -> [AchievementTimelineTodo] {
+        func ascending(_ lhs: AchievementTimelineTodo, _ rhs: AchievementTimelineTodo) -> Bool {
+            let left = lhs.sortDate ?? .distantFuture
+            let right = rhs.sortDate ?? .distantFuture
+            return left == right ? lhs.title < rhs.title : left < right
+        }
+
+        func withinGroup(_ lhs: AchievementTimelineTodo, _ rhs: AchievementTimelineTodo) -> Bool {
+            switch order {
+            case .ascending:
+                return ascending(lhs, rhs)
+            case .descending:
+                let left = lhs.sortDate ?? .distantPast
+                let right = rhs.sortDate ?? .distantPast
+                return left == right ? lhs.title < rhs.title : left > right
+            case .completedFirst:
+                return lhs.isCompleted == rhs.isCompleted ? ascending(lhs, rhs) : lhs.isCompleted
+            case .completedLast:
+                return lhs.isCompleted == rhs.isCompleted ? ascending(lhs, rhs) : rhs.isCompleted
+            }
+        }
+
+        return todos.sorted { lhs, rhs in
+            lhs.hasStartTime == rhs.hasStartTime ? withinGroup(lhs, rhs) : lhs.hasStartTime
+        }
     }
 
     static func dateRangeText(for memo: Memo) -> String {
@@ -3036,6 +3093,8 @@ struct AchievementDetailWindow: View {
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
+    @AppStorage(Constants.AppStorageKey.achievementTimelineSortOrder)
+    private var timelineSortOrderRaw: String = Constants.defaultAchievementTimelineSortOrder.rawValue
     @State private var launchOptions = AchievementDetailLaunchOptions.shared
     @State private var selectedTab: AchievementDetailTab = .progress
     @State private var selectedPeriod: AchievementPeriod = .week
@@ -3108,6 +3167,16 @@ struct AchievementDetailWindow: View {
         case .remaining:
             return weeklyGoals.filter { !$0.isComplete }
         }
+    }
+
+    private var timelineSortOrder: Constants.AchievementTimelineSortOrder {
+        Constants.AchievementTimelineSortOrder(rawValue: timelineSortOrderRaw)
+            ?? Constants.defaultAchievementTimelineSortOrder
+    }
+
+    /// '남은 것' 필터는 목표뿐 아니라 할일 단위로도 미완료만 남긴다.
+    private var timelineMemos: [Memo] {
+        selectedWeekGoalFilter == .remaining ? memos.filter { !$0.isCompletedValue } : memos
     }
 
     private var weeklyTimelineTitle: String {
@@ -3351,9 +3420,12 @@ struct AchievementDetailWindow: View {
                         Text("성취 타임라인")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(PopoverChrome.ink)
-                        Text(weeklyTimelineTitle)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkSecondary)
+                        AchievementTimelineSortMenu(
+                            title: weeklyTimelineTitle,
+                            selectedOrder: timelineSortOrder,
+                            disablesCompletionOrders: selectedWeekGoalFilter == .remaining,
+                            onSelect: { timelineSortOrderRaw = $0.rawValue }
+                        )
                     }
                     Spacer()
                     if let selectedWeekGoal {
@@ -3369,7 +3441,12 @@ struct AchievementDetailWindow: View {
                 if !visibleWeeklyGoals.isEmpty {
                     overdueMemosBanner
                     AchievementGoalTimelineView(
-                        items: AchievementDataBuilder.timeline(for: visibleWeeklyGoals, memos: memos, weekStarting: displayedWeekStart),
+                        items: AchievementDataBuilder.timeline(
+                            for: visibleWeeklyGoals,
+                            memos: timelineMemos,
+                            weekStarting: displayedWeekStart,
+                            sortOrder: timelineSortOrder
+                        ),
                         onMoveTodo: moveTimelineMemo,
                         onToggleTodoCompletion: toggleTimelineMemoCompletion
                     )
@@ -6397,6 +6474,63 @@ private struct AchievementMetricCard: View {
             .padding(12)
             .frame(width: 264, alignment: .leading)
             .background(PopoverChrome.card)
+        }
+    }
+}
+
+/// 타임라인 부제목 줄이 곧 정렬 메뉴다. 헤더 오른쪽 필터가 «무엇을 볼지»를 정하고,
+/// 이 줄이 «어떤 순서로 볼지»를 정한다.
+private struct AchievementTimelineSortMenu: View {
+    let title: String
+    let selectedOrder: Constants.AchievementTimelineSortOrder
+    /// '남은 것' 필터에서는 완료 항목이 아예 없어서 완료 기준 정렬이 의미가 없다.
+    let disablesCompletionOrders: Bool
+    let onSelect: (Constants.AchievementTimelineSortOrder) -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Menu {
+            ForEach(Constants.AchievementTimelineSortOrder.allCases) { order in
+                Button {
+                    onSelect(order)
+                } label: {
+                    Label(order.menuLabel, systemImage: order == selectedOrder ? "checkmark" : symbolName(for: order))
+                }
+                .disabled(disablesCompletionOrders && order.dependsOnCompletion)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(title) · \(selectedOrder.label)")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                isHovering ? PopoverChrome.surfaceAlt : Color.clear,
+                in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { isHovering = $0 }
+        // 호버 배경만 얻고 원래 부제목 위치는 그대로 두려고 padding 을 되돌린다.
+        .padding(.horizontal, -6)
+        .padding(.vertical, -2)
+    }
+
+    private func symbolName(for order: Constants.AchievementTimelineSortOrder) -> String {
+        switch order {
+        case .ascending:      return "arrow.up"
+        case .descending:     return "arrow.down"
+        case .completedFirst: return "arrow.up.to.line"
+        case .completedLast:  return "arrow.down.to.line"
         }
     }
 }
