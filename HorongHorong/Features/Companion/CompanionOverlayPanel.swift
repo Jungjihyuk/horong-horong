@@ -146,6 +146,10 @@ final class CompanionOverlayPanel {
             isExpanded = expanded
             return
         }
+        // 창 크기 조건은 CompanionView.overlaySize 와 같아야 한다. 어긋나면 뷰는 큰 레이아웃으로
+        // 그리는데 창만 작아져 카드가 창 밖으로 나가고, contentRect 가 어긋나 카드 영역의
+        // 클릭이 통과된다(커서도 안 뜨고 닫기 버튼도 안 눌린다).
+        let expanded = expanded || state.isChatting
         let sizeChanged = isExpanded != expanded
         isExpanded = expanded
         if sizeChanged { applyFrame() }
