@@ -124,6 +124,18 @@ struct QuickMemoView: View {
             .focused($isTextFieldFocused)
             .frame(height: 138)
             .scrollContentBackground(.hidden)
+            // placeholder 를 padding 안쪽(= TextEditor 프레임)에 얹는다.
+            // TextEditor 의 텍스트 원점은 프레임 기준 (5, 0) — NSTextView 의
+            // lineFragmentPadding 5pt 만 보정하면 커서와 정확히 겹친다.
+            .overlay(alignment: .topLeading) {
+                if memoContent.isEmpty {
+                    Text(savesAsTodayTask ? "오늘 할 일을 입력하세요..." : "빠르게 메모하세요...")
+                        .font(.system(size: 20, weight: .regular, design: .rounded))
+                        .foregroundStyle(Color(red: 0.68, green: 0.57, blue: 0.47).opacity(0.58))
+                        .padding(.leading, 5)
+                        .allowsHitTesting(false)
+                }
+            }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
             .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -131,16 +143,6 @@ struct QuickMemoView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(Color(red: 0.34, green: 0.34, blue: 0.34).opacity(0.72), lineWidth: 1.2)
             )
-            .overlay(alignment: .topLeading) {
-                if memoContent.isEmpty {
-                    Text(savesAsTodayTask ? "오늘 할 일을 입력하세요..." : "빠르게 메모하세요...")
-                        .font(.system(size: 20, weight: .regular, design: .rounded))
-                        .foregroundStyle(Color(red: 0.68, green: 0.57, blue: 0.47).opacity(0.58))
-                        .padding(.horizontal, 26)
-                        .padding(.vertical, 23)
-                        .allowsHitTesting(false)
-                }
-            }
     }
 
     private var footer: some View {

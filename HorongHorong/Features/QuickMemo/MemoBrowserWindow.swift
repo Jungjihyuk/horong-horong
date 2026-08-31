@@ -648,18 +648,20 @@ struct MemoBrowserWindow: View {
             .font(.system(size: 18, weight: .regular, design: .rounded))
             .foregroundStyle(PopoverChrome.ink)
             .scrollContentBackground(.hidden)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
+            // placeholder 를 padding 안쪽(= TextEditor 프레임)에 얹는다.
+            // TextEditor 의 텍스트 원점은 프레임 기준 (5, 0) — NSTextView 의
+            // lineFragmentPadding 5pt 만 보정하면 커서와 정확히 겹친다.
             .overlay(alignment: .topLeading) {
                 if memo.content.isEmpty {
                     Text("메모를 입력하세요...")
                         .font(.system(size: 18, weight: .regular, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary.opacity(0.62))
-                        .padding(.horizontal, 23)
-                        .padding(.vertical, 16)
+                        .padding(.leading, 5)
                         .allowsHitTesting(false)
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 8)
 
             Divider()
             schedulePanel(memo)
