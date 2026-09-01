@@ -2510,7 +2510,10 @@ private enum AchievementDataBuilder {
 struct AchievementSummaryView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(AppState.self) private var appState
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
+    // 섹션 술어는 못 쓴다 — 목표에는 **어떤 섹션의 메모든** 연결될 수 있다.
+    // 대신 정렬 키를 편집으로 안 바뀌는 필드로 바꾼다. `goals(from:memos:)` 는
+    // ID 사전을 만들 뿐이라 순서에 의존하지 않는다.
+    @Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
     @State private var hostWindow: NSWindow?
 

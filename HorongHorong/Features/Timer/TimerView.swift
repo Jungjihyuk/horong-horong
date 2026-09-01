@@ -9,6 +9,15 @@ struct PomodoroTaskCandidate: Identifiable, Equatable {
     let durationMinutes: Int?
 }
 
+/// 포모도로에 붙일 수 있는 할 일.
+///
+/// `!= true` 가 **NULL 인 행을 빠뜨리지 않는 이유**는 `normalizeMemoFlags` 가 실행할 때마다
+/// `nil` 을 `false` 로 메우기 때문이다. 그 보정이 없으면 SQL 3값 논리(`NULL != 1` → NULL)에
+/// 걸려 값이 빈 기록이 조용히 사라진다.
+private let pomodoroCandidateMemoPredicate = #Predicate<Memo> { memo in
+    memo.isCompleted != true && memo.isArchived != true && memo.deletedAt == nil
+}
+
 enum PomodoroTaskCandidateBuilder {
     static func candidates(
         memos: [Memo],
@@ -277,7 +286,17 @@ private struct HybridPixelDigit: View {
 struct TimerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.appearanceAccentOption) private var accentOption
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
+    // `PomodoroTaskCandidateBuilder` 가 어차피 버리는 것들을 DB 에서 미리 거른다.
+    // 완료·아카이브·삭제분을 전부 가져와 Swift 에서 버리고 있었다.
+    //
+    // 정렬 키는 `updatedAt` 그대로 둔다 — 후보 목록이 이 순서로 **재정렬 없이 그대로**
+    // 표시되므로, 키를 바꾸면 사용자가 보는 순서가 달라진다.
+    @Query(
+        filter: pomodoroCandidateMemoPredicate,
+        sort: \Memo.updatedAt,
+        order: .reverse
+    )
+    private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse)
     private var goalRecords: [AchievementGoalRecord]
     @State private var hoveredPreset: Constants.PomodoroPreset?

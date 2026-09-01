@@ -66,6 +66,72 @@ final class MemoSectionQueryTests: XCTestCase {
         XCTAssertEqual(memo.resolvedSection, .todo)
     }
 
+    /// 타이머 탭이 쓰는 술어. **Optional `Bool` 비교가 SQL 로 번역되는지**가 관건이다.
+    /// `isCompleted`·`isArchived` 는 `Bool?` 이라 `!= true` 로 비교한다.
+    func testTimerCandidatePredicateTranslates() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        let active = Memo(content: "살아있는 할 일", section: .todo)
+        let done = Memo(content: "끝낸 할 일", section: .todo)
+        done.setCompleted(true, at: Date())
+        let archived = Memo(content: "보관한 할 일", section: .todo)
+        archived.isArchivedValue = true
+        let deleted = Memo(content: "지운 할 일", section: .todo)
+        deleted.deletedAt = Date()
+        for memo in [active, done, archived, deleted] { context.insert(memo) }
+        try context.save()
+
+        let found = try context.fetch(FetchDescriptor<Memo>(predicate: #Predicate {
+            $0.isCompleted != true && $0.isArchived != true && $0.deletedAt == nil
+        }))
+
+        XCTAssertEqual(found.count, 1)
+        XCTAssertEqual(found.first?.content, "살아있는 할 일")
+    }
+
+    /// **Optional Bool 을 술어에서 다루는 법.**
+    ///
+    /// 이 필드들은 나중에 추가돼서 그 전에 만든 기록은 값이 `nil` 이다
+    /// (실측 2026-09-02: 실사용 190건 중 `isCompleted` 45건, `isArchived` 52건이 NULL).
+    /// `!= true` 로 거르면 그 기록들이 **화면에서 조용히 사라진다.**
+    func testNilFlagsAreHiddenUntilNormalized() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        let fresh = Memo(content: "갓 만든 할 일", section: .todo)
+        let nilled = Memo(content: "값이 비어 있는 할 일", section: .todo)
+        nilled.isCompleted = nil
+        nilled.isArchived = nil
+        context.insert(fresh)
+        context.insert(nilled)
+        try context.save()
+
+        // 보정 전: `!= true` 가 NULL 인 행을 빠뜨린다.
+        // SQL 3값 논리에서 `NULL != 1` 은 TRUE 가 아니라 NULL 이다.
+        let before = try context.fetch(FetchDescriptor<Memo>(predicate: #Predicate {
+            $0.isCompleted != true && $0.isArchived != true
+        }))
+        XCTAssertEqual(before.count, 1, "값이 빈 기록이 조용히 빠진다 — 이게 위험이다")
+
+        // 앱 실행 시 `normalizeMemoFlags` 가 하는 일.
+        let nils = try context.fetch(FetchDescriptor<Memo>(
+            predicate: #Predicate { $0.isCompleted == nil || $0.isArchived == nil }
+        ))
+        XCTAssertEqual(nils.count, 1, "NULL 인 행을 찾아낼 수 있어야 보정할 수 있다")
+        for memo in nils {
+            if memo.isCompleted == nil { memo.isCompleted = false }
+            if memo.isArchived == nil { memo.isArchived = false }
+        }
+        try context.save()
+
+        // 보정 후: 같은 술어가 두 건을 모두 찾는다.
+        let after = try context.fetch(FetchDescriptor<Memo>(predicate: #Predicate {
+            $0.isCompleted != true && $0.isArchived != true
+        }))
+        XCTAssertEqual(after.count, 2, "보정 뒤에는 빠지지 않는다")
+    }
+
     /// 섹션 없이 만든 메모도 술어에 걸린다 — 위 두 개를 이어 붙인 확인.
     func testSectionlessMemoIsReachableByPredicate() throws {
         let container = try makeContainer()

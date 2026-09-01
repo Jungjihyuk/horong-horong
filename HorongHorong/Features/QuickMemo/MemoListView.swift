@@ -11,7 +11,14 @@ struct MemoListView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Environment(AppState.self) private var appState
-    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
+    // 이 화면은 «오늘»·«완료» 두 탭 모두 todo 만 보여준다. 거르는 일을 DB 에 시킨다.
+    // `resolvedSection` 은 계산 프로퍼티라 SQL 로 번역되지 않으므로 저장 컬럼을 쓴다.
+    @Query(
+        filter: #Predicate<Memo> { $0.sectionRaw == "todo" },
+        sort: \Memo.createdAt,
+        order: .reverse
+    )
+    private var allMemos: [Memo]
     @State private var selectedTab: MemoListTab = .active
     @State private var editingMemo: Memo?
     @State private var editContent: String = ""
@@ -22,8 +29,8 @@ struct MemoListView: View {
 
     private var todayTodos: [Memo] {
         allMemos.filter { memo in
-            memo.resolvedSection == .todo
-                && !memo.isArchivedValue
+            // 섹션은 `@Query` 술어가 이미 걸렀다.
+            !memo.isArchivedValue
                 && !memo.isRecentlyDeleted
                 && !memo.isCompletedValue
                 && TodoBucket.of(
@@ -42,8 +49,7 @@ struct MemoListView: View {
     private var completedMemos: [Memo] {
         allMemos
             .filter {
-                $0.resolvedSection == .todo
-                    && $0.isCompletedValue
+                $0.isCompletedValue
                     && !$0.isArchivedValue
                     && !$0.isRecentlyDeleted
             }

@@ -425,6 +425,7 @@ private struct QuickNoteList<Row: View, Empty: View>: View {
         // 그리고 한 쿼리에 제한을 걸면 고정한 기록이 51번째에 있을 때 아예 안 보인다.
         // 나눠 두면 고정은 항상 전부, 나머지만 잘라 온다.
         _pinned = Query(FetchDescriptor<Memo>(
+            // `!= true` 가 NULL 을 빠뜨리지 않는 것은 `normalizeMemoFlags` 가 메워 주기 때문이다.
             predicate: #Predicate { $0.sectionRaw == "quickNote" && $0.isArchived != true && $0.isPinned },
             sortBy: [SortDescriptor(\Memo.updatedAt, order: .reverse)]
         ))
