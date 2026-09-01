@@ -95,7 +95,6 @@
 		3A1DAABFEF3A8028ADD4CD79 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2A3AFDD26FF89A7BBC1175 /* IdlePromptPanel.swift */; };
 		3A671FA2CC5885AEA2BBA419 /* HotkeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */; };
 		3B87C804AFE0D1FC7D246FA0 /* NewsReportIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3153713609563689ADB615C /* NewsReportIndex.swift */; };
-		3CBF43D40623337B5738D178 /* MemoBrowserWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */; };
 		3DAA33925C36732F50DDBE51 /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E2F4B47B282506A742D35E /* AILabView.swift */; };
 		3FC6A20D7DAD8508B37A3AEB /* VaultBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA545D1C7093C509A3F9FDAF /* VaultBrowserView.swift */; };
 		3FF3EAD7698170C8450DB599 /* QuickNoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84F4448F83D8E490736EBFE /* QuickNoteBrowserView.swift */; };
@@ -147,7 +146,6 @@
 		675C4D477215891B268F51A1 /* QuickMemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF78DACE05A93FE9F6570B08 /* QuickMemoView.swift */; };
 		67FC173117E4080AAF4E00D3 /* NewsReportArchiveWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B9D3EA221748570FEE29669 /* NewsReportArchiveWindow.swift */; };
 		68680247DF258E8C5CA78625 /* FocusNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119BB9C4677CB7F9E52BBFC6 /* FocusNudge.swift */; };
-		693264CD9F0555C27CD695F7 /* MemoBrowserWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */; };
 		695BCFFE660CE68416839EFC /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */; };
 		6A045FAF40FC75A8D52E6383 /* KoreanParticleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EDF20B3CA5E860377EF27FB /* KoreanParticleTests.swift */; };
 		6B9AE3B79B370DC4284245ED /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102B15EB31C2926F8C02CA7D /* SettingsSection.swift */; };
@@ -494,7 +492,6 @@
 		ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSourceSheets.swift; sourceTree = "<group>"; };
 		ADC8779891445802AEFEEDE5 /* NewsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsView.swift; sourceTree = "<group>"; };
 		AF5562C7D9D09C0D5E90FE31 /* MemoDurationEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoDurationEstimator.swift; sourceTree = "<group>"; };
-		B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoBrowserWindow.swift; sourceTree = "<group>"; };
 		B07A535A9CDE7A856AF5AD5F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B136EEFAACA04AA87AC7C891 /* FocusScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreTests.swift; sourceTree = "<group>"; };
 		B26226EB1C35C0C49F368472 /* AIRunLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRunLog.swift; sourceTree = "<group>"; };
@@ -1028,7 +1025,6 @@
 		F32D244DB15F65B306453E7B /* QuickMemo */ = {
 			isa = PBXGroup;
 			children = (
-				B06FD581079FC0605C6731CA /* MemoBrowserWindow.swift */,
 				AF5562C7D9D09C0D5E90FE31 /* MemoDurationEstimator.swift */,
 				76B92287537E68101A2064BE /* MemoListView.swift */,
 				CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */,
@@ -1323,7 +1319,6 @@
 				5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */,
 				716CB8440B5B0A18D783AE96 /* MarkdownDocumentView.swift in Sources */,
 				5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */,
-				693264CD9F0555C27CD695F7 /* MemoBrowserWindow.swift in Sources */,
 				C9772FC7D0F62A51321BD76C /* MemoClassifier.swift in Sources */,
 				38C1902F390D3689D223E73C /* MemoDurationEstimator.swift in Sources */,
 				EE8925923588F90EEF3046B3 /* MemoListView.swift in Sources */,
@@ -1475,7 +1470,6 @@
 				FA4C0EC8BCBD4E91B2FBD41A /* ManualSegmentEditorView.swift in Sources */,
 				1C7BE5C43C5456C2856FF92A /* MarkdownDocumentView.swift in Sources */,
 				A80C053F7415CA29695F7B8A /* Memo.swift in Sources */,
-				3CBF43D40623337B5738D178 /* MemoBrowserWindow.swift in Sources */,
 				C7F776A27E3FE1C1AA93F5B2 /* MemoClassifier.swift in Sources */,
 				2DE33539E04640C876150CE0 /* MemoDurationEstimator.swift in Sources */,
 				C9152C92297F1D3166835ECD /* MemoListView.swift in Sources */,
