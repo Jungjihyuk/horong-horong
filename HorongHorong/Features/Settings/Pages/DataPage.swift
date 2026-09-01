@@ -81,6 +81,10 @@ struct DataPage: View {
                         }
                 }
             }
+
+            #if DEBUG
+            MemoSeederCard()
+            #endif
         }
     }
 
