@@ -56,7 +56,7 @@ enum SecondBrainSection: String, CaseIterable, Identifiable {
     }
 }
 
-struct SecondBrainView: View {
+struct PersonalRecordView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(Constants.AppStorageKey.secondBrainSection)
     private var sectionRaw: String = SecondBrainSection.todo.rawValue

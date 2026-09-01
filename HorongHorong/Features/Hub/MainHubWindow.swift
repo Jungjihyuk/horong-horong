@@ -1,31 +1,52 @@
 import SwiftUI
 
-/// Second Brain · 뉴스 보관함 · 통계 · 성취를 담는 통합 윈도우.
+/// 기록 · 뉴스 보관함 · 통계 · 성취를 담는 통합 윈도우.
 ///
-/// 네 화면을 모두 ZStack 에 올려둔 채 보이는 것만 바꾼다.
-/// switch 로 갈아끼우면 탭을 옮길 때마다 각 뷰의 @State 와
-/// StatsDetailWindow 의 loadCache 가 날아가 매번 다시 로딩한다.
+/// **한 번 본 탭만 만들고, 만든 뒤에는 계속 살려둔다.**
+///
+/// switch 로 갈아끼우면 탭을 옮길 때마다 각 뷰의 @State 와 StatsDetailWindow 의
+/// loadCache 가 날아가 매번 다시 로딩한다. 그렇다고 넷을 전부 미리 올려두면
+/// **창을 여는 순간 보지도 않을 탭의 `@Query` 까지 전부 도는 것**이 문제였다
+/// (실측 2026-09-01: 메모 13,002건일 때 한 번 열 때 약 3만 9천 개가 실체화됐다).
+///
+/// 그래서 «매번 다시 만들기» 와 «미리 다 만들기» 사이를 택한다 — 처음 누를 때 만들고,
+/// 그 뒤로는 남겨둔다. 비용이 사라지는 게 아니라 **실제로 그 탭을 볼 때로 옮겨간다.**
 struct MainHubWindow: View {
     @Environment(AppState.self) private var appState
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
+    /// 한 번이라도 연 탭. 창을 닫았다 열면 비워져 다시 활성 탭 하나만 만든다.
+    @State private var openedTabs: Set<HubTab> = []
 
     var body: some View {
+        #if DEBUG
+        let _ = PerfLog.mark("MainHubWindow.body  만들어진 탭=\(openedTabs.map(\.rawValue).sorted())")
+        #endif
         HStack(spacing: 0) {
             rail
             Divider().overlay(PopoverChrome.divider)
 
             ZStack {
-                SecondBrainView()
-                    .hubTabVisible(appState.hubTab == .memo)
-                NewsReportArchiveWindow()
-                    .hubTabVisible(appState.hubTab == .news)
-                StatsDetailWindow()
-                    .hubTabVisible(appState.hubTab == .stats)
-                AchievementDetailWindow()
-                    .hubTabVisible(appState.hubTab == .achievement)
+                if openedTabs.contains(.memo) {
+                    PersonalRecordView()
+                        .hubTabVisible(appState.hubTab == .memo)
+                }
+                if openedTabs.contains(.news) {
+                    NewsReportArchiveWindow()
+                        .hubTabVisible(appState.hubTab == .news)
+                }
+                if openedTabs.contains(.stats) {
+                    StatsDetailWindow()
+                        .hubTabVisible(appState.hubTab == .stats)
+                }
+                if openedTabs.contains(.achievement) {
+                    AchievementDetailWindow()
+                        .hubTabVisible(appState.hubTab == .achievement)
+                }
             }
         }
+        .onAppear { openedTabs.insert(appState.hubTab) }
+        .onChange(of: appState.hubTab) { _, tab in openedTabs.insert(tab) }
         .background(PopoverChrome.surface)
         .appearanceAccentTint(.popover)
     }

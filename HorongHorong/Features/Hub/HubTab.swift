@@ -55,6 +55,9 @@ enum HubWindowPresenter {
         popoverWindow: NSWindow?,
         openWindow: OpenWindowAction
     ) {
+        #if DEBUG
+        PerfLog.start("허브 열기(\(tab))")
+        #endif
         appState.hubTab = tab
         if tab == .memo {
             appState.isRecordRailVisible = true

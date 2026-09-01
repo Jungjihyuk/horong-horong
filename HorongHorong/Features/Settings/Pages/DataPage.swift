@@ -6,8 +6,8 @@ struct DataPage: View {
     @State private var autoBackup: Bool = true
     @AppStorage(Constants.AppStorageKey.anonymousTelemetryEnabled)
     private var telemetryEnabled: Bool = false
-    @AppStorage(Constants.AppStorageKey.secondBrainVaultPath)
-    private var vaultPath: String = Constants.defaultSecondBrainVaultPath
+    @AppStorage(Constants.AppStorageKey.personalRecordVaultPath)
+    private var vaultPath: String = Constants.defaultPersonalRecordVaultPath
 
     private var telemetryConfigured: Bool {
         TelemetryClient.shared.isConfigured

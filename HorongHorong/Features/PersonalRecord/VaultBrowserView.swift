@@ -3,7 +3,7 @@ import AppKit
 
 struct VaultBrowserView: View {
     let kind: VaultKind
-    @AppStorage(Constants.AppStorageKey.secondBrainVaultPath)
+    @AppStorage(Constants.AppStorageKey.personalRecordVaultPath)
     private var vaultPath: String = Constants.defaultSecondBrainVaultPath
     @State private var roots: [VaultNode] = []
     @State private var selectedURL: URL?
