@@ -127,16 +127,8 @@ struct TodoBrowserView: View {
     }
 
     var body: some View {
-        // 리팩터링 전후의 body 재평가 횟수·무효화 소스를 콘솔로 확인한다.
-        // 측정이 끝나면 지운다 — 계획: docs 5. 운영/.../Refactoring/2026-09-01-app-wide-mvvm-repository-migration.md
-        #if DEBUG
-        let _ = PerfLog.mark("TodoBrowserView.body 진입")
-        #endif
         // body 안에서 딱 한 번 만들고 자식들에게 넘긴다. 각자 계산하게 두면 팬아웃이 돌아온다.
         let snapshot = makeSnapshot()
-        #if DEBUG
-        let _ = PerfLog.mark("  makeSnapshot 완료 (todo \(snapshot.visibleIDs.count)건)")
-        #endif
         HStack(spacing: 0) {
             listPane(snapshot)
             Divider().overlay(PopoverChrome.divider)
@@ -144,9 +136,6 @@ struct TodoBrowserView: View {
                 .frame(width: 300)
         }
         .onAppear {
-            #if DEBUG
-            PerfLog.mark("TodoBrowserView.onAppear")
-            #endif
             todayReferenceDate = Date()
             loadReminderLists()
             selectedID = snapshot.selected?.id
@@ -181,10 +170,7 @@ struct TodoBrowserView: View {
     }
 
     private func listPane(_ snapshot: Snapshot) -> some View {
-        #if DEBUG
-        let _ = PerfLog.mark("  listPane 시작")
-        #endif
-        return VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             header(linkedCount: snapshot.linkedCount)
             composer
             ScrollView {
@@ -573,9 +559,6 @@ struct TodoBrowserView: View {
 
     @ViewBuilder
     private func detailPane(_ selected: Memo?) -> some View {
-        #if DEBUG
-        let _ = PerfLog.mark("  detailPane 시작")
-        #endif
         if let memo = selected {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {

@@ -127,10 +127,8 @@
 		51C01295B928B8C3A7FEA701 /* SettingsSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41CFFC35943443CD0A84E313 /* SettingsSidebar.swift */; };
 		532725CCFBCA016CF30E224A /* SettingsCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BE61B97897A531F7A58A68 /* SettingsCard.swift */; };
 		533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */; };
-		54EF23BCD7A2C3E860144762 /* PerfLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAF57A5A9B51570D9738BE7 /* PerfLog.swift */; };
 		551E54ED93091D6338E60980 /* RewardRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33546B9C0761EC5EB97F7ED /* RewardRecords.swift */; };
 		5567063656AF7EE80F718883 /* ManualSegmentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */; };
-		590D787D844C331BD2F93A8F /* PerfLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAF57A5A9B51570D9738BE7 /* PerfLog.swift */; };
 		59473582E6A58C3CB519A58D /* AppUsageSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E816B3E65EE91BA96CD1AA /* AppUsageSegment.swift */; };
 		5A87B36A68806EAA7B236B36 /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA39CD06B92214158D8B632 /* Memo.swift */; };
 		5B567534BB2A122BA107A303 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 76FD2DA36946E510A88203D6 /* MLXHuggingFace */; };
@@ -444,7 +442,6 @@
 		65B1916435470DA4F07B1A2B /* AppCategoryRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCategoryRule.swift; sourceTree = "<group>"; };
 		69AE5508FCDD57E1FFDA021C /* USER_GUIDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = USER_GUIDE.md; sourceTree = "<group>"; };
 		6B2EDD1EF26714BD81464B18 /* HealthSleepMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSleepMath.swift; sourceTree = "<group>"; };
-		6BAF57A5A9B51570D9738BE7 /* PerfLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfLog.swift; sourceTree = "<group>"; };
 		6BFDB918694C1C7CA83E3B9C /* BrowserURLClassificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserURLClassificationTests.swift; sourceTree = "<group>"; };
 		6D0617F80C52FC659782D6B4 /* DiaryEntryDuplicateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryEntryDuplicateTests.swift; sourceTree = "<group>"; };
 		6DD9A0EA1CF9A42019772890 /* TelemetryConsentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryConsentStore.swift; sourceTree = "<group>"; };
@@ -746,7 +743,6 @@
 				77E2F4B47B282506A742D35E /* AILabView.swift */,
 				76C87C6B5789B2399D2AB170 /* GoldenEvalReport.swift */,
 				2257AB0C40431DC18CE5DC72 /* MemoSeeder.swift */,
-				6BAF57A5A9B51570D9738BE7 /* PerfLog.swift */,
 			);
 			path = Developer;
 			sourceTree = "<group>";
@@ -1351,7 +1347,6 @@
 				87F3AA939D8BBDCF6104DA96 /* NumberField.swift in Sources */,
 				2A9C3273A02EB346AF57DCCD /* OllamaModelPicker.swift in Sources */,
 				E19966BE08A49A5041BBBEC8 /* PackageChatProviderAdapter.swift in Sources */,
-				54EF23BCD7A2C3E860144762 /* PerfLog.swift in Sources */,
 				B4E9BC9B0851128DCAD2409C /* PersonalRecordView.swift in Sources */,
 				9223F1ACB039B0BD67F6B69A /* PomodoroReflectionEditSheet.swift in Sources */,
 				A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */,
@@ -1504,7 +1499,6 @@
 				315AFD0EDCF1F229F02DEC9F /* NumberField.swift in Sources */,
 				E15AFF18394A732618E4691D /* OllamaModelPicker.swift in Sources */,
 				A64256F8AE4DEEA8FB2B2C8D /* PackageChatProviderAdapter.swift in Sources */,
-				590D787D844C331BD2F93A8F /* PerfLog.swift in Sources */,
 				66AD8E3F3F331A9995E9ED91 /* PersonalRecordView.swift in Sources */,
 				87514069E0442B45EE871778 /* PomodoroReflectionEditSheet.swift in Sources */,
 				46C549D84D10731ECFB7623D /* PomodoroReflectionPanel.swift in Sources */,

@@ -19,9 +19,6 @@ struct MainHubWindow: View {
     @State private var openedTabs: Set<HubTab> = []
 
     var body: some View {
-        #if DEBUG
-        let _ = PerfLog.mark("MainHubWindow.body  만들어진 탭=\(openedTabs.map(\.rawValue).sorted())")
-        #endif
         HStack(spacing: 0) {
             rail
             Divider().overlay(PopoverChrome.divider)

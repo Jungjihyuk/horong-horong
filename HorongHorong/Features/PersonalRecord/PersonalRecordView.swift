@@ -70,9 +70,6 @@ struct PersonalRecordView: View {
     }
 
     var body: some View {
-        #if DEBUG
-        let _ = PerfLog.mark("PersonalRecordView.body 진입")
-        #endif
         HStack(spacing: 0) {
             rail
                 .frame(width: appState.isRecordRailVisible ? 220 : 0, alignment: .leading)
@@ -85,11 +82,6 @@ struct PersonalRecordView: View {
         }
         .background(PopoverChrome.surface)
         .appearanceAccentTint(.popover)
-        .onAppear {
-            #if DEBUG
-            PerfLog.mark("기록 탭 onAppear")
-            #endif
-        }
         .id(popoverTheme)
         .animation(.easeInOut(duration: 0.24), value: appState.isRecordRailVisible)
     }
