@@ -9,8 +9,9 @@ struct VaultBrowserView: View {
     @State private var selectedURL: URL?
     @State private var markdown: String = ""
     @State private var loadError: String?
-    @State private var wikiIndex: [String: URL] = [:]
+    @State private var wikiIndex: [String: [URL]] = [:]
     @State private var searchText = ""
+    @State private var isScanning = false
 
     private var vaultURL: URL {
         URL(fileURLWithPath: vaultPath)
@@ -22,7 +23,9 @@ struct VaultBrowserView: View {
             Divider().overlay(PopoverChrome.divider)
             previewPane
         }
-        .onAppear(perform: reload)
+        // `.task` 는 뷰가 사라지면 자동으로 취소된다. 탭을 빨리 오갈 때
+        // 이미 의미 없어진 순회가 계속 도는 것을 막는다.
+        .task { await load() }
     }
 
     private var treePane: some View {
@@ -32,11 +35,18 @@ struct VaultBrowserView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                 Spacer()
-                Button(action: reload) {
-                    Image(systemName: "arrow.clockwise")
+                if isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button {
+                        Task { await load(forceReload: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .help("다시 읽기")
                 }
-                .buttonStyle(.plain)
-                .help("다시 읽기")
             }
             .padding(.horizontal, 14)
             .padding(.top, 16)
@@ -118,7 +128,9 @@ struct VaultBrowserView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         MarkdownDocumentView(markdown: markdown) { title in
-                            if let target = wikiIndex[title] {
+                            if let target = VaultCatalog.resolveWikiLink(
+                                title, from: selectedURL, in: wikiIndex
+                            ) {
                                 selectedURL = target
                             }
                         }
@@ -169,10 +181,21 @@ struct VaultBrowserView: View {
         node.url.pathExtension.lowercased() == "md" ? "doc.richtext" : "doc"
     }
 
-    private func reload() {
-        let catalogRoots = VaultCatalog.roots(kind: kind, vault: vaultURL)
-        roots = catalogRoots.compactMap(VaultCatalog.tree(for:))
-        wikiIndex = VaultCatalog.indexMarkdown(in: catalogRoots)
+    /// 순회는 `VaultScanner`(actor) 가 백그라운드에서 하고, 결과만 받아 화면에 꽂는다.
+    /// 두 번째부터는 액터의 캐시가 바로 답해서 탭을 오가도 다시 훑지 않는다.
+    private func load(forceReload: Bool = false) async {
+        isScanning = true
+        defer { isScanning = false }
+
+        let scan = await VaultScanner.shared.scan(
+            kind: kind,
+            vault: vaultURL,
+            forceReload: forceReload
+        )
+        guard !Task.isCancelled else { return }
+
+        roots = scan.roots
+        wikiIndex = scan.wikiIndex
         if let selectedURL { open(selectedURL) }
     }
 
@@ -182,11 +205,20 @@ struct VaultBrowserView: View {
             markdown = ""
             return
         }
-        do {
-            markdown = try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            markdown = ""
-            loadError = "파일을 읽지 못했습니다"
+        markdown = ""
+        Task {
+            // 큰 노트를 메인 스레드에서 읽으면 그동안 화면이 멈춘다.
+            let result = await Task.detached(priority: .userInitiated) {
+                try? String(contentsOf: url, encoding: .utf8)
+            }.value
+
+            // 읽는 사이에 사용자가 다른 문서를 골랐으면 늦게 온 결과를 버린다.
+            guard selectedURL == url else { return }
+            if let result {
+                markdown = result
+            } else {
+                loadError = "파일을 읽지 못했습니다"
+            }
         }
     }
 
@@ -199,7 +231,7 @@ struct VaultBrowserView: View {
         panel.prompt = "선택"
         if panel.runModal() == .OK, let url = panel.url {
             vaultPath = url.path
-            reload()
+            Task { await load(forceReload: true) }
         }
     }
 }
