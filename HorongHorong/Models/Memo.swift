@@ -39,7 +39,17 @@ final class Memo {
         self.reminderIdentifier = nil
         self.reminderCalendarIdentifier = nil
         self.isLinkedToReminders = false
-        self.sectionRaw = section?.rawValue
+        // 부르는 쪽이 섹션을 안 주면 내용으로 정한다. **nil 로 남기지 않는다.**
+        //
+        // 화면들이 `#Predicate { $0.sectionRaw == ... }` 로 DB 에서 거르기 때문이다.
+        // nil 이면 그 술어에 걸리지 않아 **어느 화면에도 안 나온다** — 다음 실행 때
+        // `migrateMemoSections` 가 채워주기 전까지 사라진 것처럼 보인다.
+        // 실제로 컴패니언·설정에 섹션 없이 만드는 경로가 셋 있었다.
+        self.sectionRaw = (section ?? MemoClassifier.classify(
+            content: content,
+            startDate: nil,
+            deadline: nil
+        )).rawValue
         self.deletedAt = nil
     }
 }
