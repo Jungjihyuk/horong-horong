@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 private enum MemoListTab: String, CaseIterable {
-    case active = "메모"
+    case active = "오늘"
     case completed = "완료"
 }
 
@@ -20,13 +20,33 @@ struct MemoListView: View {
     @State private var newMemoIcon: String = MemoIcon.defaultIcon
     @State private var hostWindow: NSWindow?
 
+    private var todayTodos: [Memo] {
+        allMemos.filter { memo in
+            memo.resolvedSection == .todo
+                && !memo.isArchivedValue
+                && !memo.isRecentlyDeleted
+                && !memo.isCompletedValue
+                && TodoBucket.of(
+                    startDate: memo.startDate,
+                    deadline: memo.deadline,
+                    isCompleted: false,
+                    now: Date()
+                ) == .today
+        }
+    }
+
     private var activeMemos: [Memo] {
-        sortedActiveMemos(allMemos.filter { !$0.isCompletedValue && !$0.isArchivedValue })
+        sortedActiveMemos(todayTodos)
     }
 
     private var completedMemos: [Memo] {
         allMemos
-            .filter { $0.isCompletedValue && !$0.isArchivedValue }
+            .filter {
+                $0.resolvedSection == .todo
+                    && $0.isCompletedValue
+                    && !$0.isArchivedValue
+                    && !$0.isRecentlyDeleted
+            }
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 
@@ -75,7 +95,7 @@ struct MemoListView: View {
             )
         } label: {
             HStack(spacing: 6) {
-                Text("메모 보기")
+                Text("기록 더 보기")
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .bold))
             }
@@ -116,10 +136,10 @@ struct MemoListView: View {
             Image(systemName: "note.text")
                 .font(.largeTitle)
                 .foregroundStyle(PopoverChrome.inkTertiary)
-            Text("메모가 없습니다")
+            Text("오늘 할 일이 없습니다")
                 .font(.subheadline)
                 .foregroundStyle(PopoverChrome.inkSecondary)
-            Text("⌘+Shift+N으로 빠르게 메모하세요")
+            Text("아래 빠른 기록은 Quick Note로 저장됩니다")
                 .font(.caption)
                 .foregroundStyle(PopoverChrome.inkTertiary)
         }
@@ -134,7 +154,7 @@ struct MemoListView: View {
                     Image(systemName: selectedTab == .completed ? "checkmark.circle" : "note.text")
                         .font(.system(size: 28, weight: .regular))
                         .foregroundStyle(PopoverChrome.inkTertiary)
-                    Text(selectedTab == .completed ? "완료된 메모가 없습니다" : "메모가 없습니다")
+                    Text(selectedTab == .completed ? "완료된 할 일이 없습니다" : "오늘 할 일이 없습니다")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
@@ -206,7 +226,14 @@ struct MemoListView: View {
                 }
                 Divider()
                 Button("삭제", role: .destructive) {
-                    modelContext.delete(memo)
+                    NotificationManager.shared.cancel(identifier: "memo.deadline.\(memo.id.uuidString)")
+                    if memo.isLinkedToRemindersValue {
+                        try? MemoReminderLinkService.shared.removeReminder(for: memo)
+                        memo.isLinkedToRemindersValue = false
+                        memo.reminderIdentifier = nil
+                    }
+                    memo.deletedAt = Date()
+                    memo.updatedAt = Date()
                     try? modelContext.save()
                 }
             } label: {
@@ -279,7 +306,7 @@ struct MemoListView: View {
                     HStack(alignment: .top, spacing: 8) {
                         newMemoIconButton
 
-                        TextField("새 메모 입력...", text: $newMemoContent, axis: .vertical)
+                        TextField("빠른 기록...", text: $newMemoContent, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(1...3)
                     }
@@ -295,7 +322,7 @@ struct MemoListView: View {
 
                         Button("저장") {
                             guard !newMemoContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                            let memo = Memo(content: newMemoContent, icon: newMemoIcon)
+                            let memo = Memo(content: newMemoContent, icon: newMemoIcon, section: .quickNote)
                             modelContext.insert(memo)
                             try? modelContext.save()
                             newMemoContent = ""

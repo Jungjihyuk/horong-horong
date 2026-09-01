@@ -511,8 +511,10 @@ enum Constants {
     static let statsWindowHeight: CGFloat = 660
 
     // MARK: - 통합 윈도우 크기
-    static let hubWindowWidth: CGFloat = 1080
+    static let hubWindowWidth: CGFloat = 1200
     static let hubWindowHeight: CGFloat = 700
+
+    static let defaultSecondBrainVaultPath = "/Users/jihyeok/Documents/life/MY_BRAIN"
 
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
@@ -925,6 +927,9 @@ enum Constants {
         static let anonymousInstallId = "telemetry.anonymousInstallId"
         static let remindersImportEnabled = "memo.remindersImportEnabled"
         static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
+        static let secondBrainVaultPath = "secondBrain.vaultPath"
+        static let secondBrainSection = "secondBrain.section"
+        static let todoReminderListColors = "todo.reminderListColors"
         static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
         static let unmappedAppHandling = "category.unmappedAppHandling"
         static let companionEnabled = "companion.enabled"

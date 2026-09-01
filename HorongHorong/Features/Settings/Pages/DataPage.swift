@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
 
 struct DataPage: View {
     @State private var iCloudSync: Bool = false
     @State private var autoBackup: Bool = true
     @AppStorage(Constants.AppStorageKey.anonymousTelemetryEnabled)
     private var telemetryEnabled: Bool = false
+    @AppStorage(Constants.AppStorageKey.secondBrainVaultPath)
+    private var vaultPath: String = Constants.defaultSecondBrainVaultPath
 
     private var telemetryConfigured: Bool {
         TelemetryClient.shared.isConfigured
@@ -21,6 +24,15 @@ struct DataPage: View {
                 ) {
                     Button("Finder에서 열기") {
                         openDataFolder()
+                    }
+                    .controlSize(.small)
+                }
+                SettingsRow(
+                    "Second Brain vault",
+                    subtitle: vaultPath
+                ) {
+                    Button("폴더 선택") {
+                        chooseVault()
                     }
                     .controlSize(.small)
                 }
@@ -75,6 +87,18 @@ struct DataPage: View {
     private func openDataFolder() {
         if let url = try? SwiftDataStoreLocation.applicationDirectoryURL() {
             NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
+    private func chooseVault() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: vaultPath)
+        panel.prompt = "선택"
+        if panel.runModal() == .OK, let url = panel.url {
+            vaultPath = url.path
         }
     }
 }

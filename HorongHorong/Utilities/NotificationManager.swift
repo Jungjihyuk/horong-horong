@@ -16,6 +16,7 @@ enum TodayPlanningReminderPolicy {
     ) -> Bool {
         guard !memo.isCompletedValue,
               !memo.isArchivedValue,
+              !memo.isRecentlyDeleted,
               let startDate = memo.startDate else {
             return false
         }

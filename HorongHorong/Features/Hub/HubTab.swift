@@ -12,7 +12,7 @@ enum HubTab: String, CaseIterable, Identifiable, Hashable {
 
     var label: String {
         switch self {
-        case .memo:        return "전체 메모"
+        case .memo:        return "기록"
         case .news:        return "뉴스 보관함"
         case .stats:       return "통계"
         case .achievement: return "성취"
@@ -56,6 +56,9 @@ enum HubWindowPresenter {
         openWindow: OpenWindowAction
     ) {
         appState.hubTab = tab
+        if tab == .memo {
+            appState.isRecordRailVisible = true
+        }
         popoverWindow?.orderOut(nil)
         NSApp.activate()
         openWindow(id: windowID)

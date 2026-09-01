@@ -64,7 +64,11 @@ final class QuickMemoPanel {
         let contentView = QuickMemoView(
             presentationState: presentationState,
             onSave: { [weak self] content, icon in
-                let memo = Memo(content: content, icon: icon)
+                let memo = Memo(
+                    content: content,
+                    icon: icon,
+                    section: presentationState.savesAsTodayTask ? .todo : .quickNote
+                )
                 if presentationState.savesAsTodayTask {
                     memo.startDate = Date()
                 }

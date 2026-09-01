@@ -20,7 +20,8 @@ enum PomodoroTaskCandidateBuilder {
 
         return memos.compactMap { memo in
             guard !memo.isCompletedValue,
-                  !memo.isArchivedValue else {
+                  !memo.isArchivedValue,
+                  !memo.isRecentlyDeleted else {
                 return nil
             }
             let isToday = TodayPlanningReminderPolicy.isTodayTask(

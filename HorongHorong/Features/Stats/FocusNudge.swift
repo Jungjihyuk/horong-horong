@@ -689,7 +689,9 @@ enum FocusNudgeSnapshotLoader {
         }
 
         // Memo 의 날짜 필드는 옵셔널이라 #Predicate 로 다루기 번거롭고, 메모 수는 많지 않으므로 메모리에서 걸러낸다.
-        let memos = ((try? modelContext.fetch(FetchDescriptor<Memo>())) ?? []).filter { !$0.isArchivedValue }
+        let memos = ((try? modelContext.fetch(FetchDescriptor<Memo>())) ?? []).filter {
+            !$0.isArchivedValue && !$0.isRecentlyDeleted
+        }
 
         var todayTasks: [ScopedTask] = []
         var candidates: [ScopedTask] = []

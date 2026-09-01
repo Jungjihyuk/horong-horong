@@ -378,6 +378,7 @@ enum HorongHorongModelSchema {
     static func make() -> Schema {
         Schema([
             Memo.self,
+            DiaryEntry.self,
             AchievementGoalRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
@@ -436,6 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         migrateLegacyOllamaEndpoint()
         migrateRemovedDocumentCategory(in: context)
+        migrateMemoSections(in: context)
         seedDefaultCategoryRules(in: context)
         seedDefaultRewardCatalogItems(in: context)
         repairOrphanedPomodoroRecords(in: context)
@@ -489,6 +491,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let key = Constants.NewsStorageKey.ollamaEndpoint
         guard defaults.string(forKey: key) == "http://localhost:11434" else { return }
         defaults.set(Constants.defaultNewsOllamaEndpoint, forKey: key)
+    }
+
+    /// 기존 메모를 Second Brain 섹션으로 나눈다. 이미 분류된 기록은 다시 쓰지 않는다.
+    private func migrateMemoSections(in context: ModelContext) {
+        do {
+            let memos = try context.fetch(FetchDescriptor<Memo>())
+            var changed = false
+            for memo in memos where memo.sectionRaw == nil {
+                memo.assignSection(
+                    MemoClassifier.classify(
+                        content: memo.content,
+                        startDate: memo.startDate,
+                        deadline: memo.deadline
+                    )
+                )
+                changed = true
+            }
+            if changed {
+                try context.save()
+            }
+        } catch {
+            context.rollback()
+        }
     }
 
     private func toggleTimerFromHotkey() {

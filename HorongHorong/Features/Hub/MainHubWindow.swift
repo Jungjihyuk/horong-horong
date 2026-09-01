@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 전체 메모 · 뉴스 보관함 · 통계 · 성취를 담는 통합 윈도우.
+/// Second Brain · 뉴스 보관함 · 통계 · 성취를 담는 통합 윈도우.
 ///
 /// 네 화면을 모두 ZStack 에 올려둔 채 보이는 것만 바꾼다.
 /// switch 로 갈아끼우면 탭을 옮길 때마다 각 뷰의 @State 와
@@ -16,7 +16,7 @@ struct MainHubWindow: View {
             Divider().overlay(PopoverChrome.divider)
 
             ZStack {
-                MemoBrowserWindow()
+                SecondBrainView()
                     .hubTabVisible(appState.hubTab == .memo)
                 NewsReportArchiveWindow()
                     .hubTabVisible(appState.hubTab == .news)
@@ -49,7 +49,18 @@ struct MainHubWindow: View {
     private func railItem(_ tab: HubTab) -> some View {
         let isSelected = appState.hubTab == tab
         return Button {
-            appState.hubTab = tab
+            if tab == .memo, appState.hubTab == .memo {
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    appState.isRecordRailVisible.toggle()
+                }
+            } else {
+                appState.hubTab = tab
+                if tab == .memo {
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        appState.isRecordRailVisible = true
+                    }
+                }
+            }
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: tab.systemIcon)
@@ -72,7 +83,7 @@ struct MainHubWindow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(tab.label)
+        .help(tab == .memo ? "기록 · 다시 누르면 내 머리속을 접습니다" : tab.label)
         .accessibilityLabel(tab.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

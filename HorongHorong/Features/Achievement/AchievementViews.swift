@@ -2356,7 +2356,7 @@ private enum AchievementDataBuilder {
     }
 
     static func activeMemos(_ memos: [Memo]) -> [Memo] {
-        memos.filter { !$0.isArchivedValue }
+        memos.filter { !$0.isArchivedValue && !$0.isRecentlyDeleted }
     }
 
     static func displayRule(for record: AchievementGoalRecord, total: Int) -> String {
@@ -3570,6 +3570,7 @@ struct AchievementDetailWindow: View {
                 sourceIDs.contains(memo.id)
                     && !memo.isCompletedValue
                     && !memo.isArchivedValue
+                    && !memo.isRecentlyDeleted
                     && (memo.startDate != nil || memo.deadline != nil)
                     && AchievementDataBuilder.memoDate(memo) < weekStart
             }
@@ -3727,6 +3728,7 @@ struct AchievementDetailWindow: View {
         let identifier = "memo.deadline.\(memo.id.uuidString)"
         guard !memo.isCompletedValue,
               !memo.isArchivedValue,
+              !memo.isRecentlyDeleted,
               let fireDate = memo.reminderFireDate else {
             NotificationManager.shared.cancel(identifier: identifier)
             return
@@ -5402,7 +5404,9 @@ struct AchievementDetailWindow: View {
 
     private func linkableMemos(for record: AchievementGoalRecord) -> [Memo] {
         let linkedIDs = Set(record.linkedMemoIDs)
-        return memos.filter { !$0.isArchivedValue || linkedIDs.contains($0.id) }
+        return memos.filter {
+            (!$0.isArchivedValue && !$0.isRecentlyDeleted) || linkedIDs.contains($0.id)
+        }
     }
 
     private func childCadence(for cadence: String) -> String? {
@@ -9017,6 +9021,8 @@ private struct AchievementGoalComposerSheet: View {
         return memos.filter { memo in
             !weeklyLinkedIDs.contains(memo.id)
                 && !memo.isCompletedValue
+                && !memo.isRecentlyDeleted
+                && memo.resolvedSection == .todo
                 && isUsableSuggestionMemo(memo)
         }
     }
@@ -9024,8 +9030,7 @@ private struct AchievementGoalComposerSheet: View {
     private var linkableMemos: [Memo] {
         memos
             .filter { memo in
-                let icon = memo.icon ?? MemoIcon.defaultIcon
-                return !memo.isCompletedValue && !excludedMemoIcons.contains(icon)
+                memo.resolvedSection == .todo && !memo.isCompletedValue && !memo.isRecentlyDeleted
             }
             .sorted(by: isMemoOrderedBefore)
     }

@@ -4,7 +4,7 @@ import Foundation
 
 enum PopoverTab: String, CaseIterable, Identifiable {
     case timer = "타이머"
-    case memo = "메모"
+    case memo = "기록"
     case stats = "통계"
     case news = "뉴스"
     case agent = "Agent"

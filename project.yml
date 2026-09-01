@@ -113,6 +113,7 @@ targets:
         product: HorongAI
       - package: HorongAI
         product: HorongAIMLX
+      - sdk: HealthKit.framework
     postCompileScripts:
       - name: Copy News Runner Resources
         script: |
@@ -182,6 +183,7 @@ targets:
         product: HorongAI
       - package: HorongAI
         product: HorongAIMLX
+      - sdk: HealthKit.framework
     postCompileScripts:
       - name: Copy News Runner Resources
         script: |

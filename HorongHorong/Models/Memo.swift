@@ -18,8 +18,12 @@ final class Memo {
     var reminderIdentifier: String?
     var reminderCalendarIdentifier: String?
     var isLinkedToReminders: Bool?
+    /// Second Brain 섹션. nil 이면 이관 전 기록이라 `resolvedSection` 이 내용으로 판별한다.
+    var sectionRaw: String?
+    /// 최근 삭제에 들어간 시각. nil 이면 살아 있는 기록.
+    var deletedAt: Date?
 
-    init(content: String, icon: String? = nil) {
+    init(content: String, icon: String? = nil, section: MemoSection? = nil) {
         self.id = UUID()
         self.content = content
         self.createdAt = Date()
@@ -35,6 +39,8 @@ final class Memo {
         self.reminderIdentifier = nil
         self.reminderCalendarIdentifier = nil
         self.isLinkedToReminders = false
+        self.sectionRaw = section?.rawValue
+        self.deletedAt = nil
     }
 }
 
@@ -79,6 +85,10 @@ extension Memo {
         set { isArchived = newValue }
     }
 
+    var isRecentlyDeleted: Bool {
+        deletedAt != nil
+    }
+
     var isLinkedToRemindersValue: Bool {
         get { isLinkedToReminders == true }
         set { isLinkedToReminders = newValue }
@@ -101,6 +111,37 @@ extension Memo {
     }
 
     var reminderNotificationTitle: String {
-        isReminderDeadlineBased ? "메모 마감 알림" : "메모 시작 알림"
+        isReminderDeadlineBased ? "할 일 마감 알림" : "할 일 시작 알림"
+    }
+
+    var resolvedSection: MemoSection {
+        if let sectionRaw, let section = MemoSection(rawValue: sectionRaw) {
+            return section
+        }
+        return MemoClassifier.classify(
+            content: content,
+            startDate: startDate,
+            deadline: deadline
+        )
+    }
+
+    func assignSection(_ section: MemoSection) {
+        sectionRaw = section.rawValue
+    }
+
+    var todoBucket: TodoBucket {
+        TodoBucket.of(
+            startDate: startDate,
+            deadline: deadline,
+            isCompleted: isCompletedValue,
+            now: Date()
+        )
+    }
+
+    var titleLine: String {
+        content
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? "제목 없음"
     }
 }

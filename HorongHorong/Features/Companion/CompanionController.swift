@@ -1166,7 +1166,7 @@ final class CompanionController {
             return []
         }
         return memos
-            .filter { !$0.isArchivedValue }
+            .filter { !$0.isArchivedValue && !$0.isRecentlyDeleted }
             .map {
                 CompanionBriefingItem(
                     title: $0.content,

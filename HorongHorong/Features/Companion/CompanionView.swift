@@ -591,7 +591,7 @@ private struct CompanionChatMessageRow: View {
                 Button {
                     onOpenMemoTab()
                 } label: {
-                    Label("메모 탭 보기", systemImage: "arrow.up.right")
+                    Label("기록 탭 보기", systemImage: "arrow.up.right")
                         .font(.system(size: 10.5, weight: .semibold))
                 }
                 .buttonStyle(.borderless)

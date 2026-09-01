@@ -1153,7 +1153,7 @@ final class CompanionOnboardingScriptTests: XCTestCase {
         XCTAssertEqual(summon.screen, .settingsCompanion)
         XCTAssertEqual(summon.highlight, "settings.companionBasics")
 
-        let newMemo = try step(endingWith: "새 메모를 만든다")
+        let newMemo = try step(endingWith: "새 기록을 만든다")
         XCTAssertEqual(newMemo.screen, .popoverMemo)
         XCTAssertEqual(newMemo.highlight, "memo.new")
 
@@ -1165,7 +1165,7 @@ final class CompanionOnboardingScriptTests: XCTestCase {
             steps.firstIndex { $0.title.hasSuffix("등록한 할 일을 고른다") }
         )
         let memoTabIndex = try XCTUnwrap(
-            steps.firstIndex { $0.title.hasSuffix("메모 탭을 연다") }
+            steps.firstIndex { $0.title.hasSuffix("기록 탭을 연다") }
         )
         XCTAssertLessThan(taskPickerIndex, memoTabIndex)
 
