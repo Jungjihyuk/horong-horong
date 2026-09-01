@@ -14,8 +14,22 @@ struct DiaryBrowserView: View {
 
     private var calendar: Calendar { Calendar.current }
 
-    private var entryMap: [Date: DiaryEntry] {
-        Dictionary(uniqueKeysWithValues: entries.map { ($0.day, $0) })
+    /// 날짜 → 그날 일기. 달력 칸을 그릴 때 배열을 훑지 않으려고 둔다.
+    ///
+    /// **계산 프로퍼티로 두면 안 된다.** 달력 42칸의 `entryMap[date]` 와 `selectedEntry`
+    /// 호출부가 각각 사전을 통째로 다시 짓는다 — 렌더 1회에 50번쯤 재구축된다.
+    /// 일기 쓰는 동안은 타건마다 렌더가 도므로 그 비용이 글자 수만큼 곱해진다.
+    @State private var entryMap: [Date: DiaryEntry] = [:]
+
+    /// `uniqueKeysWithValues:` 를 쓰면 같은 날짜가 둘일 때 **런타임 트랩**이다.
+    /// 그런데 `DiaryEntry.day` 에는 유일 제약이 없다 — `#Unique` 는 macOS 15+ 라 못 쓴다.
+    /// iCloud 병합·백업 복원·시간대 경계로 중복이 생길 수 있고, 그러면 이 사전이
+    /// **화면을 그릴 때마다** 죽어서 사용자가 앱에 들어가 고칠 방법조차 없어진다.
+    ///
+    /// 그래서 읽는 경로는 관대하게 둔다. 중복이 안 생기게 막는 일은 `upsert` 가 하고,
+    /// 이미 생긴 것은 실행 시 마이그레이션(`mergeDuplicateDiaryEntries`)이 정리한다.
+    private func rebuildEntryMap() {
+        entryMap = Dictionary(entries.map { ($0.day, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private var selectedEntry: DiaryEntry? {
@@ -33,8 +47,14 @@ struct DiaryBrowserView: View {
             editorPane
         }
         .onAppear {
+            rebuildEntryMap()
             loadDraft()
             pullSleepIfNeeded()
+        }
+        // 일기는 지워지지 않고 하루 1건씩 늘기만 하므로 개수만 봐도 충분하다.
+        // `entries.map(\.id)` 로 비교하면 그 배열을 렌더마다 새로 할당하게 된다.
+        .onChange(of: entries.count) { _, _ in
+            rebuildEntryMap()
         }
         .onChange(of: selectedDay) { _, _ in
             flush()
@@ -253,17 +273,22 @@ struct DiaryBrowserView: View {
     }
 
     private var monthTitle: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy년 M월"
-        return formatter.string(from: visibleMonth)
+        Self.monthFormatter.string(from: visibleMonth)
     }
 
     private var dayTitle: String {
+        Self.dayFormatter.string(from: selectedDay)
+    }
+
+    /// body 평가마다 새로 만들면 로케일 데이터 로드가 반복된다.
+    private static let monthFormatter = makeFormatter("yyyy년 M월")
+    private static let dayFormatter = makeFormatter("yyyy년 M월 d일 EEEE")
+
+    private static func makeFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy년 M월 d일 EEEE"
-        return formatter.string(from: selectedDay)
+        formatter.dateFormat = format
+        return formatter
     }
 
     private var sleepLabel: String {
@@ -337,7 +362,7 @@ struct DiaryBrowserView: View {
         let entry: DiaryEntry
         if let editingEntry, calendar.isDate(editingEntry.day, inSameDayAs: day) {
             entry = editingEntry
-        } else if let existing = entryMap[day] {
+        } else if let existing = entryMap[day] ?? fetchEntry(on: day) {
             entry = existing
             editingEntry = existing
         } else {
@@ -348,6 +373,17 @@ struct DiaryBrowserView: View {
         mutate(entry)
         entry.updatedAt = Date()
         scheduleSave()
+    }
+
+    /// `entryMap` 은 `@Query` 결과를 캐시한 것이라 **방금 넣은 항목이 아직 안 보일 수 있다**
+    /// (`@Query` 는 다음 런루프에 갱신된다). 그 틈에 같은 날짜를 또 만들면 중복이 생기므로,
+    /// 새로 만들기 직전에는 저장소에 직접 물어본다.
+    private func fetchEntry(on day: Date) -> DiaryEntry? {
+        var descriptor = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day == day }
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
     private func scheduleSave() {

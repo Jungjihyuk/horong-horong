@@ -438,6 +438,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         migrateLegacyOllamaEndpoint()
         migrateRemovedDocumentCategory(in: context)
         migrateMemoSections(in: context)
+        mergeDuplicateDiaryEntries(in: context)
         seedDefaultCategoryRules(in: context)
         seedDefaultRewardCatalogItems(in: context)
         repairOrphanedPomodoroRecords(in: context)
@@ -509,6 +510,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 changed = true
             }
             if changed {
+                try context.save()
+            }
+        } catch {
+            context.rollback()
+        }
+    }
+
+    /// 같은 날짜 일기가 둘 이상이면 하나만 남긴다.
+    ///
+    /// `DiaryEntry.day` 에 유일 제약을 걸 수 없어서(`#Unique` 는 macOS 15+) 코드로 지킨다.
+    /// 새로 생기는 것은 `DiaryBrowserView.upsert` 가 막고, 이미 생긴 것을 여기서 정리한다.
+    /// iCloud 병합·백업 복원처럼 앱 밖에서 들어오는 경로가 있으므로 실행마다 확인한다.
+    ///
+    /// 남길 것은 **본문이 가장 긴 것**이다. 사용자가 실제로 쓴 글을 잃지 않는 것이
+    /// 어느 쪽이 «원본»인지 따지는 것보다 중요하다. 길이가 같으면 최근에 고친 쪽을 남긴다.
+    private func mergeDuplicateDiaryEntries(in context: ModelContext) {
+        do {
+            let entries = try context.fetch(FetchDescriptor<DiaryEntry>())
+            let byDay = Dictionary(grouping: entries, by: \.day)
+            var didRemove = false
+
+            for (_, group) in byDay where group.count > 1 {
+                let keep = group.max {
+                    if $0.body.count != $1.body.count { return $0.body.count < $1.body.count }
+                    return $0.updatedAt < $1.updatedAt
+                }
+                for entry in group where entry !== keep {
+                    context.delete(entry)
+                    didRemove = true
+                }
+            }
+
+            if didRemove {
                 try context.save()
             }
         } catch {
