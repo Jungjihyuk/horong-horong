@@ -3089,7 +3089,13 @@ private struct AchievementRecordMonthGroup: Identifiable {
 struct AchievementDetailWindow: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var memos: [Memo]
+    // 섹션 술어는 못 쓴다 — 목표에는 **어떤 섹션의 메모든** 연결할 수 있고,
+    // `linkableMemos` 는 이미 연결된 것이면 보관·삭제된 것까지 보여준다.
+    //
+    // 정렬 키만 편집으로 안 바뀌는 필드로 바꾼다. `updatedAt` 이면 메모를 하나 고칠 때마다
+    // fetch 가 무효화돼 이 창이 통째로 재계산된다 — 창이 안 보여도 살아 있으면 돈다.
+    // 표시 순서는 소비처가 전부 다시 정한다(피커·타임라인 모두 자체 정렬).
+    @Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
     @Query private var rewardEntries: [RewardLedgerEntry]
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)

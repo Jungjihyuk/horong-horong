@@ -2238,7 +2238,17 @@ struct FocusDetailView: View {
     let onNavigate: (StatsViewMode, Date) -> Void
 
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
+    // 이 화면이 `allMemos` 를 쓰는 곳은 «할 일 연결» 시트 하나뿐이라 todo 만 있으면 된다.
+    // 완료·보관된 것도 고를 수 있어야 하므로(시트 안내 문구) 그 둘은 거르지 않는다.
+    //
+    // 정렬 키는 `updatedAt` 그대로 둔다 — 최근에 고친 할 일이 위에 오는 것이
+    // 고르는 사람에게 유용하고, 키를 바꾸면 그 순서가 달라진다.
+    @Query(
+        filter: #Predicate<Memo> { $0.sectionRaw == "todo" },
+        sort: \Memo.updatedAt,
+        order: .reverse
+    )
+    private var allMemos: [Memo]
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
     @State private var showsScoreInfo = false
