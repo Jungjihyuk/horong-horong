@@ -510,7 +510,8 @@ private struct RewardHistorySheet: View {
                 .padding(.vertical, 40)
             } else {
                 ScrollView {
-                    VStack(spacing: 6) {
+                    // 원장은 지워지지 않고 계속 쌓인다.
+                    LazyVStack(spacing: 6) {
                         ForEach(entries) { entry in
                             row(entry)
                         }

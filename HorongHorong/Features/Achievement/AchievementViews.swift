@@ -7540,7 +7540,8 @@ private struct AchievementGoalManagementSheet: View {
                     .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(9), style: .continuous))
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 7) {
+                    // 기록이 늘면 이 목록도 함께 는다. VStack 이면 전부 즉시 만든다.
+                    LazyVStack(alignment: .leading, spacing: 7) {
                         ForEach(memos) { memo in
                             Toggle(isOn: Binding(
                                 get: { selectedMemoIDs.contains(memo.id) },
@@ -8911,9 +8912,11 @@ private struct AchievementGoalComposerSheet: View {
                     .background(PopoverChrome.surfaceAlt, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    // 바깥만 lazy 로 두면 섹션 컨테이너만 지연되고 그 안의 행은 전부 만들어진다.
+                    // 둘 다 바꿔야 화면에 보이는 만큼만 만든다.
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(memoPickerSections) { section in
-                            VStack(alignment: .leading, spacing: 6) {
+                            LazyVStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 6) {
                                     Text(section.icon)
                                         .font(.system(size: 12))
