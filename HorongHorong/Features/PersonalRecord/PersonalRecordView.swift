@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum SecondBrainSection: String, CaseIterable, Identifiable {
+enum PersonalRecordSection: String, CaseIterable, Identifiable {
     case quick
     case diary
     case todo
@@ -58,18 +58,21 @@ enum SecondBrainSection: String, CaseIterable, Identifiable {
 
 struct PersonalRecordView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage(Constants.AppStorageKey.secondBrainSection)
-    private var sectionRaw: String = SecondBrainSection.todo.rawValue
+    @AppStorage(Constants.AppStorageKey.personalRecordSection)
+    private var sectionRaw: String = PersonalRecordSection.todo.rawValue
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     @AppStorage(Constants.AppStorageKey.appIcon)
     private var appIconRaw: String = Constants.defaultAppIcon
 
-    private var section: SecondBrainSection {
-        SecondBrainSection(rawValue: sectionRaw) ?? .todo
+    private var section: PersonalRecordSection {
+        PersonalRecordSection(rawValue: sectionRaw) ?? .todo
     }
 
     var body: some View {
+        #if DEBUG
+        let _ = PerfLog.mark("PersonalRecordView.body 진입")
+        #endif
         HStack(spacing: 0) {
             rail
                 .frame(width: appState.isRecordRailVisible ? 220 : 0, alignment: .leading)
@@ -82,6 +85,11 @@ struct PersonalRecordView: View {
         }
         .background(PopoverChrome.surface)
         .appearanceAccentTint(.popover)
+        .onAppear {
+            #if DEBUG
+            PerfLog.mark("기록 탭 onAppear")
+            #endif
+        }
         .id(popoverTheme)
         .animation(.easeInOut(duration: 0.24), value: appState.isRecordRailVisible)
     }
@@ -105,7 +113,7 @@ struct PersonalRecordView: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 4)
 
-            ForEach(SecondBrainSection.allCases) { item in
+            ForEach(PersonalRecordSection.allCases) { item in
                 railItem(item)
             }
             Spacer(minLength: 0)
@@ -117,7 +125,7 @@ struct PersonalRecordView: View {
         .background(PopoverChrome.surfaceAlt)
     }
 
-    private func railItem(_ item: SecondBrainSection) -> some View {
+    private func railItem(_ item: PersonalRecordSection) -> some View {
         let isSelected = section == item
         return Button {
             sectionRaw = item.rawValue

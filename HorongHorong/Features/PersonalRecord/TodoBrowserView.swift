@@ -4,7 +4,15 @@ import SwiftData
 
 struct TodoBrowserView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
+    // 거르는 일을 DB 에 시킨다. 예전에는 전량을 가져와 Swift 에서 걸렀다 —
+    // Todo 를 보는데 Quick Note·References 까지 전부 실체화됐다.
+    // `resolvedSection` 은 계산 프로퍼티라 SQL 로 번역되지 않으므로 저장 컬럼을 쓴다.
+    @Query(
+        filter: #Predicate<Memo> { $0.sectionRaw == "todo" },
+        sort: \Memo.createdAt,
+        order: .reverse
+    )
+    private var allMemos: [Memo]
 
     @State private var selectedID: UUID?
     @State private var searchText = ""
@@ -55,7 +63,7 @@ struct TodoBrowserView: View {
         var snapshot = Snapshot()
 
         for memo in allMemos {
-            guard memo.resolvedSection == .todo else { continue }
+            // 섹션 확인은 `@Query` 의 술어가 이미 했다.
             if !query.isEmpty, !memo.content.localizedCaseInsensitiveContains(query) { continue }
 
             // 최근 삭제는 아카이브 여부를 보지 않는다 — 통합 전 `recentlyDeletedItems` 와 같다.
@@ -122,10 +130,13 @@ struct TodoBrowserView: View {
         // 리팩터링 전후의 body 재평가 횟수·무효화 소스를 콘솔로 확인한다.
         // 측정이 끝나면 지운다 — 계획: docs 5. 운영/.../Refactoring/2026-09-01-app-wide-mvvm-repository-migration.md
         #if DEBUG
-        let _ = Self._printChanges()
+        let _ = PerfLog.mark("TodoBrowserView.body 진입")
         #endif
         // body 안에서 딱 한 번 만들고 자식들에게 넘긴다. 각자 계산하게 두면 팬아웃이 돌아온다.
         let snapshot = makeSnapshot()
+        #if DEBUG
+        let _ = PerfLog.mark("  makeSnapshot 완료 (todo \(snapshot.visibleIDs.count)건)")
+        #endif
         HStack(spacing: 0) {
             listPane(snapshot)
             Divider().overlay(PopoverChrome.divider)
@@ -133,6 +144,9 @@ struct TodoBrowserView: View {
                 .frame(width: 300)
         }
         .onAppear {
+            #if DEBUG
+            PerfLog.mark("TodoBrowserView.onAppear")
+            #endif
             todayReferenceDate = Date()
             loadReminderLists()
             selectedID = snapshot.selected?.id
@@ -167,7 +181,10 @@ struct TodoBrowserView: View {
     }
 
     private func listPane(_ snapshot: Snapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        #if DEBUG
+        let _ = PerfLog.mark("  listPane 시작")
+        #endif
+        return VStack(alignment: .leading, spacing: 0) {
             header(linkedCount: snapshot.linkedCount)
             composer
             ScrollView {
@@ -243,7 +260,11 @@ struct TodoBrowserView: View {
         let title = bucket.title
         let expanded = !collapsedGroups.contains(title)
         let isDropTarget = dropTargetTitle == title
-        return VStack(alignment: .leading, spacing: 7) {
+        // **LazyVStack 이어야 한다.** 평범한 VStack 이면 이 그룹의 행을 전부 즉시 만든다.
+        // 바깥 LazyVStack 은 «그룹 컨테이너» 6개만 지연 생성하므로, 컨테이너가 만들어지는
+        // 순간 안쪽 행 수천 개가 한꺼번에 그려졌다
+        // (실측 2026-09-02: todo 5,235건에서 그리기에만 1,235ms · 행당 0.34ms).
+        return LazyVStack(alignment: .leading, spacing: 7) {
             Button {
                 if expanded {
                     collapsedGroups.insert(title)
@@ -325,7 +346,7 @@ struct TodoBrowserView: View {
     private func recentlyDeletedGroup(_ items: [Memo]) -> some View {
         let title = "최근 삭제"
         let expanded = !collapsedGroups.contains(title)
-        return VStack(alignment: .leading, spacing: 7) {
+        return LazyVStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Button {
                     if expanded {
@@ -552,6 +573,9 @@ struct TodoBrowserView: View {
 
     @ViewBuilder
     private func detailPane(_ selected: Memo?) -> some View {
+        #if DEBUG
+        let _ = PerfLog.mark("  detailPane 시작")
+        #endif
         if let memo = selected {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {

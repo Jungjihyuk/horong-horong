@@ -178,7 +178,7 @@ enum VaultCatalog {
 
 /// vault 순회를 메인 스레드 밖으로 빼고, 결과를 들고 있는다.
 ///
-/// 캐시가 필요한 이유는 `SecondBrainView.content` 가 `switch` 라서다 — Knowledge/Works 로
+/// 캐시가 필요한 이유는 `PersonalRecordView.content` 가 `switch` 라서다 — Knowledge/Works 로
 /// 갈 때마다 `VaultBrowserView` 가 새로 만들어지고 `.onAppear` 가 다시 터진다.
 /// 캐시가 없으면 탭을 오갈 때마다 디스크를 통째로 다시 훑는다.
 ///

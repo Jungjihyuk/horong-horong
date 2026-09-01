@@ -6,7 +6,12 @@ struct ReferencesBrowserView: View {
     @Environment(\.modelContext) private var modelContext
     // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다. `updatedAt` 을 쓰면 쪽지를 고칠 때마다
     // fetch 가 무효화된다. 대신 표시 순서를 `refs` 에서 명시적으로 정한다 — 화면은 그대로다.
-    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
+    @Query(
+        filter: #Predicate<Memo> { $0.sectionRaw == "reference" },
+        sort: \Memo.createdAt,
+        order: .reverse
+    )
+    private var allMemos: [Memo]
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var newURL = ""
@@ -17,7 +22,7 @@ struct ReferencesBrowserView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return allMemos
             .filter { memo in
-                guard memo.resolvedSection == .reference, !memo.isArchivedValue else { return false }
+                guard !memo.isArchivedValue else { return false }   // 섹션은 술어가 이미 걸렀다
                 if query.isEmpty { return true }
                 return memo.content.localizedCaseInsensitiveContains(query)
             }

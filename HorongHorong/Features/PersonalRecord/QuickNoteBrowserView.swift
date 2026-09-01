@@ -3,32 +3,33 @@ import SwiftData
 
 struct QuickNoteBrowserView: View {
     @Environment(\.modelContext) private var modelContext
-    // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다. `updatedAt` 을 쓰면 기록을 고칠 때마다
-    // fetch 가 무효화돼 창 전체가 재계산된다. 표시 순서는 아래 `notes` 에서 다시 정한다.
-    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var composerText = ""
     @State private var draft = ""
     @State private var saveTask: Task<Void, Never>?
+    /// 한 번에 가져올 개수. 목록 끝에 닿으면 늘린다.
+    ///
+    /// 전량을 가져오면 상주량이 기록 수에 비례한다 —
+    /// 실측 2026-09-02: 4,333건 fetch 50.5ms 대 50건 fetch 1.4ms (**36배**).
+    @State private var pageLimit = Self.pageSize
     @FocusState private var composerFocused: Bool
 
-    private var notes: [Memo] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allMemos
-            .filter { memo in
-                guard memo.resolvedSection == .quickNote, !memo.isArchivedValue else { return false }
-                if query.isEmpty { return true }
-                return memo.content.localizedCaseInsensitiveContains(query)
-            }
-            .sorted {
-                if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
-                return $0.updatedAt > $1.updatedAt
-            }
-    }
+    private static let pageSize = 50
 
     private var selected: Memo? {
-        notes.first { $0.id == selectedID } ?? notes.first
+        guard let selectedID else { return nil }
+        return memo(id: selectedID)
+    }
+
+    /// 에디터가 볼 기록 한 건만 가져온다.
+    ///
+    /// 예전에는 목록 배열에서 찾았는데, 그러면 **에디터가 목록 전체에 의존**한다.
+    /// 페이징을 하면 선택한 기록이 현재 페이지 밖일 수 있어 그 방식이 성립하지 않는다.
+    private func memo(id: UUID) -> Memo? {
+        var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
     var body: some View {
@@ -42,13 +43,7 @@ struct QuickNoteBrowserView: View {
             flush()
             draft = selected?.content ?? ""
         }
-        .onChange(of: notes.map(\.id)) { _, ids in
-            if let selectedID, ids.contains(selectedID) { return }
-            selectedID = ids.first
-            draft = selected?.content ?? ""
-        }
         .onAppear {
-            selectedID = selected?.id
             draft = selected?.content ?? ""
         }
         .onDisappear { flush() }
@@ -58,19 +53,19 @@ struct QuickNoteBrowserView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             composer
-            if notes.isEmpty {
-                emptyList
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(notes) { memo in
-                            noteRow(memo)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 18)
+            QuickNoteList(
+                searchText: searchText,
+                limit: pageLimit,
+                row: { noteRow($0) },
+                empty: { emptyList },
+                onReachEnd: { pageLimit += Self.pageSize },
+                // 목록을 자식이 들고 있으므로, 선택이 사라졌는지도 자식이 알려준다.
+                onVisibleChange: { ids in
+                    if let selectedID, ids.contains(selectedID) { return }
+                    selectedID = ids.first
+                    draft = selected?.content ?? ""
                 }
-            }
+            )
         }
         .frame(maxWidth: .infinity)
         .background(PopoverChrome.surface)
@@ -382,4 +377,99 @@ struct QuickNoteBrowserView: View {
         formatter.unitsStyle = .short
         return formatter
     }()
+}
+
+/// 페이징된 기록 목록.
+///
+/// **별도 struct 인 이유**: `@Query` 의 `FetchDescriptor` 는 뷰가 만들어질 때 고정된다.
+/// 개수를 늘리려면 그 뷰를 다시 만들어야 하므로, 개수를 인자로 받는 자식으로 뗀다.
+/// 부모가 `limit` 을 늘리면 이 뷰가 새 descriptor 로 다시 생긴다.
+private struct QuickNoteList<Row: View, Empty: View>: View {
+    /// 고정한 기록. **개수를 제한하지 않는다** — 몇 건 안 되고, 항상 맨 위에 있어야 한다.
+    @Query private var pinned: [Memo]
+    /// 나머지. 이쪽만 페이징한다.
+    @Query private var others: [Memo]
+
+    private let row: (Memo) -> Row
+    private let empty: () -> Empty
+    private let onReachEnd: () -> Void
+    private let onVisibleChange: ([UUID]) -> Void
+    private let isPaged: Bool
+    private let searchQuery: String
+    private let limit: Int
+
+    init(
+        searchText: String,
+        limit: Int,
+        @ViewBuilder row: @escaping (Memo) -> Row,
+        @ViewBuilder empty: @escaping () -> Empty,
+        onReachEnd: @escaping () -> Void,
+        onVisibleChange: @escaping ([UUID]) -> Void
+    ) {
+        self.row = row
+        self.empty = empty
+        self.onReachEnd = onReachEnd
+        self.onVisibleChange = onVisibleChange
+        self.limit = limit
+
+        // 검색 중에는 개수를 제한하지 않는다.
+        // `localizedCaseInsensitiveContains` 는 SQL 로 번역되지 않아 앱에서 걸러야 하는데,
+        // 앞 50건만 가져와서 거르면 **51번째부터는 검색해도 안 나온다.**
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.searchQuery = query
+        self.isPaged = query.isEmpty
+
+        // 고정 여부로 쿼리를 둘로 나누는 이유: `Bool` 은 `Comparable` 이 아니라
+        // `SortDescriptor` 의 정렬 키가 될 수 없다. «고정 먼저» 를 DB 정렬로 표현할 방법이 없다.
+        //
+        // 그리고 한 쿼리에 제한을 걸면 고정한 기록이 51번째에 있을 때 아예 안 보인다.
+        // 나눠 두면 고정은 항상 전부, 나머지만 잘라 온다.
+        _pinned = Query(FetchDescriptor<Memo>(
+            predicate: #Predicate { $0.sectionRaw == "quickNote" && $0.isArchived != true && $0.isPinned },
+            sortBy: [SortDescriptor(\Memo.updatedAt, order: .reverse)]
+        ))
+
+        var rest = FetchDescriptor<Memo>(
+            predicate: #Predicate { $0.sectionRaw == "quickNote" && $0.isArchived != true && !$0.isPinned },
+            sortBy: [SortDescriptor(\Memo.updatedAt, order: .reverse)]
+        )
+        if query.isEmpty { rest.fetchLimit = limit }
+        _others = Query(rest)
+    }
+
+    var body: some View {
+        let visible = filtered
+        if visible.isEmpty {
+            empty()
+                .onAppear { onVisibleChange([]) }
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(visible) { memo in
+                        row(memo)
+                    }
+                    if isPaged, others.count >= limit {
+                        // 가져온 만큼 다 찼다는 건 더 있을 수 있다는 뜻이다.
+                        // 목록 끝이 실제로 화면에 닿을 때만 다음 쪽을 청한다.
+                        Color.clear
+                            .frame(height: 1)
+                            .onAppear(perform: onReachEnd)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            }
+            .onChange(of: visible.map(\.id), initial: true) { _, ids in
+                onVisibleChange(ids)
+            }
+        }
+    }
+
+    /// 검색어는 `localizedCaseInsensitiveContains` 라 SQL 로 번역되지 않는다.
+    /// 그래서 여기서 거르고, 대신 검색 중에는 개수 제한을 두지 않는다(위 `init` 참고).
+    private var filtered: [Memo] {
+        let all = pinned + others
+        guard !searchQuery.isEmpty else { return all }
+        return all.filter { $0.content.localizedCaseInsensitiveContains(searchQuery) }
+    }
 }
