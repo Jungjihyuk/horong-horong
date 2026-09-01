@@ -4,7 +4,9 @@ import AppKit
 
 struct ReferencesBrowserView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
+    // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다. `updatedAt` 을 쓰면 쪽지를 고칠 때마다
+    // fetch 가 무효화된다. 대신 표시 순서를 `refs` 에서 명시적으로 정한다 — 화면은 그대로다.
+    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var newURL = ""
@@ -13,11 +15,13 @@ struct ReferencesBrowserView: View {
 
     private var refs: [Memo] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allMemos.filter { memo in
-            guard memo.resolvedSection == .reference, !memo.isArchivedValue else { return false }
-            if query.isEmpty { return true }
-            return memo.content.localizedCaseInsensitiveContains(query)
-        }
+        return allMemos
+            .filter { memo in
+                guard memo.resolvedSection == .reference, !memo.isArchivedValue else { return false }
+                if query.isEmpty { return true }
+                return memo.content.localizedCaseInsensitiveContains(query)
+            }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     private var selected: Memo? {

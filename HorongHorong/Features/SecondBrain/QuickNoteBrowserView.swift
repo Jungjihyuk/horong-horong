@@ -3,7 +3,9 @@ import SwiftData
 
 struct QuickNoteBrowserView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
+    // 정렬 키는 편집으로 바뀌지 않는 필드여야 한다. `updatedAt` 을 쓰면 기록을 고칠 때마다
+    // fetch 가 무효화돼 창 전체가 재계산된다. 표시 순서는 아래 `notes` 에서 다시 정한다.
+    @Query(sort: \Memo.createdAt, order: .reverse) private var allMemos: [Memo]
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var composerText = ""
@@ -370,9 +372,14 @@ struct QuickNoteBrowserView: View {
     }
 
     private func elapsed(_ date: Date) -> String {
+        Self.elapsedFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// 행마다·렌더마다 새로 만들면 로케일 데이터 로드가 그만큼 반복된다.
+    private static let elapsedFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
+        return formatter
+    }()
 }

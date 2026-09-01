@@ -26,69 +26,125 @@ struct TodoBrowserView: View {
     @FocusState private var composerFocused: Bool
     @ObservedObject private var listColors = ReminderListColorStore.shared
 
-    private var todos: [Memo] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allMemos.filter { memo in
-            guard memo.resolvedSection == .todo,
-                  !memo.isArchivedValue,
-                  !memo.isRecentlyDeleted else { return false }
-            if query.isEmpty { return true }
-            return memo.content.localizedCaseInsensitiveContains(query)
-        }
+    /// 한 번의 body 평가에서 쓰는 모든 파생 값.
+    ///
+    /// 계산 프로퍼티로 두면 소비처마다 `allMemos` 를 다시 전량 순회한다. 실제로 그랬다 —
+    /// `grouped()` 5개가 각각 `todos` 를 돌고, `visibleItems` 가 그 5개를 또 합치고,
+    /// `.onChange(of:)` 가 body 평가마다 그 파이프라인을 통째로 한 번 더 돌려
+    /// **body 1회당 전량 순회 12~17회 + 전량 정렬 10회**가 됐다.
+    ///
+    /// 커밋 `158018d` 가 메모 브라우저에서 같은 구조를 같은 방법으로 없앴다.
+    private struct Snapshot {
+        var overdue: [Memo] = []
+        var today: [Memo] = []
+        var upcoming: [Memo] = []
+        var someday: [Memo] = []
+        var completed: [Memo] = []
+        var recentlyDeleted: [Memo] = []
+        var linkedCount = 0
+        /// 선택이 목록에서 사라졌는지 보는 용도. `.onChange` 비교값을 body 평가마다
+        /// 새로 할당하지 않도록 스냅샷 안에서 한 번만 만든다.
+        var visibleIDs: [UUID] = []
+        var firstVisible: Memo?
+        var selected: Memo?
     }
 
-    private var overdueItems: [Memo] { grouped(.overdue) }
-    private var todayItems: [Memo] { grouped(.today) }
-    private var upcomingItems: [Memo] { grouped(.upcoming) }
-    private var somedayItems: [Memo] { grouped(.someday) }
-    private var completedItems: [Memo] { grouped(.completed) }
-
-    private var recentlyDeletedItems: [Memo] {
+    /// `allMemos` 를 **한 번만** 순회하며 5개 버킷·최근 삭제·연동 수를 함께 만든다.
+    private func makeSnapshot() -> Snapshot {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allMemos.filter { memo in
-            guard memo.resolvedSection == .todo, memo.isRecentlyDeleted else { return false }
-            if query.isEmpty { return true }
-            return memo.content.localizedCaseInsensitiveContains(query)
-        }
-        .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
-    }
+        var snapshot = Snapshot()
 
-    private var selected: Memo? {
+        for memo in allMemos {
+            guard memo.resolvedSection == .todo else { continue }
+            if !query.isEmpty, !memo.content.localizedCaseInsensitiveContains(query) { continue }
+
+            // 최근 삭제는 아카이브 여부를 보지 않는다 — 통합 전 `recentlyDeletedItems` 와 같다.
+            if memo.isRecentlyDeleted {
+                snapshot.recentlyDeleted.append(memo)
+                continue
+            }
+            guard !memo.isArchivedValue else { continue }
+
+            if !memo.isCompletedValue, memo.isLinkedToRemindersValue {
+                snapshot.linkedCount += 1
+            }
+
+            switch TodoBucket.of(
+                startDate: memo.startDate,
+                deadline: memo.deadline,
+                isCompleted: memo.isCompletedValue,
+                now: todayReferenceDate
+            ) {
+            case .overdue:   snapshot.overdue.append(memo)
+            case .today:     snapshot.today.append(memo)
+            case .upcoming:  snapshot.upcoming.append(memo)
+            case .someday:   snapshot.someday.append(memo)
+            case .completed: snapshot.completed.append(memo)
+            }
+        }
+
+        // 정렬은 버킷마다 한 번씩. 전량을 5번 정렬하던 것보다 다루는 배열이 훨씬 작다.
+        func byDue(_ items: [Memo]) -> [Memo] {
+            items.sorted {
+                let left = $0.deadline ?? $0.startDate ?? .distantFuture
+                let right = $1.deadline ?? $1.startDate ?? .distantFuture
+                return left < right
+            }
+        }
+        snapshot.overdue = byDue(snapshot.overdue)
+        snapshot.today = byDue(snapshot.today)
+        snapshot.upcoming = byDue(snapshot.upcoming)
+        snapshot.someday = byDue(snapshot.someday)
+        snapshot.completed = byDue(snapshot.completed)
+        snapshot.recentlyDeleted.sort { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+
+        let visible = snapshot.overdue + snapshot.today + snapshot.upcoming
+            + snapshot.someday + snapshot.completed
+        snapshot.visibleIDs = visible.map(\.id) + snapshot.recentlyDeleted.map(\.id)
+        snapshot.firstVisible = visible.first
+
         if let selectedID {
-            if let memo = todos.first(where: { $0.id == selectedID }) { return memo }
-            if let memo = recentlyDeletedItems.first(where: { $0.id == selectedID }) { return memo }
+            snapshot.selected = visible.first { $0.id == selectedID }
+                ?? snapshot.recentlyDeleted.first { $0.id == selectedID }
         }
-        return visibleItems.first
+        snapshot.selected = snapshot.selected ?? visible.first
+
+        return snapshot
     }
 
-    private var visibleItems: [Memo] {
-        overdueItems + todayItems + upcomingItems + somedayItems + completedItems
-    }
-
-    private var linkedCount: Int {
-        todos.filter { !$0.isCompletedValue && $0.isLinkedToRemindersValue }.count
+    /// 이벤트 처리용. 렌더 경로에서는 `Snapshot.selected` 를 쓴다 —
+    /// 여기서 스냅샷을 다시 만드는 것은 선택 전환·창 닫기처럼 드문 시점뿐이다.
+    private func selectedMemo() -> Memo? {
+        makeSnapshot().selected
     }
 
     var body: some View {
+        // 리팩터링 전후의 body 재평가 횟수·무효화 소스를 콘솔로 확인한다.
+        // 측정이 끝나면 지운다 — 계획: docs 5. 운영/.../Refactoring/2026-09-01-app-wide-mvvm-repository-migration.md
+        #if DEBUG
+        let _ = Self._printChanges()
+        #endif
+        // body 안에서 딱 한 번 만들고 자식들에게 넘긴다. 각자 계산하게 두면 팬아웃이 돌아온다.
+        let snapshot = makeSnapshot()
         HStack(spacing: 0) {
-            listPane
+            listPane(snapshot)
             Divider().overlay(PopoverChrome.divider)
-            detailPane
+            detailPane(snapshot.selected)
                 .frame(width: 300)
         }
         .onAppear {
             todayReferenceDate = Date()
             loadReminderLists()
-            selectedID = selected?.id
+            selectedID = snapshot.selected?.id
             loadDrafts()
         }
         .onChange(of: selectedID) { _, _ in
             flush()
             loadDrafts()
         }
-        .onChange(of: visibleItems.map(\.id) + recentlyDeletedItems.map(\.id)) { _, ids in
+        .onChange(of: snapshot.visibleIDs) { _, ids in
             if let selectedID, ids.contains(selectedID) { return }
-            selectedID = visibleItems.first?.id
+            selectedID = snapshot.firstVisible?.id
             loadDrafts()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
@@ -110,18 +166,18 @@ struct TodoBrowserView: View {
         }
     }
 
-    private var listPane: some View {
+    private func listPane(_ snapshot: Snapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            header(linkedCount: snapshot.linkedCount)
             composer
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 6) {
-                    group(bucket: .overdue, items: overdueItems, hint: nil)
-                    group(bucket: .today, items: todayItems, hint: nil)
-                    group(bucket: .upcoming, items: upcomingItems, hint: nil)
-                    group(bucket: .someday, items: somedayItems, hint: "날짜 없음")
-                    group(bucket: .completed, items: completedItems, hint: nil)
-                    recentlyDeletedGroup
+                    group(bucket: .overdue, items: snapshot.overdue, hint: nil)
+                    group(bucket: .today, items: snapshot.today, hint: nil)
+                    group(bucket: .upcoming, items: snapshot.upcoming, hint: nil)
+                    group(bucket: .someday, items: snapshot.someday, hint: "날짜 없음")
+                    group(bucket: .completed, items: snapshot.completed, hint: nil)
+                    recentlyDeletedGroup(snapshot.recentlyDeleted)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 18)
@@ -131,7 +187,7 @@ struct TodoBrowserView: View {
         .background(PopoverChrome.surface)
     }
 
-    private var header: some View {
+    private func header(linkedCount: Int) -> some View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Todo")
@@ -266,9 +322,8 @@ struct TodoBrowserView: View {
         }
     }
 
-    private var recentlyDeletedGroup: some View {
+    private func recentlyDeletedGroup(_ items: [Memo]) -> some View {
         let title = "최근 삭제"
-        let items = recentlyDeletedItems
         let expanded = !collapsedGroups.contains(title)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
@@ -496,7 +551,7 @@ struct TodoBrowserView: View {
     }
 
     @ViewBuilder
-    private var detailPane: some View {
+    private func detailPane(_ selected: Memo?) -> some View {
         if let memo = selected {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -833,23 +888,6 @@ struct TodoBrowserView: View {
         .buttonStyle(.plain)
     }
 
-    private func grouped(_ group: TodoBucket) -> [Memo] {
-        todos
-            .filter {
-                TodoBucket.of(
-                    startDate: $0.startDate,
-                    deadline: $0.deadline,
-                    isCompleted: $0.isCompletedValue,
-                    now: todayReferenceDate
-                ) == group
-            }
-            .sorted {
-                let left = $0.deadline ?? $0.startDate ?? .distantFuture
-                let right = $1.deadline ?? $1.startDate ?? .distantFuture
-                return left < right
-            }
-    }
-
     private func submitComposer() {
         let title = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
@@ -1004,7 +1042,7 @@ struct TodoBrowserView: View {
     }
 
     private func emptyRecentlyDeleted() {
-        let items = recentlyDeletedItems
+        let items = makeSnapshot().recentlyDeleted
         for memo in items {
             deletePermanently(memo)
         }
@@ -1031,7 +1069,7 @@ struct TodoBrowserView: View {
     }
 
     private func loadDrafts() {
-        guard let memo = selected else {
+        guard let memo = selectedMemo() else {
             titleDraft = ""
             noteDraft = ""
             return
@@ -1115,7 +1153,7 @@ struct TodoBrowserView: View {
     private func flush() {
         saveTask?.cancel()
         saveTask = nil
-        if let memo = selected { persist(memo) }
+        if let memo = selectedMemo() { persist(memo) }
     }
 
     private func persist(_ memo: Memo, syncLinkedReminder: Bool = false) {

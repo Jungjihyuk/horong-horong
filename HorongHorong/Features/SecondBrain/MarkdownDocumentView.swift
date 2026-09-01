@@ -122,6 +122,9 @@ enum BrainMarkdownParser {
 }
 
 struct MarkdownDocumentView: View {
+    /// 블록마다·렌더마다 새로 컴파일하면 패턴 파싱과 NFA 구성이 그만큼 반복된다.
+    private static let wikiLinkRegex = try? NSRegularExpression(pattern: #"\[\[([^\]]+)\]\]"#)
+
     let markdown: String
     var onWikiLink: ((String) -> Void)?
 
@@ -197,8 +200,7 @@ struct MarkdownDocumentView: View {
 
     private func inlineText(_ source: String) -> Text {
         var attributed = AttributedString(source)
-        let pattern = #"\[\[([^\]]+)\]\]"#
-        if let regex = try? NSRegularExpression(pattern: pattern) {
+        if let regex = Self.wikiLinkRegex {
             let ns = source as NSString
             let matches = regex.matches(in: source, range: NSRange(location: 0, length: ns.length))
             for match in matches.reversed() {
