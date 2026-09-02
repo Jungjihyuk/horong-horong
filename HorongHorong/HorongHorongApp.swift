@@ -384,6 +384,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notificationObservers: [NSObjectProtocol] = []
 
     private(set) var modelContainer: ModelContainer!
+    /// 구현체 조립. `modelContainer` 가 만들어진 뒤에 세운다.
+    private(set) var dependencies: DependencyContainer!
 
     override init() {
         super.init()
@@ -402,6 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }
+        dependencies = DependencyContainer(modelContainer: modelContainer)
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -1094,6 +1097,7 @@ struct HorongHorongApp: App {
         Window(HubWindowPresenter.windowTitle, id: HubWindowPresenter.windowID) {
             MainHubWindow()
                 .environment(appDelegate.appState)
+                .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
                 .controlSize(appearanceDensity.controlSize)

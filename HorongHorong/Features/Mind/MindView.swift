@@ -58,6 +58,7 @@ enum MindSection: String, CaseIterable, Identifiable {
 
 struct MindView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dependencies) private var dependencies
     @AppStorage(Constants.AppStorageKey.mindSection)
     private var sectionRaw: String = MindSection.todo.rawValue
     @AppStorage(Constants.AppStorageKey.popoverTheme)
@@ -194,7 +195,9 @@ struct MindView: View {
         case .works:
             VaultBrowserView(kind: .works)
         case .refs:
-            ReferencesBrowserView()
+            if let repository = dependencies?.referenceRepository {
+                ReferencesBrowserView(repository: repository)
+            }
         }
     }
 }

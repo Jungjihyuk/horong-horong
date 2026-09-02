@@ -1,0 +1,32 @@
+import Foundation
+import SwiftData
+import SwiftUI
+
+/// 구현체를 만들어 화면에 건네는 곳. **여기만 «누가 무엇으로 구현됐는지» 를 안다.**
+///
+/// ViewModel 이 자기 Repository 를 직접 만들면 저장 기술이 Presentation 으로 새고,
+/// 테스트에서 가짜 구현으로 바꿔 끼울 수 없다(CLAUDE.md §4 App).
+///
+/// 지금은 참고 자료 하나뿐이다. 기능을 옮길 때마다 여기에 한 줄씩 는다.
+@MainActor
+final class DependencyContainer {
+    let referenceRepository: ReferenceRepository
+
+    init(modelContainer: ModelContainer) {
+        referenceRepository = SwiftDataReferenceRepository(context: modelContainer.mainContext)
+    }
+}
+
+private struct DependencyContainerKey: @preconcurrency EnvironmentKey {
+    /// 앱은 시작할 때 반드시 주입한다. 미리보기·테스트가 주입을 잊으면 여기서 멈춘다 —
+    /// 조용히 빈 화면이 되는 것보다 낫다.
+    @MainActor
+    static let defaultValue: DependencyContainer? = nil
+}
+
+extension EnvironmentValues {
+    var dependencies: DependencyContainer? {
+        get { self[DependencyContainerKey.self] }
+        set { self[DependencyContainerKey.self] = newValue }
+    }
+}
