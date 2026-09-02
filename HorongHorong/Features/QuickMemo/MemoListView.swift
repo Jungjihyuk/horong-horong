@@ -1,9 +1,13 @@
 import SwiftUI
 import SwiftData
 
+/// 팝오버가 보여줄 할 일 묶음.
+///
+/// 완료 목록 대신 «예정» 을 둔다 — 팝오버는 **앞으로 할 것**을 확인하는 자리이고,
+/// 끝난 일을 되짚는 것은 기록 창의 Todo 탭이 맡는다.
 private enum MemoListTab: String, CaseIterable {
-    case active = "오늘"
-    case completed = "완료"
+    case today = "오늘"
+    case upcoming = "예정"
 }
 
 struct MemoListView: View {
@@ -19,7 +23,7 @@ struct MemoListView: View {
         order: .reverse
     )
     private var todos: [Memo]
-    @State private var selectedTab: MemoListTab = .active
+    @State private var selectedTab: MemoListTab = .today
     @State private var editingMemo: Memo?
     @State private var editContent: String = ""
     @State private var showNewMemoField: Bool = false
@@ -46,22 +50,34 @@ struct MemoListView: View {
         sortedActiveMemos(todayTodos)
     }
 
-    private var completedMemos: [Memo] {
+    /// 오늘 이후로 잡힌 할 일. 가까운 것부터 보여준다.
+    private var upcomingMemos: [Memo] {
         todos
-            .filter {
-                $0.isCompletedValue
-                    && !$0.isArchivedValue
-                    && !$0.isRecentlyDeleted
+            .filter { memo in
+                // 섹션은 `@Query` 술어가 이미 걸렀다.
+                !memo.isArchivedValue
+                    && !memo.isRecentlyDeleted
+                    && !memo.isCompletedValue
+                    && TodoBucket.of(
+                        startDate: memo.startDate,
+                        deadline: memo.deadline,
+                        isCompleted: false,
+                        now: Date()
+                    ) == .upcoming
             }
-            .sorted { $0.updatedAt > $1.updatedAt }
+            .sorted {
+                let left = $0.deadline ?? $0.startDate ?? .distantFuture
+                let right = $1.deadline ?? $1.startDate ?? .distantFuture
+                return left < right
+            }
     }
 
     private var visibleMemos: [Memo] {
-        selectedTab == .active ? activeMemos : completedMemos
+        selectedTab == .today ? activeMemos : upcomingMemos
     }
 
     private var hasMemoRows: Bool {
-        !activeMemos.isEmpty || !completedMemos.isEmpty
+        !activeMemos.isEmpty || !upcomingMemos.isEmpty
     }
 
     private func sortedActiveMemos(_ memos: [Memo]) -> [Memo] {
@@ -122,7 +138,7 @@ struct MemoListView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Text(tab.rawValue)
-                        Text("\(tab == .active ? activeMemos.count : completedMemos.count)")
+                        Text("\(tab == .today ? activeMemos.count : upcomingMemos.count)")
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .monospacedDigit()
                     }
@@ -157,10 +173,10 @@ struct MemoListView: View {
         Group {
             if visibleMemos.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: selectedTab == .completed ? "checkmark.circle" : "note.text")
+                    Image(systemName: selectedTab == .upcoming ? "calendar" : "note.text")
                         .font(.system(size: 28, weight: .regular))
                         .foregroundStyle(PopoverChrome.inkTertiary)
-                    Text(selectedTab == .completed ? "완료된 할 일이 없습니다" : "오늘 할 일이 없습니다")
+                    Text(selectedTab == .upcoming ? "예정된 할 일이 없습니다" : "오늘 할 일이 없습니다")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
