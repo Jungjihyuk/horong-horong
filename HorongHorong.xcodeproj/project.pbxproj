@@ -35,6 +35,7 @@
 		104BBE41D8FD7AB21B2995D7 /* CompanionPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40E30C422CA267221E628FB /* CompanionPage.swift */; };
 		10AD46A1EFDCDD8C4D43FDAA /* overview in Resources */ = {isa = PBXBuildFile; fileRef = EDB2AFEB48A4D9B3BE3A07ED /* overview */; };
 		1227FA9CD956D82EC098B2AB /* onboarding.md in Resources */ = {isa = PBXBuildFile; fileRef = 53453D33973DFCC4304BDE46 /* onboarding.md */; };
+		1322487A2B6BEDEDBC1880B0 /* AgentExperimentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE67E6ADC977F9D283662D1 /* AgentExperimentView.swift */; };
 		138134C030882AFF017AC890 /* AgentPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9C07F54EF9D4748E93E3790 /* AgentPage.swift */; };
 		13A86AAAD7F20ADC6A5D1C8C /* QuickNoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84F4448F83D8E490736EBFE /* QuickNoteBrowserView.swift */; };
 		1731C62BE6F9B0A33184AA18 /* FocusNudgeTrendCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3803D628E9203EC096F3A7 /* FocusNudgeTrendCard.swift */; };
@@ -98,6 +99,7 @@
 		3DAA33925C36732F50DDBE51 /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E2F4B47B282506A742D35E /* AILabView.swift */; };
 		3FC6A20D7DAD8508B37A3AEB /* VaultBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA545D1C7093C509A3F9FDAF /* VaultBrowserView.swift */; };
 		3FF3EAD7698170C8450DB599 /* QuickNoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B84F4448F83D8E490736EBFE /* QuickNoteBrowserView.swift */; };
+		401D9B182EFC4517950B43C2 /* AgentExperimentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE67E6ADC977F9D283662D1 /* AgentExperimentView.swift */; };
 		40F02AE17D455450916E22B2 /* RewardEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF5EDFA03DFDA5A1F91F7991 /* RewardEngine.swift */; };
 		4107C8B44179E63E0BA2351D /* CompanionOnboardingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7521BD98E14B3101B278FF5 /* CompanionOnboardingPresenter.swift */; };
 		412CB0A8A15592A1BFEFB4A5 /* GoalSuggestionParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */; };
@@ -456,6 +458,7 @@
 		787C53144DC4B755B4A4CF7A /* AppActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppActivation.swift; sourceTree = "<group>"; };
 		7A4E8966D113710C92CEA4A1 /* HorongHorongApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongApp.swift; sourceTree = "<group>"; };
 		7A59CA307E918C76373B3D5E /* CompanionOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionOnboarding.swift; sourceTree = "<group>"; };
+		7CE67E6ADC977F9D283662D1 /* AgentExperimentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentExperimentView.swift; sourceTree = "<group>"; };
 		7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsDetailWindow.swift; sourceTree = "<group>"; };
 		8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStoreLocationTests.swift; sourceTree = "<group>"; };
 		84208C64E5FF8177FE973E1A /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
@@ -692,6 +695,14 @@
 				ABE4FC297A4219769ED63E5F /* NewsSourceSheets.swift */,
 			);
 			path = News;
+			sourceTree = "<group>";
+		};
+		5F85A2A6E11DFE739D3D6A63 /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				7CE67E6ADC977F9D283662D1 /* AgentExperimentView.swift */,
+			);
+			path = Agent;
 			sourceTree = "<group>";
 		};
 		6B199C2C66A17B1375EC6B5B /* Models */ = {
@@ -995,6 +1006,7 @@
 			isa = PBXGroup;
 			children = (
 				DC3888206DF34691646A385B /* Achievement */,
+				5F85A2A6E11DFE739D3D6A63 /* Agent */,
 				9AB16467B62B64FE9DC2BF1E /* Companion */,
 				751EFF23B3A06607AD721B02 /* Developer */,
 				F99EE5BC98DA0E9F94713D98 /* Hub */,
@@ -1243,6 +1255,7 @@
 				09CA990DEC583F533576BEEF /* AboutPage.swift in Sources */,
 				4489E2BAA5A45734059C8C3E /* AchievementGoalRecord.swift in Sources */,
 				FCF61CDE25B4A3C4E6965FC3 /* AchievementViews.swift in Sources */,
+				1322487A2B6BEDEDBC1880B0 /* AgentExperimentView.swift in Sources */,
 				138134C030882AFF017AC890 /* AgentPage.swift in Sources */,
 				BAA04FFFA12BBF3CF71B632F /* AppActivation.swift in Sources */,
 				533B802C98794AE8B1A3CB83 /* AppCategoryRule.swift in Sources */,
@@ -1393,6 +1406,7 @@
 				2B7D0194C22B17AC0DB756EB /* AboutPage.swift in Sources */,
 				78AAA0FBAE47B61AB2C8C4F6 /* AchievementGoalRecord.swift in Sources */,
 				9F078A825024A0C21A665F45 /* AchievementViews.swift in Sources */,
+				401D9B182EFC4517950B43C2 /* AgentExperimentView.swift in Sources */,
 				8004232786078535BE1E6842 /* AgentPage.swift in Sources */,
 				08A34D6966BE8F0921CB8FAF /* AppActivation.swift in Sources */,
 				9187F8ED3C5941A72C6CF2C8 /* AppCategoryRule.swift in Sources */,
