@@ -191,7 +191,9 @@ struct MindView: View {
         case .diary:
             DiaryBrowserView()
         case .todo:
-            TodoBrowserView()
+            if let repository = dependencies?.todoRepository {
+                TodoBrowserView(repository: repository)
+            }
         case .knowledge:
             VaultBrowserView(kind: .knowledge)
         case .works:

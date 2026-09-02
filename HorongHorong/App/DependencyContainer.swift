@@ -12,11 +12,13 @@ import SwiftUI
 final class DependencyContainer {
     let referenceRepository: ReferenceRepository
     let quickNoteRepository: QuickNoteRepository
+    let todoRepository: TodoRepository
 
     init(modelContainer: ModelContainer) {
         let context = modelContainer.mainContext
         referenceRepository = SwiftDataReferenceRepository(context: context)
         quickNoteRepository = SwiftDataQuickNoteRepository(context: context)
+        todoRepository = SwiftDataTodoRepository(context: context)
     }
 }
 

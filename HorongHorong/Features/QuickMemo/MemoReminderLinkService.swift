@@ -311,12 +311,6 @@ final class MemoReminderLinkService {
     }
 }
 
-struct ReminderListOption: Identifiable, Hashable, Sendable {
-    let id: String
-    let title: String
-    let isDefault: Bool
-}
-
 struct ReminderListItem: Identifiable, Hashable, Sendable {
     let id: String
     let title: String
