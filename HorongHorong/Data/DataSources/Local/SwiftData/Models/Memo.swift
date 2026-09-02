@@ -147,11 +147,4 @@ extension Memo {
             now: Date()
         )
     }
-
-    var titleLine: String {
-        content
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { !$0.isEmpty } ?? "제목 없음"
-    }
 }

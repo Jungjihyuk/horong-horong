@@ -7,13 +7,16 @@ import SwiftUI
 /// ViewModel 이 자기 Repository 를 직접 만들면 저장 기술이 Presentation 으로 새고,
 /// 테스트에서 가짜 구현으로 바꿔 끼울 수 없다(CLAUDE.md §4 App).
 ///
-/// 지금은 참고 자료 하나뿐이다. 기능을 옮길 때마다 여기에 한 줄씩 는다.
+/// 기능을 옮길 때마다 여기에 한 줄씩 는다.
 @MainActor
 final class DependencyContainer {
     let referenceRepository: ReferenceRepository
+    let quickNoteRepository: QuickNoteRepository
 
     init(modelContainer: ModelContainer) {
-        referenceRepository = SwiftDataReferenceRepository(context: modelContainer.mainContext)
+        let context = modelContainer.mainContext
+        referenceRepository = SwiftDataReferenceRepository(context: context)
+        quickNoteRepository = SwiftDataQuickNoteRepository(context: context)
     }
 }
 

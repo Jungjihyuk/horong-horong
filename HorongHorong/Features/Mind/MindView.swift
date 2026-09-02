@@ -185,7 +185,9 @@ struct MindView: View {
     private var content: some View {
         switch section {
         case .quick:
-            QuickNoteBrowserView()
+            if let repository = dependencies?.quickNoteRepository {
+                QuickNoteBrowserView(repository: repository)
+            }
         case .diary:
             DiaryBrowserView()
         case .todo:
