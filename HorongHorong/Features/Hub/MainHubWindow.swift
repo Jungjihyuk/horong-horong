@@ -25,7 +25,7 @@ struct MainHubWindow: View {
 
             ZStack {
                 if openedTabs.contains(.memo) {
-                    PersonalRecordView()
+                    MindView()
                         .hubTabVisible(appState.hubTab == .memo)
                 }
                 if openedTabs.contains(.news) {

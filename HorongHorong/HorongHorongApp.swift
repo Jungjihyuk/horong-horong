@@ -374,33 +374,6 @@ private extension StatsViewMode {
 }
 
 @MainActor
-enum HorongHorongModelSchema {
-    static func make() -> Schema {
-        Schema([
-            Memo.self,
-            DiaryEntry.self,
-            AchievementGoalRecord.self,
-            FocusSession.self,
-            PomodoroReflection.self,
-            CategoryBehaviorConditionSet.self,
-            PomodoroTaskCompletion.self,
-            AppUsageRecord.self,
-            AppUsageSegment.self,
-            BreakTransitionIntent.self,
-            AttentionEvent.self,
-            AttentionDaySummary.self,
-            FocusNudgeEvent.self,
-            StatsAggregateCache.self,
-            AppCategoryRule.self,
-            NewsJob.self,
-            NewsReportIndex.self,
-            RewardLedgerEntry.self,
-            RewardCatalogItem.self,
-        ])
-    }
-}
-
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     private(set) var timerManager: TimerManager!
@@ -421,7 +394,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let storeURL = try SwiftDataStoreLocation.storeURL()
             let config = ModelConfiguration(schema: schema, url: storeURL)
-            modelContainer = try ModelContainer(for: schema, configurations: [config])
+            modelContainer = try ModelContainer(
+                for: schema,
+                migrationPlan: HorongHorongMigrationPlan.self,
+                configurations: [config]
+            )
         } catch {
             fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }
@@ -436,7 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let context = modelContainer.mainContext
 
         migrateLegacyOllamaEndpoint()
-        Self.migratePersonalRecordDefaults()
+        Self.migrateMindDefaults()
         migrateRemovedDocumentCategory(in: context)
         migrateMemoSections(in: context)
         mergeDuplicateDiaryEntries(in: context)
@@ -489,24 +466,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `localhost`는 이 기기에서 IPv6(`::1`)로 먼저 해석되지만 Ollama는 IPv4만 열어 둔
     /// 경우가 있어 연결이 거절된다. 예전 기본값만 한 번 IPv4 루프백 주소로 옮긴다.
     /// 사용자가 다른 서버 주소를 직접 지정한 경우에는 건드리지 않는다.
-    /// `secondBrain.*` → `personalRecord.*` 키 이름 변경을 따라간다.
+    /// 저장 키 이름 변경을 따라간다: `secondBrain.*` → `personalRecord.*` → `mind.*`.
     ///
-    /// 기능 이름을 «기록(PersonalRecord)» 으로 바꾸면서 저장 키도 맞췄는데, 그냥 바꾸면
-    /// 이미 저장된 값이 안 읽혀서 **사용자가 고른 vault 경로가 기본값으로 돌아간다.**
-    /// 그러면 남의 컴퓨터에는 없는 경로를 가리켜 "vault를 찾지 못했습니다" 가 뜬다.
+    /// 그냥 키를 바꾸면 이미 저장된 값이 안 읽혀 **사용자가 고른 vault 경로가 기본값으로
+    /// 돌아간다.** 그러면 남의 컴퓨터에는 없는 경로를 가리켜 "vault를 찾지 못했습니다" 가 뜬다.
     ///
-    /// 옛 키를 지우지는 않는다. 이전 버전으로 되돌렸을 때 설정이 남아 있어야 하고,
+    /// 이름이 두 번 바뀌었으므로 **체인으로 거슬러 찾는다.** 어느 버전에서 건너뛰어 올라오든
+    /// (예: `secondBrain` 시절 앱에서 바로 최신으로) 값을 찾아야 한다.
+    ///
+    /// 옛 키는 지우지 않는다. 이전 버전으로 되돌렸을 때 설정이 남아 있어야 하고,
     /// 값 두 개라 남겨두는 비용이 없다.
-    /// `defaults` 를 인자로 받는 이유는 테스트에서 별도 suite 로 검증하기 위해서다.
-    /// `UserDefaults.standard` 를 직접 만지면 테스트가 실제 앱 설정을 오염시킨다.
-    static func migratePersonalRecordDefaults(in defaults: UserDefaults = .standard) {
-        let pairs = [
-            (Constants.AppStorageKey.legacySecondBrainVaultPath, Constants.AppStorageKey.personalRecordVaultPath),
-            (Constants.AppStorageKey.legacySecondBrainSection, Constants.AppStorageKey.personalRecordSection),
+    ///
+    /// `defaults` 를 인자로 받는 이유는 테스트가 실제 앱 설정을 오염시키지 않게 하기 위해서다.
+    static func migrateMindDefaults(in defaults: UserDefaults = .standard) {
+        let chains = [
+            (Constants.AppStorageKey.mindVaultPath, Constants.AppStorageKey.legacyMindVaultPathKeys),
+            (Constants.AppStorageKey.mindSection, Constants.AppStorageKey.legacyMindSectionKeys),
         ]
-        for (legacy, current) in pairs {
-            guard defaults.object(forKey: current) == nil,
-                  let value = defaults.object(forKey: legacy) else { continue }
+        for (current, legacyKeys) in chains {
+            guard defaults.object(forKey: current) == nil else { continue }
+            guard let value = legacyKeys.lazy.compactMap({ defaults.object(forKey: $0) }).first else { continue }
             defaults.set(value, forKey: current)
         }
     }

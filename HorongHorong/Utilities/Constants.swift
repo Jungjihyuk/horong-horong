@@ -514,7 +514,7 @@ enum Constants {
     static let hubWindowWidth: CGFloat = 1200
     static let hubWindowHeight: CGFloat = 700
 
-    static let defaultPersonalRecordVaultPath = "/Users/jihyeok/Documents/life/MY_BRAIN"
+    static let defaultMindVaultPath = "/Users/jihyeok/Documents/life/MY_BRAIN"
 
     // MARK: - Agent 실험 설정
     static var defaultAgentRootDirectoryPath: String {
@@ -927,13 +927,15 @@ enum Constants {
         static let anonymousInstallId = "telemetry.anonymousInstallId"
         static let remindersImportEnabled = "memo.remindersImportEnabled"
         static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
-        // 예전 이름은 `secondBrain.*` 였다. 이미 저장된 값이 있으므로 그냥 바꾸면
-        // 사용자가 고른 vault 경로가 사라진다 — `migratePersonalRecordDefaults()` 가 옮긴다.
-        static let personalRecordVaultPath = "personalRecord.vaultPath"
-        static let personalRecordSection = "personalRecord.section"
-        /// 이관 전 키. 마이그레이션에서만 읽는다.
-        static let legacySecondBrainVaultPath = "secondBrain.vaultPath"
-        static let legacySecondBrainSection = "secondBrain.section"
+        static let mindVaultPath = "mind.vaultPath"
+        static let mindSection = "mind.section"
+
+        /// 이관 전 키들. **최근 것부터** 적는다 — `migrateMindDefaults` 가 이 순서로 찾는다.
+        ///
+        /// 이름이 두 번 바뀌었다: `secondBrain` → `personalRecord` → `mind`.
+        /// 어느 버전에서 건너뛰어 올라오든 값을 찾을 수 있어야 하므로 체인으로 둔다.
+        static let legacyMindVaultPathKeys = ["personalRecord.vaultPath", "secondBrain.vaultPath"]
+        static let legacyMindSectionKeys = ["personalRecord.section", "secondBrain.section"]
         static let todoReminderListColors = "todo.reminderListColors"
         static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
         static let unmappedAppHandling = "category.unmappedAppHandling"
