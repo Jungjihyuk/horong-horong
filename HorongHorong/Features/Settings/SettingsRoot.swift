@@ -140,7 +140,7 @@ struct SettingsRoot: View {
         case .focus:      FocusPage()
         case .achievement: AchievementPage()
         case .news:       NewsPage()
-        case .agent:      AgentPage()
+        case .lab:      LabPage()
         case .companion:  CompanionPage()
         case .memo:       MemoPage()
         case .data:       DataPage()
@@ -225,7 +225,7 @@ struct SettingsRoot: View {
         case .news:
             defaults.removeObject(forKey: Constants.NewsStorageKey.interestKeywords)
             defaults.removeObject(forKey: Constants.NewsStorageKey.selectedProvider)
-        case .agent:
+        case .lab:
             defaults.removeObject(forKey: Constants.AppStorageKey.agentRootDirectoryPath)
             defaults.removeObject(forKey: Constants.AppStorageKey.selectedAgentType)
             defaults.removeObject(forKey: Constants.AppStorageKey.planDayCount)

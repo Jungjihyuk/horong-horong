@@ -10,7 +10,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case focus
     case achievement
     case news
-    case agent
+    case lab
     case companion
     case memo
     case data
@@ -30,7 +30,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .focus:      return "몰입"
         case .achievement: return "성취"
         case .news:       return "뉴스"
-        case .agent:      return "AI Agent"
+        case .lab:        return "실험실"
         case .companion:  return "루미롱"
         case .memo:       return "메모 · Second Brain"
         case .data:       return "데이터"
@@ -51,7 +51,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .focus:      return "세션마다 몰입도를 재고, 기준선 아래로 떨어지면 호로롱이가 말을 겁니다."
         case .achievement: return "할일을 목표로 묶는 추천 방식과 생성 기본값을 설정합니다."
         case .news:       return "관심사 키워드와 뉴스 큐레이션 옵션을 설정합니다."
-        case .agent:      return "AI Agent 실험에 사용할 기본값을 설정합니다."
+        case .lab:        return "실험실에서 쓸 기본값을 설정합니다."
         case .companion:  return "화면 위 AI 컴패니언의 표시·이동·브리핑을 설정합니다."
         case .memo:       return "퀵 메모 단축키와 미리알림 가져오기를 설정합니다. vault 경로는 데이터 페이지에 있습니다."
         case .data:       return "백업·복원과 데이터 초기화를 관리합니다."
@@ -71,7 +71,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .focus:      return "flame.fill"
         case .achievement: return "target"
         case .news:       return "newspaper"
-        case .agent:      return "bolt.horizontal.circle"
+        case .lab:        return "bolt.horizontal.circle"
         case .companion:  return "sparkles"
         case .memo:       return "note.text"
         case .data:       return "externaldrive"
@@ -117,8 +117,8 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "자동 수집 스케줄", "특정 시각", "수집 시각", "수집 간격", "n시간 간격",
                     "요약 에이전트", "일일 리포트 저장 위치", "LLM",
                     "리포트", "레포트", "생성"]
-        case .agent:
-            return ["실행 환경", "실험 루트 폴더", "기본 Agent",
+        case .lab:
+            return ["실행 환경", "실험 루트 폴더", "실행 도구", "Agent",
                     "계획 일수", "관심사", "터미널 명령 실행 전 확인",
                     "Codex", "Claude", "Antigravity", "Opencode", "Hermes", "생성"]
         case .companion:
@@ -184,7 +184,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
         case .focusAndMeasurement:
             return [.timer, .stats, .category, .focus]
         case .insightsAndAction:
-            return [.news, .memo, .agent, .achievement, .companion]
+            return [.news, .memo, .lab, .achievement, .companion]
         case .system:
             return [.data, .about, .ailab]
         }

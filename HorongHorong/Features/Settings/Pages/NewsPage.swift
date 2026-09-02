@@ -191,7 +191,7 @@ struct NewsPage: View {
     private var keywordCard: some View {
         SettingsGroupCard("관심 키워드") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("뉴스 리포트 수집에 쓰일 관심사를 칩으로 관리하세요. AI Agent 탭의 관심사와는 별개로 저장됩니다.")
+                Text("뉴스 리포트 수집에 쓰일 관심사를 칩으로 관리하세요. 실험실 탭의 관심사와는 별개로 저장됩니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

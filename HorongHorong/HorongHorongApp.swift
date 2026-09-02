@@ -316,7 +316,7 @@ private extension PopoverTab {
         case .achievement: return "achievement"
         case .stats: return "stats"
         case .news: return "news"
-        case .agent: return "agent"
+        case .lab: return "lab"
         }
     }
 
@@ -332,8 +332,8 @@ private extension PopoverTab {
             self = .stats
         case "news":
             self = .news
-        case "agent":
-            self = .agent
+        case "lab":
+            self = .lab
         default:
             return nil
         }

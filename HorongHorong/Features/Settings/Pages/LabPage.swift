@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-struct AgentPage: View {
+struct LabPage: View {
     @AppStorage(Constants.AppStorageKey.agentRootDirectoryPath)
     private var agentRootDirectoryPath: String = Constants.defaultAgentRootDirectoryPath
     @AppStorage(Constants.AppStorageKey.selectedAgentType)
@@ -18,7 +18,7 @@ struct AgentPage: View {
 
     var body: some View {
         SettingsPageScroll {
-            SettingsPageHeader(title: SettingsTab.agent.label, subtitle: SettingsTab.agent.subtitle)
+            SettingsPageHeader(title: SettingsTab.lab.label, subtitle: SettingsTab.lab.subtitle)
 
             SettingsGroupCard("실행 환경") {
                 SettingsRow(
@@ -115,7 +115,7 @@ struct AgentPage: View {
     private var keywordCard: some View {
         SettingsGroupCard("관심사") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Agent 실험 계획에 쓰일 관심사를 칩으로 관리하세요. 뉴스 탭의 관심사와는 별개로 저장됩니다.")
+                Text("실험실 계획에 쓰일 관심사를 칩으로 관리하세요. 뉴스 탭의 관심사와는 별개로 저장됩니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

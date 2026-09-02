@@ -7,7 +7,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
     case memo = "기록"
     case stats = "통계"
     case news = "뉴스"
-    case agent = "Agent"
+    case lab = "실험실"
     case achievement = "성취"
 
     var id: String { rawValue }
@@ -19,7 +19,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
         case .memo: return "memo"
         case .stats: return "stats"
         case .news: return "news"
-        case .agent: return "agent"
+        case .lab: return "lab"
         case .achievement: return "achievement"
         }
     }
@@ -31,7 +31,7 @@ enum PopoverTab: String, CaseIterable, Identifiable {
         case .achievement: return "target"
         case .stats: return "chart.bar"
         case .news: return "newspaper"
-        case .agent: return "bolt.horizontal.circle"
+        case .lab: return "bolt.horizontal.circle"
         }
     }
 }
@@ -346,8 +346,8 @@ struct MenuBarPopover: View {
             StatsSummaryView(referenceDate: referenceDate)
         case .news:
             NewsView()
-        case .agent:
-            AgentExperimentView()
+        case .lab:
+            LabView()
         }
     }
 

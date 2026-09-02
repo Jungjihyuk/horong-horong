@@ -17,7 +17,7 @@ import SwiftUI
  ViewModel로, 파일 시스템·터미널 실행은 Gateway 또는 Service로 옮기고 이 View에는 표현만 남긴다.
  */
 
-struct AgentExperimentView: View {
+struct LabView: View {
     @AppStorage(Constants.AppStorageKey.agentRootDirectoryPath) private var agentRootDirectoryPath = Constants.defaultAgentRootDirectoryPath
     @AppStorage(Constants.AppStorageKey.ideaDirectoryPath) private var legacyIdeaDirectoryPath = ""
     @AppStorage(Constants.AppStorageKey.outputDirectoryPath) private var legacyOutputDirectoryPath = ""
@@ -36,7 +36,7 @@ struct AgentExperimentView: View {
                     Image(systemName: "bolt.horizontal.circle")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(PopoverChrome.accent)
-                    Text("Agent 실험")
+                    Text("실험실")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
                     Spacer()
@@ -67,7 +67,7 @@ struct AgentExperimentView: View {
                     .padding(.top, -10)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Agent")
+                    Text("실행 도구")
                         .font(.caption)
                         .foregroundStyle(PopoverChrome.inkTertiary)
                     agentSelector
