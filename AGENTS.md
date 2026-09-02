@@ -262,14 +262,39 @@ HorongHorong/
 
 **동반 타입 주의**: `FocusSession.swift`(926줄)는 `@Model` 4개 + 관련 enum·struct 11개를, `AppCategoryRule.swift`(752줄)는 `@Model` 1개 + 8개를 함께 담고 있다. 파일째 옮겼으므로 지금은 Domain 성격의 타입이 Data 에 섞여 있다. **쪼개는 것은 순수 이동이 아니라 판단이 필요한 작업**이므로 해당 기능(Timer·Stats·Tracker)을 이전할 때 함께 한다.
 
-**1단계 — 파일럿 1개**
+**1단계 — 파일럿 1개 (완료)**
 
-`Reward`(1,598 LOC, `@Query` 1곳, 모델 2개)를 View → ViewModel → Repository → Domain Entity 까지 끝까지 옮긴다. 작지만 Repository 경로 전체를 지난다. 여기서 정한 패턴을 이후 기능이 복제한다.
+파일럿은 `Reward` 대신 **`Mind`의 References**로 했다. 「실시간 바인딩이 중요하거나 단순 CRUD면 `@Query` 를 그대로 두기도 한다」는 지적에 따라, *뷰와 모델 사이에 로직이 있고 · 무효화가 잦지 않으며 · 틀려도 치명적이지 않은* 화면을 골랐다.
 
-파일럿에서 반드시 결론 낼 것:
-- Repository 쓰기 후 ViewModel 갱신 경로 (`@Query` 자동 갱신을 무엇으로 대체하나)
-- 페이징 방식 (오프셋 vs 커서)
-- Entity ↔ `@Model` Mapper 를 둘 위치
+파일럿에서 내린 결론 — 이후 기능이 그대로 복제한다.
+
+| 물음 | 답 | 근거를 적어 둔 곳 |
+|---|---|---|
+| `@Query` 자동 갱신을 무엇으로 대체하나 | **쓰기 메서드가 재적재를 부른다.** 바깥 변경까지 받아야 할 때만 알림 발행을 더한다 | `ReferencesViewModel.reload()` 주석 |
+| 페이징 | **오프셋(개수 늘리기).** 정렬 키가 «최근 수정» 이라 편집할 때마다 항목이 맨 위로 가서 커서가 성립하지 않는다 | `ReferencesViewModel.loadMore()` 주석 |
+| Entity ↔ `@Model` Mapper 위치 | **Repository 안의 `private static func`.** 두 곳 이상이 같은 매핑을 쓰게 되면 그때 `Data/Mappers/` 로 뺀다 | `SwiftDataReferenceRepository.toReference` 주석 |
+
+**2단계 진행 상태 (2026-09-03) — `Mind` 이전 완료**
+
+여섯 화면을 모두 옮겼고 `Features/Mind/` 폴더가 사라졌다. `@Query` 4곳 전부 제거.
+
+| 화면 | Domain | Data | Presentation |
+|---|---|---|---|
+| References (파일럿) | `Reference` · `ReferenceRepository` | `SwiftDataReferenceRepository` | `ReferencesViewModel` |
+| Quick Note | `QuickNote` · `NoteText` | `SwiftDataQuickNoteRepository` | `QuickNoteViewModel` |
+| Todo | `TodoItem` · `ReminderListOption` | `SwiftDataTodoRepository` | `TodoViewModel` |
+| Diary | `DiaryDay` · `SleepGateway` | `SwiftDataDiaryRepository` · `HealthSleepGateway` | `DiaryViewModel` |
+| Knowledge · Works | `VaultNode` 외 · `VaultRepository` | `VaultCatalog` · `FileSystemVaultRepository` | `VaultViewModel` |
+
+이전하며 얻은 것:
+
+- **Gateway 첫 사례** — 건강 앱 접근을 `SleepGateway` 로 뺐다. 덕분에 「직접 입력한 수면 시간을 건강 앱이 덮어쓰지 않는다」를 실기·권한 없이 테스트한다.
+- **부수효과를 Repository 안으로** — 미리알림 연동·로컬 알림 예약이 `Memo` 를 인자로 받아서, 밖에 두면 `@Model` 이 Presentation 까지 샌다. 쓰기 경로가 `touch(_:)` 하나를 지나므로 화면이 「저장했으면 알림도 다시 걸어라」를 기억할 필요가 없다.
+- **중복 방지를 저장소로** — 일기의 upsert 는 저장 직전에 저장소에 다시 물어본다. 화면이 들고 있던 캐시로 판단하면 같은 날짜가 두 장 생길 틈이 열린다.
+- **행은 값으로** — `TodoCardBody`·`QuickNoteRowView`·`DiaryDayCell` 처럼 값만 든 조각을 `Equatable` 로 뗀다. 동작 클로저를 들이면 합성이 깨지므로 메뉴·버튼은 바깥에 남긴다.
+- 조회 범위 축소: 일기는 **보고 있는 달만**, Todo 는 보관·최근 삭제를 술어로 떨군다.
+
+남은 한계는 `TodoRepository.activeTodos` 주석의 `[확인 필요]` 를 본다 — 묶음이 「지금」 기준 계산이라 활성 할 일은 아직 전량을 가져온다.
 
 **2단계 이후 — 손대는 기능부터**
 
@@ -278,7 +303,7 @@ HorongHorong/
 
 | 우선 | 기능 | 근거 |
 |---|---|---|
-| 높음 | `Mind` | `@Query` 4곳으로 최다. 활발히 개발 중 |
+| ✅ 완료 | `Mind` | `@Query` 4곳으로 최다였다. 2026-09-03 이전 완료 |
 | 높음 | `Achievement` | 9,854 LOC 단일 파일. 분할이 선행돼야 함 |
 | 중간 | `Timer` · `News` · `Tracker` | 규모가 작고 경계가 뚜렷 |
 | 중간 | `Lab` | SwiftData 를 안 쓴다. **Gateway/Adapter 경로의 파일럿**으로 적합 |
