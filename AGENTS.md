@@ -240,6 +240,28 @@ HorongHorong/
 
 `PopoverChrome` 이 먼저인 이유: 기능 10개가 쓰는데 한 기능 파일 안에 묻혀 있어, 어느 기능을 옮기든 걸린다.
 
+**0단계 진행 상태 (2026-09-03)** — 모두 이동만, 로직 변경 없음. 테스트 577개 통과.
+
+| 완료 | 결과 |
+|---|---|
+| ✅ 디자인 시스템 | `Presentation/DesignSystem/` — `PopoverChrome`·`PopoverCard`·`LanternButtonStyles`·`NumberField`·`ToastPanel`·`AppIconManager` |
+| ✅ 순수 규칙 | `Domain/Policies/` — `TodoBucket`·`MemoClassifier`·`HealthSleepMath` |
+| ✅ 저장 어휘 | `Domain/Entities/` — `MemoSection`·`DiaryMood`·`DiarySleepSource` |
+| ✅ `@Model` | `Data/DataSources/Local/SwiftData/Models/` — 14개 파일. `Models/` 폴더 소멸 |
+| ✅ OS 연동 | `Data/DataSources/System/` — `NotificationManager`·`HotKeyManager`·`AppActivation` |
+| ✅ 저장소 위치 | `Data/DataSources/Local/SwiftData/SwiftDataStoreLocation.swift` |
+
+**`Utilities/` 에 일부러 남긴 것** — 어느 계층인지 판단이 필요하고, 그 판단은 관련 기능을 이전할 때 하는 편이 낫다.
+
+| 파일 | 왜 남겼나 |
+|---|---|
+| `Constants.swift` | 1,800줄. AppStorage 키·기본값·UI 상수가 섞여 있어 쪼개기 전에는 어느 계층도 아니다 |
+| `KoreanParticle.swift` | 순수하지만 «업무 규칙» 이 아니라 문장 조사 처리다. Presentation 인지 Domain 인지 애매 |
+| `HotkeyStore.swift` | 설정 상태 소유. `Store` 규칙(§5)엔 맞으나 Presentation·Data 판단이 남음 |
+| `AIRunLog` · `SuggestionExecutionStrategy` · `SuggestionModelUnloader` | AI 실행 계층 소속. `Agent` Gateway/Adapter 를 만들 때 함께 정한다 |
+
+**동반 타입 주의**: `FocusSession.swift`(926줄)는 `@Model` 4개 + 관련 enum·struct 11개를, `AppCategoryRule.swift`(752줄)는 `@Model` 1개 + 8개를 함께 담고 있다. 파일째 옮겼으므로 지금은 Domain 성격의 타입이 Data 에 섞여 있다. **쪼개는 것은 순수 이동이 아니라 판단이 필요한 작업**이므로 해당 기능(Timer·Stats·Tracker)을 이전할 때 함께 한다.
+
 **1단계 — 파일럿 1개**
 
 `Reward`(1,598 LOC, `@Query` 1곳, 모델 2개)를 View → ViewModel → Repository → Domain Entity 까지 끝까지 옮긴다. 작지만 Repository 경로 전체를 지난다. 여기서 정한 패턴을 이후 기능이 복제한다.
