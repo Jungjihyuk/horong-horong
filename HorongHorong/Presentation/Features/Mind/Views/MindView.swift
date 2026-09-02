@@ -197,9 +197,13 @@ struct MindView: View {
                 TodoBrowserView(repository: repository)
             }
         case .knowledge:
-            VaultBrowserView(kind: .knowledge)
+            if let repository = dependencies?.vaultRepository {
+                VaultBrowserView(kind: .knowledge, repository: repository)
+            }
         case .works:
-            VaultBrowserView(kind: .works)
+            if let repository = dependencies?.vaultRepository {
+                VaultBrowserView(kind: .works, repository: repository)
+            }
         case .refs:
             if let repository = dependencies?.referenceRepository {
                 ReferencesBrowserView(repository: repository)

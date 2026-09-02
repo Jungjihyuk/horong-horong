@@ -15,6 +15,7 @@ final class DependencyContainer {
     let todoRepository: TodoRepository
     let diaryRepository: DiaryRepository
     let sleepGateway: SleepGateway
+    let vaultRepository: VaultRepository
 
     init(modelContainer: ModelContainer) {
         let context = modelContainer.mainContext
@@ -23,6 +24,7 @@ final class DependencyContainer {
         todoRepository = SwiftDataTodoRepository(context: context)
         diaryRepository = SwiftDataDiaryRepository(context: context)
         sleepGateway = HealthSleepGateway()
+        vaultRepository = FileSystemVaultRepository()
     }
 }
 
