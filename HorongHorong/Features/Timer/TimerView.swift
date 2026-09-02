@@ -1,6 +1,25 @@
 import SwiftData
 import SwiftUI
 
+/*
+ 메뉴바 팝오버의 포모도로 화면과 사용자의 타이머 조작 연결을 담당한다.
+
+ 이 파일의 책임
+ - 남은 시간·진행률·집중 상태와 시작·일시정지·재개·휴식 조작을 화면에 표시한다.
+ - 프리셋·집중 카테고리·휴식 후 행동을 선택하고 저장된 시간 설정을 `AppState`에 반영한다.
+ - 미완료 할 일과 목표 연결 정보를 조회해 이번 포모도로에 붙일 후보를 만들고 선택 결과를 시작 요청에 전달한다.
+ - 테마별 타이머 숫자·버튼 표현과 할 일 선택 UI를 구성한다.
+
+ 이 파일의 책임이 아닌 것
+ - 초 단위 카운트다운, 타이머 상태 전이와 `FocusSession` 생성·저장은 `TimerManager`가 담당한다.
+ - 집중 조기 종료의 확인 화면은 `MenuBarPopover`, 기록·폐기는 `TimerManager`가 담당한다.
+ - 완료 뒤 회고 창의 생성과 표시는 `PomodoroReflectionPanel`이 담당한다.
+ - 타이머 상태에 따른 컴패니언의 행동 변화는 `CompanionController`가 담당한다.
+
+ 현재는 화면 표시 외에도 SwiftData 조회와 포모도로 할 일 후보 정책을 함께 가진다. 이 부분을
+ ViewModel로 이전할 때는 `@Query`와 후보 생성 로직을 한 번에 옮겨 절반 이전 상태를 만들지 않는다.
+ */
+
 struct PomodoroTaskCandidate: Identifiable, Equatable {
     let id: UUID
     let title: String

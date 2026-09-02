@@ -2,6 +2,25 @@ import AppKit
 import SwiftUI
 import SwiftData
 
+/*
+ 메뉴바 팝오버에서 오늘·이번 주의 활동 및 집중 통계를 요약해 보여준다.
+
+ 이 파일의 책임
+ - 카테고리별 사용 시간·집중 상태·전환 횟수·최장 세션과 주간 추이를 카드와 차트로 표시한다.
+ - `AppUsageSegment`·`AppUsageRecord`·`FocusSession`을 SwiftData에서 조회하고 팝오버용 합계로 집계한다.
+ - 날짜 경계에서 사용 구간을 자르고, 포모도로 시간과 겹친 구간을 선택한 집중 카테고리에 귀속한다.
+ - 오늘/이번 주 범위를 전환하고 상세 통계 창을 열며, 완료된 전날의 일별 요약 확정을 요청한다.
+
+ 이 파일의 책임이 아닌 것
+ - 앱 사용 구간과 집중 세션의 원본 기록 수집은 Tracker와 `TimerManager`가 담당한다.
+ - 타임라인 버킷·집중 요약 계산은 `TimelineAnalytics`, 주의 흐름 판정은 Attention 분석 타입들이 담당한다.
+ - 완료된 날짜의 `AttentionDaySummary` 생성·저장은 `AttentionDaySummaryRecorder`가 담당한다.
+ - 전체 기간 탐색과 상세 분석 화면은 통계 상세 창이 담당한다.
+
+ 현재는 화면 표시 외에도 SwiftData 조회와 팝오버 전용 집계를 직접 수행한다. MVVM + Repository로
+ 이전할 때는 조회와 집계를 함께 ViewModel 밖으로 옮겨 View에 `modelContext`가 남지 않게 한다.
+ */
+
 struct CategoryUsage: Identifiable {
     let id = UUID()
     let category: String

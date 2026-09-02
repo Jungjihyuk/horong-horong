@@ -2,6 +2,25 @@ import SwiftUI
 import SwiftData
 import AppKit
 
+/*
+ 뉴스 리포트 팝오버의 화면 표현과 수동 생성 진입 흐름을 담당한다.
+
+ 이 파일의 책임
+ - Provider·예상/실제 사용량·생성 단계·경고·오류·최근 리포트를 팝오버에 표시한다.
+ - 뉴스 설정을 `AppStorage`에 반영하고, 최근 리포트와 실행 기록을 SwiftData에서 조회한다.
+ - 리포트 생성·중단 요청을 전달하고, Ollama 모델의 설치 여부 확인과 사용자 동의·진행 상태를 조율한다.
+ - YouTube 채널 입력을 정리하고, 선택한 리포트를 전체 리포트 창에서 열도록 연결한다.
+
+ 이 파일의 책임이 아닌 것
+ - 뉴스 수집·정규화·중복 제거·분류·정렬·요약·Markdown 생성은 뉴스 Python 에이전트가 담당한다.
+ - 에이전트 프로세스 실행, 진행 상태 수신과 작업·리포트 인덱스 저장은 `NewsPipelineService`가 담당한다.
+ - 실행 인자 조립과 마지막 실행 시각 기록은 `NewsPipelineLaunchConfiguration`이 담당한다.
+ - 자동 실행 시점 결정은 `NewsScheduler`, 전체 리포트 탐색은 `NewsReportArchiveWindow`가 담당한다.
+
+ 현재는 화면 표시만 하지 않고 수동 실행 전 확인과 시작까지 조율한다. 이 흐름이 다른 화면에서도
+ 필요해지거나 복잡해지면 View에 더 쌓지 말고 별도 ViewModel 또는 실행 조율 타입으로 옮긴다.
+ */
+
 struct NewsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext

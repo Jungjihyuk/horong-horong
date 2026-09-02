@@ -1,6 +1,24 @@
 import AppKit
 import SwiftUI
 
+/*
+ 화면 위에 떠 있는 루미롱(현재는 호로롱)의 화면 표현과 사용자 입력 전달을 담당한다.
+
+ 이 파일의 책임
+ - 선택된 컴패니언의 스프라이트 프레임을 그리고, 실제 실루엣만 클릭 영역으로 만든다.
+ - 말풍선·대화창·일정·우클릭 메뉴를 표시 상태에 맞게 배치하고 오버레이에 실제 콘텐츠 영역을 알린다.
+ - 호버·탭·드래그·대화 입력·버튼 조작을 구분해 `CompanionPresentationState`의 콜백으로 전달한다.
+
+ 이 파일의 책임이 아닌 것
+ - 행동 판단, 애니메이션 진행, 대화·브리핑 내용과 온보딩 흐름은 `CompanionController`가 담당한다.
+ - 오버레이 창의 생성·이동과 투명 영역의 클릭 통과는 `CompanionOverlayPanel`이 담당한다.
+ - 스프라이트 리소스 로드·캐시와 클릭 마스크 생성은 `CompanionSpriteLoader`·`CompanionSpriteMetrics`가 담당한다.
+ - 모델 응답 생성과 메모 저장은 컴패니언의 대화 태스크·저장 타입이 담당한다.
+
+ 이 파일은 컨트롤러가 밀어 넣은 표시 상태를 화면으로 바꾸고, 사용자의 조작을 다시 콜백으로 돌려주는
+ Presentation 경계다. 컴패니언의 행동 규칙이나 데이터 처리를 이 파일에 추가하지 않는다.
+ */
+
 struct CompanionBubbleAction: Identifiable {
     let id = UUID()
     let title: String
