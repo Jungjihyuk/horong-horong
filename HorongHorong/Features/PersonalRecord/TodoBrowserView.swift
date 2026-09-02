@@ -12,7 +12,7 @@ struct TodoBrowserView: View {
         sort: \Memo.createdAt,
         order: .reverse
     )
-    private var allMemos: [Memo]
+    private var todos: [Memo]
 
     @State private var selectedID: UUID?
     @State private var searchText = ""
@@ -36,8 +36,8 @@ struct TodoBrowserView: View {
 
     /// 한 번의 body 평가에서 쓰는 모든 파생 값.
     ///
-    /// 계산 프로퍼티로 두면 소비처마다 `allMemos` 를 다시 전량 순회한다. 실제로 그랬다 —
-    /// `grouped()` 5개가 각각 `todos` 를 돌고, `visibleItems` 가 그 5개를 또 합치고,
+    /// 계산 프로퍼티로 두면 소비처마다 `todos` 를 다시 전량 순회한다. 실제로 그랬다 —
+    /// `grouped()` 5개가 각각 전량 필터를 돌고, `visibleItems` 가 그 5개를 또 합치고,
     /// `.onChange(of:)` 가 body 평가마다 그 파이프라인을 통째로 한 번 더 돌려
     /// **body 1회당 전량 순회 12~17회 + 전량 정렬 10회**가 됐다.
     ///
@@ -57,12 +57,12 @@ struct TodoBrowserView: View {
         var selected: Memo?
     }
 
-    /// `allMemos` 를 **한 번만** 순회하며 5개 버킷·최근 삭제·연동 수를 함께 만든다.
+    /// `todos` 를 **한 번만** 순회하며 5개 버킷·최근 삭제·연동 수를 함께 만든다.
     private func makeSnapshot() -> Snapshot {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         var snapshot = Snapshot()
 
-        for memo in allMemos {
+        for memo in todos {
             // 섹션 확인은 `@Query` 의 술어가 이미 했다.
             if !query.isEmpty, !memo.content.localizedCaseInsensitiveContains(query) { continue }
 
@@ -1021,7 +1021,7 @@ struct TodoBrowserView: View {
         pendingDeleteTask?.cancel()
         pendingDeleteTask = nil
         pendingDeleteID = nil
-        guard let id, let memo = allMemos.first(where: { $0.id == id }) else { return }
+        guard let id, let memo = todos.first(where: { $0.id == id }) else { return }
         finishDelete(memo)
     }
 
@@ -1123,7 +1123,7 @@ struct TodoBrowserView: View {
 
     private func move(idString: String, to bucket: TodoBucket) {
         guard let id = UUID(uuidString: idString),
-              let memo = allMemos.first(where: { $0.id == id }) else { return }
+              let memo = todos.first(where: { $0.id == id }) else { return }
         memo.deletedAt = nil
         let placed = TodoBucket.placement(
             into: bucket,

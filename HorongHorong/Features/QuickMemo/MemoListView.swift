@@ -18,7 +18,7 @@ struct MemoListView: View {
         sort: \Memo.createdAt,
         order: .reverse
     )
-    private var allMemos: [Memo]
+    private var todos: [Memo]
     @State private var selectedTab: MemoListTab = .active
     @State private var editingMemo: Memo?
     @State private var editContent: String = ""
@@ -28,7 +28,7 @@ struct MemoListView: View {
     @State private var hostWindow: NSWindow?
 
     private var todayTodos: [Memo] {
-        allMemos.filter { memo in
+        todos.filter { memo in
             // 섹션은 `@Query` 술어가 이미 걸렀다.
             !memo.isArchivedValue
                 && !memo.isRecentlyDeleted
@@ -47,7 +47,7 @@ struct MemoListView: View {
     }
 
     private var completedMemos: [Memo] {
-        allMemos
+        todos
             .filter {
                 $0.isCompletedValue
                     && !$0.isArchivedValue

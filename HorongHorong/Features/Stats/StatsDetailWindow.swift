@@ -2238,7 +2238,7 @@ struct FocusDetailView: View {
     let onNavigate: (StatsViewMode, Date) -> Void
 
     @Environment(\.modelContext) private var modelContext
-    // 이 화면이 `allMemos` 를 쓰는 곳은 «할 일 연결» 시트 하나뿐이라 todo 만 있으면 된다.
+    // 이 화면이 `linkableTodos` 를 쓰는 곳은 «할 일 연결» 시트 하나뿐이라 todo 만 있으면 된다.
     // 완료·보관된 것도 고를 수 있어야 하므로(시트 안내 문구) 그 둘은 거르지 않는다.
     //
     // 정렬 키는 `updatedAt` 그대로 둔다 — 최근에 고친 할 일이 위에 오는 것이
@@ -2248,7 +2248,7 @@ struct FocusDetailView: View {
         sort: \Memo.updatedAt,
         order: .reverse
     )
-    private var allMemos: [Memo]
+    private var linkableTodos: [Memo]
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
     @State private var showsScoreInfo = false
@@ -2334,8 +2334,8 @@ struct FocusDetailView: View {
 
     private var taskEditorMemos: [Memo] {
         let query = taskEditorSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return allMemos }
-        return allMemos.filter {
+        guard !query.isEmpty else { return linkableTodos }
+        return linkableTodos.filter {
             $0.content.localizedCaseInsensitiveContains(query)
         }
     }

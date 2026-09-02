@@ -11,7 +11,7 @@ struct ReferencesBrowserView: View {
         sort: \Memo.createdAt,
         order: .reverse
     )
-    private var allMemos: [Memo]
+    private var references: [Memo]
     @State private var selectedID: UUID?
     @State private var searchText = ""
     @State private var newURL = ""
@@ -20,7 +20,7 @@ struct ReferencesBrowserView: View {
 
     private var refs: [Memo] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allMemos
+        return references
             .filter { memo in
                 guard !memo.isArchivedValue else { return false }   // 섹션은 술어가 이미 걸렀다
                 if query.isEmpty { return true }

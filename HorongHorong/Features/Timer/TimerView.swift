@@ -296,7 +296,7 @@ struct TimerView: View {
         sort: \Memo.updatedAt,
         order: .reverse
     )
-    private var memos: [Memo]
+    private var candidateMemos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse)
     private var goalRecords: [AchievementGoalRecord]
     @State private var hoveredPreset: Constants.PomodoroPreset?
@@ -892,7 +892,7 @@ struct TimerView: View {
 
     private var taskCandidates: [PomodoroTaskCandidate] {
         PomodoroTaskCandidateBuilder.candidates(
-            memos: memos,
+            memos: candidateMemos,
             goalRecords: goalRecords,
             now: taskReferenceDate
         )
