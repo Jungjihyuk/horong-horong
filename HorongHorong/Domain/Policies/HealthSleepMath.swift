@@ -1,10 +1,6 @@
 import Foundation
 
-enum DiarySleepSource: String {
-    case healthKit = "healthkit"
-    case manual = "manual"
-}
-
+/// 건강 앱 수면 구간에서 그날의 수면 시간을 계산한다.
 enum HealthSleepMath {
     struct Interval: Equatable {
         var start: Date
