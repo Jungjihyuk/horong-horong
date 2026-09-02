@@ -13,12 +13,16 @@ final class DependencyContainer {
     let referenceRepository: ReferenceRepository
     let quickNoteRepository: QuickNoteRepository
     let todoRepository: TodoRepository
+    let diaryRepository: DiaryRepository
+    let sleepGateway: SleepGateway
 
     init(modelContainer: ModelContainer) {
         let context = modelContainer.mainContext
         referenceRepository = SwiftDataReferenceRepository(context: context)
         quickNoteRepository = SwiftDataQuickNoteRepository(context: context)
         todoRepository = SwiftDataTodoRepository(context: context)
+        diaryRepository = SwiftDataDiaryRepository(context: context)
+        sleepGateway = HealthSleepGateway()
     }
 }
 

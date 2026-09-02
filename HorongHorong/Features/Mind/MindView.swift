@@ -189,7 +189,9 @@ struct MindView: View {
                 QuickNoteBrowserView(repository: repository)
             }
         case .diary:
-            DiaryBrowserView()
+            if let dependencies {
+                DiaryBrowserView(repository: dependencies.diaryRepository, sleep: dependencies.sleepGateway)
+            }
         case .todo:
             if let repository = dependencies?.todoRepository {
                 TodoBrowserView(repository: repository)
