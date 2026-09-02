@@ -224,6 +224,51 @@ HorongHorong/
 
 현재 소스는 Features/, Models/, Services/, Utilities/ 중심의 레거시 구조다. 요청받은 기능을 마이그레이션할 때만 목표 구조로 옮긴다. 폴더 정리만을 이유로 요청 범위 밖의 파일을 이동하지 않는다.
 
+### 이전 순서
+
+목표 구조로 한 번에 옮기지 않는다. **공유 기반을 먼저 옮기고, 기능은 손댈 때 하나씩** 옮긴다.
+
+**0단계 — 공유 기반 (기능 이전 전에 1회, 로직 변경 없이 이동만)**
+
+| 옮길 것 | 지금 | 목표 |
+|---|---|---|
+| `PopoverChrome` | `Features/MenuBar/MenuBarPopover.swift` 안 | `Presentation/DesignSystem/` |
+| 순수 규칙 | `Features/Mind/MemoClassifier.swift` 등 | `Domain/Policies/` |
+| `@Model` 19종 | `Models/` | `Data/DataSources/Local/SwiftData/Models/` |
+| OS 연동 | `Utilities/NotificationManager.swift` 등 | `Data/DataSources/System/` |
+| 순수 도구 | `Utilities/KoreanParticle.swift` 등 | `Presentation/DesignSystem/` 또는 `Domain/` |
+
+`PopoverChrome` 이 먼저인 이유: 기능 10개가 쓰는데 한 기능 파일 안에 묻혀 있어, 어느 기능을 옮기든 걸린다.
+
+**1단계 — 파일럿 1개**
+
+`Reward`(1,598 LOC, `@Query` 1곳, 모델 2개)를 View → ViewModel → Repository → Domain Entity 까지 끝까지 옮긴다. 작지만 Repository 경로 전체를 지난다. 여기서 정한 패턴을 이후 기능이 복제한다.
+
+파일럿에서 반드시 결론 낼 것:
+- Repository 쓰기 후 ViewModel 갱신 경로 (`@Query` 자동 갱신을 무엇으로 대체하나)
+- 페이징 방식 (오프셋 vs 커서)
+- Entity ↔ `@Model` Mapper 를 둘 위치
+
+**2단계 이후 — 손대는 기능부터**
+
+정해진 행진표는 없다. §0 의 "요청 범위를 벗어난 마이그레이션을 강행하지 않는다"가 우선한다.
+기능을 수정할 일이 생기면 그때 그 기능을 옮긴다. 참고 순서는 다음과 같다.
+
+| 우선 | 기능 | 근거 |
+|---|---|---|
+| 높음 | `Mind` | `@Query` 4곳으로 최다. 활발히 개발 중 |
+| 높음 | `Achievement` | 9,854 LOC 단일 파일. 분할이 선행돼야 함 |
+| 중간 | `Timer` · `News` · `Tracker` | 규모가 작고 경계가 뚜렷 |
+| 중간 | `Lab` | SwiftData 를 안 쓴다. **Gateway/Adapter 경로의 파일럿**으로 적합 |
+| 낮음 | `Stats`(14,266) · `Settings`(9,146) · `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
+| 보류 | `QuickMemo` · `MenuBar` · `Hub` · `Developer` | 역할이 겹치거나 DEBUG 전용. 정리 여부부터 판단 |
+
+**각 단계의 검증**
+
+파일 이동만 한 단계는 `xcodegen generate` → 빌드 → 관련 테스트. 이동 커밋과 내용 변경 커밋을 분리한다(`git log --follow` 가 끊기고 회귀 원인을 못 가린다).
+
+기능 이전 단계는 §7 검증 매트릭스를 따른다. R1(반쪽 마이그레이션 금지)이 단계 경계를 정한다 — 한 기능을 시작했으면 그 기능의 `@Query` 를 모두 없애고 끝낸다.
+
 ### 독립 실행 프로그램
 
 저장소 루트의 현재 Agents/news_report/는 Swift 앱 계층이 아니라 별도로 실행되는 Python sidecar다. 목표 이름은 Sidecars/news_report/이며, 경로 변경은 project.yml, Makefile, 계약과 문서를 함께 수정하는 독립된 이동 작업으로 수행한다. 명시적으로 요청받기 전에는 이름을 바꾸지 않는다.
