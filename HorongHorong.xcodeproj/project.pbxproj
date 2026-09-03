@@ -17,6 +17,7 @@
 		02766D7095C0CC0D2BD72077 /* TodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AE48BB0B02BE537399784C /* TodoItem.swift */; };
 		027C7AFAFAE0A973AF715665 /* QuickNote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 532C0CE0A18C7B5A5CF5A07B /* QuickNote.swift */; };
 		0289F382ABF276F77BD078CA /* AppIconManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BB758EEE49CCA072ED8060 /* AppIconManager.swift */; };
+		02E79743E2697CD6DCAD9ACE /* FocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEF616ED78677435847A282 /* FocusSessionRepository.swift */; };
 		031CF39EF07FDE500B29CA06 /* FocusNudgeSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA1EA3A56593CFDEC4444715 /* FocusNudgeSettingsStore.swift */; };
 		043A64915511FFD7806B2B14 /* MLXModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF7167773C553C08A59165D /* MLXModelPicker.swift */; };
 		048CC6DBF3A20A7A124DABFA /* AILabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E2F4B47B282506A742D35E /* AILabView.swift */; };
@@ -64,6 +65,7 @@
 		1C92A4119D8DEC84B3B60A92 /* SleepGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11844F5E2014C8C20FA1CBD8 /* SleepGateway.swift */; };
 		1CAD7AB6A972872AB1B1522C /* AttentionThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0327985821E5D309FC544549 /* AttentionThresholdStore.swift */; };
 		1D3B30368F33CBBAB514BA83 /* AchievementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7AEC7F1CB8D55E1671A3A2 /* AchievementModels.swift */; };
+		1D627F2D125145A074FB4B73 /* FocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEF616ED78677435847A282 /* FocusSessionRepository.swift */; };
 		1DFD4613CA730580197576CD /* AchievementSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782E988F4A4E7AED59512FD3 /* AchievementSummaryView.swift */; };
 		1E34B0A6ED80D938F1BFB34F /* AchievementGoalManagementSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60882BAB543426E73480331F /* AchievementGoalManagementSheet.swift */; };
 		1E54F1E7D119A96E8DD02E5E /* AchievementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1659D5B0BAB1D2F7F37D6B /* AchievementRepository.swift */; };
@@ -139,6 +141,7 @@
 		3A671FA2CC5885AEA2BBA419 /* HotkeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3452C2E4C01A31F049181BD1 /* HotkeyStore.swift */; };
 		3A9432626F6D41D1762CCDFB /* RewardTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523FA0B797E2254EE17C7D45 /* RewardTabView.swift */; };
 		3AE7C27A62706518DE95F2D9 /* AchievementPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5616DA83E2AD407ED6824202 /* AchievementPickers.swift */; };
+		3AFFEE9FD5816F4AF7367B51 /* SwiftDataFocusSessionRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8746146F486876CE7D56A9B /* SwiftDataFocusSessionRepositoryTests.swift */; };
 		3B20FF6A4DCBFF14521EDAF3 /* NewsScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14507FB1818716125CEF7737 /* NewsScheduler.swift */; };
 		3BE7095114811E8AC40E5C1C /* NewsUsageEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3EF6C946C88DC5725F8175E /* NewsUsageEstimator.swift */; };
 		3C27E1042C7FEA0FDA43A21F /* PomodoroTaskCandidateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA240C5CAEF1700F07528C4E /* PomodoroTaskCandidateTests.swift */; };
@@ -298,6 +301,7 @@
 		8E2DDF041E4930C65BBEDF88 /* VaultCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01EEEF8FE2FF39482F4CF1B4 /* VaultCatalog.swift */; };
 		8F1975F199945A346C15157B /* AchievementGoalSuggestionBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22F521AF636AEAFE73BF862 /* AchievementGoalSuggestionBuilder.swift */; };
 		8FA98DC67C1C787A20F4203D /* QuickNoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C350A98A1344360D3E157D /* QuickNoteBrowserView.swift */; };
+		9005DDDA4A498C225B624F7E /* SwiftDataFocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2173D516EBF176F2724E01C /* SwiftDataFocusSessionRepository.swift */; };
 		91DC74A55D4C9D3F7A6C9FAC /* MemoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752E765C19ED682899EFF22D /* MemoSection.swift */; };
 		9223F1ACB039B0BD67F6B69A /* PomodoroReflectionEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F040471C0C99E01D2804E2 /* PomodoroReflectionEditSheet.swift */; };
 		93698F28493E4FB38AF57F3E /* CompanionSpriteMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C766A4B4AA93365FBB3093 /* CompanionSpriteMetrics.swift */; };
@@ -363,6 +367,7 @@
 		ABD41643DF95BDA81E6D87E9 /* QuickNoteRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87A4339966724E252B493E17 /* QuickNoteRepository.swift */; };
 		AC74AA20D1D54FB1DFF3030C /* TodoBucket.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5F9E3C7A061587EAA99838A /* TodoBucket.swift */; };
 		ACD15784AE20917933640A8C /* DiaryEntryDuplicateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D0617F80C52FC659782D6B4 /* DiaryEntryDuplicateTests.swift */; };
+		ACFF5557A68071AE1B08E3D9 /* SwiftDataFocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2173D516EBF176F2724E01C /* SwiftDataFocusSessionRepository.swift */; };
 		AE028B220DE19C98C389E7FF /* AgentKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = A154A43329B25F5DD84CD528 /* AgentKind.swift */; };
 		AE4CD4E3CE1BA7DFF05BB123 /* SuggestionModelUnloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0E21E76F99C264A651BB5 /* SuggestionModelUnloader.swift */; };
 		AF2558AA676039691CD5291C /* NewsJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22350FFBE1E97CBB869DB36 /* NewsJob.swift */; };
@@ -747,6 +752,7 @@
 		AF5562C7D9D09C0D5E90FE31 /* MemoDurationEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoDurationEstimator.swift; sourceTree = "<group>"; };
 		B07A535A9CDE7A856AF5AD5F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B136EEFAACA04AA87AC7C891 /* FocusScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreTests.swift; sourceTree = "<group>"; };
+		B2173D516EBF176F2724E01C /* SwiftDataFocusSessionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataFocusSessionRepository.swift; sourceTree = "<group>"; };
 		B2190648ED872F82BC91540F /* RewardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardViewModelTests.swift; sourceTree = "<group>"; };
 		B22F521AF636AEAFE73BF862 /* AchievementGoalSuggestionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementGoalSuggestionBuilder.swift; sourceTree = "<group>"; };
 		B26226EB1C35C0C49F368472 /* AIRunLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRunLog.swift; sourceTree = "<group>"; };
@@ -770,6 +776,7 @@
 		C5890C956AEFA324A5A1C51A /* ReminderListOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderListOption.swift; sourceTree = "<group>"; };
 		C5F9E3C7A061587EAA99838A /* TodoBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoBucket.swift; sourceTree = "<group>"; };
 		C848AFFD27FE78B0F32159D0 /* RewardLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardLedgerTests.swift; sourceTree = "<group>"; };
+		C8746146F486876CE7D56A9B /* SwiftDataFocusSessionRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataFocusSessionRepositoryTests.swift; sourceTree = "<group>"; };
 		CA8273A0DC79CB5BD6051854 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		CADCBBA073A101670F2304F6 /* MemoReminderLinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoReminderLinkService.swift; sourceTree = "<group>"; };
 		CBED7C99B4C2430CB7C96D83 /* AchievementDataBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementDataBuilder.swift; sourceTree = "<group>"; };
@@ -791,6 +798,7 @@
 		D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataRewardRepositoryTests.swift; sourceTree = "<group>"; };
 		DA003DE36768E94825C2E07A /* Memo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Memo.swift; sourceTree = "<group>"; };
 		DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionBriefing.swift; sourceTree = "<group>"; };
+		DCEF616ED78677435847A282 /* FocusSessionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSessionRepository.swift; sourceTree = "<group>"; };
 		DCF423D2618F1E211EF966F2 /* LanternButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanternButtonStyles.swift; sourceTree = "<group>"; };
 		DCF7167773C553C08A59165D /* MLXModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXModelPicker.swift; sourceTree = "<group>"; };
 		DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualSegmentEditorView.swift; sourceTree = "<group>"; };
@@ -1093,6 +1101,7 @@
 				B976AD6C00094C94EA6E5191 /* FileSystemVaultRepository.swift */,
 				24BF28A6F98CE0B18F0A140C /* SwiftDataAchievementRepository.swift */,
 				15E1DECF6C008560F67C3308 /* SwiftDataDiaryRepository.swift */,
+				B2173D516EBF176F2724E01C /* SwiftDataFocusSessionRepository.swift */,
 				E25ADA4F50B7308032DE8343 /* SwiftDataNewsRepository.swift */,
 				EF12E4AA604C4FF0A917B10C /* SwiftDataPomodoroTaskRepository.swift */,
 				CDA58C507B6ECC6BDD37FBC0 /* SwiftDataQuickNoteRepository.swift */,
@@ -1246,6 +1255,7 @@
 				CC60BDB2A30491E0AED1E7BB /* SchemaVersioningTests.swift */,
 				9285AA21F4EDE4D8D6EEA785 /* SuggestionExecutionStrategyTests.swift */,
 				BEC80AA67EE4CE5B548952A0 /* SwiftDataAchievementRepositoryTests.swift */,
+				C8746146F486876CE7D56A9B /* SwiftDataFocusSessionRepositoryTests.swift */,
 				0B2006B5F5B428A06ED848FB /* SwiftDataPomodoroTaskRepositoryTests.swift */,
 				D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
@@ -1644,6 +1654,7 @@
 			children = (
 				1C1659D5B0BAB1D2F7F37D6B /* AchievementRepository.swift */,
 				30BED56A12CDF86CC7562B91 /* DiaryRepository.swift */,
+				DCEF616ED78677435847A282 /* FocusSessionRepository.swift */,
 				6E4120BACDCF3B8ECF9BB2CC /* NewsRepository.swift */,
 				E9746576BAAB02DC09C3F462 /* PomodoroTaskRepository.swift */,
 				87A4339966724E252B493E17 /* QuickNoteRepository.swift */,
@@ -1943,6 +1954,7 @@
 				8B2B3FE31F44FD243A42C37C /* FocusScoreHistory.swift in Sources */,
 				5C133D6869A17AC0EF866C0A /* FocusScoreMonitor.swift in Sources */,
 				2670CDE14F4197DC637FECBE /* FocusSession.swift in Sources */,
+				1D627F2D125145A074FB4B73 /* FocusSessionRepository.swift in Sources */,
 				F6B88F3E1063A778E745ACAF /* FocusTrend.swift in Sources */,
 				4F37D3F0C6F715B6B0CD486E /* FoundationModelsGoalSuggestionProvider.swift in Sources */,
 				1A6C7DA23BA0F48C7DEFCC48 /* GeneralPage.swift in Sources */,
@@ -2048,6 +2060,7 @@
 				B064B92F7102CC859E6090B0 /* SuggestionModelUnloader.swift in Sources */,
 				05133FC57DB371D07885F732 /* SwiftDataAchievementRepository.swift in Sources */,
 				B13D8CEB03D592A7F7FB1698 /* SwiftDataDiaryRepository.swift in Sources */,
+				ACFF5557A68071AE1B08E3D9 /* SwiftDataFocusSessionRepository.swift in Sources */,
 				505EAD23DA57B2E8B1BED9EC /* SwiftDataNewsRepository.swift in Sources */,
 				60BA8BF35BF25D33CCD4B688 /* SwiftDataPomodoroTaskRepository.swift in Sources */,
 				A11A86B096808BB9EE3C0FBC /* SwiftDataQuickNoteRepository.swift in Sources */,
@@ -2176,6 +2189,7 @@
 				30E2986E0740F8C90E16BF90 /* FocusScoreHistory.swift in Sources */,
 				43B78417AB8E270AAFC92D5C /* FocusScoreMonitor.swift in Sources */,
 				10C43F3CFE8E29963D91E55D /* FocusSession.swift in Sources */,
+				02E79743E2697CD6DCAD9ACE /* FocusSessionRepository.swift in Sources */,
 				D267A1F7EE53DE6896C4AF36 /* FocusTrend.swift in Sources */,
 				44ED021FF495DB55BC81A9EB /* FoundationModelsGoalSuggestionProvider.swift in Sources */,
 				6255BEFEB2A8D1DE41BD3A09 /* GeneralPage.swift in Sources */,
@@ -2281,6 +2295,7 @@
 				AE4CD4E3CE1BA7DFF05BB123 /* SuggestionModelUnloader.swift in Sources */,
 				B35A3BD43ED96E0048FB5BEE /* SwiftDataAchievementRepository.swift in Sources */,
 				4A6537C7B5A89CF6E3DB155E /* SwiftDataDiaryRepository.swift in Sources */,
+				9005DDDA4A498C225B624F7E /* SwiftDataFocusSessionRepository.swift in Sources */,
 				CAC371368F2FA96322F4E759 /* SwiftDataNewsRepository.swift in Sources */,
 				749C321485F568381B191C2E /* SwiftDataPomodoroTaskRepository.swift in Sources */,
 				7BF093892429377C4DBA414A /* SwiftDataQuickNoteRepository.swift in Sources */,
@@ -2353,6 +2368,7 @@
 				2F9975A03095D6C00BE6B6F0 /* SchemaVersioningTests.swift in Sources */,
 				E8A977F2D213038EA96275D1 /* SuggestionExecutionStrategyTests.swift in Sources */,
 				7BFFA9CF87E5EFAAE07C3D53 /* SwiftDataAchievementRepositoryTests.swift in Sources */,
+				3AFFEE9FD5816F4AF7367B51 /* SwiftDataFocusSessionRepositoryTests.swift in Sources */,
 				39CFD58E6F6723454B060AFC /* SwiftDataPomodoroTaskRepositoryTests.swift in Sources */,
 				D572FFFFD409E12DD01351B2 /* SwiftDataRewardRepositoryTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,

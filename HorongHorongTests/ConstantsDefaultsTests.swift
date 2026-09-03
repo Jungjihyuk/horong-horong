@@ -1544,12 +1544,17 @@ final class ConstantsDefaultsTests: XCTestCase {
         appState.focusMinutes = 50
         appState.breakMinutes = 5
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepository(
+            SwiftDataFocusSessionRepository(context: context),
+            reflectionContext: context
+        )
 
         manager.startFocus(category: "개발")
         appState.remainingSeconds = 31 * 60 + 18
-        let session = try XCTUnwrap(manager.endFocusAndRecord())
+        manager.endFocusAndRecord()
 
+        // `endFocusAndRecord` 는 이제 `@Model` 을 돌려주지 않는다. 저장된 것을 확인한다.
+        let session = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
         XCTAssertEqual(appState.timerState, .idle)
         XCTAssertEqual(session.actualFocusSeconds, 18 * 60 + 42)
         XCTAssertEqual(session.recordedFocusSeconds, 18 * 60 + 42)
@@ -1600,7 +1605,10 @@ final class ConstantsDefaultsTests: XCTestCase {
         let appState = AppState()
         appState.focusMinutes = 30
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepository(
+            SwiftDataFocusSessionRepository(context: context),
+            reflectionContext: context
+        )
         manager.startFocus(category: "개발")
 
         let session = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
@@ -1632,7 +1640,10 @@ final class ConstantsDefaultsTests: XCTestCase {
         let context = container.mainContext
         let appState = AppState()
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepository(
+            SwiftDataFocusSessionRepository(context: context),
+            reflectionContext: context
+        )
 
         manager.startFocus(category: "개발")
         manager.discardCurrentFocus()

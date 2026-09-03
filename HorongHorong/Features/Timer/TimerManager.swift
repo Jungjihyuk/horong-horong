@@ -1,5 +1,5 @@
-import Foundation
 import SwiftData
+import Foundation
 import CoreGraphics
 
 private struct PomodoroTaskContext {
@@ -7,15 +7,24 @@ private struct PomodoroTaskContext {
     let taskTitleSnapshot: String?
 }
 
+/// **`@MainActor` 인 이유**: 타이머 콜백으로 화면 상태(`AppState`)를 고치고 알림을 띄운다.
+/// 원래도 메인 스레드에서만 돌던 것을 이제 컴파일러가 지킨다.
+@MainActor
 @Observable
-final class TimerManager: @unchecked Sendable {
+final class TimerManager {
     private var timer: Timer?
     private var postBreakPromptTimer: Timer?
     private var appState: AppState
-    private var modelContext: ModelContext?
-    private var currentSession: FocusSession?
+    private var repository: FocusSessionRepository?
+    /// 회고 패널에만 넘기는 컨텍스트. 그 화면이 저장소로 옮겨지면 사라진다. `[확인 필요]`
+    private var reflectionContext: ModelContext?
+    /// 진행 중인 세션의 **식별자만** 든다. `@Model` 을 들면 그게 화면 쪽까지 새어 나온다.
+    private var currentSessionID: UUID?
+    /// 이번 집중이 몇 분짜리였나. 타이머가 끝까지 갔을 때 기록할 시간을 여기서 안다.
+    private var currentFocusMinutes = 0
     private var lastCompletedTaskContext: PomodoroTaskContext?
-    private var linkedTaskCompletionObserver: NSObjectProtocol?
+    /// `deinit` 이 액터 밖에서 읽어야 해서 격리에서 뺀다. 값을 만든 뒤로 바뀌지 않는다.
+    @ObservationIgnored nonisolated(unsafe) private var linkedTaskCompletionObserver: NSObjectProtocol?
 
     private(set) var canContinueLastTask = true
 
@@ -36,13 +45,16 @@ final class TimerManager: @unchecked Sendable {
     }
 
     deinit {
-        if let linkedTaskCompletionObserver {
-            NotificationCenter.default.removeObserver(linkedTaskCompletionObserver)
+        // `deinit` 은 액터 밖에서 돌 수 있어 격리된 프로퍼티를 읽을 수 없다.
+        // 관찰자만 떼면 되므로 지역 사본을 쓴다.
+        if let observer = linkedTaskCompletionObserver {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
+    func setRepository(_ repository: FocusSessionRepository, reflectionContext: ModelContext) {
+        self.repository = repository
+        self.reflectionContext = reflectionContext
     }
 
     func startFocus(
@@ -55,18 +67,15 @@ final class TimerManager: @unchecked Sendable {
         appState.timerState = .focusing
         appState.remainingSeconds = appState.focusMinutes * 60
 
-        let session = FocusSession(
+        currentFocusMinutes = appState.focusMinutes
+        currentSessionID = repository?.startFocus(
             focusMinutes: appState.focusMinutes,
             breakMinutes: appState.breakMinutes,
             category: category,
             linkedMemoID: linkedMemoID,
             taskTitleSnapshot: taskTitleSnapshot
         )
-        currentSession = session
         focusInputActiveSeconds = 0
-        modelContext?.insert(session)
-        try? modelContext?.save()
-
         startCountdown()
     }
 
@@ -79,15 +88,13 @@ final class TimerManager: @unchecked Sendable {
     func pause(at now: Date = Date()) {
         guard appState.timerState == .focusing else { return }
         timer?.invalidate()
-        currentSession?.recordPauseStarted(at: now)
-        try? modelContext?.save()
+        if let currentSessionID { repository?.recordPauseStarted(id: currentSessionID, at: now) }
         appState.timerState = .paused
     }
 
     func resume(at now: Date = Date()) {
         guard appState.timerState == .paused else { return }
-        currentSession?.recordPauseEnded(at: now)
-        try? modelContext?.save()
+        if let currentSessionID { repository?.recordPauseEnded(id: currentSessionID, at: now) }
         appState.timerState = .focusing
         startCountdown()
     }
@@ -112,7 +119,8 @@ final class TimerManager: @unchecked Sendable {
         )
     }
 
-    static func elapsedFocusSeconds(
+    /// 순수 계산이라 액터와 무관하다. 클래스가 `@MainActor` 가 되면서 딸려 갔던 것을 뗀다.
+    nonisolated static func elapsedFocusSeconds(
         plannedSeconds: Int,
         remainingSeconds: Int
     ) -> Int {
@@ -125,39 +133,35 @@ final class TimerManager: @unchecked Sendable {
     }
 
     @discardableResult
-    func endFocusAndRecord() -> FocusSession? {
+    /// 타이머가 끝나기 전에 사용자가 «기록하고 끝내기» 를 눌렀을 때.
+    func endFocusAndRecord() {
         guard appState.timerState == .focusing || appState.timerState == .paused,
-              let session = currentSession else {
-            return nil
+              let sessionID = currentSessionID else {
+            return
         }
 
         timer?.invalidate()
         timer = nil
         cancelPostBreakPrompt()
 
+        // 1초도 안 했으면 기록할 것이 없다.
         let actualSeconds = currentFocusElapsedSeconds
         guard actualSeconds > 0 else {
             discardCurrentFocus()
-            return nil
+            return
         }
 
-        let endedAt = Date()
-        session.recordPauseEnded(at: endedAt)
-        session.endedAt = endedAt
-        session.completed = true
-        session.actualFocusSeconds = actualSeconds
-        session.endKind = .recordedEarly
-        session.inputActiveSeconds = focusInputActiveSeconds
-        updateLastCompletedTaskContext(for: session)
-        try? modelContext?.save()
-        recordCompletedFocus(session: session)
-        NotificationCenter.default.post(
-            name: .pomodoroSessionDidChange,
-            object: session.id
+        let finished = repository?.finishFocus(
+            id: sessionID,
+            endedAt: Date(),
+            actualSeconds: actualSeconds,
+            inputActiveSeconds: focusInputActiveSeconds,
+            endKind: .recordedEarly
         )
+        applyFinished(finished)
+        NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: sessionID)
 
-        let completedSessionID = session.id
-        currentSession = nil
+        currentSessionID = nil
         focusInputActiveSeconds = 0
         appState.timerState = .idle
         appState.remainingSeconds = 0
@@ -166,10 +170,9 @@ final class TimerManager: @unchecked Sendable {
             forKey: Constants.AppStorageKey.pomodoroReflectionEnabled
         ) {
             Task { @MainActor [weak self] in
-                self?.showReflection(focusSessionID: completedSessionID)
+                self?.showReflection(focusSessionID: sessionID)
             }
         }
-        return session
     }
 
     func discardCurrentFocus() {
@@ -181,12 +184,9 @@ final class TimerManager: @unchecked Sendable {
         timer = nil
         cancelPostBreakPrompt()
 
-        let discardedSessionID = currentSession?.id
-        if let currentSession, let modelContext {
-            modelContext.delete(currentSession)
-            try? modelContext.save()
-        }
-        currentSession = nil
+        let discardedSessionID = currentSessionID
+        if let discardedSessionID { repository?.discardFocus(id: discardedSessionID) }
+        currentSessionID = nil
         focusInputActiveSeconds = 0
         appState.timerState = .idle
         appState.remainingSeconds = 0
@@ -209,12 +209,8 @@ final class TimerManager: @unchecked Sendable {
         timer = nil
         cancelPostBreakPrompt()
 
-        if let session = currentSession, !session.completed {
-            session.endedAt = Date()
-            session.completed = false
-            try? modelContext?.save()
-        }
-        currentSession = nil
+        if let currentSessionID { repository?.abandonFocus(id: currentSessionID, endedAt: Date()) }
+        currentSessionID = nil
 
         appState.timerState = .idle
         appState.remainingSeconds = 0
@@ -229,7 +225,7 @@ final class TimerManager: @unchecked Sendable {
             )
             return
         }
-        recordBreakTransition(
+        repository?.recordBreakTransition(
             breakEndedAt: prompt.breakEndedAt,
             decision: .sameTaskReturn,
             previousCategory: prompt.previousCategory,
@@ -244,7 +240,7 @@ final class TimerManager: @unchecked Sendable {
 
     func resolveBreakTransition(_ decision: BreakTransitionDecisionKind, nextCategory: String? = nil) {
         guard let prompt = appState.breakTransitionPrompt else { return }
-        recordBreakTransition(
+        repository?.recordBreakTransition(
             breakEndedAt: prompt.breakEndedAt,
             decision: decision,
             previousCategory: prompt.previousCategory,
@@ -296,21 +292,18 @@ final class TimerManager: @unchecked Sendable {
     private func handleTimerComplete() {
         switch appState.timerState {
         case .focusing:
-            let completedSessionID = currentSession?.id
-            if let session = currentSession {
-                session.endedAt = Date()
-                session.completed = true
-                session.actualFocusSeconds = max(0, session.focusMinutes * 60)
-                session.endKind = .timerCompleted
-                updateLastCompletedTaskContext(for: session)
-                session.inputActiveSeconds = focusInputActiveSeconds
-                try? modelContext?.save()
-                // 완료된 집중 세션을 통계(AppUsageRecord)에 반영한다.
-                recordCompletedFocus(session: session)
-                NotificationCenter.default.post(
-                    name: .pomodoroSessionDidChange,
-                    object: session.id
+            let completedSessionID = currentSessionID
+            if let sessionID = completedSessionID {
+                // 끝까지 갔으므로 계획한 시간을 그대로 기록한다.
+                let finished = repository?.finishFocus(
+                    id: sessionID,
+                    endedAt: Date(),
+                    actualSeconds: max(0, currentFocusMinutes * 60),
+                    inputActiveSeconds: focusInputActiveSeconds,
+                    endKind: .timerCompleted
                 )
+                applyFinished(finished)
+                NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: sessionID)
             } else {
                 canContinueLastTask = true
             }
@@ -326,8 +319,12 @@ final class TimerManager: @unchecked Sendable {
             )
         case .breaking:
             let breakEndedAt = Date()
-            let previousCategory = currentSession?.category ?? Constants.defaultFocusCategory
-            currentSession = nil
+            // 쉬는 시간에 들어온 시점에는 집중 세션이 이미 닫혀 있다.
+            // 이어서 할 갈래를 정할 때 쓰는 카테고리는 마지막으로 고른 값에서 읽는다.
+            let previousCategory = UserDefaults.standard
+                .string(forKey: Constants.AppStorageKey.selectedFocusCategory)
+                ?? Constants.defaultFocusCategory
+            currentSessionID = nil
             appState.timerState = .idle
             schedulePostBreakTransitionPrompt(
                 breakEndedAt: breakEndedAt,
@@ -399,12 +396,13 @@ final class TimerManager: @unchecked Sendable {
         }
     }
 
-    @MainActor
+    /// 회고 패널은 아직 `ModelContext` 를 직접 쓴다. 그 화면을 옮길 때 함께 정리한다.
+    /// `[확인 필요]`
     private func showReflection(focusSessionID: UUID?) {
-        guard let focusSessionID, let modelContext else { return }
+        guard let focusSessionID, let reflectionContext else { return }
         PomodoroReflectionPanel.shared.show(
             focusSessionID: focusSessionID,
-            modelContext: modelContext
+            modelContext: reflectionContext
         )
     }
 
@@ -429,8 +427,8 @@ final class TimerManager: @unchecked Sendable {
         postBreakPromptTimer?.invalidate()
         postBreakPromptTimer = nil
         guard appState.timerState == .idle else { return }
-        guard !hasFocusSession(startingAfter: breakEndedAt) else { return }
-        guard !hasProductiveActivity(since: breakEndedAt) else { return }
+        guard !(repository?.hasFocusSession(startingAfter: breakEndedAt) ?? false) else { return }
+        guard !(repository?.hasProductiveActivity(since: breakEndedAt, minimumSeconds: 60) ?? false) else { return }
         presentPostBreakTransitionPrompt(breakEndedAt: breakEndedAt, previousCategory: previousCategory)
     }
 
@@ -465,90 +463,29 @@ final class TimerManager: @unchecked Sendable {
         return stored > 0 ? stored : Constants.defaultPostBreakTransitionPromptDelayMinutes
     }
 
-    private func hasFocusSession(startingAfter date: Date) -> Bool {
-        guard let context = modelContext else { return false }
-        let descriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { $0.startedAt > date }
-        )
-        return ((try? context.fetchCount(descriptor)) ?? 0) > 0
-    }
 
-    private func canContinueTask(linkedMemoID: UUID?) -> Bool {
-        guard let linkedMemoID else { return true }
-        guard let context = modelContext else { return true }
-        let memoID = linkedMemoID
-        var descriptor = FetchDescriptor<Memo>(
-            predicate: #Predicate { $0.id == memoID }
-        )
-        descriptor.fetchLimit = 1
-        guard let memo = try? context.fetch(descriptor).first else { return false }
-        return !memo.isCompletedValue && !memo.isRecentlyDeleted
-    }
 
-    private func updateLastCompletedTaskContext(for session: FocusSession) {
-        canContinueLastTask = canContinueTask(linkedMemoID: session.linkedMemoID)
-        if let linkedMemoID = session.linkedMemoID, canContinueLastTask {
+    /// 끝난 세션을 보고 «이어서 같은 일을 할 수 있는가» 를 갱신한다.
+    /// 그 판단(할 일이 아직 살아 있나)은 저장소가 이미 해서 넘겨준다.
+    private func applyFinished(_ finished: FinishedFocusSession?) {
+        guard let finished else {
+            canContinueLastTask = true
+            lastCompletedTaskContext = nil
+            return
+        }
+        canContinueLastTask = finished.isTaskStillOpen
+        if let linkedMemoID = finished.linkedMemoID, finished.isTaskStillOpen {
             lastCompletedTaskContext = PomodoroTaskContext(
                 linkedMemoID: linkedMemoID,
-                taskTitleSnapshot: session.taskTitleSnapshot
+                taskTitleSnapshot: finished.taskTitleSnapshot
             )
         } else {
             lastCompletedTaskContext = nil
         }
     }
 
-    private func hasProductiveActivity(since date: Date) -> Bool {
-        guard let context = modelContext else { return false }
-        let descriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.endTime > date }
-        )
-        let segments = (try? context.fetch(descriptor)) ?? []
-        let productiveSeconds = segments.reduce(0) { total, segment in
-            guard Constants.postBreakProductiveCategories.contains(segment.category) else {
-                return total
-            }
-            let start = max(segment.startTime, date)
-            guard segment.endTime > start else { return total }
-            return total + Int(segment.endTime.timeIntervalSince(start))
-        }
-        return productiveSeconds >= 60
-    }
 
-    private func recordBreakTransition(
-        breakEndedAt: Date,
-        decision: BreakTransitionDecisionKind,
-        previousCategory: String,
-        nextCategory: String?
-    ) {
-        guard let context = modelContext else { return }
-        let intent = BreakTransitionIntent(
-            breakEndedAt: breakEndedAt,
-            decision: decision,
-            previousCategory: previousCategory,
-            nextCategory: nextCategory
-        )
-        context.insert(intent)
-        try? context.save()
-    }
 
     // MARK: - 집중 세션 통계 반영
 
-    private func recordCompletedFocus(session: FocusSession) {
-        guard let context = modelContext else { return }
-        let category = session.category ?? Constants.defaultFocusCategory
-        let seconds = session.recordedFocusSeconds
-        guard seconds > 0 else { return }
-
-        let today = Calendar.current.startOfDay(for: session.endedAt ?? Date())
-        let bundleId = Constants.focusSessionBundleId(for: category)
-        try? AppUsageRecordStore.applyDelta(
-            bundleIdentifier: bundleId,
-            appName: Constants.focusSessionAppName,
-            category: category,
-            date: today,
-            deltaSeconds: seconds,
-            modelContext: context
-        )
-        try? context.save()
-    }
 }
