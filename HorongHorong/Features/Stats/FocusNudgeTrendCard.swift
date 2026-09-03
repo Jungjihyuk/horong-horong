@@ -1,10 +1,9 @@
 import Charts
-import SwiftData
 import SwiftUI
 
 /// 실제로 표시된 집중 잔소리와 세션 몰입도의 주간 추이.
 struct FocusNudgeTrendCard: View {
-    @Environment(\.modelContext) private var modelContext
+    let repository: StatsRecordRepository
 
     @State private var weeks: [FocusTrendWeek] = []
     @State private var categoryPoints: [FocusCategoryTrendPoint] = []
@@ -112,18 +111,8 @@ struct FocusNudgeTrendCard: View {
 
     private func load() {
         let days = FocusTrendBuilder.weekCount * 7
-        let samples = FocusScoreHistory.samples(days: days, modelContext: modelContext)
-
-        guard let periodStart = Calendar.current.date(
-            byAdding: .day, value: -days, to: Date()
-        ) else { return }
-        let events = (try? modelContext.fetch(
-            FetchDescriptor<FocusNudgeEvent>(
-                predicate: #Predicate { $0.firedAt >= periodStart },
-                sortBy: [SortDescriptor(\.firedAt)]
-            )
-        )) ?? []
-        let nudgeDates = events.map(\.firedAt)
+        let samples = repository.focusScoreSamples(days: days)
+        let nudgeDates = repository.nudgeFiredDates(days: days)
 
         totalNudgeCount = nudgeDates.count
         weeks = FocusTrendBuilder.weeks(

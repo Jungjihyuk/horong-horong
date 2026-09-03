@@ -20,6 +20,12 @@ protocol StatsRecordRepository {
     /// 집중 점수 표본. 분류 설정 화면이 갈래별 분포를 보여줄 때 쓴다.
     func focusScoreSamples() -> [FocusScoreSample]
 
+    /// 최근 `days` 일의 집중 점수 표본. 추세 카드가 쓴다.
+    func focusScoreSamples(days: Int) -> [FocusScoreSample]
+
+    /// 최근 `days` 일에 띄운 넛지 시각들. 빠른 순.
+    func nudgeFiredDates(days: Int) -> [Date]
+
     /// 그 갈래로 칠해 둔 세션 색을 기본값으로 되돌린다. 갈래를 지울 때 부른다.
     /// 반환값은 되돌린 개수 — 0 이면 알릴 것이 없다.
     @discardableResult

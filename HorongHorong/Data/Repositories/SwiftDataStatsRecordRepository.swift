@@ -76,6 +76,21 @@ final class SwiftDataStatsRecordRepository: StatsRecordRepository {
         FocusScoreHistory.samples(modelContext: context)
     }
 
+    func focusScoreSamples(days: Int) -> [FocusScoreSample] {
+        FocusScoreHistory.samples(days: days, modelContext: context)
+    }
+
+    func nudgeFiredDates(days: Int) -> [Date] {
+        guard let periodStart = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else {
+            return []
+        }
+        let descriptor = FetchDescriptor<FocusNudgeEvent>(
+            predicate: #Predicate { $0.firedAt >= periodStart },
+            sortBy: [SortDescriptor(\.firedAt)]
+        )
+        return ((try? context.fetch(descriptor)) ?? []).map(\.firedAt)
+    }
+
     @discardableResult
     func resetSessionMarkerColors(for category: String) -> Int {
         (try? FocusSession.resetMarkerColors(for: category, in: context)) ?? 0

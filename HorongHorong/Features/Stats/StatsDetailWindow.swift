@@ -40,6 +40,7 @@ struct StatsDetailWindow: View {
     /// 집중 상세에만 쓰인다. 여기서는 넘기기만 한다.
     let todoRepository: TodoRepository
     let reflectionRepository: PomodoroReflectionRepository
+    let statsRepository: StatsRecordRepository
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
@@ -79,6 +80,7 @@ struct StatsDetailWindow: View {
         FocusDetailView(
             sessions: pomodoroComparisonSessions,
             reflectionRepository: reflectionRepository,
+            statsRepository: statsRepository,
             todoRepository: todoRepository,
             reflections: pomodoroReflections,
             taskCompletions: pomodoroTaskCompletions,
@@ -94,12 +96,14 @@ struct StatsDetailWindow: View {
     init(
         todoRepository: TodoRepository,
         reflectionRepository: PomodoroReflectionRepository,
+        statsRepository: StatsRecordRepository,
         initialViewMode: StatsViewMode = .daily,
         initialContentMode: StatsContentMode = .period,
         initialSelectedDate: Date? = nil
     ) {
         self.todoRepository = todoRepository
         self.reflectionRepository = reflectionRepository
+        self.statsRepository = statsRepository
         _viewMode = State(initialValue: initialViewMode)
         _contentMode = State(initialValue: initialContentMode)
         if let initialSelectedDate {
@@ -2248,6 +2252,7 @@ private struct FocusResponseBucket: Identifiable {
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
     let reflectionRepository: PomodoroReflectionRepository
+    let statsRepository: StatsRecordRepository
     /// 이 화면이 할 일을 쓰는 곳은 «할 일 연결» 시트 하나뿐이다.
     ///
     /// **`@Query` 를 걷어냈다.** 메모를 하나 고칠 때마다 이 창(4,400줄)이 통째로 다시
@@ -2445,7 +2450,7 @@ struct FocusDetailView: View {
                 } else {
                     periodFocusContent
                     // 이 카드만 기간 선택과 무관하게 최근 몇 주를 본다. 추이는 기간을 좁히면 안 보인다.
-                    FocusNudgeTrendCard()
+                    FocusNudgeTrendCard(repository: statsRepository)
                     taskGroupListSection
                 }
             }

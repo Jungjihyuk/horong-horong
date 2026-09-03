@@ -759,6 +759,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 StatsDetailWindow(
                     todoRepository: dependencies.todoRepository,
                     reflectionRepository: dependencies.reflectionRepository,
+                    statsRepository: dependencies.statsRecordRepository,
                     initialViewMode: mode,
                     initialContentMode: contentMode,
                     initialSelectedDate: referenceDate

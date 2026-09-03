@@ -36,7 +36,8 @@ struct MainHubWindow: View {
                 if openedTabs.contains(.stats), let dependencies {
                     StatsDetailWindow(
                         todoRepository: dependencies.todoRepository,
-                        reflectionRepository: dependencies.reflectionRepository
+                        reflectionRepository: dependencies.reflectionRepository,
+                        statsRepository: dependencies.statsRecordRepository
                     )
                         .hubTabVisible(appState.hubTab == .stats)
                 }
