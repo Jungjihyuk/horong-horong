@@ -1737,6 +1737,9 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(customizedStudy.markerColorKey, "pink")
     }
 
+    /// 완료·보관·삭제분은 이제 **저장소가 술어로 떨군다**
+    /// (`SwiftDataPomodoroTaskRepositoryTests` 가 그쪽을 검사한다).
+    /// 여기서는 「오늘 것인가 · 목표에 묶였는가」만 본다.
     func testPomodoroTaskCandidatesIncludeGoalLinkedAndTodayTasksOnce() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -1744,32 +1747,27 @@ final class ConstantsDefaultsTests: XCTestCase {
         let today = calendar.date(from: DateComponents(year: 2026, month: 7, day: 20, hour: 9))!
         let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 7, day: 21, hour: 9))!
 
-        let goalLinked = Memo(content: "\n  통계 회고 결과 표시\n상세 설명")
-        let todayOnly = Memo(content: "오늘 시작할 일")
-        todayOnly.startDate = today
-        let todayAndGoalLinked = Memo(content: "오늘의 목표 할 일")
-        todayAndGoalLinked.startDate = today
-        let completed = Memo(content: "완료한 오늘 할 일")
-        completed.startDate = today
-        completed.isCompletedValue = true
-        let archived = Memo(content: "보관한 일")
-        archived.startDate = today
-        archived.isArchivedValue = true
-        let future = Memo(content: "내일 시작할 일")
-        future.startDate = tomorrow
-        let noStartDate = Memo(content: "시작일이 없는 일반 할 일")
-        let primaryGoal = AchievementGoalRecord(
-            title: "포모도로 강화",
-            linkedMemoIDs: [goalLinked.id, todayAndGoalLinked.id, archived.id]
-        )
-        let duplicateGoal = AchievementGoalRecord(
-            title: "포모도로 강화",
-            linkedMemoIDs: [goalLinked.id]
-        )
+        func memo(_ content: String, start: Date? = nil) -> AchievementMemoDetail {
+            AchievementMemoDetail(
+                id: UUID(),
+                content: content,
+                icon: nil,
+                startDate: start,
+                deadline: nil,
+                updatedAt: now,
+                isCompleted: false
+            )
+        }
+
+        let goalLinked = memo("\n  통계 회고 결과 표시\n상세 설명")
+        let todayOnly = memo("오늘 시작할 일", start: today)
+        let todayAndGoalLinked = memo("오늘의 목표 할 일", start: today)
+        let future = memo("내일 시작할 일", start: tomorrow)
+        let noStartDate = memo("시작일이 없는 일반 할 일")
 
         let candidates = PomodoroTaskCandidateBuilder.candidates(
-            memos: [goalLinked, todayOnly, todayAndGoalLinked, completed, archived, future, noStartDate],
-            goalRecords: [primaryGoal, duplicateGoal],
+            memos: [goalLinked, todayOnly, todayAndGoalLinked, future, noStartDate],
+            goalLinkedMemoIDs: [goalLinked.id, todayAndGoalLinked.id],
             now: now,
             calendar: calendar
         )
@@ -1802,13 +1800,20 @@ final class ConstantsDefaultsTests: XCTestCase {
     func testPomodoroTaskCandidatePreservesFullTitleForSessionSnapshot() throws {
         let fullTitle = String(repeating: "긴 작업 제목 ", count: 8)
             .trimmingCharacters(in: .whitespaces)
-        let memo = Memo(content: "\(fullTitle)\n상세 설명")
-        let goal = AchievementGoalRecord(title: "장기 목표", linkedMemoIDs: [memo.id])
+        let memo = AchievementMemoDetail(
+            id: UUID(),
+            content: "\(fullTitle)\n상세 설명",
+            icon: nil,
+            startDate: nil,
+            deadline: nil,
+            updatedAt: Date(),
+            isCompleted: false
+        )
 
         let candidate = try XCTUnwrap(
             PomodoroTaskCandidateBuilder.candidates(
                 memos: [memo],
-                goalRecords: [goal]
+                goalLinkedMemoIDs: [memo.id]
             ).first
         )
 

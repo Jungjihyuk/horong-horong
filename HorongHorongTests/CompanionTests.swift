@@ -1298,10 +1298,13 @@ final class CompanionOnboardingDemoStoreTests: XCTestCase {
         XCTAssertEqual(goalRecords.first?.linkedMemoIDs.count, 3)
         XCTAssertEqual(memos.filter(\.isCompletedValue).count, 1)
         XCTAssertGreaterThan(segments.count, 60)
+        // 저장소를 거친다 — 완료·보관·삭제분을 떨구는 일이 이제 저장소 몫이라
+        // 빌더에 곧장 넘기면 완료한 할일까지 후보로 잡힌다.
+        let taskRepository = SwiftDataPomodoroTaskRepository(context: context)
         XCTAssertEqual(
             PomodoroTaskCandidateBuilder.candidates(
-                memos: memos,
-                goalRecords: goalRecords,
+                memos: taskRepository.candidateMemos(),
+                goalLinkedMemoIDs: taskRepository.goalLinkedMemoIDs(),
                 now: now
             ).count,
             5

@@ -16,10 +16,20 @@ enum TodayPlanningReminderPolicy {
     ) -> Bool {
         guard !memo.isCompletedValue,
               !memo.isArchivedValue,
-              !memo.isRecentlyDeleted,
-              let startDate = memo.startDate else {
+              !memo.isRecentlyDeleted else {
             return false
         }
+        return isTodayTask(startDate: memo.startDate, now: now, calendar: calendar)
+    }
+
+    /// `@Model` 없이 같은 판정을 한다. 이미 살아 있는 할일만 넘어온 자리에서 쓴다
+    /// (뽀모도로 후보 목록). 규칙이 두 벌이 되지 않게 위 버전이 이걸 부른다.
+    static func isTodayTask(
+        startDate: Date?,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard let startDate else { return false }
         return calendar.isDate(startDate, inSameDayAs: now)
     }
 

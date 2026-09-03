@@ -1,4 +1,3 @@
-import SwiftData
 import SwiftUI
 
 /*
@@ -17,7 +16,11 @@ import SwiftUI
  - 타이머 상태에 따른 컴패니언의 행동 변화는 `CompanionController`가 담당한다.
 
  현재는 화면 표시 외에도 SwiftData 조회와 포모도로 할 일 후보 정책을 함께 가진다. 이 부분을
- ViewModel로 이전할 때는 `@Query`와 후보 생성 로직을 한 번에 옮겨 절반 이전 상태를 만들지 않는다.
+ 후보 조회는 `PomodoroTaskRepository` 로 옮겼다(2026-09-03). 후보를 고르는 규칙은
+ `PomodoroTaskCandidateBuilder` 가 순수 함수로 갖고 있어 화면 없이 검사한다.
+
+ **이 기능은 아직 목표 폴더 구조로 옮기지 않았다.** 같은 폴더의 `TimerManager` 와
+ `PomodoroReflectionPanel` 이 `ModelContext` 를 직접 쓴다 — 둘을 옮겨야 `Timer` 가 끝난다.
  */
 
 struct PomodoroTaskCandidate: Identifiable, Equatable {
@@ -33,27 +36,17 @@ struct PomodoroTaskCandidate: Identifiable, Equatable {
 /// `!= true` 가 **NULL 인 행을 빠뜨리지 않는 이유**는 `normalizeMemoFlags` 가 실행할 때마다
 /// `nil` 을 `false` 로 메우기 때문이다. 그 보정이 없으면 SQL 3값 논리(`NULL != 1` → NULL)에
 /// 걸려 값이 빈 기록이 조용히 사라진다.
-private let pomodoroCandidateMemoPredicate = #Predicate<Memo> { memo in
-    memo.isCompleted != true && memo.isArchived != true && memo.deletedAt == nil
-}
-
 enum PomodoroTaskCandidateBuilder {
+    /// **순수 함수다.** 저장소가 이미 「안 끝났고 살아 있는」 할일만 준다.
     static func candidates(
-        memos: [Memo],
-        goalRecords: [AchievementGoalRecord],
+        memos: [AchievementMemoDetail],
+        goalLinkedMemoIDs linkedMemoIDs: Set<UUID>,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [PomodoroTaskCandidate] {
-        let linkedMemoIDs = Set(goalRecords.flatMap(\.linkedMemoIDs))
-
-        return memos.compactMap { memo in
-            guard !memo.isCompletedValue,
-                  !memo.isArchivedValue,
-                  !memo.isRecentlyDeleted else {
-                return nil
-            }
+        memos.compactMap { memo in
             let isToday = TodayPlanningReminderPolicy.isTodayTask(
-                memo,
+                startDate: memo.startDate,
                 now: now,
                 calendar: calendar
             )
@@ -305,19 +298,12 @@ private struct HybridPixelDigit: View {
 struct TimerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.appearanceAccentOption) private var accentOption
-    // `PomodoroTaskCandidateBuilder` 가 어차피 버리는 것들을 DB 에서 미리 거른다.
-    // 완료·아카이브·삭제분을 전부 가져와 Swift 에서 버리고 있었다.
-    //
-    // 정렬 키는 `updatedAt` 그대로 둔다 — 후보 목록이 이 순서로 **재정렬 없이 그대로**
-    // 표시되므로, 키를 바꾸면 사용자가 보는 순서가 달라진다.
-    @Query(
-        filter: pomodoroCandidateMemoPredicate,
-        sort: \Memo.updatedAt,
-        order: .reverse
-    )
-    private var candidateMemos: [Memo]
-    @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse)
-    private var goalRecords: [AchievementGoalRecord]
+    /// 거르기와 정렬은 저장소가 한다(`SwiftDataPomodoroTaskRepository` 주석 참고).
+    let repository: PomodoroTaskRepository
+
+    /// 저장소에서 읽어 둔 후보. `@Query` 를 걷어낸 자리다.
+    @State private var candidateMemos: [AchievementMemoDetail] = []
+    @State private var goalLinkedMemoIDs: Set<UUID> = []
     @State private var hoveredPreset: Constants.PomodoroPreset?
     @State private var selectedTaskID: UUID?
     @State private var showsTaskPicker = false
@@ -352,6 +338,12 @@ struct TimerView: View {
         .frame(maxWidth: .infinity, minHeight: 410, alignment: .top)
         .onAppear {
             taskReferenceDate = Date()
+            reloadCandidates()
+        }
+        // 할일은 기록 화면에서, 목표 연결은 성취 화면에서 바뀐다.
+        // `@Query` 자동 갱신을 두 알림으로 대신한다.
+        .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
+            reloadCandidates()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             taskReferenceDate = Date()
@@ -909,10 +901,15 @@ struct TimerView: View {
         )
     }
 
+    private func reloadCandidates() {
+        candidateMemos = repository.candidateMemos()
+        goalLinkedMemoIDs = repository.goalLinkedMemoIDs()
+    }
+
     private var taskCandidates: [PomodoroTaskCandidate] {
         PomodoroTaskCandidateBuilder.candidates(
             memos: candidateMemos,
-            goalRecords: goalRecords,
+            goalLinkedMemoIDs: goalLinkedMemoIDs,
             now: taskReferenceDate
         )
     }

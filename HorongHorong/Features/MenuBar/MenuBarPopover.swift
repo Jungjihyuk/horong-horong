@@ -331,13 +331,16 @@ struct MenuBarPopover: View {
     private var tabContent: some View {
         switch selectedTab {
         case .timer:
-            TimerView(
-                timerManager: timerManager,
-                requestFocusEnd: {
-                    showFocusEndPrompt = true
+            if let dependencies {
+                TimerView(
+                    repository: dependencies.pomodoroTaskRepository,
+                    timerManager: timerManager,
+                    requestFocusEnd: {
+                        showFocusEndPrompt = true
+                    }
+                ) {
+                    dismiss()
                 }
-            ) {
-                dismiss()
             }
         case .memo:
             MemoListView()
