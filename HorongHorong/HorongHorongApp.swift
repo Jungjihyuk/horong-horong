@@ -719,6 +719,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     referenceDate: referenceDate ?? Date()
                 )
                 .environment(appState)
+                .environment(\.dependencies, dependencies)
                 .modelContainer(modelContainer)
             )
         case .settings(let tab):
@@ -1086,6 +1087,10 @@ struct HorongHorongApp: App {
         MenuBarExtra {
             MenuBarPopover(timerManager: appDelegate.timerManager)
                 .environment(appDelegate.appState)
+                // 팝오버가 쓰는 것은 지금 `agentGateway` 뿐이라 SwiftData 와 무관하다.
+                // 저장소를 쓰는 화면을 팝오버에 넣을 때는 온보딩 데모 컨테이너와
+                // 어긋나지 않는지 확인한다. `[확인 필요]`
+                .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)

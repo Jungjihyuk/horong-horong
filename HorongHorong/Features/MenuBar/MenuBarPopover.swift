@@ -40,6 +40,7 @@ struct MenuBarPopover: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dependencies) private var dependencies
     @State private var selectedTab: PopoverTab
     @State private var showTelemetryConsentPrompt = false
     @State private var showFocusEndPrompt = false
@@ -347,7 +348,9 @@ struct MenuBarPopover: View {
         case .news:
             NewsView()
         case .lab:
-            LabView()
+            if let gateway = dependencies?.agentGateway {
+                LabView(gateway: gateway)
+            }
         }
     }
 

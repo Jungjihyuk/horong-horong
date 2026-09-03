@@ -16,6 +16,7 @@ final class DependencyContainer {
     let diaryRepository: DiaryRepository
     let sleepGateway: SleepGateway
     let vaultRepository: VaultRepository
+    let agentGateway: AgentGateway
 
     init(modelContainer: ModelContainer) {
         let context = modelContainer.mainContext
@@ -25,6 +26,7 @@ final class DependencyContainer {
         diaryRepository = SwiftDataDiaryRepository(context: context)
         sleepGateway = HealthSleepGateway()
         vaultRepository = FileSystemVaultRepository()
+        agentGateway = CLIAgentAdapter()
     }
 }
 
