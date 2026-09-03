@@ -29,6 +29,11 @@ final class TodoViewModelTests: XCTestCase {
         func linkableTodos(matching query: String) throws -> [TodoItem] { filter(items, query) }
 
         @discardableResult
+        func addTodayTask(content: String, icon: String?) throws -> TodoItem {
+            try add(title: content)
+        }
+
+        @discardableResult
         func add(title: String) throws -> TodoItem {
             let made = TodoItem(
                 id: UUID(), content: title, startDate: Date(), deadline: nil,

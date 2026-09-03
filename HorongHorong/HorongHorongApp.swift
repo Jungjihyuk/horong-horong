@@ -460,7 +460,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyManager.shared.setup(
             onQuickMemo: { [weak self] in
                 guard let self else { return }
-                self.quickMemoPanel.toggle(modelContext: context)
+                self.quickMemoPanel.toggle(
+                    todos: self.dependencies.todoRepository,
+                    quickNotes: self.dependencies.quickNoteRepository
+                )
             },
             onMenuBarPopover: {
                 MenuBarExtraController.toggle()
@@ -644,7 +647,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             return
         }
-        quickMemoPanel.showTodayTask(modelContext: context)
+        quickMemoPanel.showTodayTask(
+            todos: dependencies.todoRepository,
+            quickNotes: dependencies.quickNoteRepository
+        )
     }
 
     /// 날짜·시계·시간대가 바뀌면 오늘 할 일 알림 예약을 다시 잡는다.

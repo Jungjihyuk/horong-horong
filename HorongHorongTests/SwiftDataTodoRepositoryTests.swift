@@ -47,4 +47,31 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(saved.startDate, start)
         XCTAssertEqual(saved.deadline, start)
     }
+
+    // MARK: - 빠른 기록의 «오늘 할 일»
+
+    /// **지금 시각**으로 시작한다. 기록 창의 추가(오전 9시)와 다른 경로다.
+    func testAddTodayTaskStartsNow() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataTodoRepository(context: container.mainContext)
+        let before = Date()
+
+        let created = try repository.addTodayTask(content: "지금 할 일", icon: "📝")
+
+        let startDate = try XCTUnwrap(created.startDate)
+        XCTAssertGreaterThanOrEqual(startDate, before)
+        XCTAssertLessThanOrEqual(startDate, Date())
+        XCTAssertEqual(created.icon, "📝")
+        XCTAssertEqual(created.content, "지금 할 일")
+    }
+
+    /// 할 일 섹션으로 들어가야 목록에 보인다.
+    func testAddTodayTaskLandsInTodoSection() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataTodoRepository(context: container.mainContext)
+
+        try repository.addTodayTask(content: "지금 할 일", icon: nil)
+
+        XCTAssertEqual(try repository.activeTodos(matching: "").map(\.content), ["지금 할 일"])
+    }
 }

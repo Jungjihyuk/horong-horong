@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import SwiftData
 
 @MainActor
 final class QuickMemoPresentationState: ObservableObject {
@@ -16,25 +15,25 @@ final class QuickMemoPanel {
     private var panel: NSPanel?
     private var presentationState: QuickMemoPresentationState?
 
-    func toggle(modelContext: ModelContext) {
+    func toggle(todos: TodoRepository, quickNotes: QuickNoteRepository) {
         if let panel = panel, panel.isVisible {
             close()
             return
         }
-        show(modelContext: modelContext, savesAsTodayTask: false)
+        show(todos: todos, quickNotes: quickNotes, savesAsTodayTask: false)
     }
 
-    func showTodayTask(modelContext: ModelContext) {
+    func showTodayTask(todos: TodoRepository, quickNotes: QuickNoteRepository) {
         if let panel, panel.isVisible {
             presentationState?.savesAsTodayTask = true
             NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             return
         }
-        show(modelContext: modelContext, savesAsTodayTask: true)
+        show(todos: todos, quickNotes: quickNotes, savesAsTodayTask: true)
     }
 
-    private func show(modelContext: ModelContext, savesAsTodayTask: Bool) {
+    private func show(todos: TodoRepository, quickNotes: QuickNoteRepository, savesAsTodayTask: Bool) {
         let presentationState = QuickMemoPresentationState(
             savesAsTodayTask: savesAsTodayTask
         )
@@ -64,26 +63,17 @@ final class QuickMemoPanel {
         let contentView = QuickMemoView(
             presentationState: presentationState,
             onSave: { [weak self] content, icon in
-                let memo = Memo(
-                    content: content,
-                    icon: icon,
-                    section: presentationState.savesAsTodayTask ? .todo : .quickNote
-                )
-                if presentationState.savesAsTodayTask {
-                    memo.startDate = Date()
-                }
-                modelContext.insert(memo)
                 do {
-                    try modelContext.save()
+                    // 「오늘 할 일」이면 지금 시각으로 시작하는 할 일, 아니면 그냥 기록.
+                    // 오늘 계획 알림을 끄는 것도 저장소가 함께 한다.
                     if presentationState.savesAsTodayTask {
-                        NotificationManager.shared.cancel(
-                            identifier: Constants.todayPlanningReminderNotificationIdentifier
-                        )
+                        try todos.addTodayTask(content: content, icon: icon)
+                    } else {
+                        try quickNotes.add(content: content, icon: icon)
                     }
                     self?.close()
                     return true
                 } catch {
-                    modelContext.delete(memo)
                     print("빠른 메모 저장 실패: \(error.localizedDescription)")
                     return false
                 }

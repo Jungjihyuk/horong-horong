@@ -29,6 +29,13 @@ protocol TodoRepository {
     @discardableResult
     func add(title: String) throws -> TodoItem
 
+    /// **지금 시각**으로 시작하는 할 일을 추가한다. 빠른 기록 창의 «오늘 할 일» 경로다.
+    ///
+    /// 오전 9시가 아니라 지금인 이유: 이 창은 「지금 이걸 하겠다」고 적는 자리다.
+    /// 저장하면 「오늘 계획을 세우세요」 알림도 함께 끈다 — 방금 세웠기 때문이다.
+    @discardableResult
+    func addTodayTask(content: String, icon: String?) throws -> TodoItem
+
     func updateContent(id: UUID, content: String) throws
     func setCompleted(id: UUID, isCompleted: Bool) throws
 

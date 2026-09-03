@@ -54,6 +54,16 @@ final class SwiftDataTodoRepository: TodoRepository {
         return Self.toItem(memo)
     }
 
+    @discardableResult
+    func addTodayTask(content: String, icon: String?) throws -> TodoItem {
+        let memo = Memo(content: content, icon: icon, section: .todo)
+        memo.startDate = Date()
+        context.insert(memo)
+        try touch(memo)
+        notifications.cancel(identifier: Constants.todayPlanningReminderNotificationIdentifier)
+        return Self.toItem(memo)
+    }
+
     func updateContent(id: UUID, content: String) throws {
         try change(id) { $0.content = content }
     }
