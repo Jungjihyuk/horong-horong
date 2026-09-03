@@ -301,14 +301,21 @@ HorongHorong/
 정해진 행진표는 없다. §0 의 "요청 범위를 벗어난 마이그레이션을 강행하지 않는다"가 우선한다.
 기능을 수정할 일이 생기면 그때 그 기능을 옮긴다. 참고 순서는 다음과 같다.
 
+**고른 순서 = 「얽힘이 적은 것부터」.** 다른 기능과 모델을 공유하는 화면을 혼자 옮기면 R1 이 금지하는 절반 이전이 된다 — 옮긴 쪽이 저장소를 거쳐도 안 옮긴 쪽의 `@Query` 가 그대로 무효화된다.
+
 | 우선 | 기능 | 근거 |
 |---|---|---|
 | ✅ 완료 | `Mind` | `@Query` 4곳으로 최다였다. 2026-09-03 이전 완료 |
-| 높음 | `Achievement` | 9,854 LOC 단일 파일. 분할이 선행돼야 함 |
-| 중간 | `Timer` · `News` · `Tracker` | 규모가 작고 경계가 뚜렷 |
-| 중간 | `Lab` | SwiftData 를 안 쓴다. **Gateway/Adapter 경로의 파일럿**으로 적합 |
+| ✅ 완료 | `Lab` | SwiftData 를 안 써 위험이 없었다. `AgentGateway` 로 Gateway 경로 개시 |
+| ✅ 완료 | `News` | 모델(`NewsReportIndex`·`NewsJob`)을 이 기능만 씀 — 얽힘 없음 |
+| 높음 | `Achievement` + `Reward` | **한 덩어리다.** `RewardTabView` 는 `AchievementViews.swift:3217` 에서만 생기고, Achievement 가 `RewardLedgerEntry` 를 `@Query` 로 두 곳에서 읽는다. 9,854 LOC 단일 파일이라 **분할이 선행돼야 함** |
+| 중간 | `Timer` | `@Query<AchievementGoalRecord>` 로 Achievement 와 모델 공유. 위와 함께 봐야 함 |
+| 중간 | `Tracker` | 뷰에 `@Query` 가 없다(Manager 가 fetch). 얻는 게 적어 우선순위 낮음 |
 | 낮음 | `Stats`(14,266) · `Settings`(9,146) · `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
 | 보류 | `QuickMemo` · `MenuBar` · `Hub` · `Developer` | 역할이 겹치거나 DEBUG 전용. 정리 여부부터 판단 |
+
+**2026-09-03 기준 남은 `@Query`** — `Achievement`(5) · `Stats`(1) · `Reward`(2) · `Timer`(2) · `MemoListView` · `MemoPage` · `AILabView`.
+그중 `AchievementViews:3098` 과 `StatsDetailWindow:2246` 이 `Memo` 를 읽는다. 허브에서 그 탭을 한 번이라도 열면 **메모를 고칠 때마다 보이지 않는 두 화면이 다시 계산된다.** Mind 를 옮겨도 이 쓰기 증폭은 남아 있다.
 
 **각 단계의 검증**
 
