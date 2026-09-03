@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-04
+
 ### 추가
 
 - 할 일(Todo), 빠른 메모(Quick Note), 일기(Diary), 참고 자료(References), 지식/작업 볼트(Knowledge/Works Vault)를 아우르는 통합 «Second Brain(Mind)» 작업 공간을 추가했습니다.
@@ -266,7 +268,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.0
 [0.2.9]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.9
 [0.2.8]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.8
 [0.2.7]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.7
