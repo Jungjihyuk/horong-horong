@@ -45,7 +45,7 @@ struct MemoPage: View {
 
     var body: some View {
         SettingsPageScroll {
-            SettingsPageHeader(title: SettingsTab.memo.label, subtitle: SettingsTab.memo.subtitle)
+            SettingsPageHeader(title: SettingsTab.secondBrain.label, subtitle: SettingsTab.secondBrain.subtitle)
 
             SettingsGroupCard("퀵 메모") {
                 SettingsRow(

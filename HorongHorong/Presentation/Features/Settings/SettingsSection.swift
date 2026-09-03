@@ -12,12 +12,20 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     case news
     case lab
     case companion
-    case memo
+    case secondBrain
     case data
     case about
     case ailab
 
     var id: String { rawValue }
+
+    init?(actionIdentifier: String) {
+        if actionIdentifier == "memo" || actionIdentifier.lowercased() == "secondbrain" {
+            self = .secondBrain
+            return
+        }
+        self.init(rawValue: actionIdentifier)
+    }
 
     var label: String {
         switch self {
@@ -32,7 +40,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .news:       return "뉴스"
         case .lab:        return "실험실"
         case .companion:  return "루미롱"
-        case .memo:       return "메모 · Second Brain"
+        case .secondBrain: return "기록"
         case .data:       return "데이터"
         case .about:      return "정보"
         case .ailab:      return "AI 실험실"
@@ -53,7 +61,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .news:       return "관심사 키워드와 뉴스 큐레이션 옵션을 설정합니다."
         case .lab:        return "실험실에서 쓸 기본값을 설정합니다."
         case .companion:  return "화면 위 AI 컴패니언의 표시·이동·브리핑을 설정합니다."
-        case .memo:       return "퀵 메모 단축키와 미리알림 가져오기를 설정합니다. vault 경로는 데이터 페이지에 있습니다."
+        case .secondBrain: return "퀵 기록 단축키와 미리알림 가져오기를 설정합니다. vault 경로는 데이터 페이지에 있습니다."
         case .data:       return "백업·복원과 데이터 초기화를 관리합니다."
         case .about:      return "호롱호롱 소개와 버전 정보."
         case .ailab:      return "앱 내부 평가 파이프라인 결과를 시각적으로 분석합니다."
@@ -73,7 +81,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
         case .news:       return "newspaper"
         case .lab:        return "bolt.horizontal.circle"
         case .companion:  return "sparkles"
-        case .memo:       return "note.text"
+        case .secondBrain: return "note.text"
         case .data:       return "externaldrive"
         case .about:      return "info.circle"
         case .ailab:      return "flask"
@@ -125,8 +133,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
             return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
                     "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",
                     "대화 공급자", "AI 대화", "온디바이스", "개인정보", "음성"]
-        case .memo:
-            return ["퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
+        case .secondBrain:
+            return ["기록", "세컨드 브레인", "Second Brain", "메모", "노트",
+                    "퀵 기록 단축키", "퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
                     "미리알림 가져오기", "미리알림 앱 연동", "미리 알림", "Reminders", "캘린더"]
         case .data:
             return ["데이터 위치", "iCloud 동기화", "자동 백업", "지금 백업하기", "내보내기"]
@@ -184,7 +193,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
         case .focusAndMeasurement:
             return [.timer, .stats, .category, .focus]
         case .insightsAndAction:
-            return [.news, .memo, .lab, .achievement, .companion]
+            return [.news, .secondBrain, .lab, .achievement, .companion]
         case .system:
             return [.data, .about, .ailab]
         }

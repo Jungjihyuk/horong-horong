@@ -97,7 +97,7 @@ enum CompanionOnboardingPresenter {
         case .settingsCompanion:
             openSettings(tab: .companion)
         case .settingsMemo:
-            openSettings(tab: .memo)
+            openSettings(tab: .secondBrain)
         }
     }
 

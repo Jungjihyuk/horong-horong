@@ -69,7 +69,7 @@ struct SettingsRoot: View {
             // 온보딩이 설명하는 페이지로 옮겨준다.
             guard let action = notification.object as? String,
                   action.hasPrefix("settings.show:"),
-                  let tab = SettingsTab(rawValue: String(action.dropFirst("settings.show:".count))),
+                  let tab = SettingsTab(actionIdentifier: String(action.dropFirst("settings.show:".count))),
                   SettingsTab.visibleCases.contains(tab)
             else { return }
             selection = tab
@@ -155,7 +155,7 @@ struct SettingsRoot: View {
         case .news:       NewsPage()
         case .lab:      LabPage()
         case .companion:  CompanionPage()
-        case .memo:
+        case .secondBrain:
             if let dependencies {
                 MemoPage(reminderImports: dependencies.reminderImportRepository)
             }
@@ -257,7 +257,7 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingEnabled)
             defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingHour)
             defaults.removeObject(forKey: Constants.AppStorageKey.companionBriefingMinute)
-        case .memo:
+        case .secondBrain:
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportEnabled)
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
         case .category:

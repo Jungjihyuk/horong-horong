@@ -1593,7 +1593,7 @@ final class CompanionSettingsIndexTests: XCTestCase {
     func testFindsPageFromRowKeyword() {
         XCTAssertEqual(
             CompanionSettingsIndex.bestMatch(for: "미리알림 연동할 수 있어?")?.tab,
-            .memo
+            .secondBrain
         )
     }
 
@@ -1614,7 +1614,7 @@ final class CompanionSettingsIndexTests: XCTestCase {
         let evidence = CompanionSettingsIndex.bestMatch(for: "미리알림 연동")?.evidence
 
         XCTAssertNotNil(evidence)
-        XCTAssertTrue(evidence!.contains("설정 → 메모"))
+        XCTAssertTrue(evidence!.contains("설정 → 기록"))
         XCTAssertLessThan(evidence!.count, 60)
     }
 }
@@ -1632,7 +1632,7 @@ final class SettingsSearchIndexTests: XCTestCase {
 
     func testMemoKeywordsCoverRemindersImport() {
         XCTAssertTrue(
-            SettingsTab.memo.searchKeywords.contains { $0.contains("미리알림") }
+            SettingsTab.secondBrain.searchKeywords.contains { $0.contains("미리알림") }
         )
     }
 }

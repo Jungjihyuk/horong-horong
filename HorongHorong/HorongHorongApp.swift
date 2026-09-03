@@ -346,7 +346,12 @@ private extension SettingsTab {
     }
 
     init?(screenshotIdentifier: String) {
-        self.init(rawValue: screenshotIdentifier.lowercased())
+        let lower = screenshotIdentifier.lowercased()
+        if lower == "memo" || lower == "secondbrain" {
+            self = .secondBrain
+            return
+        }
+        self.init(rawValue: lower)
     }
 }
 
