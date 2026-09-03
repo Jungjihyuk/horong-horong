@@ -1,20 +1,23 @@
 import AppKit
-import SwiftData
 
+/// **`@MainActor` 인 이유**: 5초 폴링 타이머로 앱 전환을 보고 화면 상태를 고친다.
+/// 원래도 메인 스레드에서만 돌던 것을 이제 컴파일러가 지킨다(`TimerManager` 와 같은 사정).
+@MainActor
 @Observable
-final class AppTracker: @unchecked Sendable {
+final class AppTracker {
     private var currentApp: NSRunningApplication?
     private var currentAppStartTime: Date?
     // 집중도 분석용 세그먼트 구간 시작 (앱 전환/슬립 복귀 시에만 리셋 — 5초 폴링으로는 리셋되지 않음)
     private var currentSegmentStart: Date?
     private var pollTimer: Timer?
-    private var trackingContext: ModelContext?
+    private var repository: AppUsageRepository?
     var isTracking: Bool = false
 
     // 앱 방문 최소 길이(초). 이보다 짧은 포커스 이동은 일일/세션 기록 모두에서 제외한다.
-    static let minimumSegmentSeconds: TimeInterval = 5
+    /// 값이라 액터와 무관하다. 통계 화면도 같은 기준으로 짧은 구간을 거른다.
+    nonisolated static let minimumSegmentSeconds: TimeInterval = 5
 
-    static func shouldPersistSegment(
+    nonisolated static func shouldPersistSegment(
         elapsed: TimeInterval,
         hasPreviousSegment: Bool
     ) -> Bool {
@@ -22,63 +25,15 @@ final class AppTracker: @unchecked Sendable {
         return hasPreviousSegment || elapsed >= minimumSegmentSeconds
     }
 
-    struct DailyDurationSlice: Equatable {
-        let date: Date
-        let durationSeconds: Int
-    }
+    typealias DailyDurationSlice = AppUsageDaySlicer.Slice
 
-    static func dailyDurationSlices(
+    /// 규칙은 `AppUsageDaySlicer` 에 있다. 호출부가 많아 이름을 남겨 둔다.
+    nonisolated static func dailyDurationSlices(
         from start: Date,
         to end: Date,
         calendar: Calendar = .current
     ) -> [DailyDurationSlice] {
-        guard end > start else { return [] }
-
-        var cursor = start
-        var rawSlices: [(date: Date, duration: TimeInterval)] = []
-        while cursor < end {
-            let dayStart = calendar.startOfDay(for: cursor)
-            guard let nextDay = calendar.date(
-                byAdding: .day,
-                value: 1,
-                to: dayStart
-            ), nextDay > cursor else {
-                break
-            }
-
-            let sliceEnd = min(end, nextDay)
-            rawSlices.append((
-                date: dayStart,
-                duration: sliceEnd.timeIntervalSince(cursor)
-            ))
-            cursor = sliceEnd
-        }
-
-        var durationSeconds = rawSlices.map { max(0, Int($0.duration)) }
-        var remainingSeconds = max(0, Int(end.timeIntervalSince(start)))
-            - durationSeconds.reduce(0, +)
-        let remainderOrder = rawSlices.indices.sorted {
-            let lhsFraction = rawSlices[$0].duration.rounded(.down)
-            let rhsFraction = rawSlices[$1].duration.rounded(.down)
-            let lhsRemainder = rawSlices[$0].duration - lhsFraction
-            let rhsRemainder = rawSlices[$1].duration - rhsFraction
-            if lhsRemainder != rhsRemainder {
-                return lhsRemainder > rhsRemainder
-            }
-            return rawSlices[$0].date < rawSlices[$1].date
-        }
-        for index in remainderOrder where remainingSeconds > 0 {
-            durationSeconds[index] += 1
-            remainingSeconds -= 1
-        }
-
-        return rawSlices.indices.compactMap { index in
-            guard durationSeconds[index] > 0 else { return nil }
-            return DailyDurationSlice(
-                date: rawSlices[index].date,
-                durationSeconds: durationSeconds[index]
-            )
-        }
+        AppUsageDaySlicer.slices(from: start, to: end, calendar: calendar)
     }
 
     // MARK: - 유휴(자리 비움 후보) 세그먼트
@@ -92,10 +47,10 @@ final class AppTracker: @unchecked Sendable {
     private var pendingIdleSegment: PendingIdleSegment?
     private var lastIdleSeconds: TimeInterval = 0
 
-    func setModelContainer(_ container: ModelContainer) {
-        trackingContext = ModelContext(container)
-        trackingContext?.autosaveEnabled = false
-        CategoryManager.shared.loadUserRules(from: trackingContext!)
+    @MainActor
+    func setRepository(_ repository: AppUsageRepository) {
+        self.repository = repository
+        CategoryManager.shared.loadUserRules(from: repository)
     }
 
     func startTracking() {
@@ -196,7 +151,7 @@ final class AppTracker: @unchecked Sendable {
         endedAt: Date,
         target: ResolvedTarget?
     ) {
-        guard trackingContext != nil,
+        guard repository != nil,
               TrackerStateStore.shared.shouldRecord(),
               let target else {
             currentAppStartTime = endedAt
@@ -217,7 +172,7 @@ final class AppTracker: @unchecked Sendable {
         target: ResolvedTarget
     ) {
         guard let startTime = currentAppStartTime,
-              let trackingContext else { return }
+              let repository else { return }
 
         let elapsed = Int(endedAt.timeIntervalSince(startTime))
         guard elapsed > 0 else {
@@ -225,16 +180,13 @@ final class AppTracker: @unchecked Sendable {
             return
         }
 
-        try? AppUsageRecordStore.applyDelta(
+        repository.applyUsageDelta(
             bundleIdentifier: target.bundleId,
             appName: target.appName,
             category: target.category,
             date: endedAt,
-            deltaSeconds: elapsed,
-            modelContext: trackingContext
+            deltaSeconds: elapsed
         )
-
-        try? trackingContext.save()
         currentAppStartTime = endedAt
     }
 
@@ -250,47 +202,18 @@ final class AppTracker: @unchecked Sendable {
         target: ResolvedTarget
     ) -> Bool {
         guard let start = currentSegmentStart,
-              let trackingContext else { return false }
+              let repository else { return false }
 
-        let elapsed = endedAt.timeIntervalSince(start)
-        guard elapsed >= 0 else {
-            currentSegmentStart = endedAt
-            return false
-        }
-
-        let targetBundleId = target.bundleId
-        let targetCategory = target.category
-        let descriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate {
-                $0.bundleIdentifier == targetBundleId &&
-                $0.category == targetCategory &&
-                $0.endTime == start
-            },
-            sortBy: [SortDescriptor(\.endTime, order: .reverse)]
+        // 이어붙이기·너무 짧은 구간 버리기는 저장소가 판단한다.
+        let recorded = repository.recordSegment(
+            appName: target.appName,
+            bundleIdentifier: target.bundleId,
+            category: target.category,
+            from: start,
+            to: endedAt,
+            minimumSeconds: Self.minimumSegmentSeconds
         )
-
-        let previous = try? trackingContext.fetch(descriptor).first
-        guard Self.shouldPersistSegment(
-            elapsed: elapsed,
-            hasPreviousSegment: previous != nil
-        ) else {
-            return false
-        }
-
-        if let previous {
-            previous.appName = target.appName
-            previous.endTime = endedAt
-        } else {
-            let segment = AppUsageSegment(
-                appName: target.appName,
-                bundleIdentifier: target.bundleId,
-                category: target.category,
-                startTime: start,
-                endTime: endedAt
-            )
-            trackingContext.insert(segment)
-        }
-        try? trackingContext.save()
+        guard recorded else { return false }
         currentSegmentStart = endedAt
         return true
     }
@@ -385,7 +308,7 @@ final class AppTracker: @unchecked Sendable {
         return value
     }
 
-    static func researchLabel(for url: String) -> String? {
+    nonisolated static func researchLabel(for url: String) -> String? {
         guard let components = URLComponents(string: url),
               let host = components.host?.lowercased() else {
             return nil
@@ -406,7 +329,7 @@ final class AppTracker: @unchecked Sendable {
         let appName: String
     }
 
-    static func shouldInspectWebsiteURL(
+    nonisolated static func shouldInspectWebsiteURL(
         isKnownBrowser: Bool,
         classification: CategoryManager.TrackingClassification,
         hasWebsiteRules: Bool
@@ -416,7 +339,7 @@ final class AppTracker: @unchecked Sendable {
             || (classification == .unclassified && hasWebsiteRules)
     }
 
-    static func categoryForNonBrowserApp(
+    nonisolated static func categoryForNonBrowserApp(
         classification: CategoryManager.TrackingClassification,
         unmappedAppHandling: Constants.UnmappedAppHandling
     ) -> String? {
@@ -560,82 +483,13 @@ final class AppTracker: @unchecked Sendable {
     }
 
     private func subtractIdleTime(from segment: PendingIdleSegment, endedAt: Date) {
-        guard let trackingContext else { return }
-        let idleStart = segment.startedAt
-        let idleEnd = endedAt
-        let idleSeconds = Int(idleEnd.timeIntervalSince(idleStart))
-        guard idleSeconds > 0 else { return }
-
-        // (1) 일일 총사용 시간 차감
-        for slice in Self.dailyDurationSlices(from: idleStart, to: idleEnd) {
-            try? AppUsageRecordStore.applyDelta(
-                bundleIdentifier: segment.bundleIdentifier,
-                appName: segment.appName,
-                category: segment.category,
-                date: slice.date,
-                deltaSeconds: -slice.durationSeconds,
-                modelContext: trackingContext
-            )
-        }
-
-        // (2) 타임라인 세그먼트 보정 — idle 구간과 겹치는 세그먼트를 잘라내거나 삭제
-        let segDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { seg in
-                seg.startTime < idleEnd && seg.endTime > idleStart
-            }
+        repository?.subtractIdleTime(
+            appName: segment.appName,
+            bundleIdentifier: segment.bundleIdentifier,
+            category: segment.category,
+            from: segment.startedAt,
+            to: endedAt,
+            minimumSeconds: Self.minimumSegmentSeconds
         )
-        let overlapping = (try? trackingContext.fetch(segDescriptor)) ?? []
-        let minSec = Self.minimumSegmentSeconds
-
-        for seg in overlapping {
-            let origStart = seg.startTime
-            let origEnd = seg.endTime
-
-            if origStart >= idleStart && origEnd <= idleEnd {
-                // 세그먼트가 idle 구간에 완전히 포함됨 → 삭제
-                trackingContext.delete(seg)
-            } else if origStart < idleStart && origEnd <= idleEnd {
-                // 세그먼트 뒷부분이 idle 에 걸림 → endTime 을 idleStart 로 축소
-                seg.endTime = idleStart
-                if seg.endTime.timeIntervalSince(seg.startTime) < minSec {
-                    trackingContext.delete(seg)
-                }
-            } else if origStart >= idleStart && origEnd > idleEnd {
-                // 세그먼트 앞부분이 idle 에 걸림 → startTime 을 idleEnd 로 이동
-                seg.startTime = idleEnd
-                if seg.endTime.timeIntervalSince(seg.startTime) < minSec {
-                    trackingContext.delete(seg)
-                }
-            } else {
-                // idle 이 세그먼트 중간에 들어가 있음 → 앞뒤로 분할
-                let frontDuration = idleStart.timeIntervalSince(origStart)
-                let backDuration = origEnd.timeIntervalSince(idleEnd)
-                let app = seg.appName
-                let bundle = seg.bundleIdentifier
-                let cat = seg.category
-                let isManual = seg.isManual
-                let isUserModified = seg.isUserModified || seg.isManual
-
-                if frontDuration >= minSec {
-                    seg.endTime = idleStart
-                } else {
-                    trackingContext.delete(seg)
-                }
-                if backDuration >= minSec {
-                    let tail = AppUsageSegment(
-                        appName: app,
-                        bundleIdentifier: bundle,
-                        category: cat,
-                        startTime: idleEnd,
-                        endTime: origEnd,
-                        isManual: isManual,
-                        isUserModified: isUserModified
-                    )
-                    trackingContext.insert(tail)
-                }
-            }
-        }
-
-        try? trackingContext.save()
     }
 }

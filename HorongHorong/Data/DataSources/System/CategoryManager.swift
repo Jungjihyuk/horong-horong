@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 final class CategoryManager: @unchecked Sendable {
     enum TrackingClassification: Equatable {
@@ -16,8 +15,11 @@ final class CategoryManager: @unchecked Sendable {
 
     private init() {}
 
-    func loadUserRules(from context: ModelContext) {
-        migrateLegacyProductivityManagementCategory(in: context)
+    /// 저장된 규칙을 메모리로 올린다. **분류는 이 사본으로만 한다** —
+    /// 앱을 옮길 때마다 DB 를 읽으면 5초 폴링이 그대로 조회가 된다.
+    @MainActor
+    func loadUserRules(from repository: AppUsageRepository) {
+        repository.migrateLegacyProductivityManagementCategory()
         userRules.removeAll()
         websiteRules.removeAll()
         excludedBundleIdentifiers.removeAll()
@@ -28,10 +30,8 @@ final class CategoryManager: @unchecked Sendable {
             setWebsiteCategory(rule.category, for: rule.domain)
         }
 
-        let descriptor = FetchDescriptor<AppCategoryRule>(
-            predicate: #Predicate { $0.isUserDefined == true }
-        )
-        if let rules = try? context.fetch(descriptor) {
+        do {
+            let rules = repository.userDefinedRules()
             var persistedWebsiteRules: [(domain: String, category: String)] = []
             for rule in rules {
                 if let domain = WebsiteCategoryRule.domain(from: rule.bundleIdentifier) {
@@ -132,39 +132,4 @@ final class CategoryManager: @unchecked Sendable {
         }
     }
 
-    private func migrateLegacyProductivityManagementCategory(
-        in context: ModelContext
-    ) {
-        let legacyCategory = Constants.legacySupportAppCategory
-        let currentCategory = Constants.productivityManagementAppCategory
-        var changed = false
-
-        let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
-            predicate: #Predicate { $0.category == legacyCategory }
-        )
-        for rule in (try? context.fetch(ruleDescriptor)) ?? [] {
-            rule.category = currentCategory
-            changed = true
-        }
-
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.category == legacyCategory }
-        )
-        for segment in (try? context.fetch(segmentDescriptor)) ?? [] {
-            segment.category = currentCategory
-            changed = true
-        }
-
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.category == legacyCategory }
-        )
-        for record in (try? context.fetch(recordDescriptor)) ?? [] {
-            record.category = currentCategory
-            changed = true
-        }
-
-        if changed {
-            try? context.save()
-        }
-    }
 }

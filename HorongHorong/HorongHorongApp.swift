@@ -441,7 +441,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        appTracker.setModelContainer(modelContainer)
+        // 추적은 쓰기가 잦아 자동 저장을 끈 별도 컨텍스트를 쓴다(저장소가 만든다).
+        appTracker.setRepository(SwiftDataAppUsageRepository(container: modelContainer))
         appTracker.startTracking()
 
         observeTodayPlanningReminderSelection()
@@ -983,7 +984,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
     }
 }
 
@@ -1102,9 +1103,14 @@ struct HorongHorongApp: App {
         MenuBarExtra {
             MenuBarPopover(timerManager: appDelegate.timerManager)
                 .environment(appDelegate.appState)
-                // 팝오버가 쓰는 것은 지금 `agentGateway` 뿐이라 SwiftData 와 무관하다.
-                // 저장소를 쓰는 화면을 팝오버에 넣을 때는 온보딩 데모 컨테이너와
-                // 어긋나지 않는지 확인한다. `[확인 필요]`
+                // **알려진 결함(2026-09-03).** `dependencies` 는 실제 저장소로 한 번만 만들어지는데,
+                // 이 화면들은 온보딩 중에 `guidedModelContainer`(메모리 데모)로 바뀐다.
+                // 그래서 데모 중에는 저장소 기반 화면(메모·성취·타이머 후보)이 데모 데이터가
+                // 아니라 **비어 있는 실제 저장소**를 본다.
+                //
+                // 데모는 데이터가 하나도 없는 첫 사용자에게만 뜨므로 기존 사용자에게는 보이지 않는다.
+                // 기능 이전이 끝난 뒤에 고치기로 했다 — 데모가 켜지면 그 컨테이너로 만든
+                // `DependencyContainer` 를 주입하면 된다.
                 .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .modelContainer(guidedModelContainer)

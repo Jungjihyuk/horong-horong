@@ -118,7 +118,7 @@ final class SwiftDataPomodoroReflectionRepository: PomodoroReflectionRepository 
             }
             try context.save()
             // 규칙이 바뀌었으니 분류기가 쓰는 사본도 다시 읽는다.
-            CategoryManager.shared.loadUserRules(from: context)
+            CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
             NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
         } catch {
             context.rollback()

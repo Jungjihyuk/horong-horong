@@ -3214,7 +3214,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         context.insert(record)
         try context.save()
 
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
 
         XCTAssertEqual(rule.category, Constants.productivityManagementAppCategory)
         XCTAssertEqual(segment.category, Constants.productivityManagementAppCategory)

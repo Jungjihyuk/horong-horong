@@ -1087,7 +1087,7 @@ struct CategoryMappingPage: View {
         }
 
         pairStore.renameCategory(from: oldCategory, to: newCategory)
-        CategoryManager.shared.loadUserRules(from: modelContext)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: modelContext))
     }
 
     private func resetCategorySelections() {
@@ -1125,7 +1125,7 @@ struct CategoryMappingPage: View {
 
     private func loadRules() {
         insertMissingDefaultRules()
-        CategoryManager.shared.loadUserRules(from: modelContext)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: modelContext))
         var descriptor = FetchDescriptor<AppCategoryRule>()
         descriptor.sortBy = [
             SortDescriptor(\AppCategoryRule.category),
