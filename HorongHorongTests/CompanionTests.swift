@@ -734,7 +734,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: "💡",
                 isTodayTask: true
             ),
-            in: context,
+            in: SwiftDataCompanionMemoRepository(context: context),
             now: now
         )
 
@@ -759,7 +759,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: MemoIcon.defaultIcon,
                 isTodayTask: false
             ),
-            in: context
+            in: SwiftDataCompanionMemoRepository(context: context)
         )
 
         let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
@@ -786,7 +786,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 startDate: start,
                 deadline: end
             ),
-            in: context
+            in: SwiftDataCompanionMemoRepository(context: context)
         )
 
         let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
@@ -809,8 +809,8 @@ final class CompanionMemoStoreTests: XCTestCase {
             isTodayTask: false
         )
 
-        let first = try store.save(request, in: context)
-        let second = try store.save(request, in: context)
+        let first = try store.save(request, in: SwiftDataCompanionMemoRepository(context: context))
+        let second = try store.save(request, in: SwiftDataCompanionMemoRepository(context: context))
 
         guard case .saved(let firstID) = first else {
             return XCTFail("첫 저장은 saved 여야 합니다.")

@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 
 /// 사용자의 말이 오늘 할일·일정에 관한 것인지 판정한다.
 ///
@@ -554,26 +553,22 @@ final class CompanionMemoStore {
 
     func save(
         _ request: CompanionMemoSaveRequest,
-        in modelContext: ModelContext,
+        in repository: CompanionMemoRepository,
         now: Date = Date()
     ) throws -> CompanionMemoSaveResult {
+        // 같은 말풍선에서 두 번 저장하지 않는다. 이 판단이 이 타입의 존재 이유다.
         if let memoID = memoIDsByMessageID[request.messageID] {
             return .duplicate(memoID)
         }
 
-        let memo = Memo(content: request.content, icon: request.icon)
-        // 말로 정해준 때가 있으면 그 값이 우선이다.
-        memo.startDate = request.startDate ?? (request.isTodayTask ? now : nil)
-        memo.deadline = request.deadline
-        modelContext.insert(memo)
-
-        do {
-            try modelContext.save()
-            memoIDsByMessageID[request.messageID] = memo.id
-            return .saved(memo.id)
-        } catch {
-            modelContext.delete(memo)
-            throw error
-        }
+        let memoID = try repository.createMemo(
+            content: request.content,
+            icon: request.icon,
+            // 말로 정해준 때가 있으면 그 값이 우선이다.
+            startDate: request.startDate ?? (request.isTodayTask ? now : nil),
+            deadline: request.deadline
+        )
+        memoIDsByMessageID[request.messageID] = memoID
+        return .saved(memoID)
     }
 }

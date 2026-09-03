@@ -925,10 +925,11 @@ final class CompanionController {
         isTodayTask: Bool,
         schedule: CompanionMemoSchedule? = nil
     ) {
-        guard let modelContext = modelContainer?.mainContext else {
+        guard let modelContainer else {
             appendMemoStatusMessage("메모를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")
             return
         }
+        let repository = SwiftDataCompanionMemoRepository(context: modelContainer.mainContext)
 
         do {
             let result = try memoStore.save(
@@ -940,7 +941,7 @@ final class CompanionController {
                     startDate: schedule?.startDate,
                     deadline: schedule?.deadline
                 ),
-                in: modelContext
+                in: repository
             )
 
             let memoID: UUID
