@@ -717,9 +717,51 @@ final class CompanionMemoScheduleTests: XCTestCase {
 }
 
 final class CompanionMemoStoreTests: XCTestCase {
+    private func makeAppContainer() throws -> ModelContainer {
+        let schema = HorongHorongModelSchema.make()
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    @MainActor
+    func testRepositoryReturnsOnboardingCountsAndActiveBriefingMemos() throws {
+        let container = try makeAppContainer()
+        let context = container.mainContext
+        let active = SecondBrainRecord(content: "오늘 할 일", section: .todo)
+        active.startDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let deleted = SecondBrainRecord(content: "지운 할 일", section: .todo)
+        deleted.deletedAt = Date()
+        context.insert(active)
+        context.insert(deleted)
+        context.insert(FocusSession(focusMinutes: 25, breakMinutes: 5))
+        try context.save()
+
+        let repository = SwiftDataCompanionRepository(context: context)
+
+        XCTAssertEqual(
+            repository.onboardingCounts(),
+            CompanionOnboardingCounts(
+                memoCount: 2,
+                focusSessionCount: 1,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertEqual(
+            repository.briefingMemos(),
+            [
+                CompanionMemoSummary(
+                    title: "오늘 할 일",
+                    isCompleted: false,
+                    startDate: active.startDate,
+                    deadline: nil
+                )
+            ]
+        )
+    }
+
     @MainActor
     func testSaveKeepsOriginalTextAndSelectedOptions() throws {
-        let schema = Schema([Memo.self])
+        let schema = Schema([SecondBrainRecord.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -734,11 +776,11 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: "💡",
                 isTodayTask: true
             ),
-            in: context,
+            in: SwiftDataCompanionRepository(context: context),
             now: now
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
         XCTAssertEqual(memo.content, original)
         XCTAssertEqual(memo.icon, "💡")
         XCTAssertEqual(memo.startDate, now)
@@ -746,7 +788,7 @@ final class CompanionMemoStoreTests: XCTestCase {
 
     @MainActor
     func testRegularMemoDoesNotReceiveStartDate() throws {
-        let schema = Schema([Memo.self])
+        let schema = Schema([SecondBrainRecord.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -759,17 +801,17 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: MemoIcon.defaultIcon,
                 isTodayTask: false
             ),
-            in: context
+            in: SwiftDataCompanionRepository(context: context)
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
         XCTAssertNil(memo.startDate)
     }
 
     /// 말로 정해준 때는 메모의 시작·마감으로 그대로 들어간다.
     @MainActor
     func testSpokenScheduleIsStoredOnTheMemo() throws {
-        let schema = Schema([Memo.self])
+        let schema = Schema([SecondBrainRecord.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -786,17 +828,17 @@ final class CompanionMemoStoreTests: XCTestCase {
                 startDate: start,
                 deadline: end
             ),
-            in: context
+            in: SwiftDataCompanionRepository(context: context)
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
         XCTAssertEqual(memo.startDate, start)
         XCTAssertEqual(memo.deadline, end)
     }
 
     @MainActor
     func testSameMessageIsSavedOnlyOnce() throws {
-        let schema = Schema([Memo.self])
+        let schema = Schema([SecondBrainRecord.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -809,14 +851,14 @@ final class CompanionMemoStoreTests: XCTestCase {
             isTodayTask: false
         )
 
-        let first = try store.save(request, in: context)
-        let second = try store.save(request, in: context)
+        let first = try store.save(request, in: SwiftDataCompanionRepository(context: context))
+        let second = try store.save(request, in: SwiftDataCompanionRepository(context: context))
 
         guard case .saved(let firstID) = first else {
             return XCTFail("첫 저장은 saved 여야 합니다.")
         }
         XCTAssertEqual(second, .duplicate(firstID))
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Memo>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SecondBrainRecord>()), 1)
     }
 }
 
@@ -1153,7 +1195,7 @@ final class CompanionOnboardingScriptTests: XCTestCase {
         XCTAssertEqual(summon.screen, .settingsCompanion)
         XCTAssertEqual(summon.highlight, "settings.companionBasics")
 
-        let newMemo = try step(endingWith: "새 메모를 만든다")
+        let newMemo = try step(endingWith: "새 기록을 만든다")
         XCTAssertEqual(newMemo.screen, .popoverMemo)
         XCTAssertEqual(newMemo.highlight, "memo.new")
 
@@ -1165,7 +1207,7 @@ final class CompanionOnboardingScriptTests: XCTestCase {
             steps.firstIndex { $0.title.hasSuffix("등록한 할 일을 고른다") }
         )
         let memoTabIndex = try XCTUnwrap(
-            steps.firstIndex { $0.title.hasSuffix("메모 탭을 연다") }
+            steps.firstIndex { $0.title.hasSuffix("기록 탭을 연다") }
         )
         XCTAssertLessThan(taskPickerIndex, memoTabIndex)
 
@@ -1286,7 +1328,7 @@ final class CompanionOnboardingDemoStoreTests: XCTestCase {
         )
 
         let context = try XCTUnwrap(store.modelContainer).mainContext
-        let memos = try context.fetch(FetchDescriptor<Memo>())
+        let memos = try context.fetch(FetchDescriptor<SecondBrainRecord>())
         let goalRecords = try context.fetch(FetchDescriptor<AchievementGoalRecord>())
         let sessions = try context.fetch(FetchDescriptor<FocusSession>())
         let reflections = try context.fetch(FetchDescriptor<PomodoroReflection>())
@@ -1298,10 +1340,13 @@ final class CompanionOnboardingDemoStoreTests: XCTestCase {
         XCTAssertEqual(goalRecords.first?.linkedMemoIDs.count, 3)
         XCTAssertEqual(memos.filter(\.isCompletedValue).count, 1)
         XCTAssertGreaterThan(segments.count, 60)
+        // 저장소를 거친다 — 완료·보관·삭제분을 떨구는 일이 이제 저장소 몫이라
+        // 빌더에 곧장 넘기면 완료한 할일까지 후보로 잡힌다.
+        let taskRepository = SwiftDataPomodoroTaskRepository(context: context)
         XCTAssertEqual(
             PomodoroTaskCandidateBuilder.candidates(
-                memos: memos,
-                goalRecords: goalRecords,
+                memos: taskRepository.candidateMemos(),
+                goalLinkedMemoIDs: taskRepository.goalLinkedMemoIDs(),
                 now: now
             ).count,
             5
@@ -1548,7 +1593,7 @@ final class CompanionSettingsIndexTests: XCTestCase {
     func testFindsPageFromRowKeyword() {
         XCTAssertEqual(
             CompanionSettingsIndex.bestMatch(for: "미리알림 연동할 수 있어?")?.tab,
-            .memo
+            .secondBrain
         )
     }
 
@@ -1569,7 +1614,7 @@ final class CompanionSettingsIndexTests: XCTestCase {
         let evidence = CompanionSettingsIndex.bestMatch(for: "미리알림 연동")?.evidence
 
         XCTAssertNotNil(evidence)
-        XCTAssertTrue(evidence!.contains("설정 → 메모"))
+        XCTAssertTrue(evidence!.contains("설정 → 기록"))
         XCTAssertLessThan(evidence!.count, 60)
     }
 }
@@ -1587,7 +1632,7 @@ final class SettingsSearchIndexTests: XCTestCase {
 
     func testMemoKeywordsCoverRemindersImport() {
         XCTAssertTrue(
-            SettingsTab.memo.searchKeywords.contains { $0.contains("미리알림") }
+            SettingsTab.secondBrain.searchKeywords.contains { $0.contains("미리알림") }
         )
     }
 }

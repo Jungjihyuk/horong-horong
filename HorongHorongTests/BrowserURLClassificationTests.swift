@@ -228,11 +228,11 @@ final class BrowserURLClassificationTests: XCTestCase {
         context.insert(rule)
         try context.save()
 
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
         defer {
             context.delete(rule)
             try? context.save()
-            CategoryManager.shared.loadUserRules(from: context)
+            CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
         }
 
         XCTAssertEqual(
@@ -265,11 +265,11 @@ final class BrowserURLClassificationTests: XCTestCase {
         context.insert(rule)
         try context.save()
 
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
         defer {
             context.delete(rule)
             try? context.save()
-            CategoryManager.shared.loadUserRules(from: context)
+            CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
         }
 
         let expected = WebsiteCategoryMatch(domain: "youtube.com", category: "공부")

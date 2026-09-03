@@ -316,7 +316,7 @@ private extension PopoverTab {
         case .achievement: return "achievement"
         case .stats: return "stats"
         case .news: return "news"
-        case .agent: return "agent"
+        case .lab: return "lab"
         }
     }
 
@@ -332,8 +332,8 @@ private extension PopoverTab {
             self = .stats
         case "news":
             self = .news
-        case "agent":
-            self = .agent
+        case "lab":
+            self = .lab
         default:
             return nil
         }
@@ -346,7 +346,12 @@ private extension SettingsTab {
     }
 
     init?(screenshotIdentifier: String) {
-        self.init(rawValue: screenshotIdentifier.lowercased())
+        let lower = screenshotIdentifier.lowercased()
+        if lower == "memo" || lower == "secondbrain" {
+            self = .secondBrain
+            return
+        }
+        self.init(rawValue: lower)
     }
 }
 
@@ -374,32 +379,6 @@ private extension StatsViewMode {
 }
 
 @MainActor
-enum HorongHorongModelSchema {
-    static func make() -> Schema {
-        Schema([
-            Memo.self,
-            AchievementGoalRecord.self,
-            FocusSession.self,
-            PomodoroReflection.self,
-            CategoryBehaviorConditionSet.self,
-            PomodoroTaskCompletion.self,
-            AppUsageRecord.self,
-            AppUsageSegment.self,
-            BreakTransitionIntent.self,
-            AttentionEvent.self,
-            AttentionDaySummary.self,
-            FocusNudgeEvent.self,
-            StatsAggregateCache.self,
-            AppCategoryRule.self,
-            NewsJob.self,
-            NewsReportIndex.self,
-            RewardLedgerEntry.self,
-            RewardCatalogItem.self,
-        ])
-    }
-}
-
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     private(set) var timerManager: TimerManager!
@@ -410,20 +389,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notificationObservers: [NSObjectProtocol] = []
 
     private(set) var modelContainer: ModelContainer!
+    /// 구현체 조립. `modelContainer` 가 만들어진 뒤에 세운다.
+    private(set) var dependencies: DependencyContainer!
 
     override init() {
         super.init()
         timerManager = TimerManager(appState: appState)
-        companionController = CompanionController(appState: appState)
-
         let schema = HorongHorongModelSchema.make()
         do {
             let storeURL = try SwiftDataStoreLocation.storeURL()
             let config = ModelConfiguration(schema: schema, url: storeURL)
-            modelContainer = try ModelContainer(for: schema, configurations: [config])
+            modelContainer = try ModelContainer(
+                for: schema,
+                migrationPlan: HorongHorongMigrationPlan.self,
+                configurations: [config]
+            )
         } catch {
             fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }
+        dependencies = DependencyContainer(
+            modelContainer: modelContainer,
+            newsPipelineService: appState.newsPipelineService
+        )
+        companionController = CompanionController(
+            appState: appState,
+            repository: dependencies.companionRepository
+        )
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -435,12 +426,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let context = modelContainer.mainContext
 
         migrateLegacyOllamaEndpoint()
+        Self.migrateMindDefaults()
         migrateRemovedDocumentCategory(in: context)
+        migrateMemoSections(in: context)
+        Self.migrateMemoToSecondBrainRecords(in: context)
+        mergeDuplicateDiaryEntries(in: context)
+        normalizeMemoFlags(in: context)
         seedDefaultCategoryRules(in: context)
         seedDefaultRewardCatalogItems(in: context)
         repairOrphanedPomodoroRecords(in: context)
 
-        timerManager.setModelContext(context)
+        timerManager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
+        )
 
         // AI 실행 원문 기록. 개발자 모드에서만 켜지고, 보존 기한이 지난 것은 여기서 정리된다.
         AIRunLog.installTraceRecorder()
@@ -450,7 +449,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        appTracker.setModelContainer(modelContainer)
+        // 추적은 쓰기가 잦아 자동 저장을 끈 별도 컨텍스트를 쓴다(저장소가 만든다).
+        appTracker.setRepository(SwiftDataAppUsageRepository(container: modelContainer))
         appTracker.startTracking()
 
         observeTodayPlanningReminderSelection()
@@ -468,7 +468,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyManager.shared.setup(
             onQuickMemo: { [weak self] in
                 guard let self else { return }
-                self.quickMemoPanel.toggle(modelContext: context)
+                self.quickMemoPanel.toggle(
+                    todos: self.dependencies.todoRepository,
+                    quickNotes: self.dependencies.quickNoteRepository
+                )
             },
             onMenuBarPopover: {
                 MenuBarExtraController.toggle()
@@ -478,17 +481,183 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        companionController.start(modelContainer: modelContainer)
+        let focusScoreMonitor = FocusScoreMonitor(
+            appState: appState,
+            modelContainer: modelContainer
+        ) { [weak companionController] message in
+            companionController?.presentFocusNudge(message) ?? false
+        }
+        companionController.start(focusScoreMonitor: focusScoreMonitor)
     }
 
     /// `localhost`는 이 기기에서 IPv6(`::1`)로 먼저 해석되지만 Ollama는 IPv4만 열어 둔
     /// 경우가 있어 연결이 거절된다. 예전 기본값만 한 번 IPv4 루프백 주소로 옮긴다.
     /// 사용자가 다른 서버 주소를 직접 지정한 경우에는 건드리지 않는다.
+    /// 저장 키 이름 변경을 따라간다: `secondBrain.*` → `personalRecord.*` → `mind.*`.
+    ///
+    /// 그냥 키를 바꾸면 이미 저장된 값이 안 읽혀 **사용자가 고른 vault 경로가 기본값으로
+    /// 돌아간다.** 그러면 남의 컴퓨터에는 없는 경로를 가리켜 "vault를 찾지 못했습니다" 가 뜬다.
+    ///
+    /// 이름이 두 번 바뀌었으므로 **체인으로 거슬러 찾는다.** 어느 버전에서 건너뛰어 올라오든
+    /// (예: `secondBrain` 시절 앱에서 바로 최신으로) 값을 찾아야 한다.
+    ///
+    /// 옛 키는 지우지 않는다. 이전 버전으로 되돌렸을 때 설정이 남아 있어야 하고,
+    /// 값 두 개라 남겨두는 비용이 없다.
+    ///
+    /// `defaults` 를 인자로 받는 이유는 테스트가 실제 앱 설정을 오염시키지 않게 하기 위해서다.
+    static func migrateMindDefaults(in defaults: UserDefaults = .standard) {
+        let chains = [
+            (Constants.AppStorageKey.mindVaultPath, Constants.AppStorageKey.legacyMindVaultPathKeys),
+            (Constants.AppStorageKey.mindSection, Constants.AppStorageKey.legacyMindSectionKeys),
+        ]
+        for (current, legacyKeys) in chains {
+            guard defaults.object(forKey: current) == nil else { continue }
+            guard let value = legacyKeys.lazy.compactMap({ defaults.object(forKey: $0) }).first else { continue }
+            defaults.set(value, forKey: current)
+        }
+    }
+
     private func migrateLegacyOllamaEndpoint() {
         let defaults = UserDefaults.standard
         let key = Constants.NewsStorageKey.ollamaEndpoint
         guard defaults.string(forKey: key) == "http://localhost:11434" else { return }
         defaults.set(Constants.defaultNewsOllamaEndpoint, forKey: key)
+    }
+
+    /// 기존 메모를 Second Brain 섹션으로 나눈다. 이미 분류된 기록은 다시 쓰지 않는다.
+    private func migrateMemoSections(in context: ModelContext) {
+        do {
+            let memos = try context.fetch(FetchDescriptor<Memo>())
+            var changed = false
+            for memo in memos where memo.sectionRaw == nil {
+                memo.assignSection(
+                    MemoClassifier.classify(
+                        content: memo.content,
+                        startDate: memo.startDate,
+                        deadline: memo.deadline
+                    )
+                )
+                changed = true
+            }
+            if changed {
+                try context.save()
+            }
+        } catch {
+            context.rollback()
+        }
+    }
+
+    /// 기존 `Memo` 테이블의 데이터를 신규 `SecondBrainRecord` 테이블로 1:1 복사 이전한다.
+    static func migrateMemoToSecondBrainRecords(in context: ModelContext, defaults: UserDefaults = .standard) {
+        let migrationKey = "migration.memoToSecondBrain.v1"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+
+        do {
+            let legacyMemos = try context.fetch(FetchDescriptor<Memo>())
+            if !legacyMemos.isEmpty {
+                for memo in legacyMemos {
+                    let record = SecondBrainRecord(
+                        id: memo.id,
+                        content: memo.content,
+                        icon: memo.icon,
+                        section: memo.resolvedSection,
+                        createdAt: memo.createdAt,
+                        updatedAt: memo.updatedAt,
+                        isPinned: memo.isPinned,
+                        isCompleted: memo.isCompletedValue,
+                        completionStateChangedAt: memo.completionStateChangedAt,
+                        startDate: memo.startDate,
+                        deadline: memo.deadline,
+                        reminderOffsetMinutes: memo.reminderOffsetMinutes,
+                        reminderIdentifier: memo.reminderIdentifier,
+                        reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
+                        isLinkedToReminders: memo.isLinkedToReminders ?? false,
+                        deletedAt: memo.deletedAt
+                    )
+                    record.isArchived = memo.isArchived
+                    context.insert(record)
+                }
+                try context.save()
+
+                for memo in legacyMemos {
+                    context.delete(memo)
+                }
+                try context.save()
+            }
+            defaults.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
+        }
+    }
+
+    /// `isCompleted` 의 `nil` 을 `false` 로 메운다.
+    ///
+    /// 나중에 추가된 필드라 그 전에 만든 기록은 값이 비어 있다
+    /// (실측 2026-09-02: 실사용 190건 중 45건).
+    ///
+    /// `isArchived` 는 더 이상 어느 술어도 읽지 않아 메울 필요가 없다(2026-09-03,
+    /// «보관» 기능 제거).
+    ///
+    /// 코드에서는 `isCompletedValue` 가 `== true` 로 읽어 `nil` 과 `false` 가 이미 같다.
+    /// **그런데 SQL 은 다르다.** `#Predicate` 의 `isCompleted != true` 는
+    /// `ZISCOMPLETED != 1` 이 되는데, 3값 논리에서 `NULL != 1` 은 TRUE 가 아니라 NULL 이라
+    /// **그 행이 결과에서 조용히 빠진다.** 화면에서 기록이 사라지는 것으로 나타난다.
+    ///
+    /// 술어마다 `(x == false || x == nil)` 로 쓸 수도 있지만, 그러면 모든 호출부가 그 사정을
+    /// 알아야 하고 타입 검사기도 버거워한다. 데이터를 한 번 고르게 만드는 편이 낫다.
+    private func normalizeMemoFlags(in context: ModelContext) {
+        do {
+            let memos = try context.fetch(FetchDescriptor<Memo>(
+                predicate: #Predicate { $0.isCompleted == nil }
+            ))
+            for memo in memos {
+                if memo.isCompleted == nil { memo.isCompleted = false }
+            }
+            let records = try context.fetch(FetchDescriptor<SecondBrainRecord>(
+                predicate: #Predicate { $0.isCompleted == nil }
+            ))
+            for record in records {
+                if record.isCompleted == nil { record.isCompleted = false }
+            }
+            if !memos.isEmpty || !records.isEmpty {
+                try context.save()
+            }
+        } catch {
+            context.rollback()
+        }
+    }
+
+    /// 같은 날짜 일기가 둘 이상이면 하나만 남긴다.
+    ///
+    /// `DiaryEntry.day` 에 유일 제약을 걸 수 없어서(`#Unique` 는 macOS 15+) 코드로 지킨다.
+    /// 새로 생기는 것은 `DiaryBrowserView.upsert` 가 막고, 이미 생긴 것을 여기서 정리한다.
+    /// iCloud 병합·백업 복원처럼 앱 밖에서 들어오는 경로가 있으므로 실행마다 확인한다.
+    ///
+    /// 남길 것은 **본문이 가장 긴 것**이다. 사용자가 실제로 쓴 글을 잃지 않는 것이
+    /// 어느 쪽이 «원본»인지 따지는 것보다 중요하다. 길이가 같으면 최근에 고친 쪽을 남긴다.
+    private func mergeDuplicateDiaryEntries(in context: ModelContext) {
+        do {
+            let entries = try context.fetch(FetchDescriptor<DiaryEntry>())
+            let byDay = Dictionary(grouping: entries, by: \.day)
+            var didRemove = false
+
+            for (_, group) in byDay where group.count > 1 {
+                let keep = group.max {
+                    if $0.body.count != $1.body.count { return $0.body.count < $1.body.count }
+                    return $0.updatedAt < $1.updatedAt
+                }
+                for entry in group where entry !== keep {
+                    context.delete(entry)
+                    didRemove = true
+                }
+            }
+
+            if didRemove {
+                try context.save()
+            }
+        } catch {
+            context.rollback()
+        }
     }
 
     private func toggleTimerFromHotkey() {
@@ -535,14 +704,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let context = modelContainer.mainContext
-        guard let memos = try? context.fetch(FetchDescriptor<Memo>()) else { return }
-        guard !TodayPlanningReminderPolicy.hasTodayTask(in: memos, now: Date()) else {
+        guard let records = try? context.fetch(FetchDescriptor<SecondBrainRecord>()) else { return }
+        guard !TodayPlanningReminderPolicy.hasTodayTask(in: records, now: Date()) else {
             NotificationManager.shared.cancel(
                 identifier: Constants.todayPlanningReminderNotificationIdentifier
             )
             return
         }
-        quickMemoPanel.showTodayTask(modelContext: context)
+        quickMemoPanel.showTodayTask(
+            todos: dependencies.todoRepository,
+            quickNotes: dependencies.quickNoteRepository
+        )
     }
 
     /// 날짜·시계·시간대가 바뀌면 오늘 할 일 알림 예약을 다시 잡는다.
@@ -626,11 +798,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     referenceDate: referenceDate ?? Date()
                 )
                 .environment(appState)
+                .environment(\.dependencies, dependencies)
                 .modelContainer(modelContainer)
             )
         case .settings(let tab):
             let view = SettingsRoot(initialSelection: tab)
                 .environment(appState)
+                .environment(\.dependencies, dependencies)
                 .modelContainer(modelContainer)
                 .frame(
                     width: SettingsTheme.windowDefaultSize.width,
@@ -647,6 +821,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .statsDetail(let mode, let contentMode, _):
             return AnyView(
                 StatsDetailWindow(
+                    repository: dependencies.statsDetailRepository,
+                    todoRepository: dependencies.todoRepository,
+                    reflectionRepository: dependencies.reflectionRepository,
+                    statsRepository: dependencies.statsRecordRepository,
+                    statsEditorRepository: dependencies.statsRecordEditorRepository,
                     initialViewMode: mode,
                     initialContentMode: contentMode,
                     initialSelectedDate: referenceDate
@@ -660,7 +839,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         case .achievementDetail(let mode):
             return AnyView(
-                AchievementDetailWindow(initialScreenshotState: mode.initialState)
+                AchievementDetailWindow(
+                    repository: dependencies.achievementRepository,
+                    rewardRepository: dependencies.rewardRepository,
+                    initialScreenshotState: mode.initialState
+                )
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(
@@ -874,7 +1057,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         CategoryPairStore.shared.renameCategory(from: oldCategory, to: newCategory)
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
     }
 }
 
@@ -993,6 +1176,15 @@ struct HorongHorongApp: App {
         MenuBarExtra {
             MenuBarPopover(timerManager: appDelegate.timerManager)
                 .environment(appDelegate.appState)
+                // **알려진 결함(2026-09-03).** `dependencies` 는 실제 저장소로 한 번만 만들어지는데,
+                // 이 화면들은 온보딩 중에 `guidedModelContainer`(메모리 데모)로 바뀐다.
+                // 그래서 데모 중에는 저장소 기반 화면(메모·성취·타이머 후보)이 데모 데이터가
+                // 아니라 **비어 있는 실제 저장소**를 본다.
+                //
+                // 데모는 데이터가 하나도 없는 첫 사용자에게만 뜨므로 기존 사용자에게는 보이지 않는다.
+                // 기능 이전이 끝난 뒤에 고치기로 했다 — 데모가 켜지면 그 컨테이너로 만든
+                // `DependencyContainer` 를 주입하면 된다.
+                .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
@@ -1004,6 +1196,7 @@ struct HorongHorongApp: App {
         Window(HubWindowPresenter.windowTitle, id: HubWindowPresenter.windowID) {
             MainHubWindow()
                 .environment(appDelegate.appState)
+                .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
                 .dynamicTypeSize(appearanceDensity.dynamicTypeSize)
                 .controlSize(appearanceDensity.controlSize)
@@ -1015,6 +1208,7 @@ struct HorongHorongApp: App {
         Settings {
             SettingsRoot()
                 .environment(appDelegate.appState)
+                .environment(\.dependencies, appDelegate.dependencies)
                 .modelContainer(appDelegate.modelContainer)
                 .frame(
                     minWidth: SettingsTheme.windowMinSize.width,

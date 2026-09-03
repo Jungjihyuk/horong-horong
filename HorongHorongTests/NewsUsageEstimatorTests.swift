@@ -76,8 +76,8 @@ final class NewsUsageEstimatorTests: XCTestCase {
     // 시나리오 5. 소모량이 기록되지 않은 실행은 표본에서 제외한다.
     func testEstimate_jobsWithoutUsage_areExcluded() {
         // Given: 소모량을 보고하지 않는 provider로 돌린 실행만 있다.
-        let job = NewsJob(jobId: "job-1", provider: "antigravity")
-        job.usagePlannedItems = 10
+        // 소모량을 보고하지 않으면 `usage` 자체가 없다.
+        let job = makeRun(provider: "antigravity", usage: nil)
 
         // When: 추정한다.
         let estimate = NewsUsageEstimator.estimate(
@@ -111,11 +111,22 @@ final class NewsUsageEstimatorTests: XCTestCase {
     // 시나리오 7. 사용률을 보고한 이력이 있으면 차감 예정 %를 계산한다.
     func testEstimate_withRateLimitHistory_predictsPercentRange() throws {
         // Given: 20회 호출로 사용률 4%를 쓴 실행 3건.
-        let jobs = (0..<3).map { _ -> NewsJob in
-            let job = makeJob(provider: "codex", plannedItems: 10, calls: 20, input: 8_000, output: 2_000)
-            job.usagePrimaryPercentDelta = 4.0
-            job.usagePrimaryWindowMinutes = 300
-            return job
+        let jobs = (0..<3).map { _ in
+            makeRun(
+                provider: "codex",
+                usage: NewsJobUsage(
+                    callCount: 20,
+                    inputTokens: 8_000,
+                    outputTokens: 2_000,
+                    totalCostUSD: 0.5,
+                    plannedItems: 10,
+                    primaryPercentDelta: 4.0,
+                    primaryWindowMinutes: 300,
+                    secondaryPercentDelta: nil,
+                    secondaryWindowMinutes: nil,
+                    planType: nil
+                )
+            )
         }
 
         // When: 같은 설정으로 추정한다.
@@ -149,20 +160,43 @@ final class NewsUsageEstimatorTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// **`@Model` 을 만들지 않는다.** 추정은 순수 함수라 값 타입만 있으면 된다.
     private func makeJob(
         provider: String,
         plannedItems: Int,
         calls: Int,
         input: Int,
         output: Int
-    ) -> NewsJob {
-        let job = NewsJob(jobId: UUID().uuidString, provider: provider)
-        job.status = "success"
-        job.usagePlannedItems = plannedItems
-        job.usageCallCount = calls
-        job.usageInputTokens = input
-        job.usageOutputTokens = output
-        job.usageTotalCostUSD = 0.5
-        return job
+    ) -> NewsJobRun {
+        makeRun(
+            provider: provider,
+            usage: NewsJobUsage(
+                callCount: calls,
+                inputTokens: input,
+                outputTokens: output,
+                totalCostUSD: 0.5,
+                plannedItems: plannedItems,
+                primaryPercentDelta: nil,
+                primaryWindowMinutes: nil,
+                secondaryPercentDelta: nil,
+                secondaryWindowMinutes: nil,
+                planType: nil
+            )
+        )
+    }
+
+    private func makeRun(provider: String, usage: NewsJobUsage?) -> NewsJobRun {
+        NewsJobRun(
+            jobId: UUID().uuidString,
+            status: "success",
+            provider: provider,
+            requestedAt: Date(),
+            startedAt: nil,
+            endedAt: nil,
+            errorCode: nil,
+            errorMessage: nil,
+            logPath: nil,
+            usage: usage
+        )
     }
 }

@@ -103,7 +103,7 @@ final class FocusNudgeEngineTests: XCTestCase {
             FocusSession.self,
             PomodoroReflection.self,
             AppUsageSegment.self,
-            Memo.self,
+            SecondBrainRecord.self,
         ])
         let configuration = ModelConfiguration(
             schema: schema,
@@ -116,7 +116,7 @@ final class FocusNudgeEngineTests: XCTestCase {
         let modelContext = container.mainContext
 
         for index in 0..<7 {
-            let memo = Memo(content: "오늘 할 일 \(index + 1)")
+            let memo = SecondBrainRecord(content: "오늘 할 일 \(index + 1)")
             memo.startDate = day.addingTimeInterval(Double(9 + index) * 60 * 60)
             if index < 2 {
                 memo.setCompleted(true, at: day.addingTimeInterval(12 * 60 * 60))
@@ -128,7 +128,7 @@ final class FocusNudgeEngineTests: XCTestCase {
         }
 
         for index in 0..<2 {
-            let memo = Memo(content: "이전 마감 할 일 \(index + 1)")
+            let memo = SecondBrainRecord(content: "이전 마감 할 일 \(index + 1)")
             memo.deadline = day.addingTimeInterval(Double(-index - 1) * 24 * 60 * 60)
             modelContext.insert(memo)
         }
@@ -193,7 +193,7 @@ final class FocusNudgeEngineTests: XCTestCase {
             FocusSession.self,
             PomodoroReflection.self,
             AppUsageSegment.self,
-            Memo.self,
+            SecondBrainRecord.self,
         ])
         let configuration = ModelConfiguration(
             schema: schema,

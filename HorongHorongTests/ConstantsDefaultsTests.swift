@@ -349,13 +349,13 @@ final class ConstantsDefaultsTests: XCTestCase {
         let completed = Memo(content: "완료한 일")
         completed.startDate = now
         completed.isCompletedValue = true
-        let archived = Memo(content: "보관한 일")
-        archived.startDate = now
-        archived.isArchivedValue = true
+        let deleted = Memo(content: "지운 오늘 할 일")
+        deleted.startDate = now
+        deleted.deletedAt = now
 
         XCTAssertFalse(
             TodayPlanningReminderPolicy.hasTodayTask(
-                in: [completed, archived],
+                in: [completed, deleted],
                 now: now,
                 calendar: calendar
             )
@@ -722,14 +722,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testPomodoroTaskCompletionMarksLinkedMemoAndStoresEvidence() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "  완료 근거 저장  ")
+        let memo = SecondBrainRecord(content: "  완료 근거 저장  ")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -770,7 +770,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testCompletionForAlreadyCompletedMemoNeverTakesRestorationOwnership() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
@@ -778,7 +778,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
         let originalUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let memo = Memo(content: "직접 완료한 할 일")
+        let memo = SecondBrainRecord(content: "직접 완료한 할 일")
         memo.isCompletedValue = true
         memo.isPinned = true
         memo.updatedAt = originalUpdatedAt
@@ -826,7 +826,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testCompletionForMissingLinkedMemoDoesNotStoreEvidence() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
@@ -863,14 +863,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingPomodoroTaskCompletionSafelyRestoresMemoState() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "완료 취소")
+        let memo = SecondBrainRecord(content: "완료 취소")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -907,7 +907,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingPomodoroSessionRemovesReflectionAndRestoresLinkedMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             PomodoroTaskCompletion.self,
@@ -915,7 +915,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "세션 삭제 시 되돌릴 할 일")
+        let memo = SecondBrainRecord(content: "세션 삭제 시 되돌릴 할 일")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -956,7 +956,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRepairingOrphanedPomodoroRecordsRestoresPreviouslyDeletedSessionMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             PomodoroTaskCompletion.self,
@@ -964,7 +964,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "기존 삭제 오류 복구")
+        let memo = SecondBrainRecord(content: "기존 삭제 오류 복구")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -1008,14 +1008,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingFirstOfMultipleCompletionsTransfersSafeMemoRestoration() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "여러 완료 근거")
+        let memo = SecondBrainRecord(content: "여러 완료 근거")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1079,14 +1079,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingNonOwningCompletionFirstStillRestoresMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "완료 근거 삭제 순서")
+        let memo = SecondBrainRecord(content: "완료 근거 삭제 순서")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1148,14 +1148,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCurrentCompletionDoesNotTransferToHistoricalOwner() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "다시 진행한 할 일")
+        let memo = SecondBrainRecord(content: "다시 진행한 할 일")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1213,14 +1213,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCompletionDoesNotUndoLaterCompletionDecision() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "나중에 다시 완료한 일")
+        let memo = SecondBrainRecord(content: "나중에 다시 완료한 일")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -1256,14 +1256,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCompletionPreservesUnrelatedMemoEditsAndRestoresCheck() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "수정 전 제목")
+        let memo = SecondBrainRecord(content: "수정 전 제목")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -1544,12 +1544,17 @@ final class ConstantsDefaultsTests: XCTestCase {
         appState.focusMinutes = 50
         appState.breakMinutes = 5
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
+        )
 
         manager.startFocus(category: "개발")
         appState.remainingSeconds = 31 * 60 + 18
-        let session = try XCTUnwrap(manager.endFocusAndRecord())
+        manager.endFocusAndRecord()
 
+        // `endFocusAndRecord` 는 이제 `@Model` 을 돌려주지 않는다. 저장된 것을 확인한다.
+        let session = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
         XCTAssertEqual(appState.timerState, .idle)
         XCTAssertEqual(session.actualFocusSeconds, 18 * 60 + 42)
         XCTAssertEqual(session.recordedFocusSeconds, 18 * 60 + 42)
@@ -1600,7 +1605,10 @@ final class ConstantsDefaultsTests: XCTestCase {
         let appState = AppState()
         appState.focusMinutes = 30
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
+        )
         manager.startFocus(category: "개발")
 
         let session = try XCTUnwrap(context.fetch(FetchDescriptor<FocusSession>()).first)
@@ -1632,7 +1640,10 @@ final class ConstantsDefaultsTests: XCTestCase {
         let context = container.mainContext
         let appState = AppState()
         let manager = TimerManager(appState: appState)
-        manager.setModelContext(context)
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
+        )
 
         manager.startFocus(category: "개발")
         manager.discardCurrentFocus()
@@ -1734,6 +1745,9 @@ final class ConstantsDefaultsTests: XCTestCase {
         XCTAssertEqual(customizedStudy.markerColorKey, "pink")
     }
 
+    /// 완료·보관·삭제분은 이제 **저장소가 술어로 떨군다**
+    /// (`SwiftDataPomodoroTaskRepositoryTests` 가 그쪽을 검사한다).
+    /// 여기서는 「오늘 것인가 · 목표에 묶였는가」만 본다.
     func testPomodoroTaskCandidatesIncludeGoalLinkedAndTodayTasksOnce() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -1741,32 +1755,27 @@ final class ConstantsDefaultsTests: XCTestCase {
         let today = calendar.date(from: DateComponents(year: 2026, month: 7, day: 20, hour: 9))!
         let tomorrow = calendar.date(from: DateComponents(year: 2026, month: 7, day: 21, hour: 9))!
 
-        let goalLinked = Memo(content: "\n  통계 회고 결과 표시\n상세 설명")
-        let todayOnly = Memo(content: "오늘 시작할 일")
-        todayOnly.startDate = today
-        let todayAndGoalLinked = Memo(content: "오늘의 목표 할 일")
-        todayAndGoalLinked.startDate = today
-        let completed = Memo(content: "완료한 오늘 할 일")
-        completed.startDate = today
-        completed.isCompletedValue = true
-        let archived = Memo(content: "보관한 일")
-        archived.startDate = today
-        archived.isArchivedValue = true
-        let future = Memo(content: "내일 시작할 일")
-        future.startDate = tomorrow
-        let noStartDate = Memo(content: "시작일이 없는 일반 할 일")
-        let primaryGoal = AchievementGoalRecord(
-            title: "포모도로 강화",
-            linkedMemoIDs: [goalLinked.id, todayAndGoalLinked.id, archived.id]
-        )
-        let duplicateGoal = AchievementGoalRecord(
-            title: "포모도로 강화",
-            linkedMemoIDs: [goalLinked.id]
-        )
+        func memo(_ content: String, start: Date? = nil) -> AchievementMemoDetail {
+            AchievementMemoDetail(
+                id: UUID(),
+                content: content,
+                icon: nil,
+                startDate: start,
+                deadline: nil,
+                updatedAt: now,
+                isCompleted: false
+            )
+        }
+
+        let goalLinked = memo("\n  통계 회고 결과 표시\n상세 설명")
+        let todayOnly = memo("오늘 시작할 일", start: today)
+        let todayAndGoalLinked = memo("오늘의 목표 할 일", start: today)
+        let future = memo("내일 시작할 일", start: tomorrow)
+        let noStartDate = memo("시작일이 없는 일반 할 일")
 
         let candidates = PomodoroTaskCandidateBuilder.candidates(
-            memos: [goalLinked, todayOnly, todayAndGoalLinked, completed, archived, future, noStartDate],
-            goalRecords: [primaryGoal, duplicateGoal],
+            memos: [goalLinked, todayOnly, todayAndGoalLinked, future, noStartDate],
+            goalLinkedMemoIDs: [goalLinked.id, todayAndGoalLinked.id],
             now: now,
             calendar: calendar
         )
@@ -1799,13 +1808,20 @@ final class ConstantsDefaultsTests: XCTestCase {
     func testPomodoroTaskCandidatePreservesFullTitleForSessionSnapshot() throws {
         let fullTitle = String(repeating: "긴 작업 제목 ", count: 8)
             .trimmingCharacters(in: .whitespaces)
-        let memo = Memo(content: "\(fullTitle)\n상세 설명")
-        let goal = AchievementGoalRecord(title: "장기 목표", linkedMemoIDs: [memo.id])
+        let memo = AchievementMemoDetail(
+            id: UUID(),
+            content: "\(fullTitle)\n상세 설명",
+            icon: nil,
+            startDate: nil,
+            deadline: nil,
+            updatedAt: Date(),
+            isCompleted: false
+        )
 
         let candidate = try XCTUnwrap(
             PomodoroTaskCandidateBuilder.candidates(
                 memos: [memo],
-                goalRecords: [goal]
+                goalLinkedMemoIDs: [memo.id]
             ).first
         )
 
@@ -3198,7 +3214,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         context.insert(record)
         try context.save()
 
-        CategoryManager.shared.loadUserRules(from: context)
+        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: context))
 
         XCTAssertEqual(rule.category, Constants.productivityManagementAppCategory)
         XCTAssertEqual(segment.category, Constants.productivityManagementAppCategory)
