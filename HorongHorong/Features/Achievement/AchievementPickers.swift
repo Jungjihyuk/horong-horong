@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -34,7 +33,7 @@ struct AchievementEmptyDetailCard: View {
 }
 
 struct AchievementMemoPickerRow: View {
-    let memo: Memo
+    let memo: AchievementMemoDetail
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -43,7 +42,7 @@ struct AchievementMemoPickerRow: View {
                     .font(.system(size: 13))
                 Text(memo.content)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(memo.isCompletedValue ? PopoverChrome.inkSecondary : PopoverChrome.ink)
+                    .foregroundStyle(memo.isCompleted ? PopoverChrome.inkSecondary : PopoverChrome.ink)
                     .lineLimit(1)
             }
             let metaText = AchievementDataBuilder.todoMetaText(for: memo)
@@ -114,7 +113,7 @@ struct AchievementChildGoalPickerRow: View {
 struct AchievementMemoPickerSection: Identifiable {
     let icon: String
     let label: String
-    let memos: [Memo]
+    let memos: [AchievementMemoDetail]
 
     var id: String { icon }
 }

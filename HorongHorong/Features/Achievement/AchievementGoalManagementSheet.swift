@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -18,16 +17,16 @@ import FoundationModels
 struct AchievementGoalManagementSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    let record: AchievementGoalRecord
+    let record: AchievementGoalDetail
     let linkedMemoCount: Int
-    let memos: [Memo]
-    let childRecords: [AchievementGoalRecord]
-    let availableChildRecords: [AchievementGoalRecord]
+    let memos: [AchievementMemoDetail]
+    let childRecords: [AchievementGoalDetail]
+    let availableChildRecords: [AchievementGoalDetail]
     let childCadence: String?
-    let onSave: (AchievementGoalRecord, AchievementGoalEditDraft) -> Void
-    let onDelete: (AchievementGoalRecord) -> Void
+    let onSave: (AchievementGoalDetail, AchievementGoalEditDraft) -> Void
+    let onDelete: (AchievementGoalDetail) -> Void
     /// 자식을 부모에서 떼어낸다. 자식 목표 자체를 고치거나 지우는 일은 그 목표의 관리 창이 맡는다.
-    let onDetachChild: (AchievementGoalRecord) -> Void
+    let onDetachChild: (AchievementGoalDetail) -> Void
 
     @State private var title: String
     @State private var emoji: String
@@ -40,15 +39,15 @@ struct AchievementGoalManagementSheet: View {
     @State private var showsDeleteConfirmation = false
 
     init(
-        record: AchievementGoalRecord,
+        record: AchievementGoalDetail,
         linkedMemoCount: Int,
-        memos: [Memo] = [],
-        childRecords: [AchievementGoalRecord] = [],
-        availableChildRecords: [AchievementGoalRecord] = [],
+        memos: [AchievementMemoDetail] = [],
+        childRecords: [AchievementGoalDetail] = [],
+        availableChildRecords: [AchievementGoalDetail] = [],
         childCadence: String? = nil,
-        onSave: @escaping (AchievementGoalRecord, AchievementGoalEditDraft) -> Void,
-        onDelete: @escaping (AchievementGoalRecord) -> Void,
-        onDetachChild: @escaping (AchievementGoalRecord) -> Void = { _ in }
+        onSave: @escaping (AchievementGoalDetail, AchievementGoalEditDraft) -> Void,
+        onDelete: @escaping (AchievementGoalDetail) -> Void,
+        onDetachChild: @escaping (AchievementGoalDetail) -> Void = { _ in }
     ) {
         self.record = record
         self.linkedMemoCount = linkedMemoCount
@@ -393,8 +392,8 @@ struct AchievementGoalManagementSheet: View {
 /// 이름·이모지 수정과 삭제는 그 목표 자신의 관리 창이 맡는다.
 /// 여기서는 부모와의 연결만 다룬다 — 실수로 남의 목표를 통째로 지우는 일이 없도록.
 struct AchievementChildGoalEditorRow: View {
-    let record: AchievementGoalRecord
-    let onDetach: (AchievementGoalRecord) -> Void
+    let record: AchievementGoalDetail
+    let onDetach: (AchievementGoalDetail) -> Void
 
     var body: some View {
         HStack(spacing: 8) {

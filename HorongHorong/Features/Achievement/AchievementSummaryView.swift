@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -20,31 +19,29 @@ struct AchievementSummaryView: View {
     let rewardRepository: RewardRepository
 
     @Environment(AppState.self) private var appState
-    // 섹션 술어는 못 쓴다 — 목표에는 **어떤 섹션의 메모든** 연결될 수 있다.
-    // 대신 정렬 키를 편집으로 안 바뀌는 필드로 바꾼다. `goals(from:memos:)` 는
-    // ID 사전을 만들 뿐이라 순서에 의존하지 않는다.
-    @Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
-    @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
+    @State private var viewModel: AchievementSummaryViewModel
     @State private var hostWindow: NSWindow?
 
     private let textScale: CGFloat = 0.8
 
-    private var goals: [AchievementGoal] {
-        AchievementDataBuilder.goals(from: goalRecords, memos: memos)
+    init(repository: AchievementRepository, rewardRepository: RewardRepository) {
+        self.rewardRepository = rewardRepository
+        _viewModel = State(initialValue: AchievementSummaryViewModel(repository: repository))
     }
 
-    private var currentWeekStart: Date {
-        AchievementDataBuilder.weekStart(for: Date())
-    }
-
-    private var weeklyGoals: [AchievementGoal] {
-        goals.filter { goal in
-            goal.cadence == "주간"
-                && AchievementDataBuilder.goal(goal, belongsToWeekStarting: currentWeekStart)
-        }
-    }
+    private var currentWeekStart: Date { viewModel.currentWeekStart }
+    private var weeklyGoals: [AchievementGoal] { viewModel.weeklyGoals }
 
     var body: some View {
+        content
+            .onAppear { viewModel.reload() }
+            // 목표는 성취 창에서 바뀐다. `@Query` 자동 갱신을 대신한다.
+            .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
+                viewModel.reload()
+            }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
 

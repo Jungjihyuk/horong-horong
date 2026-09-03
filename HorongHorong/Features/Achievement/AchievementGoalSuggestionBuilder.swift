@@ -46,21 +46,20 @@ enum AchievementGoalSuggestionBuilder {
             .map { $0 }
     }
 
-    static func snapshots(from memos: [Memo]) -> [AchievementMemoSnapshot] {
+    static func snapshots(from memos: [AchievementMemoDetail]) -> [AchievementMemoSnapshot] {
         memos.map { memo in
             AchievementMemoSnapshot(
                 id: memo.id,
                 content: memo.content,
                 icon: memo.icon,
-                date: AchievementDataBuilder.memoDate(memo),
+                date: memo.date,
                 startDate: memo.startDate,
                 deadline: memo.deadline,
-                isCompleted: memo.isCompletedValue
+                isCompleted: memo.isCompleted
             )
         }
     }
 
-    // 앱 전용 SwiftData 브리지. 평가 하네스는 골든셋 JSON에서 스냅샷을 직접 만든다.
     /// 파일이 갈리면서 `fileprivate` 로는 안 보이게 됐다. 목표 작성 시트가 부른다.
     static func snapshots(from goals: [AchievementGoal]) -> [AchievementGoalSnapshot] {
         goals.map { goal in

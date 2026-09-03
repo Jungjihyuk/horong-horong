@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -17,6 +16,10 @@ import FoundationModels
  원래 `AchievementViews.swift`(9,854줄) 한 파일에 있었다. 2026-09-03 분할.
  */
 
+/// 저장된 값을 화면이 쓸 모습으로 조립한다.
+///
+/// **표현 계층에 있는 이유**: 결과인 `AchievementGoal` 이 `Color` 를 들고 있다.
+/// 입력은 `Domain` 의 값 타입이라 SwiftData 를 import 하지 않는다.
 enum AchievementDataBuilder {
     static func weekStart(for date: Date, calendar: Calendar = .current) -> Date {
         Constants.mondayWeekStart(for: date, calendar: calendar)
@@ -53,7 +56,7 @@ enum AchievementDataBuilder {
     }
 
     @MainActor
-    static func goals(from records: [AchievementGoalRecord], memos: [Memo]) -> [AchievementGoal] {
+    static func goals(from records: [AchievementGoalDetail], memos: [AchievementMemoDetail]) -> [AchievementGoal] {
         let memoByID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         func nonEmpty(_ value: String?) -> String? {
             let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -66,7 +69,7 @@ enum AchievementDataBuilder {
             default: return nil
             }
         }
-        func childRecords(for record: AchievementGoalRecord) -> [AchievementGoalRecord] {
+        func childRecords(for record: AchievementGoalDetail) -> [AchievementGoalDetail] {
             guard let childCadence = childCadence(for: record.cadence) else { return [] }
             return records.filter { child in
                 guard child.cadence == childCadence else { return false }
@@ -80,12 +83,12 @@ enum AchievementDataBuilder {
                 }
             }
         }
-        func directProgress(for record: AchievementGoalRecord) -> (done: Int, total: Int) {
+        func directProgress(for record: AchievementGoalDetail) -> (done: Int, total: Int) {
             let linkedMemos = record.linkedMemoIDs.compactMap { memoByID[$0] }
             guard !linkedMemos.isEmpty else { return (0, 0) }
-            return (linkedMemos.filter(\.isCompletedValue).count, max(1, record.targetCount))
+            return (linkedMemos.filter(\.isCompleted).count, max(1, record.targetCount))
         }
-        func progress(for record: AchievementGoalRecord, visited: Set<UUID> = []) -> (done: Int, total: Int) {
+        func progress(for record: AchievementGoalDetail, visited: Set<UUID> = []) -> (done: Int, total: Int) {
             guard !visited.contains(record.id) else {
                 return directProgress(for: record)
             }
@@ -98,7 +101,7 @@ enum AchievementDataBuilder {
             let completedChildren = childProgresses.filter { $0.total > 0 && $0.done >= $0.total }.count
             return (completedChildren, children.count)
         }
-        func descendantMemoIDs(for record: AchievementGoalRecord, visited: Set<UUID> = []) -> [UUID] {
+        func descendantMemoIDs(for record: AchievementGoalDetail, visited: Set<UUID> = []) -> [UUID] {
             guard !visited.contains(record.id) else {
                 return record.linkedMemoIDs
             }
@@ -111,7 +114,7 @@ enum AchievementDataBuilder {
             let linkedMemos = sourceMemoIDs.compactMap { memoByID[$0] }
                 .sorted { memoDate($0) < memoDate($1) }
             let recordDate = linkedMemos
-                .filter(\.isCompletedValue)
+                .filter(\.isCompleted)
                 .map(memoDate)
                 .max() ?? record.updatedAt
             let todos = linkedMemos.map { memo in
@@ -126,15 +129,10 @@ enum AchievementDataBuilder {
             let goalProgress = progress(for: record)
             let done = goalProgress.total > 0 ? min(goalProgress.done, goalProgress.total) : 0
             let total = goalProgress.total
-            // 달성을 **사건으로** 남긴다. 여기가 달성 여부를 아는 유일한 자리다 —
-            // `done`·`total` 은 지금 남아 있는 할일로부터 계산되므로, 나중에 할일을 더하거나
-            // 지우면 답이 바뀐다. 처음 참이 된 순간을 찍어 두지 않으면 그 사실을 잃는다.
-            //
-            // 한 번 찍은 값은 되돌리지 않는다. 달성이 풀리는 일(할일 추가)은 있어도
-            // «그때 달성했었다» 는 사실은 변하지 않는다.
-            if total > 0, done >= total, record.completedAt == nil {
-                record.completedAt = Date()
-            }
+            // 달성 도장(`completedAt`)은 여기서 찍지 않는다. 예전에는 이 자리에서
+            // 저장소에 직접 썼는데, **화면을 그리는 도중에 DB 가 바뀌는** 셈이었다.
+            // 지금은 조립만 하고, 새로 달성된 목표를 골라 내는 일은
+            // `newlyCompletedGoalIDs(...)` 가 맡는다.
             return AchievementGoal(
                 id: record.id,
                 emoji: record.emoji,
@@ -187,12 +185,12 @@ enum AchievementDataBuilder {
         }
     }
 
-    static func timeline(for goal: AchievementGoal, memos: [Memo], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
+    static func timeline(for goal: AchievementGoal, memos: [AchievementMemoDetail], weekStarting weekStart: Date, referenceDate: Date = Date()) -> [AchievementTimelineItem] {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: weekStart)
         let linked = memos.filter { goal.sourceMemoIDs.contains($0.id) }
-        let completedCount = linked.filter(\.isCompletedValue).count
-        let lastCompletedDate = linked.filter(\.isCompletedValue).compactMap(timelineDate).max()
+        let completedCount = linked.filter(\.isCompleted).count
+        let lastCompletedDate = linked.filter(\.isCompleted).compactMap(timelineDate).max()
 
         return (0..<7).map { offset in
             let day = calendar.date(byAdding: .day, value: offset, to: start) ?? start
@@ -207,7 +205,7 @@ enum AchievementDataBuilder {
             let isLastDay = offset == 6
             let hasReward = isLastDay && !goal.reward.amount.isEmpty
                 && goal.reward.amount != AchievementReward.emptyAmount
-            let isCompletedDay = dayMemos.contains(where: \.isCompletedValue)
+            let isCompletedDay = dayMemos.contains(where: \.isCompleted)
             let isFutureDay = !isCompletedDay && calendar.startOfDay(for: day) > calendar.startOfDay(for: referenceDate)
             let topLabel: String?
             if hasReward {
@@ -227,7 +225,7 @@ enum AchievementDataBuilder {
                         memoID: memo.id,
                         title: shortText(memo.content, limit: 200),
                         meta: todoMetaText(for: memo),
-                        isCompleted: memo.isCompletedValue,
+                        isCompleted: memo.isCompleted,
                         isFuture: todoStatus(for: memo, referenceDate: referenceDate) == .future,
                         sortDate: timelineDate(memo),
                         hasStartTime: memo.startDate != nil
@@ -242,7 +240,7 @@ enum AchievementDataBuilder {
 
     static func timeline(
         for goals: [AchievementGoal],
-        memos: [Memo],
+        memos: [AchievementMemoDetail],
         weekStarting weekStart: Date,
         referenceDate: Date = Date(),
         sortOrder: Constants.AchievementTimelineSortOrder = .ascending
@@ -288,11 +286,19 @@ enum AchievementDataBuilder {
         }
     }
 
-    static func activeMemos(_ memos: [Memo]) -> [Memo] {
-        memos.filter { !$0.isArchivedValue && !$0.isRecentlyDeleted }
+    /// 이번에 처음 달성된 목표. 저장소에 달성 시각을 찍어 달라고 할 대상이다.
+    ///
+    /// **한 번 찍은 값은 되돌리지 않는다.** 달성이 풀리는 일(할일을 더 묶음)은 있어도
+    /// «그때 달성했었다» 는 사실은 변하지 않는다 — 그래서 `completedAt == nil` 인 것만 고른다.
+    static func newlyCompletedGoalIDs(
+        goals: [AchievementGoal],
+        details: [AchievementGoalDetail]
+    ) -> [UUID] {
+        let stamped = Set(details.filter { $0.completedAt != nil }.map(\.id))
+        return goals.filter { $0.isComplete && !stamped.contains($0.id) }.map(\.id)
     }
 
-    static func displayRule(for record: AchievementGoalRecord, total: Int) -> String {
+    static func displayRule(for record: AchievementGoalDetail, total: Int) -> String {
         let criterion = record.rule.trimmingCharacters(in: .whitespacesAndNewlines)
         if !criterion.isEmpty {
             return criterion
@@ -307,13 +313,14 @@ enum AchievementDataBuilder {
         .joined(separator: " · ")
     }
 
-    static func memoDate(_ memo: Memo) -> Date {
-        memo.deadline ?? memo.startDate ?? memo.updatedAt
+    /// `AchievementMemoDetail.date` 와 같다. 호출부가 많아 이름을 남겨 둔다.
+    static func memoDate(_ memo: AchievementMemoDetail) -> Date {
+        memo.date
     }
 
     /// 카드가 어느 요일 칸에 놓일지, 칸 안에서 몇 번째로 놓일지를 함께 정하는 기준.
     /// 타임라인은 «언제 하는 일인지»를 읽는 화면이라 시작 시각을 먼저 본다.
-    private static func timelineDate(_ memo: Memo) -> Date? {
+    private static func timelineDate(_ memo: AchievementMemoDetail) -> Date? {
         memo.startDate ?? memo.deadline
     }
 
@@ -355,7 +362,7 @@ enum AchievementDataBuilder {
         }
     }
 
-    static func dateRangeText(for memo: Memo) -> String {
+    static func dateRangeText(for memo: AchievementMemoDetail) -> String {
         switch (memo.startDate, memo.deadline) {
         case let (start?, deadline?):
             return "\(shortDate(start)) - \(shortDate(deadline))"
@@ -368,7 +375,7 @@ enum AchievementDataBuilder {
         }
     }
 
-    static func todoMetaText(for memo: Memo) -> String {
+    static func todoMetaText(for memo: AchievementMemoDetail) -> String {
         let dateText = dateRangeText(for: memo)
         let detail = todoDetail(for: memo)
         if dateText.isEmpty {
@@ -380,8 +387,8 @@ enum AchievementDataBuilder {
         return "\(dateText) · \(detail)"
     }
 
-    static func todoDetail(for memo: Memo, referenceDate: Date = Date()) -> String {
-        if memo.isCompletedValue {
+    static func todoDetail(for memo: AchievementMemoDetail, referenceDate: Date = Date()) -> String {
+        if memo.isCompleted {
             return "완료"
         }
         guard memo.startDate != nil || memo.deadline != nil else {
@@ -393,8 +400,8 @@ enum AchievementDataBuilder {
         return ""
     }
 
-    static func todoStatus(for memo: Memo, referenceDate: Date = Date()) -> AchievementTodoStatus {
-        if memo.isCompletedValue {
+    static func todoStatus(for memo: AchievementMemoDetail, referenceDate: Date = Date()) -> AchievementTodoStatus {
+        if memo.isCompleted {
             return .done
         }
         if Calendar.current.startOfDay(for: memoDate(memo)) > Calendar.current.startOfDay(for: referenceDate) {

@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -24,11 +23,15 @@ struct AchievementGoalComposerSheet: View {
     /// 적용만 하고 닫으면 채택이 아니므로, 출처를 여기 들고 있다가 **저장할 때** 심는다.
     @State private var appliedSuggestion: AchievementGoalSuggestion?
 
-    let memos: [Memo]
+    /// 목표에 묶을 수 있는 할일. **저장소가 이미 걸러 준다**(Todo 섹션 · 안 끝난 것 ·
+    /// 보관·삭제 제외). 예전에는 전체를 받아 여기서 같은 조건을 다시 썼다.
+    let memos: [AchievementMemoDetail]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
     /// 저장한 목표, 이어붙일 기존 하위 목표, 함께 새로 만들 하위 목표 제목들.
-    let onSave: (AchievementGoalRecord, Set<UUID>, [String]) throws -> Void
+    /// 저장한 뒤 **만들어진 목표의 id 를 돌려준다.** 추천 채택 기록에 그 id 가 필요하다 —
+    /// 예전에는 여기서 레코드를 직접 만들어 id 를 알고 있었다.
+    let onSave: (AchievementGoalDraft, Set<UUID>, [String]) throws -> UUID
 
     @AppStorage(Constants.AppStorageKey.achievementSuggestionCount)
     private var weeklySuggestionLimit: Int = Constants.defaultAchievementSuggestionCount
@@ -389,9 +392,9 @@ struct AchievementGoalComposerSheet: View {
                     ForEach(visibleMemoIDs(for: suggestion), id: \.self) { id in
                         if let memo = memo(for: id) {
                             HStack(spacing: 6) {
-                                Image(systemName: memo.isCompletedValue ? "checkmark.circle.fill" : "circle")
+                                Image(systemName: memo.isCompleted ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(memo.isCompletedValue ? PopoverChrome.accent : PopoverChrome.inkTertiary)
+                                    .foregroundStyle(memo.isCompleted ? PopoverChrome.accent : PopoverChrome.inkTertiary)
                                 Text(AchievementDataBuilder.shortText(memo.content, limit: 30))
                                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                                     .foregroundStyle(PopoverChrome.ink)
@@ -1021,27 +1024,19 @@ struct AchievementGoalComposerSheet: View {
         }
     }
 
-    private var suggestionSourceMemos: [Memo] {
+    private var suggestionSourceMemos: [AchievementMemoDetail] {
         let weeklyLinkedIDs = Set(existingGoals.filter { $0.cadence == "주간" }.flatMap(\.sourceMemoIDs))
         return memos.filter { memo in
-            !weeklyLinkedIDs.contains(memo.id)
-                && !memo.isCompletedValue
-                && !memo.isRecentlyDeleted
-                && memo.resolvedSection == .todo
-                && isUsableSuggestionMemo(memo)
+            !weeklyLinkedIDs.contains(memo.id) && isUsableSuggestionMemo(memo)
         }
     }
 
-    private var linkableMemos: [Memo] {
-        memos
-            .filter { memo in
-                memo.resolvedSection == .todo && !memo.isCompletedValue && !memo.isRecentlyDeleted
-            }
-            .sorted(by: isMemoOrderedBefore)
+    private var linkableMemos: [AchievementMemoDetail] {
+        memos.sorted(by: isMemoOrderedBefore)
     }
 
     /// 검색어로 좁힌 할일. 이미 고른 것은 사라지지 않도록 남긴다.
-    private var visibleLinkableMemos: [Memo] {
+    private var visibleLinkableMemos: [AchievementMemoDetail] {
         let query = memoSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return linkableMemos }
         return linkableMemos.filter {
@@ -1069,11 +1064,11 @@ struct AchievementGoalComposerSheet: View {
             }
     }
 
-    private func memoPickerDate(for memo: Memo) -> Date? {
+    private func memoPickerDate(for memo: AchievementMemoDetail) -> Date? {
         [memo.startDate, memo.deadline].compactMap { $0 }.max()
     }
 
-    private func isMemoOrderedBefore(_ lhs: Memo, _ rhs: Memo) -> Bool {
+    private func isMemoOrderedBefore(_ lhs: AchievementMemoDetail, _ rhs: AchievementMemoDetail) -> Bool {
         let lhsDate = memoPickerDate(for: lhs)
         let rhsDate = memoPickerDate(for: rhs)
 
@@ -1107,7 +1102,7 @@ struct AchievementGoalComposerSheet: View {
         return Set(icons)
     }
 
-    private func isUsableSuggestionMemo(_ memo: Memo) -> Bool {
+    private func isUsableSuggestionMemo(_ memo: AchievementMemoDetail) -> Bool {
         let content = memo.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.count >= 3 else { return false }
         let icon = memo.icon ?? MemoIcon.defaultIcon
@@ -1150,7 +1145,7 @@ struct AchievementGoalComposerSheet: View {
         clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
     }
 
-    private func memo(for id: UUID) -> Memo? {
+    private func memo(for id: UUID) -> AchievementMemoDetail? {
         memos.first { $0.id == id }
     }
 
@@ -1763,7 +1758,7 @@ struct AchievementGoalComposerSheet: View {
             linkedMemoCount: linkedMemoIDs.count,
             childGoalCount: selectedChildGoalIDs.count + pendingNewChildTitles.count
         )
-        let record = AchievementGoalRecord(
+        let draft = AchievementGoalDraft(
             title: trimmedTitle,
             emoji: selectedEmoji,
             cadence: selectedTargetLevel,
@@ -1772,22 +1767,20 @@ struct AchievementGoalComposerSheet: View {
             targetValueText: resolvedTargetValueText,
             periodText: resolvedPeriodText,
             dueDate: hasDueDate ? selectedPeriodDate : nil,
-            rewardText: "",
             colorHex: colorHex,
             roleName: hierarchy.roleName,
             vision: hierarchy.vision,
             yearGoal: hierarchy.yearGoal,
-            quarterGoal: nil,
             monthGoal: hierarchy.monthGoal,
-            linkedMemoIDs: linkedMemoIDs
+            linkedMemoIDs: linkedMemoIDs,
+            // 추천에서 온 목표면 출처를 심는다. 직접 만든 목표는 `nil` 로 남아 둘이 갈린다.
+            sourceRunID: appliedSuggestion?.runID,
+            sourceSuggestionID: appliedSuggestion?.id
         )
-        // 추천에서 온 목표면 출처를 심는다. 직접 만든 목표는 `nil` 로 남아 둘이 갈린다.
-        record.sourceRunID = appliedSuggestion?.runID
-        record.sourceSuggestionID = appliedSuggestion?.id
         do {
-            try onSave(record, selectedChildGoalIDs, pendingNewChildTitles)
+            let goalID = try onSave(draft, selectedChildGoalIDs, pendingNewChildTitles)
             if let applied = appliedSuggestion {
-                AIRunLog.recordAdoption(suggestion: applied, goalID: record.id, titleEdited: applied.title != trimmedTitle)
+                AIRunLog.recordAdoption(suggestion: applied, goalID: goalID, titleEdited: applied.title != trimmedTitle)
             }
             onClose()
         } catch {

@@ -2,7 +2,6 @@ import AppKit
 import HorongAI
 import HorongAIMLX
 import OSLog
-import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 #if canImport(FoundationModels)
@@ -275,7 +274,6 @@ struct AchievementRecordMonthGroup: Identifiable {
 }
 
 struct AchievementDetailWindow: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
     // 섹션 술어는 못 쓴다 — 목표에는 **어떤 섹션의 메모든** 연결할 수 있고,
     // `linkableMemos` 는 이미 연결된 것이면 보관·삭제된 것까지 보여준다.
@@ -288,8 +286,12 @@ struct AchievementDetailWindow: View {
     /// 원장 스냅샷. 계산 프로퍼티에서 매번 조회하면 body 평가마다 fetch 가 돈다.
     @State private var rewardSnapshots: [RewardEntrySnapshot] = []
 
-    @Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
-    @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
+    let repository: AchievementRepository
+
+    /// 저장소에서 읽어 둔 값. `@Query` 를 걷어낸 자리다 —
+    /// 나타날 때와 「바뀌었다」 알림이 올 때 다시 읽는다.
+    @State private var goalDetails: [AchievementGoalDetail] = []
+    @State private var memoDetails: [AchievementMemoDetail] = []
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -322,9 +324,11 @@ struct AchievementDetailWindow: View {
     @State private var visionDragOrder: [UUID] = []
 
     init(
+        repository: AchievementRepository,
         rewardRepository: RewardRepository,
         initialScreenshotState: AchievementDetailScreenshotState? = nil
     ) {
+        self.repository = repository
         self.rewardRepository = rewardRepository
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
            let tab = AchievementDetailTab(screenshotIdentifier: tabIdentifier) {
@@ -336,8 +340,23 @@ struct AchievementDetailWindow: View {
         }
     }
 
+    private var memos: [AchievementMemoDetail] { memoDetails }
+
     private var goals: [AchievementGoal] {
-        AchievementDataBuilder.goals(from: goalRecords, memos: memos)
+        AchievementDataBuilder.goals(from: goalDetails, memos: memoDetails)
+    }
+
+    /// 저장소를 다시 읽고, 이번에 처음 달성된 목표에 도장을 찍는다.
+    private func reload() {
+        goalDetails = repository.goals()
+        memoDetails = repository.memos()
+        let newlyCompleted = AchievementDataBuilder.newlyCompletedGoalIDs(
+            goals: AchievementDataBuilder.goals(from: goalDetails, memos: memoDetails),
+            details: goalDetails
+        )
+        guard !newlyCompleted.isEmpty else { return }
+        repository.markCompleted(ids: newlyCompleted, at: Date())
+        goalDetails = repository.goals()
     }
 
     private var roles: [AchievementRole] {
@@ -351,9 +370,9 @@ struct AchievementDetailWindow: View {
         return goals.first
     }
 
-    private var managingGoalRecord: AchievementGoalRecord? {
+    private var managingGoalRecord: AchievementGoalDetail? {
         guard let managingGoalID else { return nil }
-        return goalRecords.first { $0.id == managingGoalID }
+        return goalDetails.first { $0.id == managingGoalID }
     }
 
     private var selectedWeekGoal: AchievementGoal? {
@@ -380,8 +399,8 @@ struct AchievementDetailWindow: View {
     }
 
     /// '남은 것' 필터는 목표뿐 아니라 할일 단위로도 미완료만 남긴다.
-    private var timelineMemos: [Memo] {
-        selectedWeekGoalFilter == .remaining ? memos.filter { !$0.isCompletedValue } : memos
+    private var timelineMemos: [AchievementMemoDetail] {
+        selectedWeekGoalFilter == .remaining ? memos.filter { !$0.isCompleted } : memos
     }
 
     private var weeklyTimelineTitle: String {
@@ -427,19 +446,19 @@ struct AchievementDetailWindow: View {
                         .transition(.opacity)
 
                     AchievementGoalComposerSheet(
-                        memos: AchievementDataBuilder.activeMemos(memos),
+                        memos: repository.linkableMemos(),
                         existingGoals: goals,
                         onClose: closeGoalComposer
-                    ) { record, childGoalIDs, newChildTitles in
-                        modelContext.insert(record)
-                        connectChildGoals(childGoalIDs, to: record)
-                        // 컴포저에서 이름만 적어둔 하위 목표는 여기서 실제 레코드로 만든다.
-                        for childTitle in newChildTitles {
-                            addChildGoal(to: record, title: childTitle, emoji: "")
-                        }
-                        try modelContext.save()
-                        selectedGoalID = record.id
-                        selectedRoleID = record.roleName
+                    ) { draft, childGoalIDs, newChildTitles in
+                        let created = try repository.createGoal(
+                            draft,
+                            childGoalIDs: childGoalIDs,
+                            newChildTitles: newChildTitles
+                        )
+                        reload()
+                        selectedGoalID = created.id
+                        selectedRoleID = created.roleName
+                        return created.id
                     }
                     .frame(maxHeight: .infinity)
                     .shadow(color: Color.black.opacity(0.16), radius: 22, x: -10, y: 0)
@@ -487,14 +506,18 @@ struct AchievementDetailWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: SwiftDataRewardRepository.didChangeNotification)) { _ in
             rewardSnapshots = rewardRepository.entries().map(\.snapshot)
         }
+        .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
+            reload()
+        }
         .onAppear {
+            reload()
             rewardSnapshots = rewardRepository.entries().map(\.snapshot)
             ensureSelection()
             if launchOptions.consumeGoalComposerRequest() {
                 openGoalComposer()
             }
         }
-        .onChange(of: goalRecords.count) { _, _ in
+        .onChange(of: goalDetails.count) { _, _ in
             ensureSelection()
         }
         .onChange(of: launchOptions.shouldOpenGoalComposer) { _, shouldOpen in
@@ -772,15 +795,14 @@ struct AchievementDetailWindow: View {
         }
     }
 
-    private var overdueVisibleWeeklyMemos: [Memo] {
+    private var overdueVisibleWeeklyMemos: [AchievementMemoDetail] {
         let sourceIDs = Set(visibleWeeklyGoals.flatMap(\.sourceMemoIDs))
         let weekStart = currentWeekStart
         return memos
             .filter { memo in
+                // 보관·최근 삭제는 저장소가 이미 떨궜다.
                 sourceIDs.contains(memo.id)
-                    && !memo.isCompletedValue
-                    && !memo.isArchivedValue
-                    && !memo.isRecentlyDeleted
+                    && !memo.isCompleted
                     && (memo.startDate != nil || memo.deadline != nil)
                     && AchievementDataBuilder.memoDate(memo) < weekStart
             }
@@ -795,18 +817,18 @@ struct AchievementDetailWindow: View {
         Calendar.current.date(byAdding: .day, value: 7, to: currentWeekStart) ?? Date()
     }
 
-    private func overdueMemosPreview(_ memos: [Memo]) -> String {
+    private func overdueMemosPreview(_ memos: [AchievementMemoDetail]) -> String {
         let titles = memos.prefix(3).map { AchievementDataBuilder.shortText($0.content, limit: 18) }
         let suffix = memos.count > 3 ? " 외 \(memos.count - 3)개" : ""
         return (titles.joined(separator: ", ") + suffix).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func moveOverdueMemosToToday(_ memos: [Memo]) {
+    private func moveOverdueMemosToToday(_ memos: [AchievementMemoDetail]) {
         let today = Calendar.current.startOfDay(for: Date())
         rescheduleOverdueMemos(memos, targetDays: [today], messagePrefix: "오늘로 이동했습니다")
     }
 
-    private func distributeOverdueMemosAcrossRemainingWeek(_ memos: [Memo]) {
+    private func distributeOverdueMemosAcrossRemainingWeek(_ memos: [AchievementMemoDetail]) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let start = max(today, currentWeekStart)
@@ -817,115 +839,6 @@ struct AchievementDetailWindow: View {
         rescheduleOverdueMemos(memos, targetDays: targetDays.isEmpty ? [today] : targetDays, messagePrefix: "남은 요일에 나눠 배치했습니다")
     }
 
-    private func moveTimelineMemo(_ memoID: UUID, to targetDay: Date) {
-        guard let memo = memos.first(where: { $0.id == memoID }) else { return }
-
-        overdueRescheduleMessage = ""
-        moveMemoSchedule(memo, to: Calendar.current.startOfDay(for: targetDay))
-        memo.updatedAt = Date()
-        scheduleLocalReminder(for: memo)
-
-        do {
-            try modelContext.save()
-        } catch {
-            overdueRescheduleMessage = "일정 이동에 실패했습니다: \(error.localizedDescription)"
-            return
-        }
-
-        let dayText = weekdayText(targetDay)
-        syncLinkedRemindersIfNeeded([memo], successMessage: "할일을 \(dayText)요일로 이동했습니다.")
-    }
-
-    /// 타임라인에서 할일의 완료를 뒤집는다.
-    ///
-    /// 메모장에서 체크한 것과 같은 결과가 되도록 알림 정리와 미리알림 동기화까지 함께 한다.
-    private func toggleTimelineMemoCompletion(_ memoID: UUID) {
-        guard let memo = memos.first(where: { $0.id == memoID }) else { return }
-
-        overdueRescheduleMessage = ""
-        let previousCompleted = memo.isCompleted
-        let previousChangedAt = memo.completionStateChangedAt
-        let previousPinned = memo.isPinned
-
-        memo.isCompletedValue.toggle()
-        if memo.isCompletedValue {
-            // 끝낸 일을 계속 위에 붙여둘 이유가 없다.
-            memo.isPinned = false
-        }
-        memo.updatedAt = Date()
-        // 완료·완료 해제에 맞춰 마감 알림을 취소하거나 다시 잡는다.
-        scheduleLocalReminder(for: memo)
-
-        do {
-            try modelContext.save()
-        } catch {
-            // 화면과 저장소가 어긋나지 않도록 건드린 값을 전부 되돌린다.
-            memo.isCompleted = previousCompleted
-            memo.completionStateChangedAt = previousChangedAt
-            memo.isPinned = previousPinned
-            scheduleLocalReminder(for: memo)
-            overdueRescheduleMessage = "완료 표시에 실패했습니다: \(error.localizedDescription)"
-            return
-        }
-
-        syncLinkedRemindersIfNeeded(
-            [memo],
-            successMessage: memo.isCompletedValue ? "할일을 완료했습니다." : "완료를 해제했습니다."
-        )
-    }
-
-    private func rescheduleOverdueMemos(_ memos: [Memo], targetDays: [Date], messagePrefix: String) {
-        guard !memos.isEmpty, !targetDays.isEmpty else { return }
-        overdueRescheduleMessage = ""
-
-        for (index, memo) in memos.enumerated() {
-            let targetDay = targetDays[index % targetDays.count]
-            moveMemoSchedule(memo, to: targetDay)
-            memo.updatedAt = Date()
-            scheduleLocalReminder(for: memo)
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            overdueRescheduleMessage = "일정 저장에 실패했습니다: \(error.localizedDescription)"
-            return
-        }
-
-        syncLinkedRemindersIfNeeded(memos, successMessage: "\(memos.count)개를 \(messagePrefix).")
-    }
-
-    private func moveMemoSchedule(_ memo: Memo, to targetDay: Date) {
-        switch (memo.startDate, memo.deadline) {
-        case let (startDate?, deadline?):
-            let newStartDate = date(on: targetDay, preservingTimeOf: startDate)
-            memo.startDate = newStartDate
-            memo.deadline = deadlineDate(on: targetDay, preservingTimeOf: deadline, notBefore: newStartDate)
-        case let (startDate?, nil):
-            memo.startDate = date(on: targetDay, preservingTimeOf: startDate)
-        case let (nil, deadline?):
-            memo.deadline = date(on: targetDay, preservingTimeOf: deadline)
-        default:
-            memo.startDate = date(on: targetDay, preservingTimeOf: Date())
-        }
-    }
-
-    private func date(on targetDay: Date, preservingTimeOf sourceDate: Date) -> Date {
-        let calendar = Calendar.current
-        let time = calendar.dateComponents([.hour, .minute, .second], from: sourceDate)
-        return calendar.date(
-            bySettingHour: time.hour ?? 9,
-            minute: time.minute ?? 0,
-            second: time.second ?? 0,
-            of: targetDay
-        ) ?? targetDay
-    }
-
-    private func deadlineDate(on targetDay: Date, preservingTimeOf sourceDate: Date, notBefore startDate: Date) -> Date {
-        let deadline = date(on: targetDay, preservingTimeOf: sourceDate)
-        guard deadline < startDate else { return deadline }
-        return Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: targetDay) ?? startDate
-    }
 
     private func weekdayText(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -934,27 +847,92 @@ struct AchievementDetailWindow: View {
         return formatter.string(from: date)
     }
 
-    private func scheduleLocalReminder(for memo: Memo) {
-        let identifier = "memo.deadline.\(memo.id.uuidString)"
-        guard !memo.isCompletedValue,
-              !memo.isArchivedValue,
-              !memo.isRecentlyDeleted,
-              let fireDate = memo.reminderFireDate else {
-            NotificationManager.shared.cancel(identifier: identifier)
+    // MARK: - 쓰기 (저장소에 맡기고, 안내 문구만 여기서 만든다)
+
+    private func updateGoalRecord(_ detail: AchievementGoalDetail, draft: AchievementGoalEditDraft) {
+        repository.updateGoal(id: detail.id, with: draft)
+        managingGoalID = nil
+        reload()
+    }
+
+    private func deleteGoalRecord(_ detail: AchievementGoalDetail) {
+        let deletedID = detail.id
+        repository.deleteGoal(id: deletedID)
+        reload()
+        if selectedGoalID == deletedID {
+            selectedGoalID = goals.first { $0.id != deletedID }?.id
+        }
+        if managingGoalID == deletedID {
+            managingGoalID = nil
+        }
+    }
+
+    private func detachChildGoal(_ child: AchievementGoalDetail, from parent: AchievementGoalDetail) {
+        repository.detachChild(id: child.id, fromParentID: parent.id)
+        reload()
+    }
+
+    private func savePersonaVisionDraft(_ draft: AchievementPersonaVisionDraft) throws {
+        try repository.savePersonaVision(draft)
+        reload()
+        let personaName = AchievementDataBuilder.shortText(draft.personaName, limit: 40)
+        selectedRoleID = personaName
+        // 방금 만든 비전을 고른 상태로 연다.
+        let visionTitle = AchievementDataBuilder.shortText(draft.visionTitle, limit: 40)
+        if let vision = goalDetails.first(where: { $0.cadence == "비전" && $0.title == visionTitle }) {
+            selectedJourneyVisionID = vision.id
+            selectedGoalID = vision.id
+        }
+        showPersonaVisionComposer = false
+    }
+
+    private func moveTimelineMemo(_ memoID: UUID, to targetDay: Date) {
+        overdueRescheduleMessage = ""
+        do {
+            try repository.moveMemo(id: memoID, to: targetDay)
+        } catch {
+            overdueRescheduleMessage = "일정 이동에 실패했습니다: \(error.localizedDescription)"
             return
         }
+        reload()
+        syncLinkedRemindersIfNeeded([memoID], successMessage: "할일을 \(weekdayText(targetDay))요일로 이동했습니다.")
+    }
 
-        NotificationManager.shared.scheduleMemoReminder(
-            identifier: identifier,
-            title: memo.reminderNotificationTitle,
-            body: AchievementDataBuilder.shortText(memo.content, limit: 40),
-            at: fireDate
+    /// 타임라인에서 할일의 완료를 뒤집는다.
+    /// 메모장에서 체크한 것과 같은 결과가 되도록 알림 정리와 미리알림 동기화까지 함께 한다.
+    private func toggleTimelineMemoCompletion(_ memoID: UUID) {
+        overdueRescheduleMessage = ""
+        let isCompleted: Bool
+        do {
+            isCompleted = try repository.toggleMemoCompletion(id: memoID)
+        } catch {
+            overdueRescheduleMessage = "완료 표시에 실패했습니다: \(error.localizedDescription)"
+            return
+        }
+        reload()
+        syncLinkedRemindersIfNeeded(
+            [memoID],
+            successMessage: isCompleted ? "할일을 완료했습니다." : "완료를 해제했습니다."
         )
     }
 
-    private func syncLinkedRemindersIfNeeded(_ memos: [Memo], successMessage: String) {
-        let linkedMemos = memos.filter(\.isLinkedToRemindersValue)
-        guard !linkedMemos.isEmpty else {
+    private func rescheduleOverdueMemos(_ memos: [AchievementMemoDetail], targetDays: [Date], messagePrefix: String) {
+        guard !memos.isEmpty, !targetDays.isEmpty else { return }
+        overdueRescheduleMessage = ""
+        let ids = memos.map(\.id)
+        do {
+            try repository.rescheduleMemos(ids: ids, targetDays: targetDays)
+        } catch {
+            overdueRescheduleMessage = "일정 저장에 실패했습니다: \(error.localizedDescription)"
+            return
+        }
+        reload()
+        syncLinkedRemindersIfNeeded(ids, successMessage: "\(ids.count)개를 \(messagePrefix).")
+    }
+
+    /// 미리알림 연동이 걸린 할일이 있으면 그쪽도 맞춘다. 오래 걸릴 수 있어 안내를 먼저 띄운다.
+    private func syncLinkedRemindersIfNeeded(_ ids: [UUID], successMessage: String) {
+        guard repository.hasLinkedReminders(ids: ids) else {
             overdueRescheduleMessage = successMessage
             clearOverdueRescheduleMessageLater()
             return
@@ -962,20 +940,10 @@ struct AchievementDetailWindow: View {
 
         overdueRescheduleMessage = "\(successMessage) 미리알림을 동기화하는 중입니다."
         Task { @MainActor in
-            var failedCount = 0
-            for memo in linkedMemos {
-                do {
-                    memo.reminderIdentifier = try await MemoReminderLinkService.shared.saveReminder(for: memo)
-                    scheduleLocalReminder(for: memo)
-                    try? modelContext.save()
-                } catch {
-                    failedCount += 1
-                }
-            }
-
-            overdueRescheduleMessage = failedCount == 0
+            let failed = await repository.syncLinkedReminders(ids: ids)
+            overdueRescheduleMessage = failed == 0
                 ? "\(successMessage) 미리알림도 동기화했습니다."
-                : "\(successMessage) 미리알림 \(failedCount)개는 동기화하지 못했습니다."
+                : "\(successMessage) 미리알림 \(failed)개는 동기화하지 못했습니다."
             clearOverdueRescheduleMessageLater()
         }
     }
@@ -1693,7 +1661,7 @@ struct AchievementDetailWindow: View {
             HStack(spacing: 10) {
                 AchievementJourneyStat(label: "월간 목표", value: "\(selectedJourneyMonthlyGoals.count)")
                 AchievementJourneyStat(label: "연결된 일", value: "\(journeyLinkedMemos.count)")
-                AchievementJourneyStat(label: "완료한 일", value: "\(journeyLinkedMemos.filter(\.isCompletedValue).count)")
+                AchievementJourneyStat(label: "완료한 일", value: "\(journeyLinkedMemos.filter(\.isCompleted).count)")
             }
 
             let remainingGoals = journeyRemainingMonthlyGoals
@@ -1769,7 +1737,7 @@ struct AchievementDetailWindow: View {
                 ForEach(recentMemos, id: \.id) { memo in
                     HStack(spacing: 9) {
                         Circle()
-                            .fill(memo.isCompletedValue ? PopoverChrome.accent : Color.blue)
+                            .fill(memo.isCompleted ? PopoverChrome.accent : Color.blue)
                             .frame(width: 7, height: 7)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(AchievementDataBuilder.shortText(memo.content, limit: 28))
@@ -1903,7 +1871,7 @@ struct AchievementDetailWindow: View {
                     ForEach(directMemos) { memo in
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(memo.isCompletedValue ? PopoverChrome.accent : Color.blue)
+                                .fill(memo.isCompleted ? PopoverChrome.accent : Color.blue)
                                 .frame(width: 4, height: 4)
                             Text(AchievementDataBuilder.shortText(memo.content, limit: 15))
                                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
@@ -1920,7 +1888,7 @@ struct AchievementDetailWindow: View {
         }
     }
 
-    private func linkedMemos(for goal: AchievementGoal) -> [Memo] {
+    private func linkedMemos(for goal: AchievementGoal) -> [AchievementMemoDetail] {
         let ids = Set(goal.sourceMemoIDs)
         return memos.filter { ids.contains($0.id) }
             .sorted { AchievementDataBuilder.memoDate($0) > AchievementDataBuilder.memoDate($1) }
@@ -2118,14 +2086,14 @@ struct AchievementDetailWindow: View {
         journeyMonthlyGoalsInJourneyOrder.filter { isJourneyGoalComplete($0) }
     }
 
-    private var selectedRoleLinkedMemos: [Memo] {
+    private var selectedRoleLinkedMemos: [AchievementMemoDetail] {
         let ids = Set(selectedRoleGoals.flatMap(\.sourceMemoIDs))
         return memos
             .filter { ids.contains($0.id) }
             .sorted { AchievementDataBuilder.memoDate($0) > AchievementDataBuilder.memoDate($1) }
     }
 
-    private var journeyLinkedMemos: [Memo] {
+    private var journeyLinkedMemos: [AchievementMemoDetail] {
         guard let role = selectedRole else { return [] }
         let monthlyGoals = selectedJourneyMonthlyGoals
         let monthlyTitles = Set(monthlyGoals.map(\.title))
@@ -2142,52 +2110,6 @@ struct AchievementDetailWindow: View {
         return memos
             .filter { ids.contains($0.id) }
             .sorted { AchievementDataBuilder.memoDate($0) > AchievementDataBuilder.memoDate($1) }
-    }
-
-    private func savePersonaVisionDraft(_ draft: AchievementPersonaVisionDraft) throws {
-        let personaName = AchievementDataBuilder.shortText(draft.personaName, limit: 40)
-        let visionTitle = AchievementDataBuilder.shortText(draft.visionTitle, limit: 40)
-        let visionText = draft.visionText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !goalRecords.contains(where: { $0.cadence == "역할" && $0.title == personaName }) {
-            let personaRecord = AchievementGoalRecord(
-                title: personaName,
-                emoji: draft.personaEmoji,
-                cadence: "역할",
-                rule: "페르소나 방향 유지",
-                targetCount: 1,
-                targetValueText: "1개",
-                periodText: "계속",
-                rewardText: "",
-                colorHex: "#E87333",
-                roleName: personaName,
-                vision: "",
-                linkedMemoIDs: []
-            )
-            modelContext.insert(personaRecord)
-        }
-
-        let visionRecord = AchievementGoalRecord(
-            title: visionTitle,
-            emoji: draft.visionEmoji,
-            cadence: "비전",
-            rule: "비전 방향 유지",
-            targetCount: 1,
-            targetValueText: "1개",
-            periodText: "장기",
-            rewardText: "",
-            colorHex: "#7A52D4",
-            roleName: personaName,
-            vision: visionText.isEmpty ? visionTitle : visionText,
-            linkedMemoIDs: []
-        )
-        modelContext.insert(visionRecord)
-        try modelContext.save()
-
-        selectedRoleID = personaName
-        selectedJourneyVisionID = visionRecord.id
-        selectedGoalID = visionRecord.id
-        showPersonaVisionComposer = false
     }
 
     private func chooseJourneyImage(for role: AchievementRole) {
@@ -2581,7 +2503,7 @@ struct AchievementDetailWindow: View {
             return children.filter { $0.total > 0 && $0.isComplete }.map(\.recordDate)
         }
         return memos
-            .filter { goal.sourceMemoIDs.contains($0.id) && $0.isCompletedValue }
+            .filter { goal.sourceMemoIDs.contains($0.id) && $0.isCompleted }
             .map(AchievementDataBuilder.memoDate)
     }
 
@@ -2603,7 +2525,7 @@ struct AchievementDetailWindow: View {
     }
 
     private func deleteGoal(_ goal: AchievementGoal) {
-        guard let record = goalRecords.first(where: { $0.id == goal.id }) else { return }
+        guard let record = goalDetails.first(where: { $0.id == goal.id }) else { return }
         deleteGoalRecord(record)
     }
 
@@ -2611,11 +2533,13 @@ struct AchievementDetailWindow: View {
         managingGoalID = goal.id
     }
 
-    private func linkableMemos(for record: AchievementGoalRecord) -> [Memo] {
+    /// 이 목표에 묶을 수 있는 할일. 이미 묶인 것은 조건과 무관하게 남긴다 —
+    /// 안 그러면 편집 화면에서 기존 연결이 조용히 사라진다.
+    private func linkableMemos(for record: AchievementGoalDetail) -> [AchievementMemoDetail] {
         let linkedIDs = Set(record.linkedMemoIDs)
-        return memos.filter {
-            (!$0.isArchivedValue && !$0.isRecentlyDeleted) || linkedIDs.contains($0.id)
-        }
+        let linkable = repository.linkableMemos()
+        let linkableIDs = Set(linkable.map(\.id))
+        return linkable + memos.filter { linkedIDs.contains($0.id) && !linkableIDs.contains($0.id) }
     }
 
     private func childCadence(for cadence: String) -> String? {
@@ -2629,9 +2553,9 @@ struct AchievementDetailWindow: View {
         }
     }
 
-    private func childRecords(for record: AchievementGoalRecord) -> [AchievementGoalRecord] {
+    private func childRecords(for record: AchievementGoalDetail) -> [AchievementGoalDetail] {
         guard let childCadence = childCadence(for: record.cadence) else { return [] }
-        return goalRecords
+        return goalDetails
             .filter { child in
                 guard child.cadence == childCadence else { return false }
                 switch record.cadence {
@@ -2646,9 +2570,9 @@ struct AchievementDetailWindow: View {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
-    private func linkableChildRecords(for record: AchievementGoalRecord) -> [AchievementGoalRecord] {
+    private func linkableChildRecords(for record: AchievementGoalDetail) -> [AchievementGoalDetail] {
         guard let childCadence = childCadence(for: record.cadence) else { return [] }
-        return goalRecords
+        return goalDetails
             .filter { child in
                 guard child.cadence == childCadence else { return false }
                 switch record.cadence {
@@ -2661,186 +2585,6 @@ struct AchievementDetailWindow: View {
                 }
             }
             .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private func updateGoalRecord(_ record: AchievementGoalRecord, draft: AchievementGoalEditDraft) {
-        let oldTitle = record.title
-        let newTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        record.title = newTitle.isEmpty ? record.title : newTitle
-        record.emoji = draft.emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? record.emoji : draft.emoji
-        record.rule = draft.rule.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.targetCount = max(1, draft.targetCount)
-        record.rewardText = draft.rewardText.trimmingCharacters(in: .whitespacesAndNewlines)
-        record.dueDate = draft.dueDate
-        if let linkedMemoIDs = draft.linkedMemoIDs {
-            record.linkedMemoIDs = linkedMemoIDs
-            record.targetCount = max(1, linkedMemoIDs.count)
-        }
-        if let additionalChildGoalIDs = draft.additionalChildGoalIDs, !additionalChildGoalIDs.isEmpty {
-            for childID in additionalChildGoalIDs {
-                if let child = goalRecords.first(where: { $0.id == childID }) {
-                    if record.cadence == "연간" { child.yearGoal = record.title }
-                    if record.cadence == "월간" { child.monthGoal = record.title }
-                    child.updatedAt = Date()
-                }
-            }
-        }
-        record.updatedAt = Date()
-
-        syncGoalTitleReferences(oldTitle: oldTitle, newTitle: record.title, cadence: record.cadence)
-        connectDescendantGoals(of: record)
-        try? modelContext.save()
-        managingGoalID = nil
-    }
-
-    private func addChildGoal(to parent: AchievementGoalRecord, title: String, emoji: String) {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let childCadence = childCadence(for: parent.cadence), !trimmedTitle.isEmpty else { return }
-        let trimmedEmoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
-        let record = AchievementGoalRecord(
-            title: trimmedTitle,
-            emoji: trimmedEmoji.isEmpty ? defaultEmoji(for: childCadence) : String(trimmedEmoji.prefix(1)),
-            cadence: childCadence,
-            rule: "",
-            targetCount: 1,
-            targetValueText: nil,
-            periodText: defaultPeriodText(for: childCadence),
-            rewardText: "",
-            colorHex: parent.colorHex,
-            roleName: parent.roleName,
-            vision: parent.vision,
-            yearGoal: childCadence == "월간" ? parent.title : parent.yearGoal,
-            quarterGoal: nil,
-            monthGoal: childCadence == "주간" ? parent.title : parent.monthGoal,
-            linkedMemoIDs: []
-        )
-        modelContext.insert(record)
-        try? modelContext.save()
-    }
-
-    private func defaultEmoji(for cadence: String) -> String {
-        switch cadence {
-        case "연간": return "🏁"
-        case "월간": return "📅"
-        case "주간": return "🎯"
-        default: return "🎯"
-        }
-    }
-
-    private func defaultPeriodText(for cadence: String) -> String? {
-        switch cadence {
-        case "연간": return "올해"
-        case "월간": return "이번 달"
-        case "주간": return "이번 주"
-        default: return nil
-        }
-    }
-
-    private func deleteGoalRecord(_ record: AchievementGoalRecord) {
-        let deletedID = record.id
-        modelContext.delete(record)
-        try? modelContext.save()
-        if selectedGoalID == deletedID {
-            selectedGoalID = goals.first(where: { $0.id != deletedID })?.id
-        }
-        if managingGoalID == deletedID {
-            managingGoalID = nil
-        }
-    }
-
-    private func syncGoalTitleReferences(oldTitle: String, newTitle: String, cadence: String) {
-        guard oldTitle != newTitle else { return }
-        guard !oldTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-
-        for record in goalRecords {
-            switch cadence {
-            case "역할":
-                if record.roleName == oldTitle {
-                    record.roleName = newTitle
-                    record.updatedAt = Date()
-                }
-            case "비전":
-                if record.vision == oldTitle {
-                    record.vision = newTitle
-                    record.updatedAt = Date()
-                }
-            case "연간":
-                if record.yearGoal == oldTitle {
-                    record.yearGoal = newTitle
-                    record.updatedAt = Date()
-                }
-            case "월간":
-                if record.monthGoal == oldTitle {
-                    record.monthGoal = newTitle
-                    record.updatedAt = Date()
-                }
-            default:
-                break
-            }
-        }
-    }
-
-    /// 부모에서 자식을 떼어낸다. 자식 목표 자체는 남는다.
-    private func detachChildGoal(_ child: AchievementGoalRecord, from parent: AchievementGoalRecord) {
-        switch parent.cadence {
-        case "연간":
-            child.yearGoal = nil
-        case "월간":
-            child.monthGoal = nil
-        default:
-            return
-        }
-        child.updatedAt = Date()
-        try? modelContext.save()
-    }
-
-    private func connectChildGoals(_ childGoalIDs: Set<UUID>, to parent: AchievementGoalRecord) {
-        guard !childGoalIDs.isEmpty else { return }
-
-        for child in goalRecords where childGoalIDs.contains(child.id) {
-            child.roleName = parent.roleName
-            child.vision = parent.vision
-
-            switch parent.cadence {
-            case "연간":
-                child.yearGoal = parent.title
-            case "월간":
-                child.yearGoal = parent.yearGoal
-                child.quarterGoal = nil
-                child.monthGoal = parent.title
-            default:
-                break
-            }
-
-            child.updatedAt = Date()
-            connectDescendantGoals(of: child)
-        }
-    }
-
-    private func connectDescendantGoals(of parent: AchievementGoalRecord) {
-        switch parent.cadence {
-        case "연간":
-            for month in goalRecords where month.cadence == "월간" && nonEmpty(month.yearGoal) == parent.title {
-                month.roleName = parent.roleName
-                month.vision = parent.vision
-                month.yearGoal = parent.title
-                month.quarterGoal = nil
-                month.updatedAt = Date()
-                connectDescendantGoals(of: month)
-            }
-        case "월간":
-            for week in goalRecords where week.cadence == "주간" && nonEmpty(week.monthGoal) == parent.title {
-                week.roleName = parent.roleName
-                week.vision = parent.vision
-                week.yearGoal = parent.yearGoal
-                week.quarterGoal = nil
-                week.monthGoal = parent.title
-                week.updatedAt = Date()
-            }
-        default:
-            break
-        }
     }
 
     private func nonEmpty(_ value: String?) -> String? {

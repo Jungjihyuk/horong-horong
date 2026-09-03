@@ -758,6 +758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .achievementDetail(let mode):
             return AnyView(
                 AchievementDetailWindow(
+                    repository: dependencies.achievementRepository,
                     rewardRepository: dependencies.rewardRepository,
                     initialScreenshotState: mode.initialState
                 )
