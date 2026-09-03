@@ -2,7 +2,6 @@ import HorongAI
 import HorongAIMLX
 import Foundation
 import OSLog
-import SwiftData
 
 /// 어느 공급자가 뽑혔는지. 사용자가 고른 값과 실제로 쓰인 값이 다를 수 있어(폴백) 둘 다 남긴다.
 /// 모델 이름은 설정 화면에 그대로 보이는 값이라 `.public` 이다 — 사용자 내용이 아니다.
@@ -15,8 +14,6 @@ let companionProviderLog = Logger(
 struct CompanionChatContext {
     let character: CompanionCharacter
     let profile: CompanionUserProfile
-    /// 할일 조회 도구에 넘길 저장소. 없으면 도구 없이 대화한다.
-    let modelContainer: ModelContainer?
 }
 
 /// 대화 한 세션. 이전 turn 의 문맥을 유지한다.

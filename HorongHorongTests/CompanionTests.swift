@@ -717,6 +717,48 @@ final class CompanionMemoScheduleTests: XCTestCase {
 }
 
 final class CompanionMemoStoreTests: XCTestCase {
+    private func makeAppContainer() throws -> ModelContainer {
+        let schema = HorongHorongModelSchema.make()
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    @MainActor
+    func testRepositoryReturnsOnboardingCountsAndActiveBriefingMemos() throws {
+        let container = try makeAppContainer()
+        let context = container.mainContext
+        let active = Memo(content: "오늘 할 일", section: .todo)
+        active.startDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let deleted = Memo(content: "지운 할 일", section: .todo)
+        deleted.deletedAt = Date()
+        context.insert(active)
+        context.insert(deleted)
+        context.insert(FocusSession(focusMinutes: 25, breakMinutes: 5))
+        try context.save()
+
+        let repository = SwiftDataCompanionRepository(context: context)
+
+        XCTAssertEqual(
+            repository.onboardingCounts(),
+            CompanionOnboardingCounts(
+                memoCount: 2,
+                focusSessionCount: 1,
+                achievementGoalCount: 0
+            )
+        )
+        XCTAssertEqual(
+            repository.briefingMemos(),
+            [
+                CompanionMemoSummary(
+                    title: "오늘 할 일",
+                    isCompleted: false,
+                    startDate: active.startDate,
+                    deadline: nil
+                )
+            ]
+        )
+    }
+
     @MainActor
     func testSaveKeepsOriginalTextAndSelectedOptions() throws {
         let schema = Schema([Memo.self])
@@ -734,7 +776,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: "💡",
                 isTodayTask: true
             ),
-            in: SwiftDataCompanionMemoRepository(context: context),
+            in: SwiftDataCompanionRepository(context: context),
             now: now
         )
 
@@ -759,7 +801,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 icon: MemoIcon.defaultIcon,
                 isTodayTask: false
             ),
-            in: SwiftDataCompanionMemoRepository(context: context)
+            in: SwiftDataCompanionRepository(context: context)
         )
 
         let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
@@ -786,7 +828,7 @@ final class CompanionMemoStoreTests: XCTestCase {
                 startDate: start,
                 deadline: end
             ),
-            in: SwiftDataCompanionMemoRepository(context: context)
+            in: SwiftDataCompanionRepository(context: context)
         )
 
         let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Memo>()).first)
@@ -809,8 +851,8 @@ final class CompanionMemoStoreTests: XCTestCase {
             isTodayTask: false
         )
 
-        let first = try store.save(request, in: SwiftDataCompanionMemoRepository(context: context))
-        let second = try store.save(request, in: SwiftDataCompanionMemoRepository(context: context))
+        let first = try store.save(request, in: SwiftDataCompanionRepository(context: context))
+        let second = try store.save(request, in: SwiftDataCompanionRepository(context: context))
 
         guard case .saved(let firstID) = first else {
             return XCTFail("첫 저장은 saved 여야 합니다.")

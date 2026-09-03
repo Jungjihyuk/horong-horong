@@ -4,7 +4,7 @@ import SwiftData
 
 /// 진행 중인 집중 세션의 최근 10분을 보고, 규칙 위반이 새로 시작될 때 이유와 함께 말한다.
 @MainActor
-final class FocusScoreMonitor {
+final class FocusScoreMonitor: FocusScoreMonitoringGateway {
     private let appState: AppState
     private let modelContainer: ModelContainer
     /// 말풍선을 실제로 띄웠으면 true. 대화 중이라 건너뛴 경우에는 다음 폴에서 다시 시도한다.

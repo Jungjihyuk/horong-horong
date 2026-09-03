@@ -26,6 +26,7 @@ final class DependencyContainer {
     let reflectionRepository: PomodoroReflectionRepository
     let statsRecordRepository: StatsRecordRepository
     let appUsageRepository: AppUsageRepository
+    let companionRepository: CompanionRepository
 
     init(modelContainer: ModelContainer, newsPipelineService: NewsPipelineService) {
         let context = modelContainer.mainContext
@@ -45,6 +46,7 @@ final class DependencyContainer {
         reflectionRepository = SwiftDataPomodoroReflectionRepository(context: context)
         statsRecordRepository = SwiftDataStatsRecordRepository(context: context)
         appUsageRepository = SwiftDataAppUsageRepository(context: context)
+        companionRepository = SwiftDataCompanionRepository(context: context)
     }
 }
 

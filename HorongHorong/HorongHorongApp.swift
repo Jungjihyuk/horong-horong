@@ -390,8 +390,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         timerManager = TimerManager(appState: appState)
-        companionController = CompanionController(appState: appState)
-
         let schema = HorongHorongModelSchema.make()
         do {
             let storeURL = try SwiftDataStoreLocation.storeURL()
@@ -407,6 +405,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dependencies = DependencyContainer(
             modelContainer: modelContainer,
             newsPipelineService: appState.newsPipelineService
+        )
+        companionController = CompanionController(
+            appState: appState,
+            repository: dependencies.companionRepository
         )
     }
 
@@ -473,7 +475,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
-        companionController.start(modelContainer: modelContainer)
+        let focusScoreMonitor = FocusScoreMonitor(
+            appState: appState,
+            modelContainer: modelContainer
+        ) { [weak companionController] message in
+            companionController?.presentFocusNudge(message) ?? false
+        }
+        companionController.start(focusScoreMonitor: focusScoreMonitor)
     }
 
     /// `localhost`는 이 기기에서 IPv6(`::1`)로 먼저 해석되지만 Ollama는 IPv4만 열어 둔

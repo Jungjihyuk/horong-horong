@@ -1,7 +1,6 @@
 import HorongAI
 import AppKit
 import Combine
-import SwiftData
 import SwiftUI
 
 /// 루미롱 컴패니언의 생명주기 담당.
@@ -18,8 +17,8 @@ final class CompanionController {
     private let appState: AppState
     private let state: CompanionPresentationState
     private let overlay: CompanionOverlayPanel
+    private let repository: CompanionRepository
 
-    private var modelContainer: ModelContainer?
     private var tickTimer: Timer?
     private var briefingTimer: Timer?
     private var systemTimeObservers: [NSObjectProtocol] = []
@@ -48,7 +47,7 @@ final class CompanionController {
     /// 집중 넛지를 띄워두는 시간. 집중을 깨지 않을 만큼만 머문다.
     private static let focusNudgeSeconds: Double = 6
 
-    private var focusScoreMonitor: FocusScoreMonitor?
+    private var focusScoreMonitor: (any FocusScoreMonitoringGateway)?
     /// 마지막으로 띄운 집중 넛지 문구. 자동 소멸 예약이 자기가 띄운 말풍선만 지우도록 표시해 둔다.
     private var focusNudgeMessage: String?
 
@@ -64,8 +63,9 @@ final class CompanionController {
     /// 한 틱이 인정하는 최대 간격. 잠들었다 깨거나 시계가 앞으로 튀어도 이만큼만 흘린 것으로 본다.
     private static let maximumTickDelta: TimeInterval = 1.0
 
-    init(appState: AppState) {
+    init(appState: AppState, repository: CompanionRepository) {
         self.appState = appState
+        self.repository = repository
         let character = CompanionRegistry.character(for: Self.selectedIdentifier)
         self.state = CompanionPresentationState(character: character)
         self.overlay = CompanionOverlayPanel(state: state)
@@ -96,17 +96,9 @@ final class CompanionController {
         state.onStartOnboarding = { [weak self] in self?.startOnboarding() }
     }
 
-    func start(modelContainer: ModelContainer) {
-        self.modelContainer = modelContainer
-
-        let monitor = FocusScoreMonitor(
-            appState: appState,
-            modelContainer: modelContainer
-        ) { [weak self] message in
-            self?.presentFocusNudge(message) ?? false
-        }
-        focusScoreMonitor = monitor
-        monitor.start()
+    func start(focusScoreMonitor: any FocusScoreMonitoringGateway) {
+        self.focusScoreMonitor = focusScoreMonitor
+        focusScoreMonitor.start()
 
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
@@ -570,12 +562,13 @@ final class CompanionController {
             }
             return
         }
+        let counts = repository.onboardingCounts()
         guard CompanionOnboardingTrigger.shouldStartAutomatically(
             hasSeenOnboarding: UserDefaults.standard.bool(
                 forKey: Constants.AppStorageKey.companionOnboardingSeen
             ),
-            memoCount: storedCount(of: Memo.self),
-            focusSessionCount: storedCount(of: FocusSession.self)
+            memoCount: counts.memoCount,
+            focusSessionCount: counts.focusSessionCount
         ) else { return }
 
         // 앱이 막 뜬 직후라 팝오버가 준비될 시간을 준다.
@@ -585,21 +578,17 @@ final class CompanionController {
         }
     }
 
-    private func storedCount<T: PersistentModel>(of type: T.Type) -> Int {
-        guard let modelContainer else { return 0 }
-        return (try? modelContainer.mainContext.fetchCount(FetchDescriptor<T>())) ?? 0
-    }
-
     /// 설정에서 직접 시작할 때도 이 경로를 쓴다.
     func startOnboarding() {
         let scenarios = CompanionOnboardingScript.loadFromBundle()
         let steps = scenarios.flatMap(\.steps)
         guard !steps.isEmpty else { return }
 
+        let counts = repository.onboardingCounts()
         CompanionOnboardingDemoStore.shared.startIfNeeded(
-            memoCount: storedCount(of: Memo.self),
-            focusSessionCount: storedCount(of: FocusSession.self),
-            achievementGoalCount: storedCount(of: AchievementGoalRecord.self)
+            memoCount: counts.memoCount,
+            focusSessionCount: counts.focusSessionCount,
+            achievementGoalCount: counts.achievementGoalCount
         )
 
         // 컴패니언이 꺼져 있으면 켜야 호로롱이 설명할 수 있다.
@@ -803,8 +792,7 @@ final class CompanionController {
         let session = currentChatProvider().makeSession(
             CompanionChatContext(
                 character: state.character,
-                profile: profile,
-                modelContainer: modelContainer
+                profile: profile
             )
         )
         chatSession = session
@@ -925,12 +913,6 @@ final class CompanionController {
         isTodayTask: Bool,
         schedule: CompanionMemoSchedule? = nil
     ) {
-        guard let modelContainer else {
-            appendMemoStatusMessage("메모를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")
-            return
-        }
-        let repository = SwiftDataCompanionMemoRepository(context: modelContainer.mainContext)
-
         do {
             let result = try memoStore.save(
                 CompanionMemoSaveRequest(
@@ -1162,16 +1144,11 @@ final class CompanionController {
 
     /// 보관하지 않은 메모 전체를 브리핑·대화가 함께 쓰는 형태로 바꾼다.
     private func todayBriefingItems() -> [CompanionBriefingItem] {
-        guard let modelContainer,
-              let memos = try? modelContainer.mainContext.fetch(FetchDescriptor<Memo>()) else {
-            return []
-        }
-        return memos
-            .filter { !$0.isRecentlyDeleted }
+        repository.briefingMemos()
             .map {
                 CompanionBriefingItem(
-                    title: $0.content,
-                    isCompleted: $0.isCompletedValue,
+                    title: $0.title,
+                    isCompleted: $0.isCompleted,
                     startDate: $0.startDate,
                     deadline: $0.deadline
                 )
@@ -1186,7 +1163,7 @@ final class CompanionController {
     /// 대화나 온보딩이 떠 있으면 건너뛰고 false 를 돌려준다 — 이번 세션의 한 번을 쓴 것으로
     /// 치지 않아야 다음 판정 때 다시 올 수 있다.
     @discardableResult
-    private func presentFocusNudge(_ message: String) -> Bool {
+    func presentFocusNudge(_ message: String) -> Bool {
         guard Self.isEnabled, !isOnboarding, !state.isChatting, !state.isMenuVisible else {
             return false
         }

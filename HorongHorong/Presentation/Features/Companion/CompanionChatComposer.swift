@@ -553,7 +553,7 @@ final class CompanionMemoStore {
 
     func save(
         _ request: CompanionMemoSaveRequest,
-        in repository: CompanionMemoRepository,
+        in repository: CompanionRepository,
         now: Date = Date()
     ) throws -> CompanionMemoSaveResult {
         // 같은 말풍선에서 두 번 저장하지 않는다. 이 판단이 이 타입의 존재 이유다.
