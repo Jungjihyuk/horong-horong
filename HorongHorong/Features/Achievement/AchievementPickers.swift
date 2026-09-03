@@ -1,0 +1,120 @@
+import AppKit
+import HorongAI
+import HorongAIMLX
+import OSLog
+import SwiftData
+import SwiftUI
+import UniformTypeIdentifiers
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+/*
+ 기록·하위 목표 고르기 행.
+
+ 원래 `AchievementViews.swift`(9,854줄) 한 파일에 있었다. 2026-09-03 분할.
+ */
+
+struct AchievementEmptyDetailCard: View {
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tray")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            Text(message)
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(12), style: .continuous))
+    }
+}
+
+struct AchievementMemoPickerRow: View {
+    let memo: Memo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(memo.icon ?? MemoIcon.defaultIcon)
+                    .font(.system(size: 13))
+                Text(memo.content)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(memo.isCompletedValue ? PopoverChrome.inkSecondary : PopoverChrome.ink)
+                    .lineLimit(1)
+            }
+            let metaText = AchievementDataBuilder.todoMetaText(for: memo)
+            if !metaText.isEmpty {
+                HStack(spacing: 7) {
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(statusColor)
+                    Text(metaText)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+        }
+    }
+
+    private var statusIcon: String {
+        switch AchievementDataBuilder.todoStatus(for: memo) {
+        case .done:
+            return "checkmark.circle.fill"
+        case .future:
+            return "circle.dotted"
+        case .pending:
+            return "circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch AchievementDataBuilder.todoStatus(for: memo) {
+        case .done:
+            return PopoverChrome.accent
+        case .future:
+            return PopoverChrome.inkTertiary
+        case .pending:
+            return PopoverChrome.inkSecondary
+        }
+    }
+}
+
+struct AchievementChildGoalPickerRow: View {
+    let goal: AchievementGoal
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(goal.emoji)
+                    .font(.system(size: 13))
+                Text(goal.title)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 7) {
+                Text("\(goal.done)/\(goal.total)")
+                if !goal.rule.isEmpty {
+                    Text(goal.rule)
+                        .lineLimit(1)
+                }
+            }
+            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+            .foregroundStyle(PopoverChrome.inkTertiary)
+        }
+    }
+}
+
+struct AchievementMemoPickerSection: Identifiable {
+    let icon: String
+    let label: String
+    let memos: [Memo]
+
+    var id: String { icon }
+}
