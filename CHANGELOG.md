@@ -15,6 +15,9 @@
 
 ### 변경
 
+- 설정 탭 및 관련 UI 표기를 기존 «메모»에서 직관적인 «기록»으로 개편하고, 내부 식별자를 도메인 목적에 부합하는 `secondBrain`으로 정돈했습니다.
+- SwiftData 스키마 V2(`HorongHorongSchemaV2`)를 도입하고, 기존 SQLite `Memo` 테이블의 데이터를 신규 영속 모델 `SecondBrainRecord` 테이블로 1:1 무손실 복사 이전하는 안전한 DB 마이그레이션 파이프라인을 구축했습니다.
+- Todo, Quick Note, References, Companion, Reminder, Pomodoro, Achievement 등 Data 계층(Repositories)의 조회 및 영속화 대상을 `SecondBrainRecord`로 전면 전환했습니다.
 - 앱 전반의 아키텍처를 MVVM + Clean Architecture(Presentation / Domain / Data)로 전면 개편했습니다.
   - 모든 View 계층에서 SwiftData `@Query`와 `ModelContext`를 완전히 제거(0개)하고, ViewModel과 Repository 프로토콜 기반으로 전환하여 메모 편집 시 보이지 않는 화면까지 다시 계산되던 쓰기 증폭 문제를 해결했습니다.
   - `Mind`, `News`, `Lab`, `Achievement`, `Reward`, `Timer`, `Stats` 등 모든 주요 비즈니스 기능을 ViewModel + Repository 구조로 마이그레이션했습니다.
