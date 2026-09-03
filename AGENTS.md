@@ -260,7 +260,7 @@ HorongHorong/
 | `HotkeyStore.swift` | 설정 상태 소유. `Store` 규칙(§5)엔 맞으나 Presentation·Data 판단이 남음 |
 | `AIRunLog` · `SuggestionExecutionStrategy` · `SuggestionModelUnloader` | AI 실행 계층 소속. `Agent` Gateway/Adapter 를 만들 때 함께 정한다 |
 
-**동반 타입 주의**: `FocusSession.swift`(926줄)는 `@Model` 4개 + 관련 enum·struct 11개를, `AppCategoryRule.swift`(752줄)는 `@Model` 1개 + 8개를 함께 담고 있다. 파일째 옮겼으므로 지금은 Domain 성격의 타입이 Data 에 섞여 있다. **쪼개는 것은 순수 이동이 아니라 판단이 필요한 작업**이므로 해당 기능(Timer·Stats·Tracker)을 이전할 때 함께 한다.
+**동반 타입 분리 완료 (2026-09-03)**: `FocusSession.swift`(926줄)와 `AppCategoryRule.swift`(752줄)에 혼재되어 있던 동반 타입들을 완전히 분리했다. 각 `@Model`(`FocusSession`, `PomodoroReflection`, `CategoryBehaviorConditionSet`, `PomodoroTaskCompletion`, `AppCategoryRule`)은 1파일 1모델로 독립시켰고, 순수 규칙/엔티티는 `Domain/`으로, Data 계층 Store/Service는 `Data/DataSources/Local/`로 정돈했다.
 
 **1단계 — 파일럿 1개 (완료)**
 
