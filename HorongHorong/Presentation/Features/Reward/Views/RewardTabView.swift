@@ -1,55 +1,23 @@
 import SwiftUI
-import SwiftData
 
 /// 성취 창의 "보상" 탭.
 /// 모은 포인트를 호롱불로 보여주고, 보상 목록을 관리하고, 적립·사용 이력을 훑는다.
 struct RewardTabView: View {
     /// 달성했지만 아직 보상을 고르지 않은 월간 목표. 이게 있어야 보상을 받을 수 있다.
-    /// `AchievementGoal`이 file-private 타입이라 성취 화면에서 만들어 넘겨받는다.
-    var unlockedMonthlyGoals: [RewardClaimableGoal] = []
+    /// `AchievementGoal` 이 성취 화면 쪽 타입이라 거기서 만들어 넘겨받는다.
+    let unlockedMonthlyGoals: [RewardClaimableGoal]
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
-    @Query(sort: \RewardCatalogItem.sortOrder) private var catalogItems: [RewardCatalogItem]
-    @Query(sort: \RewardLedgerEntry.occurredAt, order: .reverse) private var entries: [RewardLedgerEntry]
+    @State private var viewModel: RewardViewModel
 
     @State private var showComposer = false
-    @State private var editingItem: RewardCatalogItem?
-    @State private var pendingDeletion: RewardCatalogItem?
-    @State private var unboxing: UnboxedReward?
+    @State private var editingItem: RewardItem?
+    @State private var pendingDeletion: RewardItem?
     @State private var showHistory = false
-    @State private var failureMessage = ""
 
-    /// 개봉 연출에 넘길 결과. 원장은 이미 기록된 뒤다.
-    private struct UnboxedReward: Identifiable {
-        let id = UUID()
-        let emoji: String
-        let title: String
-        let costPoints: Int
-        let remainingBalance: Int
-    }
-
-    private var balance: Int {
-        RewardLedger.balance(entries.map(\.snapshot))
-    }
-
-    private var progress: RewardProgress {
-        RewardLedger.progress(balance: balance, items: catalogItems.map(\.snapshot))
-    }
-
-    private var visibleItems: [RewardCatalogItem] {
-        catalogItems.filter { !$0.isArchived }
-    }
-
-    /// 아직 보상을 고르지 않은 달성 목표.
-    private var unlockedGoals: [RewardClaimableGoal] {
-        let snapshots = entries.map(\.snapshot)
-        return unlockedMonthlyGoals.filter { !RewardLedger.hasRedeemed(goalID: $0.id, in: snapshots) }
-    }
-
-    /// 지금까지 받은 보상. 전리품 선반에 늘어놓는다.
-    private var receivedRewards: [RewardLedgerEntry] {
-        entries.filter { $0.kind == .spend }
+    init(repository: RewardRepository, unlockedMonthlyGoals: [RewardClaimableGoal] = []) {
+        self.unlockedMonthlyGoals = unlockedMonthlyGoals
+        _viewModel = State(initialValue: RewardViewModel(repository: repository))
     }
 
     var body: some View {
@@ -68,13 +36,13 @@ struct RewardTabView: View {
             }
 
             LanternOilJarView(
-                progress: progress,
-                unlockedGoalTitles: unlockedGoals.map(\.title)
+                progress: viewModel.progress,
+                unlockedGoalTitles: viewModel.unlockedGoals.map(\.title)
             )
             .frame(maxWidth: .infinity)
 
-            if !failureMessage.isEmpty {
-                Text(failureMessage)
+            if !viewModel.failureMessage.isEmpty {
+                Text(viewModel.failureMessage)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.red)
             }
@@ -82,87 +50,50 @@ struct RewardTabView: View {
             catalogSection
             trophySection
         }
-        .sheet(isPresented: $showHistory) {
-            RewardHistorySheet(entries: entries)
+        // 원장은 성취 화면에서도 바뀐다. 나타날 때마다 다시 읽어야 적립이 반영된다.
+        .onAppear {
+            viewModel.unlockedMonthlyGoals = unlockedMonthlyGoals
+            viewModel.reload()
         }
-        .sheet(item: $unboxing) { reward in
+        .onChange(of: unlockedMonthlyGoals) { _, goals in
+            viewModel.unlockedMonthlyGoals = goals
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SwiftDataRewardRepository.didChangeNotification)) { _ in
+            viewModel.reload()
+        }
+        .sheet(isPresented: $showHistory) {
+            RewardHistorySheet(entries: viewModel.entries)
+        }
+        .sheet(item: Binding(get: { viewModel.unboxed }, set: { if $0 == nil { viewModel.dismissUnboxing() } })) { reward in
             RewardUnboxingOverlay(
                 emoji: reward.emoji,
                 title: reward.title,
                 costPoints: reward.costPoints,
                 remainingBalance: reward.remainingBalance
             ) {
-                unboxing = nil
+                viewModel.dismissUnboxing()
             }
         }
         .sheet(isPresented: $showComposer) {
             RewardItemComposer(item: nil) { title, emoji, cost, note in
-                RewardEngine.addCatalogItem(
-                    title: title, emoji: emoji, costPoints: cost, note: note, in: modelContext
-                )
+                viewModel.addItem(title: title, emoji: emoji, costPoints: cost, note: note)
             }
         }
         .sheet(item: $editingItem) { item in
             RewardItemComposer(item: item) { title, emoji, cost, note in
-                item.title = title
-                item.emoji = emoji
-                item.costPoints = max(1, cost)
-                item.note = note
-                item.updatedAt = Date()
-                try? modelContext.save()
+                viewModel.updateItem(id: item.id, title: title, emoji: emoji, costPoints: cost, note: note)
             }
         }
         .alert("보상을 지울까요?", isPresented: .constant(pendingDeletion != nil)) {
             Button("취소", role: .cancel) { pendingDeletion = nil }
             Button("지우기", role: .destructive) {
                 if let pendingDeletion {
-                    RewardEngine.deleteCatalogItem(pendingDeletion, in: modelContext)
+                    viewModel.deleteItem(id: pendingDeletion.id)
                 }
                 pendingDeletion = nil
             }
         } message: {
             Text("지난 사용 이력은 그대로 남습니다.")
-        }
-    }
-
-    /// 포인트도 충분하고 아직 쓰지 않은 달성 목표도 남아야 받을 수 있다.
-    private func canRedeem(_ item: RewardCatalogItem) -> Bool {
-        balance >= item.costPoints && !unlockedGoals.isEmpty
-    }
-
-    private func redeemHelpText(_ item: RewardCatalogItem) -> String {
-        if balance < item.costPoints {
-            return "\(item.costPoints - balance)P 가 더 필요해요"
-        }
-        if unlockedGoals.isEmpty {
-            return "월간 목표를 달성하면 받을 수 있어요"
-        }
-        return "달성한 월간 목표를 걸고 이 보상을 받습니다"
-    }
-
-    /// 달성한 월간 목표 하나를 걸고 보상을 받는다. 원장에 사용 기록이 남고 포인트가 깎인다.
-    private func redeem(_ item: RewardCatalogItem) {
-        guard let unlocked = unlockedGoals.first else {
-            failureMessage = "월간 목표를 달성해야 보상을 받을 수 있어요."
-            return
-        }
-        // 차감 후 잔액은 직접 계산한다.
-        // @Query 는 다음 런루프에 갱신되므로 여기서 balance 를 다시 읽으면 옛 값이 나온다.
-        let remaining = balance - item.costPoints
-
-        switch RewardEngine.redeem(item: item, forMonthlyGoal: unlocked, in: modelContext) {
-        case .success:
-            failureMessage = ""
-            withAnimation(.easeIn(duration: 0.2)) {
-                unboxing = UnboxedReward(
-                    emoji: item.emoji,
-                    title: item.title,
-                    costPoints: item.costPoints,
-                    remainingBalance: remaining
-                )
-            }
-        case .failure(let error):
-            failureMessage = error.message
         }
     }
 
@@ -183,7 +114,7 @@ struct RewardTabView: View {
                 .fixedSize()
             }
 
-            if visibleItems.isEmpty {
+            if viewModel.visibleItems.isEmpty {
                 emptyCard(
                     icon: "gift",
                     title: "아직 정한 보상이 없어요",
@@ -191,7 +122,7 @@ struct RewardTabView: View {
                 )
             } else {
                 VStack(spacing: 8) {
-                    ForEach(visibleItems) { item in
+                    ForEach(viewModel.visibleItems) { item in
                         catalogRow(item)
                     }
                 }
@@ -199,8 +130,8 @@ struct RewardTabView: View {
         }
     }
 
-    private func catalogRow(_ item: RewardCatalogItem) -> some View {
-        let canAfford = balance >= item.costPoints
+    private func catalogRow(_ item: RewardItem) -> some View {
+        let canAfford = viewModel.balance >= item.costPoints
 
         return HStack(spacing: 10) {
             Text(item.emoji)
@@ -221,14 +152,14 @@ struct RewardTabView: View {
                     }
                 }
                 if canAfford {
-                    Text(unlockedGoals.isEmpty
+                    Text(viewModel.unlockedGoals.isEmpty
                          ? "포인트는 충분해요. 월간 목표를 달성하면 받을 수 있어요"
                          : "지금 받을 수 있어요")
                         .font(.system(size: 10.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .lineLimit(1)
                 } else {
-                    Text("\(item.costPoints - balance)P 더 모으면 받을 수 있어요")
+                    Text("\(item.costPoints - viewModel.balance)P 더 모으면 받을 수 있어요")
                         .font(.system(size: 10.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                         .lineLimit(1)
@@ -254,13 +185,13 @@ struct RewardTabView: View {
                 )
 
             // 버튼은 항상 자리를 지킨다. 조건에 따라 나타났다 사라지면 줄마다 모양이 달라진다.
-            Button("받기") { redeem(item) }
+            Button("받기") { viewModel.redeem(item) }
                 .buttonStyle(LanternPrimaryButtonStyle())
                 .controlSize(.small)
                 .fixedSize()
-                .disabled(!canRedeem(item))
-                .opacity(canRedeem(item) ? 1 : 0.4)
-                .help(redeemHelpText(item))
+                .disabled(!viewModel.canRedeem(item))
+                .opacity(viewModel.canRedeem(item) ? 1 : 0.4)
+                .help(viewModel.redeemHelpText(item))
 
             Menu {
                 Button("수정") { editingItem = item }
@@ -288,11 +219,11 @@ struct RewardTabView: View {
 
     @ViewBuilder
     private var trophySection: some View {
-        if !receivedRewards.isEmpty {
+        if !viewModel.receivedRewards.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     sectionTitle("받은 보상", systemImage: "trophy")
-                    Text("\(receivedRewards.count)")
+                    Text("\(viewModel.receivedRewards.count)")
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.accentInk)
                         .padding(.horizontal, 7)
@@ -304,7 +235,7 @@ struct RewardTabView: View {
                     columns: [GridItem(.adaptive(minimum: 116), spacing: 8)],
                     spacing: 8
                 ) {
-                    ForEach(receivedRewards) { entry in
+                    ForEach(viewModel.receivedRewards) { entry in
                         trophyCard(entry)
                     }
                 }
@@ -312,7 +243,7 @@ struct RewardTabView: View {
         }
     }
 
-    private func trophyCard(_ entry: RewardLedgerEntry) -> some View {
+    private func trophyCard(_ entry: RewardEntry) -> some View {
         VStack(spacing: 6) {
             Text(Self.trophyEmoji(from: entry.note))
                 .font(.system(size: 26))
@@ -391,7 +322,7 @@ struct RewardTabView: View {
 // MARK: - 보상 추가·수정 시트
 
 private struct RewardItemComposer: View {
-    let item: RewardCatalogItem?
+    let item: RewardItem?
     let onSave: (String, String, Int, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -400,7 +331,7 @@ private struct RewardItemComposer: View {
     @State private var costText: String
     @State private var note: String
 
-    init(item: RewardCatalogItem?, onSave: @escaping (String, String, Int, String) -> Void) {
+    init(item: RewardItem?, onSave: @escaping (String, String, Int, String) -> Void) {
         self.item = item
         self.onSave = onSave
         _title = State(initialValue: item?.title ?? "")
@@ -470,7 +401,7 @@ private struct RewardItemComposer: View {
 
 /// 이력은 계속 쌓이므로 보상 탭에 눌러두지 않고 별도 창에서 본다.
 private struct RewardHistorySheet: View {
-    let entries: [RewardLedgerEntry]
+    let entries: [RewardEntry]
 
     @Environment(\.dismiss) private var dismiss
 
@@ -533,7 +464,7 @@ private struct RewardHistorySheet: View {
         .appearanceAccentTint(.popover)
     }
 
-    private func row(_ entry: RewardLedgerEntry) -> some View {
+    private func row(_ entry: RewardEntry) -> some View {
         let isEarn = entry.kind == .earn
 
         return HStack(spacing: 10) {

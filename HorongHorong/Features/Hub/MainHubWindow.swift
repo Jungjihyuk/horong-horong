@@ -13,6 +13,7 @@ import SwiftUI
 /// 그 뒤로는 남겨둔다. 비용이 사라지는 게 아니라 **실제로 그 탭을 볼 때로 옮겨간다.**
 struct MainHubWindow: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dependencies) private var dependencies
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     /// 한 번이라도 연 탭. 창을 닫았다 열면 비워져 다시 활성 탭 하나만 만든다.
@@ -36,8 +37,8 @@ struct MainHubWindow: View {
                     StatsDetailWindow()
                         .hubTabVisible(appState.hubTab == .stats)
                 }
-                if openedTabs.contains(.achievement) {
-                    AchievementDetailWindow()
+                if openedTabs.contains(.achievement), let dependencies {
+                    AchievementDetailWindow(rewardRepository: dependencies.rewardRepository)
                         .hubTabVisible(appState.hubTab == .achievement)
                 }
             }

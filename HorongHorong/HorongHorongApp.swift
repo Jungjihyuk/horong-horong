@@ -757,7 +757,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         case .achievementDetail(let mode):
             return AnyView(
-                AchievementDetailWindow(initialScreenshotState: mode.initialState)
+                AchievementDetailWindow(
+                    rewardRepository: dependencies.rewardRepository,
+                    initialScreenshotState: mode.initialState
+                )
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(

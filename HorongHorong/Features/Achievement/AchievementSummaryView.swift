@@ -17,6 +17,8 @@ import FoundationModels
 
 struct AchievementSummaryView: View {
     @Environment(\.openWindow) private var openWindow
+    let rewardRepository: RewardRepository
+
     @Environment(AppState.self) private var appState
     // 섹션 술어는 못 쓴다 — 목표에는 **어떤 섹션의 메모든** 연결될 수 있다.
     // 대신 정렬 키를 편집으로 안 바뀌는 필드로 바꾼다. `goals(from:memos:)` 는
@@ -53,6 +55,7 @@ struct AchievementSummaryView: View {
                     } else {
                         ForEach(weeklyGoals) { goal in
                             AchievementGoalSummaryCard(
+                                rewardRepository: rewardRepository,
                                 goal: goal,
                                 textScale: textScale,
                                 weekCount: AchievementDataBuilder.goalWeekCount(for: goal, inWeekStarting: currentWeekStart)
@@ -202,6 +205,7 @@ struct AchievementOverdueBadge: View {
 }
 
 struct AchievementGoalSummaryCard: View {
+    let rewardRepository: RewardRepository
     let goal: AchievementGoal
     var textScale: CGFloat = 1
     var weekCount = 1
@@ -251,7 +255,7 @@ struct AchievementGoalSummaryCard: View {
                     .font(.system(size: scaled(14), weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(PopoverChrome.ink)
-                AchievementGoalRewardAction(goal: goal, textScale: textScale)
+                AchievementGoalRewardAction(goal: goal, rewardRepository: rewardRepository, textScale: textScale)
             }
 
             if let todo = goal.nextTodo {

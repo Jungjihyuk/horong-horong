@@ -1,72 +1,5 @@
 import Foundation
 
-enum RewardEntryKind: String, Codable {
-    case earn
-    case spend
-}
-
-/// 원장 한 줄의 계산용 스냅샷. SwiftData 없이 계산·테스트하기 위한 값 타입이다.
-struct RewardEntrySnapshot: Equatable {
-    let amount: Int
-    let kind: RewardEntryKind
-    let sourceGoalID: UUID?
-
-    init(amount: Int, kind: RewardEntryKind, sourceGoalID: UUID? = nil) {
-        self.amount = amount
-        self.kind = kind
-        self.sourceGoalID = sourceGoalID
-    }
-}
-
-/// 보상 항목의 계산용 스냅샷.
-struct RewardItemSnapshot: Equatable {
-    let id: UUID
-    let emoji: String
-    let title: String
-    let costPoints: Int
-    let isArchived: Bool
-
-    init(
-        id: UUID = UUID(),
-        emoji: String = "🎁",
-        title: String = "",
-        costPoints: Int,
-        isArchived: Bool = false
-    ) {
-        self.id = id
-        self.emoji = emoji
-        self.title = title
-        self.costPoints = costPoints
-        self.isArchived = isArchived
-    }
-}
-
-/// 등잔에 그을 눈금 하나. 보상 하나가 눈금 하나다.
-struct RewardMark: Equatable, Identifiable {
-    let id: UUID
-    let emoji: String
-    let title: String
-    let costPoints: Int
-    /// 등잔 바닥에서의 높이 0…1.
-    let heightRatio: Double
-    /// 기름이 이 눈금을 넘었는가 — 지금 받을 수 있는가.
-    let isReached: Bool
-}
-
-/// 목표를 Reward 쪽으로 넘기기 위한 경계 타입.
-/// `AchievementGoal`은 `AchievementViews.swift`의 file-private 타입이라 직접 쓸 수 없다.
-struct RewardClaimableGoal: Equatable {
-    let id: UUID
-    let title: String
-    let emoji: String
-    let cadence: String
-    let isComplete: Bool
-
-    var isWeekly: Bool { cadence == "주간" }
-    var isMonthly: Bool { cadence == "월간" }
-}
-
-/// 포인트 계산. 전부 순수 함수라 SwiftData 없이 테스트한다.
 enum RewardLedger {
     /// 현재 잔액. 적립(양수)과 사용(음수)을 그대로 더한다.
     static func balance(_ entries: [RewardEntrySnapshot]) -> Int {
@@ -127,20 +60,6 @@ enum RewardLedger {
             marks: marks
         )
     }
-}
-
-/// 호롱불과 안내 문구가 함께 쓰는 진행 상태.
-struct RewardProgress: Equatable {
-    let balance: Int
-    /// 지금 잔액으로 받을 수 있는 보상 개수.
-    let affordableCount: Int
-    /// 가장 싼 미달 보상까지 남은 포인트. 전부 받을 수 있으면 nil.
-    let pointsToNext: Int?
-    let fillRatio: Double
-    /// 등잔에 그을 눈금. 싼 것부터.
-    let marks: [RewardMark]
-
-    var hasAffordableReward: Bool { affordableCount > 0 }
 }
 
 /// 적립 규칙. 정책을 바꿔 끼울 수 있는 지점이며, 이 모듈의 유일한 추상화다.

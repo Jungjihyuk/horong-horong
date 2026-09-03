@@ -65,13 +65,14 @@ enum AchievementPeriod: String, CaseIterable, Identifiable {
 /// 달성 여부가 파생값이라 버튼 노출만으로는 중복을 못 막는다 — 실제 차단은 `RewardEngine`이 한다.
 struct AchievementGoalRewardAction: View {
     let goal: AchievementGoal
+    let rewardRepository: RewardRepository
     var textScale: CGFloat = 1
     /// 보상 탭으로 데려다주는 동작. 성취 상세 창에서만 넘어온다.
     /// nil 이면(팝오버) 받을 수 있다는 사실만 알린다.
     var onOpenRewardTab: (() -> Void)?
 
-    @Environment(\.modelContext) private var modelContext
-    @Query private var entries: [RewardLedgerEntry]
+    /// 원장 스냅샷. `@Query` 대신 저장소에서 읽고, 바뀌었다는 알림을 받으면 다시 읽는다.
+    @State private var snapshots: [RewardEntrySnapshot] = []
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var weeklyPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @State private var isHovering = false
@@ -88,7 +89,6 @@ struct AchievementGoalRewardAction: View {
         )
     }
 
-    private var snapshots: [RewardEntrySnapshot] { entries.map(\.snapshot) }
     private var balance: Int { RewardLedger.balance(snapshots) }
     private var hasClaimed: Bool { RewardLedger.hasClaimed(goalID: goal.id, in: snapshots) }
     private var hasRedeemed: Bool { RewardLedger.hasRedeemed(goalID: goal.id, in: snapshots) }
@@ -96,6 +96,15 @@ struct AchievementGoalRewardAction: View {
     private func scaled(_ value: CGFloat) -> CGFloat { value * textScale }
 
     var body: some View {
+        content
+            .onAppear(perform: reloadSnapshots)
+            .onReceive(NotificationCenter.default.publisher(for: SwiftDataRewardRepository.didChangeNotification)) { _ in
+                reloadSnapshots()
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             if claimable.isWeekly {
                 // 이미 받았으면 목표가 미완성으로 되돌아가도 계속 보여준다.
@@ -136,7 +145,7 @@ struct AchievementGoalRewardAction: View {
 
     /// 이 목표로 받아둔 포인트.
     private var claimedPoints: Int {
-        entries.first { $0.kind == .earn && $0.sourceGoalID == goal.id }?.amount ?? weeklyPoints
+        snapshots.first { $0.kind == .earn && $0.sourceGoalID == goal.id }?.amount ?? weeklyPoints
     }
 
     private var revokeButton: some View {
@@ -157,12 +166,17 @@ struct AchievementGoalRewardAction: View {
     }
 
     private func revokeClaim() {
-        switch RewardEngine.revokeClaim(goalID: goal.id, in: modelContext) {
+        switch rewardRepository.revokeClaim(goalID: goal.id) {
         case .success:
             revokeErrorMessage = nil
         case .failure(let error):
             revokeErrorMessage = error.message
         }
+        reloadSnapshots()
+    }
+
+    private func reloadSnapshots() {
+        snapshots = rewardRepository.entries().map(\.snapshot)
     }
 
     /// 월간 목표를 달성하면 보상을 받을 수 있게 된다. 실제 교환은 보상 탭에서 한다.
@@ -194,11 +208,11 @@ struct AchievementGoalRewardAction: View {
 
     private var claimButton: some View {
         Button {
-            RewardEngine.claim(
+            rewardRepository.claim(
                 claimable,
-                policy: FixedWeeklyRewardPolicy(pointsPerGoal: weeklyPoints),
-                in: modelContext
+                policy: FixedWeeklyRewardPolicy(pointsPerGoal: weeklyPoints)
             )
+            reloadSnapshots()
         } label: {
             AchievementRewardChip(
                 systemImage: "gift",
@@ -269,9 +283,13 @@ struct AchievementDetailWindow: View {
     // 정렬 키만 편집으로 안 바뀌는 필드로 바꾼다. `updatedAt` 이면 메모를 하나 고칠 때마다
     // fetch 가 무효화돼 이 창이 통째로 재계산된다 — 창이 안 보여도 살아 있으면 돈다.
     // 표시 순서는 소비처가 전부 다시 정한다(피커·타임라인 모두 자체 정렬).
+    let rewardRepository: RewardRepository
+
+    /// 원장 스냅샷. 계산 프로퍼티에서 매번 조회하면 body 평가마다 fetch 가 돈다.
+    @State private var rewardSnapshots: [RewardEntrySnapshot] = []
+
     @Query(sort: \Memo.createdAt, order: .reverse) private var memos: [Memo]
     @Query(sort: \AchievementGoalRecord.updatedAt, order: .reverse) private var goalRecords: [AchievementGoalRecord]
-    @Query private var rewardEntries: [RewardLedgerEntry]
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -303,7 +321,11 @@ struct AchievementDetailWindow: View {
     @State private var visionDragStartIndex = 0
     @State private var visionDragOrder: [UUID] = []
 
-    init(initialScreenshotState: AchievementDetailScreenshotState? = nil) {
+    init(
+        rewardRepository: RewardRepository,
+        initialScreenshotState: AchievementDetailScreenshotState? = nil
+    ) {
+        self.rewardRepository = rewardRepository
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
            let tab = AchievementDetailTab(screenshotIdentifier: tabIdentifier) {
             _selectedTab = State(initialValue: tab)
@@ -388,7 +410,7 @@ struct AchievementDetailWindow: View {
                         case .journey:
                             journeyContent
                         case .reward:
-                            RewardTabView(unlockedMonthlyGoals: unlockedMonthlyGoals)
+                            RewardTabView(repository: rewardRepository, unlockedMonthlyGoals: unlockedMonthlyGoals)
                         }
                     }
                     .padding(appearanceDensity.informationMetric(18))
@@ -462,7 +484,11 @@ struct AchievementDetailWindow: View {
                 onSave: savePersonaVisionDraft
             )
         }
+        .onReceive(NotificationCenter.default.publisher(for: SwiftDataRewardRepository.didChangeNotification)) { _ in
+            rewardSnapshots = rewardRepository.entries().map(\.snapshot)
+        }
         .onAppear {
+            rewardSnapshots = rewardRepository.entries().map(\.snapshot)
             ensureSelection()
             if launchOptions.consumeGoalComposerRequest() {
                 openGoalComposer()
@@ -648,6 +674,7 @@ struct AchievementDetailWindow: View {
                     ForEach(visibleWeeklyGoals) { goal in
                         AchievementDetailGoalRow(
                             goal: goal,
+                            rewardRepository: rewardRepository,
                             onAdd: {
                                 manageGoal(goal)
                             },
@@ -2415,9 +2442,8 @@ struct AchievementDetailWindow: View {
 
     /// 달성했는데 아직 «보상 받기»를 누르지 않은 주간 목표.
     private var unclaimedWeeklyGoals: [AchievementGoal] {
-        let snapshots = rewardEntries.map(\.snapshot)
-        return weeklyGoals.filter {
-            $0.isComplete && !RewardLedger.hasClaimed(goalID: $0.id, in: snapshots)
+        weeklyGoals.filter {
+            $0.isComplete && !RewardLedger.hasClaimed(goalID: $0.id, in: rewardSnapshots)
         }
     }
 

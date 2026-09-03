@@ -342,7 +342,9 @@ struct MenuBarPopover: View {
         case .memo:
             MemoListView()
         case .achievement:
-            AchievementSummaryView()
+            if let dependencies {
+                AchievementSummaryView(rewardRepository: dependencies.rewardRepository)
+            }
         case .stats:
             StatsSummaryView(referenceDate: referenceDate)
         case .news:

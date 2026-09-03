@@ -17,6 +17,7 @@ import FoundationModels
 
 struct AchievementDetailGoalRow: View {
     let goal: AchievementGoal
+    let rewardRepository: RewardRepository
     let onAdd: () -> Void
     let onManage: () -> Void
     let onDelete: () -> Void
@@ -42,7 +43,7 @@ struct AchievementDetailGoalRow: View {
                 }
                 Spacer()
                 AchievementRewardBadge(reward: goal.reward, color: goal.color)
-                AchievementGoalRewardAction(goal: goal, onOpenRewardTab: onOpenRewardTab)
+                AchievementGoalRewardAction(goal: goal, rewardRepository: rewardRepository, onOpenRewardTab: onOpenRewardTab)
                 Menu {
                     Button {
                         onAdd()

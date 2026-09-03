@@ -19,6 +19,7 @@ final class DependencyContainer {
     let agentGateway: AgentGateway
     let newsRepository: NewsRepository
     let newsPipelineGateway: NewsPipelineGateway
+    let rewardRepository: RewardRepository
 
     init(modelContainer: ModelContainer, newsPipelineService: NewsPipelineService) {
         let context = modelContainer.mainContext
@@ -31,6 +32,7 @@ final class DependencyContainer {
         agentGateway = CLIAgentAdapter()
         newsRepository = SwiftDataNewsRepository(context: context)
         newsPipelineGateway = NewsPipelineAdapter(service: newsPipelineService, context: context)
+        rewardRepository = SwiftDataRewardRepository(context: context)
     }
 }
 
