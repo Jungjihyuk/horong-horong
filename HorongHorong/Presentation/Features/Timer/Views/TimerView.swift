@@ -19,8 +19,6 @@ import SwiftUI
  후보 조회는 `PomodoroTaskRepository` 로 옮겼다(2026-09-03). 후보를 고르는 규칙은
  `PomodoroTaskCandidateBuilder` 가 순수 함수로 갖고 있어 화면 없이 검사한다.
 
- **이 기능은 아직 목표 폴더 구조로 옮기지 않았다.** 같은 폴더의 `TimerManager` 와
- `PomodoroReflectionPanel` 이 `ModelContext` 를 직접 쓴다 — 둘을 옮겨야 `Timer` 가 끝난다.
  */
 
 struct PomodoroTaskCandidate: Identifiable, Equatable {
