@@ -1,6 +1,5 @@
 import SwiftUI
 import Charts
-import SwiftData
 import OSLog
 
 // MARK: - Data models
