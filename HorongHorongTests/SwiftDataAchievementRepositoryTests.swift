@@ -98,6 +98,82 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         XCTAssertEqual(child.monthGoal, "구월 목표", "이름만 바꿨는데 연결이 끊기면 안 된다")
     }
 
+    /// 연간 목표 제목을 고치면 하위 **월간** 목표의 `yearGoal` 이 따라와야 한다.
+    func testRenamingYearlyGoalUpdatesMonthlyChildren() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAchievementRepository(context: container.mainContext)
+        let yearly = try repository.createGoal(draft("2026년", cadence: "연간"), childGoalIDs: [], newChildTitles: [])
+        try repository.createGoal(
+            draft("9월", cadence: "월간", yearGoal: "2026년"),
+            childGoalIDs: [], newChildTitles: []
+        )
+
+        repository.updateGoal(id: yearly.id, with: edit(title: "이천이십육년"))
+
+        let monthly = try XCTUnwrap(repository.goals().first { $0.cadence == "월간" })
+        XCTAssertEqual(monthly.yearGoal, "이천이십육년")
+    }
+
+    /// 역할 이름을 고치면 그 역할에 속한 **모든** 목표의 `roleName` 이 따라와야 한다.
+    /// 안 그러면 여정 화면에서 목표들이 사라진 역할 아래에 남는다.
+    func testRenamingPersonaUpdatesEveryGoalUnderIt() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAchievementRepository(context: container.mainContext)
+        try repository.savePersonaVision(AchievementPersonaVisionDraft(
+            personaName: "개발자",
+            personaEmoji: "🧑‍💻",
+            visionTitle: "더 나은 도구",
+            visionText: "",
+            visionEmoji: "🔭"
+        ))
+        var underPersona = draft("주간 하나")
+        underPersona.roleName = "개발자"
+        try repository.createGoal(underPersona, childGoalIDs: [], newChildTitles: [])
+
+        let persona = try XCTUnwrap(repository.goals().first { $0.cadence == "역할" })
+        repository.updateGoal(id: persona.id, with: edit(title: "엔지니어"))
+
+        let underNewName = repository.goals().filter { $0.roleName == "엔지니어" }
+        XCTAssertEqual(underNewName.count, 3, "역할 자신 · 비전 · 주간 목표가 모두 따라온다")
+        XCTAssertTrue(repository.goals().allSatisfy { $0.roleName != "개발자" })
+    }
+
+    /// 비전 제목을 고치면 그 비전을 가리키던 목표들의 `vision` 이 따라와야 한다.
+    func testRenamingVisionUpdatesGoalsPointingToIt() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAchievementRepository(context: container.mainContext)
+        var withVision = draft("주간 하나")
+        withVision.vision = "더 나은 도구"
+        try repository.createGoal(withVision, childGoalIDs: [], newChildTitles: [])
+        let vision = try repository.createGoal(
+            draft("더 나은 도구", cadence: "비전"),
+            childGoalIDs: [], newChildTitles: []
+        )
+
+        repository.updateGoal(id: vision.id, with: edit(title: "쓸모 있는 도구"))
+
+        let weekly = try XCTUnwrap(repository.goals().first { $0.cadence == "주간" })
+        XCTAssertEqual(weekly.vision, "쓸모 있는 도구")
+    }
+
+    /// 주간 목표에는 하위가 없다. 이름을 바꿔도 **다른 목표를 건드리면 안 된다.**
+    func testRenamingWeeklyGoalTouchesNothingElse() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAchievementRepository(context: container.mainContext)
+        let parent = try repository.createGoal(draft("9월", cadence: "월간"), childGoalIDs: [], newChildTitles: [])
+        let weekly = try repository.createGoal(
+            draft("주간 하나", monthGoal: "9월"),
+            childGoalIDs: [], newChildTitles: []
+        )
+
+        repository.updateGoal(id: weekly.id, with: edit(title: "주간 첫째"))
+
+        let after = try XCTUnwrap(repository.goals().first { $0.id == weekly.id })
+        XCTAssertEqual(after.title, "주간 첫째")
+        XCTAssertEqual(after.monthGoal, "9월", "부모와의 연결은 그대로")
+        XCTAssertEqual(repository.goals().first { $0.id == parent.id }?.title, "9월", "부모는 안 바뀐다")
+    }
+
     /// 기존 목표를 하위로 이어붙이면 부모의 역할·비전까지 물려받는다.
     func testConnectingChildInheritsParentContext() throws {
         let container = try makeContainer()
