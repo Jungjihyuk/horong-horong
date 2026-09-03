@@ -1,57 +1,160 @@
 import SwiftUI
 
+// 1. 일반 & UI 윈도우 레이아웃 (General & Window Layout)
+// 2. 타이머 & 집중 세션 (Timer & Focus Session)
+// 3. 카테고리 & 앱 매핑 (Category & App Mapping)
+// 4. 앱 사용량 트래커 & 통계 (Tracker & Stats)
+// 5. 컴패니언 루미롱 (Companion)
+// 6. 성취 & 보상 (Achievement & Reward)
+// 7. 메모 & Second Brain (Mind / Vault)
+// 8. 뉴스 큐레이션 & AI 실험실 (News & AI Lab)
+// 9. 공통 저장소 키 (Storage Keys)
+// 10. 카테고리 도메인 모델 & 저장소 (Category Models & Store)
+
 enum Constants {
-    /// 앱의 사용 구간은 기록했지만 사용자가 아직 카테고리를 확정하지 않은 상태.
-    /// 실제 사용자 카테고리 목록에는 포함하지 않는다.
-    static let unclassifiedAppCategory = "미분류"
-    /// 타이머·할 일 확인처럼 작업 흐름을 관리하기 위해 잠깐 사용하는 앱의 특수 분류.
-    static let productivityManagementAppCategory = "생산성 관리"
-    static let productivityManagementAppEmoji = "⏰"
-    static let legacySupportAppCategory = "세션 보조"
-    static let horongHorongBundleIdentifier = "com.horonghorong.app"
-    static let productivityManagementShortInteractionSeconds: TimeInterval = 10
-    static let productivityManagementReflectionThresholdSeconds = 60
-    static let reservedCategoryNames: Set<String> = [
-        unclassifiedAppCategory,
-        productivityManagementAppCategory,
-        legacySupportAppCategory,
-    ]
 
-    static func isProductivityManagementCategory(_ category: String) -> Bool {
-        category == productivityManagementAppCategory
-            || category == legacySupportAppCategory
-    }
+    // MARK: - 1. 일반 & UI 윈도우 레이아웃 (General & Window Layout)
+    // 팝오버, 통합 윈도우, 통계, 퀵 메모 패널의 크기 및 메뉴바/아이콘/테마 표시 설정
 
-    static func mondayWeekStart(for date: Date, calendar baseCalendar: Calendar = .current) -> Date {
-        var calendar = baseCalendar
-        calendar.firstWeekday = 2
-        calendar.minimumDaysInFirstWeek = 4
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-        return calendar.date(from: components).map { calendar.startOfDay(for: $0) }
-            ?? calendar.startOfDay(for: date)
-    }
+    // MARK: - 팝오버 크기
+    static let popoverWidth: CGFloat = 360
+    static let popoverMaxHeight: CGFloat = 560
 
-    struct NewsOllamaModelOption: Identifiable, Hashable {
-        enum Availability: Hashable {
-            case local
-            case cloud
+
+    // MARK: - 퀵 메모 패널 크기
+    static let quickMemoPanelWidth: CGFloat = 616
+    static let quickMemoPanelHeight: CGFloat = 360
+    static let quickMemoPanelMinHeight: CGFloat = 160
+    static let quickMemoPanelMaxHeight: CGFloat = 360
+
+
+    // MARK: - 통계 윈도우 크기
+    static let statsWindowWidth: CGFloat = 880
+    static let statsWindowHeight: CGFloat = 660
+
+
+    // MARK: - 통합 윈도우 크기
+    static let hubWindowWidth: CGFloat = 1200
+    static let hubWindowHeight: CGFloat = 700
+
+
+    enum PopoverTheme: String, CaseIterable, Identifiable {
+        case warmLantern
+        case wineLantern
+        case gamePixel
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .warmLantern: return "따뜻한 등불"
+            case .wineLantern: return "와인 랜턴"
+            case .gamePixel: return "게임 픽셀"
+            }
         }
 
-        var id: String { name }
-        let name: String
-        let label: String
-        let detail: String
-        let availability: Availability
-        let isRecommended: Bool
+        var symbol: String {
+            switch self {
+            case .warmLantern: return "🏮"
+            case .wineLantern: return "🍷"
+            case .gamePixel: return "▣"
+            }
+        }
+
+        static func normalized(rawValue: String) -> Self {
+            Self(rawValue: rawValue) ?? .warmLantern
+        }
     }
 
-    enum NewsOllamaRecommendationKind: String {
-        case primary = "추천"
-        case lightweight = "가벼움"
-        case quality = "고품질"
-        case caution = "주의"
-        case unsupported = "불가능"
+
+    enum AppIconStyle: String, CaseIterable, Identifiable {
+        case horong = "app-icon"
+        case cozyHorong = "app-icon2"
+        case cozyBear = "app-icon3"
+
+        var id: String { rawValue }
+        var resourceName: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .horong: return "호롱"
+            case .cozyHorong: return "포근한 호롱"
+            case .cozyBear: return "포근한 곰"
+            }
+        }
+
+        static func normalized(rawValue: String) -> Self {
+            Self(rawValue: rawValue) ?? .horong
+        }
     }
+
+    static let defaultAppearanceMode = "light"
+    static let defaultAppearanceDensity = AppearanceDensity.comfortable.rawValue
+    static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
+    static let defaultAppIcon = AppIconStyle.horong.rawValue
+
+
+    // MARK: - 메뉴바 표시 형식
+    enum MenubarLabelStyle: String, CaseIterable, Identifiable {
+        case timeAndIcon
+        case timeOnly
+        case categoryOnly
+        case iconOnly
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .timeAndIcon:  return "시간 + 이모지"
+            case .timeOnly:     return "시간만"
+            case .categoryOnly: return "카테고리"
+            case .iconOnly:     return "아이콘만"
+            }
+        }
+    }
+
+    enum MenubarTimeStyle: String, CaseIterable, Identifiable {
+        case mmss
+        case minutes
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .mmss:    return "분:초 (25:00)"
+            case .minutes: return "분 (25분)"
+            }
+        }
+    }
+
+    static let defaultMenubarLabelStyle = MenubarLabelStyle.timeAndIcon.rawValue
+    static let defaultMenubarTimeStyle = MenubarTimeStyle.mmss.rawValue
+
+
+    // MARK: - 메뉴바 아이콘 (idle 상태에서 표시되는 대표 아이콘)
+    enum MenubarIconStyle: String, CaseIterable, Identifiable {
+        case horong = "MenuBarIcon"
+        case horong2 = "MenuBarIcon2"
+        case horong3 = "MenuBarIcon3"
+
+        var id: String { rawValue }
+
+        /// Assets.xcassets 의 imageset 이름.
+        var imageName: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .horong:  return "호롱불"
+            case .horong2: return "호롱불 2"
+            case .horong3: return "호롱불 3"
+            }
+        }
+    }
+
+    static let defaultMenubarIcon = MenubarIconStyle.horong.rawValue
+
+
+
+    // MARK: - 2. 타이머 & 집중 세션 (Timer & Focus Session)
+    // 포모도로/긴 집중 프리셋, 타이머 완료 알림, 휴식 후 전환 프롬프트 및 의사 식별자
 
     // MARK: - 포모도로 프리셋
     enum PomodoroPreset: String, CaseIterable, Identifiable {
@@ -78,262 +181,6 @@ enum Constants {
         }
     }
 
-    // MARK: - 카테고리 색상
-    static let defaultCategoryColorKeys: [String: String] = [
-        "업무": "brown",
-        "개발": "blue",
-        "공부": "lime",
-        "조사": "teal",
-        "소통": "orange",
-        "엔터": "red",
-        "기록": "sky",
-        "기타": "gray",
-    ]
-
-    // MARK: - 카테고리 이모지
-    static let categoryEmoji: [String: String] = [
-        "업무": "💼",
-        "개발": "💻",
-        "공부": "📚",
-        "조사": "🔎",
-        "소통": "💬",
-        "엔터": "🎬",
-        "기록": "📓",
-        "기타": "📦",
-    ]
-
-    static let defaultCategoryDefinitions: [CategoryDefinition] = [
-        CategoryDefinition(defaultName: "업무", name: "업무", emoji: "💼", colorKey: "brown"),
-        CategoryDefinition(defaultName: "개발", name: "개발", emoji: "💻", colorKey: "blue"),
-        CategoryDefinition(defaultName: "공부", name: "공부", emoji: "📚", colorKey: "lime"),
-        CategoryDefinition(defaultName: "조사", name: "조사", emoji: "🔎", colorKey: "teal"),
-        CategoryDefinition(defaultName: "기록", name: "기록", emoji: "📓", colorKey: "sky"),
-        CategoryDefinition(defaultName: "소통", name: "소통", emoji: "💬", colorKey: "orange"),
-        CategoryDefinition(defaultName: "엔터", name: "엔터", emoji: "🎬", colorKey: "red"),
-        CategoryDefinition(defaultName: "기타", name: "기타", emoji: "📦", colorKey: "gray"),
-    ]
-
-    static func categoryName(_ defaultName: String) -> String {
-        CategoryStore.shared.displayName(forDefaultName: defaultName)
-    }
-
-    static func defaultName(forCategory category: String) -> String {
-        CategoryStore.shared.defaultName(forDisplayName: category)
-    }
-
-    static func categoryEmoji(for category: String) -> String {
-        if isProductivityManagementCategory(category) {
-            return productivityManagementAppEmoji
-        }
-        return CategoryStore.shared.emoji(for: category)
-    }
-
-    static func categoryColor(for category: String) -> Color {
-        if isProductivityManagementCategory(category) {
-            return CategoryColorPalette.color(for: "gray")
-        }
-        return CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
-    }
-
-    enum UnmappedAppHandling: String, CaseIterable, Identifiable {
-        case pendingClassification
-        case recordAsOther
-        case doNotRecord
-
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .pendingClassification: return "분류 대기"
-            case .recordAsOther: return "기타로 기록"
-            case .doNotRecord: return "기록 안 함"
-            }
-        }
-
-        var subtitle: String {
-            switch self {
-            case .pendingClassification:
-                return "미분류 목록에 모아 나중에 분류합니다."
-            case .recordAsOther:
-                return "기타로 기록하며 미분류 목록에는 추가하지 않습니다."
-            case .doNotRecord:
-                return "등록하지 않은 앱의 사용 시간을 저장하지 않습니다."
-            }
-        }
-    }
-
-    static let defaultUnmappedAppHandling: UnmappedAppHandling = .pendingClassification
-
-    static func storedUnmappedAppHandling(
-        in defaults: UserDefaults = .standard
-    ) -> UnmappedAppHandling {
-        guard let rawValue = defaults.string(
-            forKey: AppStorageKey.unmappedAppHandling
-        ) else {
-            return defaultUnmappedAppHandling
-        }
-        return UnmappedAppHandling(rawValue: rawValue)
-            ?? defaultUnmappedAppHandling
-    }
-
-    // MARK: - 브라우저 bundle identifier (URL 기반 분류용)
-    static let browserBundleIds: Set<String> = [
-        "com.google.Chrome",
-        "com.google.Chrome.canary",
-        "com.apple.Safari",
-        "com.apple.SafariTechnologyPreview",
-        "com.brave.Browser",
-        "com.microsoft.edgemac",
-        "company.thebrowser.Browser",
-        "org.chromium.Chromium",
-        "org.mozilla.firefox",
-        "org.mozilla.firefoxdeveloperedition",
-        "com.vivaldi.Vivaldi",
-        "com.operasoftware.Opera",
-        "com.kagi.kagimacOS",
-    ]
-
-    // MARK: - 조사 카테고리로 분류할 URL 규칙
-    // 검색 결과, 기술 문서, 블로그, Q&A처럼 자료를 찾고 읽는 흐름만 기본 분류한다.
-    static let researchURLRules: [(host: String, pathContains: String?, label: String)] = [
-        ("google.com", "/search", "Google Search"),
-        ("bing.com", "/search", "Bing Search"),
-        ("duckduckgo.com", nil, "DuckDuckGo"),
-        ("search.naver.com", nil, "Naver Search"),
-        ("search.daum.net", nil, "Daum Search"),
-        ("perplexity.ai", nil, "Perplexity"),
-        ("wikipedia.org", nil, "Wikipedia"),
-        ("developer.mozilla.org", nil, "MDN"),
-        ("stackoverflow.com", nil, "Stack Overflow"),
-        ("stackexchange.com", nil, "Stack Exchange"),
-        ("tistory.com", nil, "Tistory"),
-        ("velog.io", nil, "Velog"),
-        ("medium.com", nil, "Medium"),
-        ("dev.to", nil, "DEV"),
-        ("github.io", nil, "GitHub Pages"),
-    ]
-
-    // MARK: - 기본 앱→카테고리 매핑 (업무/공부는 자동 매핑 없음)
-    static var defaultCategoryRules: [(bundleId: String, appName: String, category: String)] { [
-        // ⏰ 생산성 관리
-        (horongHorongBundleIdentifier, "호롱호롱", productivityManagementAppCategory),
-        ("com.apple.reminders", "미리알림", productivityManagementAppCategory),
-
-        // 💻 개발
-        ("com.microsoft.VSCode", "Visual Studio Code", categoryName("개발")),
-        ("com.google.antigravity", "Antigravity", categoryName("개발")),
-        ("com.openai.codex", "Codex", categoryName("개발")),
-        ("com.anthropic.claudefordesktop", "Claude", categoryName("개발")),
-        ("com.cmuxterm.app", "cmux", categoryName("개발")),
-        ("com.apple.Terminal", "터미널", categoryName("개발")),
-        ("com.googlecode.iterm2", "iTerm2", categoryName("개발")),
-
-        // 📓 기록
-        ("md.obsidian", "Obsidian", categoryName("기록")),
-        ("notion.id", "Notion", categoryName("기록")),
-        ("com.apple.Notes", "메모", categoryName("기록")),
-
-        // 💬 소통
-        ("com.kakao.KakaoTalkMac", "카카오톡", categoryName("소통")),
-        ("com.hnc.Discord", "Discord", categoryName("소통")),
-    ] }
-
-    // MARK: - 기본 웹사이트→카테고리 매핑
-    static var defaultWebsiteCategoryRules: [
-        (domain: String, aliases: [String], category: String)
-    ] { [
-        ("chatgpt.com", [], categoryName("개발")),
-        ("claude.ai", [], categoryName("개발")),
-        ("gemini.google.com", [], categoryName("개발")),
-        ("youtube.com", ["youtu.be"], categoryName("엔터")),
-        ("netflix.com", [], categoryName("엔터")),
-    ] }
-
-    static func websiteAliases(for domain: String) -> [String] {
-        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
-            return []
-        }
-        return defaultWebsiteCategoryRules.first {
-            $0.domain == normalizedDomain
-        }?.aliases ?? []
-    }
-
-    static func canonicalWebsiteRuleDomain(for domain: String) -> String {
-        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
-            return domain
-        }
-        return defaultWebsiteCategoryRules.first {
-            $0.domain == normalizedDomain || $0.aliases.contains(normalizedDomain)
-        }?.domain ?? normalizedDomain
-    }
-
-    static func websiteRuleDomains(for domain: String) -> [String] {
-        let canonicalDomain = canonicalWebsiteRuleDomain(for: domain)
-        return [canonicalDomain] + websiteAliases(for: canonicalDomain)
-    }
-
-    static func legacyWebsiteTrackedBundleSuffixes(for domain: String) -> [String] {
-        switch canonicalWebsiteRuleDomain(for: domain) {
-        case "youtube.com":
-            return [".youtube"]
-        case "netflix.com":
-            return [".netflix"]
-        default:
-            return []
-        }
-    }
-
-    static var allDefaultCategoryRules: [
-        (bundleId: String, appName: String, category: String)
-    ] {
-        defaultCategoryRules + defaultWebsiteCategoryRules.map { rule in
-            (
-                bundleId: WebsiteCategoryRule.bundleIdentifier(for: rule.domain),
-                appName: rule.domain,
-                category: rule.category
-            )
-        }
-    }
-
-    // MARK: - 모든 카테고리 목록
-    static var allCategories: [String] { CategoryStore.shared.categoryNames }
-
-    static func defaultCategoryRule(
-        for bundleIdentifier: String,
-        includingHidden: Bool = false
-    ) -> (bundleId: String, appName: String, category: String)? {
-        guard includingHidden || !isDefaultCategoryRuleHidden(bundleIdentifier) else { return nil }
-        return allDefaultCategoryRules.first { $0.bundleId == bundleIdentifier }
-    }
-
-    static func isDefaultCategoryRuleHidden(_ bundleIdentifier: String) -> Bool {
-        hiddenDefaultCategoryRuleBundleIDs.contains(bundleIdentifier)
-    }
-
-    static func hideDefaultCategoryRule(_ bundleIdentifier: String) {
-        var ids = hiddenDefaultCategoryRuleBundleIDs
-        ids.insert(bundleIdentifier)
-        saveHiddenDefaultCategoryRuleBundleIDs(ids)
-    }
-
-    static func restoreDefaultCategoryRule(_ bundleIdentifier: String) {
-        var ids = hiddenDefaultCategoryRuleBundleIDs
-        ids.remove(bundleIdentifier)
-        saveHiddenDefaultCategoryRuleBundleIDs(ids)
-    }
-
-    private static var hiddenDefaultCategoryRuleBundleIDs: Set<String> {
-        Set(UserDefaults.standard.stringArray(forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs) ?? [])
-    }
-
-    private static func saveHiddenDefaultCategoryRuleBundleIDs(_ ids: Set<String>) {
-        UserDefaults.standard.set(Array(ids).sorted(), forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
-    }
-
-    // MARK: - 화면에서 숨길 과거/폐기 카테고리 (데이터에 남아있어도 렌더링 제외)
-    static let hiddenLegacyCategories: Set<String> = [
-        "SNS/엔터테인먼트",
-    ]
 
     // MARK: - 타이머 집중 세션 의사(pseudo) 앱 식별자
     // AppUsageRecord 에 저장할 때 카테고리별로 하나의 행으로 집계되도록 카테고리를 접미사로 사용
@@ -342,6 +189,7 @@ enum Constants {
         "\(focusSessionBundlePrefix).\(category)"
     }
     static let focusSessionAppName = "🔥 집중 세션"
+
 
     // MARK: - 타이머 기본값
     static var defaultFocusCategory: String { categoryName("업무") }
@@ -473,6 +321,302 @@ enum Constants {
         }
     }
 
+
+
+    // MARK: - 3. 카테고리 & 앱 매핑 (Category & App Mapping)
+    // 기본 카테고리 8종, 색상/이모지, 특수 카테고리(미분류/생산성관리), 앱 및 웹사이트 분류 규칙
+
+    /// 앱의 사용 구간은 기록했지만 사용자가 아직 카테고리를 확정하지 않은 상태.
+    /// 실제 사용자 카테고리 목록에는 포함하지 않는다.
+    static let unclassifiedAppCategory = "미분류"
+    /// 타이머·할 일 확인처럼 작업 흐름을 관리하기 위해 잠깐 사용하는 앱의 특수 분류.
+    static let productivityManagementAppCategory = "생산성 관리"
+    static let productivityManagementAppEmoji = "⏰"
+    static let legacySupportAppCategory = "세션 보조"
+    static let horongHorongBundleIdentifier = "com.horonghorong.app"
+    static let productivityManagementShortInteractionSeconds: TimeInterval = 10
+    static let productivityManagementReflectionThresholdSeconds = 60
+    static let reservedCategoryNames: Set<String> = [
+        unclassifiedAppCategory,
+        productivityManagementAppCategory,
+        legacySupportAppCategory,
+    ]
+
+    static func isProductivityManagementCategory(_ category: String) -> Bool {
+        category == productivityManagementAppCategory
+            || category == legacySupportAppCategory
+    }
+
+
+    // MARK: - 카테고리 색상
+    static let defaultCategoryColorKeys: [String: String] = [
+        "업무": "brown",
+        "개발": "blue",
+        "공부": "lime",
+        "조사": "teal",
+        "소통": "orange",
+        "엔터": "red",
+        "기록": "sky",
+        "기타": "gray",
+    ]
+
+
+    // MARK: - 카테고리 이모지
+    static let categoryEmoji: [String: String] = [
+        "업무": "💼",
+        "개발": "💻",
+        "공부": "📚",
+        "조사": "🔎",
+        "소통": "💬",
+        "엔터": "🎬",
+        "기록": "📓",
+        "기타": "📦",
+    ]
+
+    static let defaultCategoryDefinitions: [CategoryDefinition] = [
+        CategoryDefinition(defaultName: "업무", name: "업무", emoji: "💼", colorKey: "brown"),
+        CategoryDefinition(defaultName: "개발", name: "개발", emoji: "💻", colorKey: "blue"),
+        CategoryDefinition(defaultName: "공부", name: "공부", emoji: "📚", colorKey: "lime"),
+        CategoryDefinition(defaultName: "조사", name: "조사", emoji: "🔎", colorKey: "teal"),
+        CategoryDefinition(defaultName: "기록", name: "기록", emoji: "📓", colorKey: "sky"),
+        CategoryDefinition(defaultName: "소통", name: "소통", emoji: "💬", colorKey: "orange"),
+        CategoryDefinition(defaultName: "엔터", name: "엔터", emoji: "🎬", colorKey: "red"),
+        CategoryDefinition(defaultName: "기타", name: "기타", emoji: "📦", colorKey: "gray"),
+    ]
+
+    static func categoryName(_ defaultName: String) -> String {
+        CategoryStore.shared.displayName(forDefaultName: defaultName)
+    }
+
+    static func defaultName(forCategory category: String) -> String {
+        CategoryStore.shared.defaultName(forDisplayName: category)
+    }
+
+    static func categoryEmoji(for category: String) -> String {
+        if isProductivityManagementCategory(category) {
+            return productivityManagementAppEmoji
+        }
+        return CategoryStore.shared.emoji(for: category)
+    }
+
+    static func categoryColor(for category: String) -> Color {
+        if isProductivityManagementCategory(category) {
+            return CategoryColorPalette.color(for: "gray")
+        }
+        return CategoryColorPalette.color(for: CategoryStore.shared.colorKey(for: category))
+    }
+
+    enum UnmappedAppHandling: String, CaseIterable, Identifiable {
+        case pendingClassification
+        case recordAsOther
+        case doNotRecord
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .pendingClassification: return "분류 대기"
+            case .recordAsOther: return "기타로 기록"
+            case .doNotRecord: return "기록 안 함"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .pendingClassification:
+                return "미분류 목록에 모아 나중에 분류합니다."
+            case .recordAsOther:
+                return "기타로 기록하며 미분류 목록에는 추가하지 않습니다."
+            case .doNotRecord:
+                return "등록하지 않은 앱의 사용 시간을 저장하지 않습니다."
+            }
+        }
+    }
+
+    static let defaultUnmappedAppHandling: UnmappedAppHandling = .pendingClassification
+
+    static func storedUnmappedAppHandling(
+        in defaults: UserDefaults = .standard
+    ) -> UnmappedAppHandling {
+        guard let rawValue = defaults.string(
+            forKey: AppStorageKey.unmappedAppHandling
+        ) else {
+            return defaultUnmappedAppHandling
+        }
+        return UnmappedAppHandling(rawValue: rawValue)
+            ?? defaultUnmappedAppHandling
+    }
+
+
+    // MARK: - 브라우저 bundle identifier (URL 기반 분류용)
+    static let browserBundleIds: Set<String> = [
+        "com.google.Chrome",
+        "com.google.Chrome.canary",
+        "com.apple.Safari",
+        "com.apple.SafariTechnologyPreview",
+        "com.brave.Browser",
+        "com.microsoft.edgemac",
+        "company.thebrowser.Browser",
+        "org.chromium.Chromium",
+        "org.mozilla.firefox",
+        "org.mozilla.firefoxdeveloperedition",
+        "com.vivaldi.Vivaldi",
+        "com.operasoftware.Opera",
+        "com.kagi.kagimacOS",
+    ]
+
+
+    // MARK: - 조사 카테고리로 분류할 URL 규칙
+    // 검색 결과, 기술 문서, 블로그, Q&A처럼 자료를 찾고 읽는 흐름만 기본 분류한다.
+    static let researchURLRules: [(host: String, pathContains: String?, label: String)] = [
+        ("google.com", "/search", "Google Search"),
+        ("bing.com", "/search", "Bing Search"),
+        ("duckduckgo.com", nil, "DuckDuckGo"),
+        ("search.naver.com", nil, "Naver Search"),
+        ("search.daum.net", nil, "Daum Search"),
+        ("perplexity.ai", nil, "Perplexity"),
+        ("wikipedia.org", nil, "Wikipedia"),
+        ("developer.mozilla.org", nil, "MDN"),
+        ("stackoverflow.com", nil, "Stack Overflow"),
+        ("stackexchange.com", nil, "Stack Exchange"),
+        ("tistory.com", nil, "Tistory"),
+        ("velog.io", nil, "Velog"),
+        ("medium.com", nil, "Medium"),
+        ("dev.to", nil, "DEV"),
+        ("github.io", nil, "GitHub Pages"),
+    ]
+
+
+    // MARK: - 기본 앱→카테고리 매핑 (업무/공부는 자동 매핑 없음)
+    static var defaultCategoryRules: [(bundleId: String, appName: String, category: String)] { [
+        // ⏰ 생산성 관리
+        (horongHorongBundleIdentifier, "호롱호롱", productivityManagementAppCategory),
+        ("com.apple.reminders", "미리알림", productivityManagementAppCategory),
+
+        // 💻 개발
+        ("com.microsoft.VSCode", "Visual Studio Code", categoryName("개발")),
+        ("com.google.antigravity", "Antigravity", categoryName("개발")),
+        ("com.openai.codex", "Codex", categoryName("개발")),
+        ("com.anthropic.claudefordesktop", "Claude", categoryName("개발")),
+        ("com.cmuxterm.app", "cmux", categoryName("개발")),
+        ("com.apple.Terminal", "터미널", categoryName("개발")),
+        ("com.googlecode.iterm2", "iTerm2", categoryName("개발")),
+
+        // 📓 기록
+        ("md.obsidian", "Obsidian", categoryName("기록")),
+        ("notion.id", "Notion", categoryName("기록")),
+        ("com.apple.Notes", "메모", categoryName("기록")),
+
+        // 💬 소통
+        ("com.kakao.KakaoTalkMac", "카카오톡", categoryName("소통")),
+        ("com.hnc.Discord", "Discord", categoryName("소통")),
+    ] }
+
+
+    // MARK: - 기본 웹사이트→카테고리 매핑
+    static var defaultWebsiteCategoryRules: [
+        (domain: String, aliases: [String], category: String)
+    ] { [
+        ("chatgpt.com", [], categoryName("개발")),
+        ("claude.ai", [], categoryName("개발")),
+        ("gemini.google.com", [], categoryName("개발")),
+        ("youtube.com", ["youtu.be"], categoryName("엔터")),
+        ("netflix.com", [], categoryName("엔터")),
+    ] }
+
+    static func websiteAliases(for domain: String) -> [String] {
+        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
+            return []
+        }
+        return defaultWebsiteCategoryRules.first {
+            $0.domain == normalizedDomain
+        }?.aliases ?? []
+    }
+
+    static func canonicalWebsiteRuleDomain(for domain: String) -> String {
+        guard let normalizedDomain = WebsiteCategoryRule.normalizedDomain(from: domain) else {
+            return domain
+        }
+        return defaultWebsiteCategoryRules.first {
+            $0.domain == normalizedDomain || $0.aliases.contains(normalizedDomain)
+        }?.domain ?? normalizedDomain
+    }
+
+    static func websiteRuleDomains(for domain: String) -> [String] {
+        let canonicalDomain = canonicalWebsiteRuleDomain(for: domain)
+        return [canonicalDomain] + websiteAliases(for: canonicalDomain)
+    }
+
+    static func legacyWebsiteTrackedBundleSuffixes(for domain: String) -> [String] {
+        switch canonicalWebsiteRuleDomain(for: domain) {
+        case "youtube.com":
+            return [".youtube"]
+        case "netflix.com":
+            return [".netflix"]
+        default:
+            return []
+        }
+    }
+
+    static var allDefaultCategoryRules: [
+        (bundleId: String, appName: String, category: String)
+    ] {
+        defaultCategoryRules + defaultWebsiteCategoryRules.map { rule in
+            (
+                bundleId: WebsiteCategoryRule.bundleIdentifier(for: rule.domain),
+                appName: rule.domain,
+                category: rule.category
+            )
+        }
+    }
+
+
+    // MARK: - 모든 카테고리 목록
+    static var allCategories: [String] { CategoryStore.shared.categoryNames }
+
+    static func defaultCategoryRule(
+        for bundleIdentifier: String,
+        includingHidden: Bool = false
+    ) -> (bundleId: String, appName: String, category: String)? {
+        guard includingHidden || !isDefaultCategoryRuleHidden(bundleIdentifier) else { return nil }
+        return allDefaultCategoryRules.first { $0.bundleId == bundleIdentifier }
+    }
+
+    static func isDefaultCategoryRuleHidden(_ bundleIdentifier: String) -> Bool {
+        hiddenDefaultCategoryRuleBundleIDs.contains(bundleIdentifier)
+    }
+
+    static func hideDefaultCategoryRule(_ bundleIdentifier: String) {
+        var ids = hiddenDefaultCategoryRuleBundleIDs
+        ids.insert(bundleIdentifier)
+        saveHiddenDefaultCategoryRuleBundleIDs(ids)
+    }
+
+    static func restoreDefaultCategoryRule(_ bundleIdentifier: String) {
+        var ids = hiddenDefaultCategoryRuleBundleIDs
+        ids.remove(bundleIdentifier)
+        saveHiddenDefaultCategoryRuleBundleIDs(ids)
+    }
+
+    private static var hiddenDefaultCategoryRuleBundleIDs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs) ?? [])
+    }
+
+    private static func saveHiddenDefaultCategoryRuleBundleIDs(_ ids: Set<String>) {
+        UserDefaults.standard.set(Array(ids).sorted(), forKey: AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
+    }
+
+
+    // MARK: - 화면에서 숨길 과거/폐기 카테고리 (데이터에 남아있어도 렌더링 제외)
+    static let hiddenLegacyCategories: Set<String> = [
+        "SNS/엔터테인먼트",
+    ]
+
+
+
+    // MARK: - 4. 앱 사용량 트래커 & 통계 (Tracker & Stats)
+    // 자리비움(Idle) 감지 임계값, 타임라인 표시 간격, 주간 시작일 계산 도구
+
     // MARK: - 유휴 감지 임계값 (초 단위, 카테고리별 기본값)
     // 이 시간 이상 키보드/마우스 입력이 없으면 "자리 비움 가능성"으로 간주하고
     // 사용자가 돌아왔을 때 해당 구간을 작업 시간으로 인정할지 물어본다.
@@ -496,55 +640,27 @@ enum Constants {
     // 사용자가 "활성" 상태로 복귀했다고 판정하는 유휴 초 상한
     static let idleActiveReturnThresholdSeconds: Double = 3.0
 
-    // MARK: - 팝오버 크기
-    static let popoverWidth: CGFloat = 360
-    static let popoverMaxHeight: CGFloat = 560
 
-    // MARK: - 퀵 메모 패널 크기
-    static let quickMemoPanelWidth: CGFloat = 616
-    static let quickMemoPanelHeight: CGFloat = 360
-    static let quickMemoPanelMinHeight: CGFloat = 160
-    static let quickMemoPanelMaxHeight: CGFloat = 360
+    // MARK: - 타임라인 표시 기본값
+    static let defaultTimelineStartHour = 0
+    static let defaultTimelineEndHour = 24
+    static let defaultTimelineBucketMinutes = 30
+    static let timelineBucketMinuteOptions: [Int] = [10, 15, 20, 30, 45, 60, 90, 120]
 
-    // MARK: - 통계 윈도우 크기
-    static let statsWindowWidth: CGFloat = 880
-    static let statsWindowHeight: CGFloat = 660
 
-    // MARK: - 통합 윈도우 크기
-    static let hubWindowWidth: CGFloat = 1080
-    static let hubWindowHeight: CGFloat = 700
-
-    // MARK: - Agent 실험 설정
-    static var defaultAgentRootDirectoryPath: String {
-        repositoryRelativePath("Agents", "experiments")
+    static func mondayWeekStart(for date: Date, calendar baseCalendar: Calendar = .current) -> Date {
+        var calendar = baseCalendar
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components).map { calendar.startOfDay(for: $0) }
+            ?? calendar.startOfDay(for: date)
     }
-    static let agentIdeaDirectoryName = "ideas"
-    static let agentOutputDirectoryName = "outputs"
-    // 기본 관심 키워드 = 빈 문자열. 사용자가 직접 등록한 키워드만 사용한다는 정책.
-    static let defaultInterestKeywords = ""
-    static let defaultAgentType = "Codex"
-    static let defaultPlanDayCount = 5
-    static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Hermes"]
-    static let maxRepresentativeAgentCount = 3
-    static let defaultRepresentativeAgentTypes = ["Codex", "Claude", "Antigravity"]
-    static let defaultRepresentativeAgentTypesCSV = defaultRepresentativeAgentTypes.joined(separator: ",")
 
-    static func normalizedRepresentativeAgentTypes(from rawValue: String) -> [String] {
-        let candidates = rawValue
-            .components(separatedBy: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
 
-        var normalized: [String] = []
-        for agent in candidates where availableAgentTypes.contains(agent) && !normalized.contains(agent) {
-            normalized.append(agent)
-            if normalized.count == maxRepresentativeAgentCount {
-                break
-            }
-        }
 
-        return normalized.isEmpty ? defaultRepresentativeAgentTypes : normalized
-    }
+    // MARK: - 5. 컴패니언 루미롱 (Companion)
+    // 화면 위 AI 컴패니언 캐릭터, 브리핑 시각, 온디바이스/클라우드 모델 옵션 및 동작 설정
 
     // MARK: - 루미롱 컴패니언
     static let defaultCompanionEnabled = true
@@ -746,6 +862,11 @@ enum Constants {
         availableCompanionMLXModelOptions.first { $0.name == name }?.label ?? name
     }
 
+
+
+    // MARK: - 6. 성취 & 보상 (Achievement & Reward)
+    // 할 일 기반 목표 추천 공급자 모델, 성취 추천 파라미터 및 보상 포인트 규칙
+
     // MARK: - 성취탭 목표 추천 공급자
 
     /// 목표 추천에 쓸 모델. 컴패니언과 나누는 이유는 요구하는 능력이 다르기 때문이다.
@@ -866,175 +987,6 @@ enum Constants {
     static let companionUserNoteMaxLength = 300
     static let companionUserNicknameMaxLength = 20
 
-    enum AppStorageKey {
-        static let appearanceMode = "appearance.mode"  // "light" | "dark"
-        static let appearanceDensity = "appearance.density"
-        static let popoverTheme = "appearance.popoverTheme"
-        static let warmLanternAccent = "appearance.accent.warmLantern"
-        static let wineLanternAccent = "appearance.accent.wineLantern"
-        static let gamePixelAccent = "appearance.accent.gamePixel"
-        static let appIcon = "appearance.appIcon"
-        static let agentRootDirectoryPath = "agent.rootDirectoryPath"
-        static let ideaDirectoryPath = "agent.ideaDirectoryPath"
-        static let outputDirectoryPath = "agent.outputDirectoryPath"
-        static let interestKeywords = "agent.interestKeywords"
-        static let selectedAgentType = "agent.selectedAgentType"
-        static let representativeAgentTypes = "agent.representativeAgentTypes"
-        static let planDayCount = "agent.planDayCount"
-        static let selectedFocusCategory = "timer.selectedFocusCategory"
-        static let pomodoroFocusMinutes = "timer.pomodoroFocusMinutes"
-        static let pomodoroBreakMinutes = "timer.pomodoroBreakMinutes"
-        static let pomodoroReflectionEnabled = "timer.pomodoroReflectionEnabled"
-        static let timerCompletionNotificationStyle = "timer.completionNotificationStyle"
-        static let todayPlanningReminderEnabled = "timer.todayPlanningReminderEnabled"
-        static let todayPlanningReminderDelayMinutes = "timer.todayPlanningReminderDelayMinutes"
-        static let todayPlanningReminderLastPromptDay = "timer.todayPlanningReminderLastPromptDay"
-        static let longFocusFocusMinutes = "timer.longFocusFocusMinutes"
-        static let longFocusBreakMinutes = "timer.longFocusBreakMinutes"
-        static let customFocusMinutes = "timer.customFocusMinutes"
-        static let customBreakMinutes = "timer.customBreakMinutes"
-        static let postBreakTransitionPromptMode = "timer.postBreakTransitionPromptMode"
-        static let postBreakTransitionPromptDelayMinutes = "timer.postBreakTransitionPromptDelayMinutes"
-        static let timelineStartHour = "timeline.startHour"
-        static let timelineEndHour = "timeline.endHour"
-        static let timelineBucketMinutes = "timeline.bucketMinutes"
-        static let achievementSuggestionCount = "achievement.suggestionCount"
-        static let achievementSuggestionMaxTodoCount = "achievement.suggestionMaxTodoCount"
-        static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
-        static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
-        static let achievementMinTodosForWeeklySuggestions = "achievement.minTodosForWeeklySuggestions"
-        static let achievementMaxWeeklyGoalsPerMonthlyGoal = "achievement.maxWeeklyGoalsPerMonthlyGoal"
-        static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
-        static let achievementSuggestionProvider = "achievement.suggestionProvider"
-        /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
-        /// `defaults write com.horonghorong.app achievement.executionStrategy -string sequential`
-        static let achievementExecutionStrategy = "achievement.executionStrategy"
-        static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
-        static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
-        static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
-        static let rewardWeeklyGoalPoints = "reward.weeklyGoalPoints"
-        static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
-        static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
-        static let achievementVisionOrder = "achievement.visionOrder"
-        static let achievementTimelineSortOrder = "achievement.timelineSortOrder"
-        static let menubarLabelStyle = "menubar.labelStyle"
-        static let menubarTimeStyle = "menubar.timeStyle"
-        static let menubarIcon = "menubar.icon"
-        static let anonymousTelemetryEnabled = "telemetry.anonymousEnabled"
-        static let anonymousTelemetryPrompted = "telemetry.anonymousPrompted"
-        static let anonymousInstallId = "telemetry.anonymousInstallId"
-        static let remindersImportEnabled = "memo.remindersImportEnabled"
-        static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
-        static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
-        static let unmappedAppHandling = "category.unmappedAppHandling"
-        static let companionEnabled = "companion.enabled"
-        static let companionSelectedIdentifier = "companion.selectedIdentifier"
-        static let companionRoamingRegion = "companion.roamingRegion"
-        static let companionHideDuringFocus = "companion.hideDuringFocus"
-        static let companionBriefingEnabled = "companion.briefingEnabled"
-        static let companionBriefingHour = "companion.briefingHour"
-        static let companionBriefingMinute = "companion.briefingMinute"
-        static let companionBriefingLastDeliveredAt = "companion.briefingLastDeliveredAt"
-        static let companionFocusNudgeEnabled = "companion.focusNudgeEnabled"
-        /// 사용자가 등록한 넛지 문구. 한 줄에 하나씩.
-        static let companionFocusNudgeMessages = "companion.focusNudgeMessages"
-        /// 직전에 쓴 문구. 같은 말이 연달아 나오지 않게 한다.
-        static let companionFocusNudgeLastMessage = "companion.focusNudgeLastMessage"
-        static let companionFocusNudgeDetectionMode = "companion.focusNudgeDetectionMode"
-        static let companionFocusNudgeRequiredFeedbackCount =
-            "companion.focusNudgeRequiredFeedbackCount"
-        static let companionFocusNudgeManualFocusPercent =
-            "companion.focusNudgeManualFocusPercent"
-        static let companionFocusNudgeManualMaxAppSwitches =
-            "companion.focusNudgeManualMaxAppSwitches"
-        static let companionFocusNudgeFrequencyMode = "companion.focusNudgeFrequencyMode"
-        static let companionFocusNudgeMaximumPerSession =
-            "companion.focusNudgeMaximumPerSession"
-        static let companionFocusNudgePendingEvents = "companion.focusNudgePendingEvents"
-        static let companionFocusNudgeSessionState = "companion.focusNudgeSessionState"
-        static let companionUserNickname = "companion.userNickname"
-        static let companionUserNote = "companion.userNote"
-        static let companionOnboardingSeen = "companion.onboardingSeen"
-        static let companionChatProvider = "companion.chatProvider"
-        static let companionOllamaModel = "companion.ollamaModel"
-        static let companionMLXModel = "companion.mlxModel"
-        /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
-        /// 실제로 읽고 쓰는 쪽은 `HorongAIMLX` 의 `MLXModelStore.preparedModelsDefaultsKey` 다. 값이 같아야 한다.
-        static let companionMLXPreparedModels = "companion.mlxPreparedModels"
-        static let companionBubbleSize = "companion.bubbleSize"
-        /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.
-        static let aiLabRatings = "ailab.ratings"
-        /// 골든셋 채점 결과가 있는 `Evals/` 폴더 경로.
-        ///
-        /// 결과(`Evals/results/`)는 gitignore 된 실행 산출물이라 앱에 번들할 수 없다.
-        /// 사용자가 한 번 지정하면 기억한다. 앱 샌드박스가 꺼져 있어 경로만으로 충분하다.
-        static let aiLabEvalsDirectory = "ailab.evalsDirectory"
-        /// 개발자 전용 탭(AI 실험실) 노출 여부. Release 빌드에서 직접 켤 때만 쓰는 숨김 플래그.
-        /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
-        static let aiLabEnabled = "ailab.enabled"
-    }
-
-    // MARK: - 메뉴바 표시 형식
-    enum MenubarLabelStyle: String, CaseIterable, Identifiable {
-        case timeAndIcon
-        case timeOnly
-        case categoryOnly
-        case iconOnly
-
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .timeAndIcon:  return "시간 + 이모지"
-            case .timeOnly:     return "시간만"
-            case .categoryOnly: return "카테고리"
-            case .iconOnly:     return "아이콘만"
-            }
-        }
-    }
-
-    enum MenubarTimeStyle: String, CaseIterable, Identifiable {
-        case mmss
-        case minutes
-
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .mmss:    return "분:초 (25:00)"
-            case .minutes: return "분 (25분)"
-            }
-        }
-    }
-
-    static let defaultMenubarLabelStyle = MenubarLabelStyle.timeAndIcon.rawValue
-    static let defaultMenubarTimeStyle = MenubarTimeStyle.mmss.rawValue
-
-    // MARK: - 메뉴바 아이콘 (idle 상태에서 표시되는 대표 아이콘)
-    enum MenubarIconStyle: String, CaseIterable, Identifiable {
-        case horong = "MenuBarIcon"
-        case horong2 = "MenuBarIcon2"
-        case horong3 = "MenuBarIcon3"
-
-        var id: String { rawValue }
-
-        /// Assets.xcassets 의 imageset 이름.
-        var imageName: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .horong:  return "호롱불"
-            case .horong2: return "호롱불 2"
-            case .horong3: return "호롱불 3"
-            }
-        }
-    }
-
-    static let defaultMenubarIcon = MenubarIconStyle.horong.rawValue
-
-    // MARK: - 타임라인 표시 기본값
-    static let defaultTimelineStartHour = 0
-    static let defaultTimelineEndHour = 24
-    static let defaultTimelineBucketMinutes = 30
-    static let timelineBucketMinuteOptions: [Int] = [10, 15, 20, 30, 45, 60, 90, 120]
 
     // MARK: - 성취 추천 기본값
     static let defaultAchievementSuggestionCount = 4
@@ -1090,12 +1042,81 @@ enum Constants {
 
     static let defaultAchievementTimelineSortOrder = AchievementTimelineSortOrder.ascending
 
+
     // MARK: - 보상 포인트
     static let defaultRewardWeeklyGoalPoints = 10
     static let rewardWeeklyGoalPointsRange = 1...100
     /// 비전 선택 목록의 행 높이·간격. 드래그 재정렬이 이동 거리를 계산할 때 함께 쓴다.
     static let achievementVisionRowHeight: CGFloat = 34
     static let achievementVisionRowSpacing: CGFloat = 8
+
+
+
+    // MARK: - 7. 메모 & Second Brain (Mind / Vault)
+    // 마인드 볼트(Vault) 기본 로컬 저장소 경로
+
+    static let defaultMindVaultPath = "/Users/jihyeok/Documents/life/MY_BRAIN"
+
+
+
+    // MARK: - 8. 뉴스 큐레이션 & AI 실험실 (News & AI Lab)
+    // 뉴스 크롤링/요약 러너, Ollama/MLX 모델 옵션, 스케줄링 모드 및 에이전트 실험 경로
+
+    struct NewsOllamaModelOption: Identifiable, Hashable {
+        enum Availability: Hashable {
+            case local
+            case cloud
+        }
+
+        var id: String { name }
+        let name: String
+        let label: String
+        let detail: String
+        let availability: Availability
+        let isRecommended: Bool
+    }
+
+    enum NewsOllamaRecommendationKind: String {
+        case primary = "추천"
+        case lightweight = "가벼움"
+        case quality = "고품질"
+        case caution = "주의"
+        case unsupported = "불가능"
+    }
+
+
+    // MARK: - Agent 실험 설정
+    static var defaultAgentRootDirectoryPath: String {
+        repositoryRelativePath("Agents", "experiments")
+    }
+    static let agentIdeaDirectoryName = "ideas"
+    static let agentOutputDirectoryName = "outputs"
+    // 기본 관심 키워드 = 빈 문자열. 사용자가 직접 등록한 키워드만 사용한다는 정책.
+    static let defaultInterestKeywords = ""
+    static let defaultAgentType = "Codex"
+    static let defaultPlanDayCount = 5
+    static let availableAgentTypes = ["Codex", "Claude", "Antigravity", "Opencode", "Hermes"]
+    static let maxRepresentativeAgentCount = 3
+    static let defaultRepresentativeAgentTypes = ["Codex", "Claude", "Antigravity"]
+    static let defaultRepresentativeAgentTypesCSV = defaultRepresentativeAgentTypes.joined(separator: ",")
+
+    static func normalizedRepresentativeAgentTypes(from rawValue: String) -> [String] {
+        let candidates = rawValue
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var normalized: [String] = []
+        for agent in candidates where availableAgentTypes.contains(agent) && !normalized.contains(agent) {
+            normalized.append(agent)
+            if normalized.count == maxRepresentativeAgentCount {
+                break
+            }
+        }
+
+        return normalized.isEmpty ? defaultRepresentativeAgentTypes : normalized
+    }
+
 
     // MARK: - 뉴스 큐레이션 설정
     static var defaultNewsRunnerPath: String {
@@ -1457,88 +1478,6 @@ enum Constants {
     // 기본 뉴스 키워드 = 빈 문자열. 사용자가 관심사를 직접 등록하기 전까지 자동 키워드는 넣지 않는다.
     static let defaultNewsInterestKeywords = ""
     static let availableNewsProviders = ["ollama", "codex", "claude", "antigravity", "opencode", "hermes"]
-    enum NewsStorageKey {
-        static let dataBasePath = "news.dataBasePath"
-        static let selectedProvider = "news.selectedProvider"
-        static let ollamaModel = "news.ollama.model"
-        static let ollamaEndpoint = "news.ollama.endpoint"
-        static let ollamaTimeout = "news.ollama.timeout"
-        static let interestKeywords = "news.interestKeywords"
-        static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
-        static let sources = "news.sources.v1"
-        static let schedule = "news.schedule"
-        static let scheduleDailyHour = "news.schedule.dailyHour"
-        static let scheduleDailyMinute = "news.schedule.dailyMinute"
-        static let scheduleIntervalHours = "news.schedule.intervalHours"
-        /// 간격 격자의 기준점. `특정 시각` 모드의 시각과는 별개 값이다.
-        static let scheduleIntervalStartHour = "news.schedule.intervalStartHour"
-        static let scheduleIntervalStartMinute = "news.schedule.intervalStartMinute"
-        /// 다음 예정 슬롯. 격자를 유지하는 장부 — 실행 여부와 무관하게 전진한다.
-        static let scheduleNextSlotAt = "news.schedule.nextSlotAt"
-        /// 마지막으로 수집을 *시작* 한 시각. 수동·자동 모두 기록하며 격자에는 영향을 주지 않고,
-        /// 슬롯 직전에 이미 수집했는지 판정하는 데만 쓴다.
-        static let scheduleLastRunAt = "news.schedule.lastRunAt"
-        /// 지금의 스케줄 설정이 확정된 시각. 이보다 오래된 `lastRunAt` 은 지금 스케줄과 무관하므로
-        /// 유예 창 판정에서 제외한다 — 새 스케줄의 첫 회차가 옛 기록 때문에 사라지지 않게 한다.
-        static let scheduleConfiguredAt = "news.schedule.configuredAt"
-        static let maxItemsPerSource = "news.maxItemsPerSource"
-    }
-
-    static let defaultNewsMaxItemsPerSource = 10
-
-    enum PopoverTheme: String, CaseIterable, Identifiable {
-        case warmLantern
-        case wineLantern
-        case gamePixel
-
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .warmLantern: return "따뜻한 등불"
-            case .wineLantern: return "와인 랜턴"
-            case .gamePixel: return "게임 픽셀"
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .warmLantern: return "🏮"
-            case .wineLantern: return "🍷"
-            case .gamePixel: return "▣"
-            }
-        }
-
-        static func normalized(rawValue: String) -> Self {
-            Self(rawValue: rawValue) ?? .warmLantern
-        }
-    }
-
-    enum AppIconStyle: String, CaseIterable, Identifiable {
-        case horong = "app-icon"
-        case cozyHorong = "app-icon2"
-        case cozyBear = "app-icon3"
-
-        var id: String { rawValue }
-        var resourceName: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .horong: return "호롱"
-            case .cozyHorong: return "포근한 호롱"
-            case .cozyBear: return "포근한 곰"
-            }
-        }
-
-        static func normalized(rawValue: String) -> Self {
-            Self(rawValue: rawValue) ?? .horong
-        }
-    }
-
-    static let defaultAppearanceMode = "light"
-    static let defaultAppearanceDensity = AppearanceDensity.comfortable.rawValue
-    static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
-    static let defaultAppIcon = AppIconStyle.horong.rawValue
 
     enum NewsScheduleMode: String, CaseIterable, Identifiable {
         /// 사용자가 팝오버의 `리포트 생성` 을 직접 누를 때만 수집한다.
@@ -1662,7 +1601,163 @@ enum Constants {
             .appendingPathComponent(component, isDirectory: true)
             .path
     }
+
+
+    // MARK: - 9. 공통 저장소 키 (Storage Keys)
+    // 앱 전역 UserDefaults 및 @AppStorage 키 네임스페이스
+
+    enum AppStorageKey {
+        static let appearanceMode = "appearance.mode"  // "light" | "dark"
+        static let appearanceDensity = "appearance.density"
+        static let popoverTheme = "appearance.popoverTheme"
+        static let warmLanternAccent = "appearance.accent.warmLantern"
+        static let wineLanternAccent = "appearance.accent.wineLantern"
+        static let gamePixelAccent = "appearance.accent.gamePixel"
+        static let appIcon = "appearance.appIcon"
+        static let agentRootDirectoryPath = "agent.rootDirectoryPath"
+        static let ideaDirectoryPath = "agent.ideaDirectoryPath"
+        static let outputDirectoryPath = "agent.outputDirectoryPath"
+        static let interestKeywords = "agent.interestKeywords"
+        static let selectedAgentType = "agent.selectedAgentType"
+        static let representativeAgentTypes = "agent.representativeAgentTypes"
+        static let planDayCount = "agent.planDayCount"
+        static let selectedFocusCategory = "timer.selectedFocusCategory"
+        static let pomodoroFocusMinutes = "timer.pomodoroFocusMinutes"
+        static let pomodoroBreakMinutes = "timer.pomodoroBreakMinutes"
+        static let pomodoroReflectionEnabled = "timer.pomodoroReflectionEnabled"
+        static let timerCompletionNotificationStyle = "timer.completionNotificationStyle"
+        static let todayPlanningReminderEnabled = "timer.todayPlanningReminderEnabled"
+        static let todayPlanningReminderDelayMinutes = "timer.todayPlanningReminderDelayMinutes"
+        static let todayPlanningReminderLastPromptDay = "timer.todayPlanningReminderLastPromptDay"
+        static let longFocusFocusMinutes = "timer.longFocusFocusMinutes"
+        static let longFocusBreakMinutes = "timer.longFocusBreakMinutes"
+        static let customFocusMinutes = "timer.customFocusMinutes"
+        static let customBreakMinutes = "timer.customBreakMinutes"
+        static let postBreakTransitionPromptMode = "timer.postBreakTransitionPromptMode"
+        static let postBreakTransitionPromptDelayMinutes = "timer.postBreakTransitionPromptDelayMinutes"
+        static let timelineStartHour = "timeline.startHour"
+        static let timelineEndHour = "timeline.endHour"
+        static let timelineBucketMinutes = "timeline.bucketMinutes"
+        static let achievementSuggestionCount = "achievement.suggestionCount"
+        static let achievementSuggestionMaxTodoCount = "achievement.suggestionMaxTodoCount"
+        static let achievementMonthlySuggestionMinWeeklyGoalCount = "achievement.monthlySuggestionMinWeeklyGoalCount"
+        static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
+        static let achievementMinTodosForWeeklySuggestions = "achievement.minTodosForWeeklySuggestions"
+        static let achievementMaxWeeklyGoalsPerMonthlyGoal = "achievement.maxWeeklyGoalsPerMonthlyGoal"
+        static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
+        static let achievementSuggestionProvider = "achievement.suggestionProvider"
+        /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
+        /// `defaults write com.horonghorong.app achievement.executionStrategy -string sequential`
+        static let achievementExecutionStrategy = "achievement.executionStrategy"
+        static let achievementSuggestionMLXModel = "achievement.suggestionMLXModel"
+        static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
+        static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
+        static let rewardWeeklyGoalPoints = "reward.weeklyGoalPoints"
+        static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
+        static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
+        static let achievementVisionOrder = "achievement.visionOrder"
+        static let achievementTimelineSortOrder = "achievement.timelineSortOrder"
+        static let menubarLabelStyle = "menubar.labelStyle"
+        static let menubarTimeStyle = "menubar.timeStyle"
+        static let menubarIcon = "menubar.icon"
+        static let anonymousTelemetryEnabled = "telemetry.anonymousEnabled"
+        static let anonymousTelemetryPrompted = "telemetry.anonymousPrompted"
+        static let anonymousInstallId = "telemetry.anonymousInstallId"
+        static let remindersImportEnabled = "memo.remindersImportEnabled"
+        static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
+        static let mindVaultPath = "mind.vaultPath"
+        static let mindSection = "mind.section"
+
+        /// 이관 전 키들. **최근 것부터** 적는다 — `migrateMindDefaults` 가 이 순서로 찾는다.
+        ///
+        /// 이름이 두 번 바뀌었다: `secondBrain` → `personalRecord` → `mind`.
+        /// 어느 버전에서 건너뛰어 올라오든 값을 찾을 수 있어야 하므로 체인으로 둔다.
+        static let legacyMindVaultPathKeys = ["personalRecord.vaultPath", "secondBrain.vaultPath"]
+        static let legacyMindSectionKeys = ["personalRecord.section", "secondBrain.section"]
+        static let todoReminderListColors = "todo.reminderListColors"
+        static let hiddenDefaultCategoryRuleBundleIDs = "category.hiddenDefaultRuleBundleIDs"
+        static let unmappedAppHandling = "category.unmappedAppHandling"
+        static let companionEnabled = "companion.enabled"
+        static let companionSelectedIdentifier = "companion.selectedIdentifier"
+        static let companionRoamingRegion = "companion.roamingRegion"
+        static let companionHideDuringFocus = "companion.hideDuringFocus"
+        static let companionBriefingEnabled = "companion.briefingEnabled"
+        static let companionBriefingHour = "companion.briefingHour"
+        static let companionBriefingMinute = "companion.briefingMinute"
+        static let companionBriefingLastDeliveredAt = "companion.briefingLastDeliveredAt"
+        static let companionFocusNudgeEnabled = "companion.focusNudgeEnabled"
+        /// 사용자가 등록한 넛지 문구. 한 줄에 하나씩.
+        static let companionFocusNudgeMessages = "companion.focusNudgeMessages"
+        /// 직전에 쓴 문구. 같은 말이 연달아 나오지 않게 한다.
+        static let companionFocusNudgeLastMessage = "companion.focusNudgeLastMessage"
+        static let companionFocusNudgeDetectionMode = "companion.focusNudgeDetectionMode"
+        static let companionFocusNudgeRequiredFeedbackCount =
+            "companion.focusNudgeRequiredFeedbackCount"
+        static let companionFocusNudgeManualFocusPercent =
+            "companion.focusNudgeManualFocusPercent"
+        static let companionFocusNudgeManualMaxAppSwitches =
+            "companion.focusNudgeManualMaxAppSwitches"
+        static let companionFocusNudgeFrequencyMode = "companion.focusNudgeFrequencyMode"
+        static let companionFocusNudgeMaximumPerSession =
+            "companion.focusNudgeMaximumPerSession"
+        static let companionFocusNudgePendingEvents = "companion.focusNudgePendingEvents"
+        static let companionFocusNudgeSessionState = "companion.focusNudgeSessionState"
+        static let companionUserNickname = "companion.userNickname"
+        static let companionUserNote = "companion.userNote"
+        static let companionOnboardingSeen = "companion.onboardingSeen"
+        static let companionChatProvider = "companion.chatProvider"
+        static let companionOllamaModel = "companion.ollamaModel"
+        static let companionMLXModel = "companion.mlxModel"
+        /// 한 번이라도 끝까지 준비된 MLX 모델들. 대화 중 자동 로드를 허용할지 판단하는 데 쓴다.
+        /// 실제로 읽고 쓰는 쪽은 `HorongAIMLX` 의 `MLXModelStore.preparedModelsDefaultsKey` 다. 값이 같아야 한다.
+        static let companionMLXPreparedModels = "companion.mlxPreparedModels"
+        static let companionBubbleSize = "companion.bubbleSize"
+        /// AI 실험실에서 사람이 남긴 평가(👍/👎/메모). "케이스ID|레벨" → 평가 의 JSON.
+        static let aiLabRatings = "ailab.ratings"
+        /// 골든셋 채점 결과가 있는 `Evals/` 폴더 경로.
+        ///
+        /// 결과(`Evals/results/`)는 gitignore 된 실행 산출물이라 앱에 번들할 수 없다.
+        /// 사용자가 한 번 지정하면 기억한다. 앱 샌드박스가 꺼져 있어 경로만으로 충분하다.
+        static let aiLabEvalsDirectory = "ailab.evalsDirectory"
+        /// 개발자 전용 탭(AI 실험실) 노출 여부. Release 빌드에서 직접 켤 때만 쓰는 숨김 플래그.
+        /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
+        static let aiLabEnabled = "ailab.enabled"
+    }
+
+
+    enum NewsStorageKey {
+        static let dataBasePath = "news.dataBasePath"
+        static let selectedProvider = "news.selectedProvider"
+        static let ollamaModel = "news.ollama.model"
+        static let ollamaEndpoint = "news.ollama.endpoint"
+        static let ollamaTimeout = "news.ollama.timeout"
+        static let interestKeywords = "news.interestKeywords"
+        static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
+        static let sources = "news.sources.v1"
+        static let schedule = "news.schedule"
+        static let scheduleDailyHour = "news.schedule.dailyHour"
+        static let scheduleDailyMinute = "news.schedule.dailyMinute"
+        static let scheduleIntervalHours = "news.schedule.intervalHours"
+        /// 간격 격자의 기준점. `특정 시각` 모드의 시각과는 별개 값이다.
+        static let scheduleIntervalStartHour = "news.schedule.intervalStartHour"
+        static let scheduleIntervalStartMinute = "news.schedule.intervalStartMinute"
+        /// 다음 예정 슬롯. 격자를 유지하는 장부 — 실행 여부와 무관하게 전진한다.
+        static let scheduleNextSlotAt = "news.schedule.nextSlotAt"
+        /// 마지막으로 수집을 *시작* 한 시각. 수동·자동 모두 기록하며 격자에는 영향을 주지 않고,
+        /// 슬롯 직전에 이미 수집했는지 판정하는 데만 쓴다.
+        static let scheduleLastRunAt = "news.schedule.lastRunAt"
+        /// 지금의 스케줄 설정이 확정된 시각. 이보다 오래된 `lastRunAt` 은 지금 스케줄과 무관하므로
+        /// 유예 창 판정에서 제외한다 — 새 스케줄의 첫 회차가 옛 기록 때문에 사라지지 않게 한다.
+        static let scheduleConfiguredAt = "news.schedule.configuredAt"
+        static let maxItemsPerSource = "news.maxItemsPerSource"
+    }
+
+    static let defaultNewsMaxItemsPerSource = 10
+
+
 }
+
+// MARK: - 10. 카테고리 도메인 모델 & 저장소 (Category Models & Store)
 
 struct CategoryDefinition: Codable, Identifiable, Hashable {
     var id: String { name }

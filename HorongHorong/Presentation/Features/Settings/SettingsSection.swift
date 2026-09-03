@@ -1,0 +1,201 @@
+import SwiftUI
+
+enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
+    case general
+    case appearance
+    case timer
+    case hotkey
+    case category
+    case stats
+    case focus
+    case achievement
+    case news
+    case lab
+    case companion
+    case secondBrain
+    case data
+    case about
+    case ailab
+
+    var id: String { rawValue }
+
+    init?(actionIdentifier: String) {
+        if actionIdentifier == "memo" || actionIdentifier.lowercased() == "secondbrain" {
+            self = .secondBrain
+            return
+        }
+        self.init(rawValue: actionIdentifier)
+    }
+
+    var label: String {
+        switch self {
+        case .general:    return "일반"
+        case .appearance: return "외관"
+        case .timer:      return "타이머"
+        case .hotkey:     return "단축키"
+        case .category:   return "카테고리 매핑"
+        case .stats:      return "통계"
+        case .focus:      return "몰입"
+        case .achievement: return "성취"
+        case .news:       return "뉴스"
+        case .lab:        return "실험실"
+        case .companion:  return "루미롱"
+        case .secondBrain: return "기록"
+        case .data:       return "데이터"
+        case .about:      return "정보"
+        case .ailab:      return "AI 실험실"
+        }
+    }
+
+    /// 콘텐츠 헤더 부제.
+    var subtitle: String {
+        switch self {
+        case .general:    return "앱의 기본 동작과 표시 방식을 설정합니다."
+        case .appearance: return "화면 모드와 팝오버 테마, 강조 색 등 시각 옵션을 조정합니다."
+        case .timer:      return "집중·휴식 사이클의 기본값과 동작 방식을 설정합니다."
+        case .hotkey:     return "전역 단축키를 확인하고 변경합니다."
+        case .category:   return "카테고리·앱 매핑·자리 비움 임계값을 한 곳에서 관리합니다."
+        case .stats:      return "타임라인 표시와 데이터 보관 정책을 설정합니다."
+        case .focus:      return "세션마다 몰입도를 재고, 기준선 아래로 떨어지면 호로롱이가 말을 겁니다."
+        case .achievement: return "할일을 목표로 묶는 추천 방식과 생성 기본값을 설정합니다."
+        case .news:       return "관심사 키워드와 뉴스 큐레이션 옵션을 설정합니다."
+        case .lab:        return "실험실에서 쓸 기본값을 설정합니다."
+        case .companion:  return "화면 위 AI 컴패니언의 표시·이동·브리핑을 설정합니다."
+        case .secondBrain: return "퀵 기록 단축키와 미리알림 가져오기를 설정합니다. vault 경로는 데이터 페이지에 있습니다."
+        case .data:       return "백업·복원과 데이터 초기화를 관리합니다."
+        case .about:      return "호롱호롱 소개와 버전 정보."
+        case .ailab:      return "앱 내부 평가 파이프라인 결과를 시각적으로 분석합니다."
+        }
+    }
+
+    var systemIcon: String {
+        switch self {
+        case .general:    return "switch.2"
+        case .appearance: return "paintpalette"
+        case .timer:      return "timer"
+        case .hotkey:     return "keyboard"
+        case .category:   return "square.grid.2x2"
+        case .stats:      return "chart.bar"
+        case .focus:      return "flame.fill"
+        case .achievement: return "target"
+        case .news:       return "newspaper"
+        case .lab:        return "bolt.horizontal.circle"
+        case .companion:  return "sparkles"
+        case .secondBrain: return "note.text"
+        case .data:       return "externaldrive"
+        case .about:      return "info.circle"
+        case .ailab:      return "flask"
+        }
+    }
+
+    /// 사이드바 검색에서 매칭될 *해당 탭 안의 설정 행 제목·키워드* 목록.
+    /// 새 행을 페이지에 추가하면 여기에도 같이 더해야 검색에 잡힌다.
+    var searchKeywords: [String] {
+        switch self {
+        case .general:
+            return ["로그인 시 자동 시작", "자동 업데이트", "익명 사용 데이터 전송"]
+        case .appearance:
+            return ["모드", "화면 모드", "라이트", "다크", "시스템",
+                    "강조 색", "정보 밀도", "앱 아이콘",
+                    "테마", "팝오버 테마", "따뜻한 등불", "와인 랜턴", "게임 픽셀"]
+        case .timer:
+            return ["프리셋", "포모도로", "긴 집중", "커스텀",
+                    "프리셋 시간 편집",
+                    "메뉴바 표시", "라벨 형식", "시간 형식"]
+        case .hotkey:
+            return ["퀵 메모 띄우기", "호롱호롱 팝오버 열기", "타이머 시작", "일시정지",
+                    "설정 창 열기", "단축키"]
+        case .category:
+            return ["카테고리", "앱 카테고리", "앱 규칙", "자리 비움 감지 임계값",
+                    "짝 카테고리", "전환 무시"]
+        case .stats:
+            return ["타임라인 표시", "시작 시간", "종료 시간", "시간 간격",
+                    "앱 사용 시간 추적", "민감 작업 모드", "전체 추적 상태",
+                    "휴가 기간", "데이터 보관 기간", "주간 리포트 자동 생성"]
+        case .focus:
+            return ["몰입", "몰입도", "집중 넛지", "잔소리", "기준선", "기준",
+                    "해줄 말", "호로롱이", "넛지", "동기 부여"]
+        case .achievement:
+            return ["성취", "목표 추천", "추천 묶음", "추천 개수", "할일 최대 개수",
+                    "주간 목표", "월간 목표", "월간 추천", "활성화 기준",
+                    "목표 초안", "Foundation Models", "Apple 모델"]
+        case .news:
+            return ["소스", "YouTube", "Google News", "Hacker News", "RSS", "YOZM IT",
+                    "관심 키워드", "관심사", "파이프라인",
+                    "자동 수집 스케줄", "특정 시각", "수집 시각", "수집 간격", "n시간 간격",
+                    "요약 에이전트", "일일 리포트 저장 위치", "LLM",
+                    "리포트", "레포트", "생성"]
+        case .lab:
+            return ["실행 환경", "실험 루트 폴더", "실행 도구", "Agent",
+                    "계획 일수", "관심사", "터미널 명령 실행 전 확인",
+                    "Codex", "Claude", "Antigravity", "Opencode", "Hermes", "생성"]
+        case .companion:
+            return ["루미롱", "컴패니언", "호로롱", "캐릭터", "활동 영역", "영역 지정",
+                    "집중 중에는 숨기기", "오늘 일정 브리핑", "브리핑 시간", "오버레이",
+                    "대화 공급자", "AI 대화", "온디바이스", "개인정보", "음성"]
+        case .secondBrain:
+            return ["기록", "세컨드 브레인", "Second Brain", "메모", "노트",
+                    "퀵 기록 단축키", "퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
+                    "미리알림 가져오기", "미리알림 앱 연동", "미리 알림", "Reminders", "캘린더"]
+        case .data:
+            return ["데이터 위치", "iCloud 동기화", "자동 백업", "지금 백업하기", "내보내기"]
+        case .about:
+            return ["호롱호롱", "버전", "GitHub", "사용 가이드", "라이선스",
+                    "Apache", "제3자 컴포넌트", "HotKey", "Pretendard", "크레딧"]
+        case .ailab:
+            return ["AI", "실험실", "평가", "채점", "대시보드", "테스트", "LLM"]
+        }
+    }
+
+    /// label / subtitle / searchKeywords 합쳐서 검색에 쓰이는 텍스트 풀.
+    var searchableHaystack: String {
+        ([label, subtitle] + searchKeywords).joined(separator: " ")
+    }
+
+    /// 개발자만 보는 탭. 일반 사용자에게는 사이드바·검색·호로롱 답변 어디에도 나오지 않는다.
+    var isDeveloperOnly: Bool {
+        self == .ailab
+    }
+
+    /// Debug 빌드에서는 항상 보이고, Release 빌드에서는 숨김 플래그를 켠 경우에만 보인다.
+    /// `defaults write com.horonghorong.app ailab.enabled -bool YES` 후 앱 재시작.
+    static var showsDeveloperTabs: Bool {
+        #if DEBUG
+        return true
+        #else
+        return UserDefaults.standard.bool(forKey: Constants.AppStorageKey.aiLabEnabled)
+        #endif
+    }
+
+    /// 실제로 노출할 탭 목록. 사이드바·검색·호로롱 안내가 모두 이 목록을 근거로 삼는다.
+    static var visibleCases: [SettingsTab] {
+        showsDeveloperTabs ? allCases : allCases.filter { !$0.isDeveloperOnly }
+    }
+}
+
+enum SettingsGroup: String, CaseIterable, Identifiable {
+    case preferences = "환경설정"
+    case focusAndMeasurement = "몰입과 측정"
+    case insightsAndAction = "관심사와 실험"
+    case system = "시스템 관리"
+
+    var id: String { rawValue }
+
+    /// 개발자 전용 탭은 노출 조건을 만족할 때만 남긴다.
+    var tabs: [SettingsTab] {
+        allTabs.filter { !$0.isDeveloperOnly || SettingsTab.showsDeveloperTabs }
+    }
+
+    private var allTabs: [SettingsTab] {
+        switch self {
+        case .preferences:
+            return [.general, .appearance, .hotkey]
+        case .focusAndMeasurement:
+            return [.timer, .stats, .category, .focus]
+        case .insightsAndAction:
+            return [.news, .secondBrain, .lab, .achievement, .companion]
+        case .system:
+            return [.data, .about, .ailab]
+        }
+    }
+}

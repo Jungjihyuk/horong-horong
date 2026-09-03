@@ -58,4 +58,6 @@ final class AppState {
 
     /// 통합 윈도우에서 현재 보고 있는 화면.
     var hubTab: HubTab = .stats
+    /// 기록 탭의 '내 머리속' 사이드 패널. 기록 탭을 다시 누르면 접힌다.
+    var isRecordRailVisible: Bool = true
 }

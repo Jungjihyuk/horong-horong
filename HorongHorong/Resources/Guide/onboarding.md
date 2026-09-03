@@ -15,7 +15,7 @@
 | 값 | 띄우는 화면 |
 |---|---|
 | `popover.timer` | 메뉴바 팝오버 · 타이머 탭 |
-| `popover.memo` | 메뉴바 팝오버 · 메모 탭 |
+| `popover.memo` | 메뉴바 팝오버 · 기록 탭 |
 | `popover.stats` | 메뉴바 팝오버 · 통계 탭 |
 | `popover.achievement` | 메뉴바 팝오버 · 성취 탭 |
 | `window.stats` | 통계 상세 창 |
@@ -32,7 +32,7 @@
 | `timer.preset` | 타이머 탭의 **프리셋** |
 | `timer.selectTask` | 타이머 탭의 **할 일 선택** |
 | `timer.startFocus` | 타이머 탭의 **집중 시작** |
-| `memo.new` | 메모 탭의 **새 메모** |
+| `memo.new` | 기록 탭의 **빠른 기록** |
 | `stats.detail` | 통계 탭의 **상세 보기** |
 | `stats.focusToggle` | 통계 상세 창의 **몰입** |
 | `settings.companionBasics` | 설정 · 루미롱의 **루미롱** 카드 |
@@ -106,15 +106,15 @@
 ## 시나리오 2. 할 일을 빠르게 등록하고 싶어요
 <!-- id: focus-with-task -->
 
-### 1) 메모 탭을 연다
+### 1) 기록 탭을 연다
 <!-- screen: popover.memo -->
 <!-- highlight: tab.memo -->
-> 할 일은 메모 탭에 모여요. 여기 적어둔 것이 타이머의 할 일 후보가 돼요.
+> 할 일은 기록 탭에 모여요. 여기 적어둔 것이 타이머의 할 일 후보가 돼요.
 
-### 2) 새 메모를 만든다
+### 2) 새 기록을 만든다
 <!-- screen: popover.memo -->
 <!-- highlight: memo.new -->
-> **새 메모**로 할 일을 적어요. 오늘 할 일로 표시해두면 타이머에서 바로 고를 수 있어요.
+> **빠른 기록**으로 적어 두면, 오늘 할 일로 표시한 것이 타이머의 후보가 돼요.
 
 ### 3) 더 빠르게 적는 법
 <!-- screen: settings.memo -->

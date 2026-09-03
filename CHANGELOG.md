@@ -7,6 +7,37 @@
 
 ## [Unreleased]
 
+### 추가
+
+- 할 일(Todo), 빠른 메모(Quick Note), 일기(Diary), 참고 자료(References), 지식/작업 볼트(Knowledge/Works Vault)를 아우르는 통합 «Second Brain(Mind)» 작업 공간을 추가했습니다.
+- 성취 타임라인에 완료 여부(완료 먼저, 완료 나중)와 시간 순서(오름차순, 내림차순)를 조합해 볼 수 있는 정렬 필터 옵션을 추가했습니다.
+- 메뉴바 팝오버의 메모 탭에서 완료된 항목 대신 마감일 기준 다가오는 할 일을 우선 보여주도록 개선했습니다.
+
+### 변경
+
+- 설정 탭 및 관련 UI 표기를 기존 «메모»에서 직관적인 «기록»으로 개편하고, 내부 식별자를 도메인 목적에 부합하는 `secondBrain`으로 정돈했습니다.
+- SwiftData 스키마 V2(`HorongHorongSchemaV2`)를 도입하고, 기존 SQLite `Memo` 테이블의 데이터를 신규 영속 모델 `SecondBrainRecord` 테이블로 1:1 무손실 복사 이전하는 안전한 DB 마이그레이션 파이프라인을 구축했습니다.
+- Todo, Quick Note, References, Companion, Reminder, Pomodoro, Achievement 등 Data 계층(Repositories)의 조회 및 영속화 대상을 `SecondBrainRecord`로 전면 전환했습니다.
+- 앱 전반의 아키텍처를 MVVM + Clean Architecture(Presentation / Domain / Data)로 전면 개편했습니다.
+  - 모든 View 계층에서 SwiftData `@Query`와 `ModelContext`를 완전히 제거(0개)하고, ViewModel과 Repository 프로토콜 기반으로 전환하여 메모 편집 시 보이지 않는 화면까지 다시 계산되던 쓰기 증폭 문제를 해결했습니다.
+  - `Mind`, `News`, `Lab`, `Achievement`, `Reward`, `Timer`, `Stats` 등 모든 주요 비즈니스 기능을 ViewModel + Repository 구조로 마이그레이션했습니다.
+  - 레거시 `Features/`, `Models/`, `Services/` 폴더를 완전히 소멸시키고 목표 아키텍처 폴더로 재배치했습니다.
+- `FocusSession`과 `AppCategoryRule` 등 단일 파일에 여러 `@Model`과 도메인 타입이 섞여 있던 거대 모델 파일들을 1모델 1파일로 독립시키고, 순수 정책과 비즈니스 엔티티를 `Domain/` 계층으로 분리했습니다.
+- 1,900여 줄의 전역 설정 파일(`Constants.swift`)을 UI 기능 순서(일반/외관 → 타이머 → 카테고리 → 트래커 → 컴패니언 → 성취/보상 → 메모 → 뉴스/AI → 저장소 키)에 맞추어 10대 섹션으로 체계화하고 가이드 주석을 보강했습니다.
+- 한국어 조사 처리 도구, AI 실행 도구, 설정 스토어들을 디자인 시스템, 어댑터, 로컬 데이터 소스 계층으로 각각 알맞게 재배치했습니다.
+
+### 수정
+
+- 메뉴바 팝오버 등 non-activating 창을 열었을 때 앱 활성화 타이밍 문제로 한글 입력이 막히던 현상을 수정했습니다.
+- 컴패니언 대화창 입력 중 말풍선이나 메뉴가 노출될 때 입력창 포커스가 해제되던 문제를 수정했습니다.
+- 컴패니언 오버레이 카드가 열려 있는 동안 빈 프레임 갱신으로 인해 카드가 깜빡이던 문제를 수정했습니다.
+- 일기(Diary) 실행 시 날짜별 중복 레코드가 발생하지 않도록 저장 전 중복 검증 및 병합 로직을 강화했습니다.
+- 메모 텍스트 편집기에서 플레이스홀더 텍스트와 커서 위치가 어긋나던 문제를 수정했습니다.
+
+### 제거
+
+- 구형 독립 메모 창(`MemoBrowserWindow`)과 사용하지 않는 메모 보관(Archive) 기능을 제거했습니다.
+
 ## [0.2.9] - 2026-08-29
 
 ### 추가
