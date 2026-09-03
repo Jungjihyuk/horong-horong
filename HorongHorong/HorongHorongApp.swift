@@ -768,6 +768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     todoRepository: dependencies.todoRepository,
                     reflectionRepository: dependencies.reflectionRepository,
                     statsRepository: dependencies.statsRecordRepository,
+                    statsEditorRepository: dependencies.statsRecordEditorRepository,
                     initialViewMode: mode,
                     initialContentMode: contentMode,
                     initialSelectedDate: referenceDate

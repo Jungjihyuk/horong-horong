@@ -37,7 +37,8 @@ struct MainHubWindow: View {
                     StatsDetailWindow(
                         todoRepository: dependencies.todoRepository,
                         reflectionRepository: dependencies.reflectionRepository,
-                        statsRepository: dependencies.statsRecordRepository
+                        statsRepository: dependencies.statsRecordRepository,
+                        statsEditorRepository: dependencies.statsRecordEditorRepository
                     )
                         .hubTabVisible(appState.hubTab == .stats)
                 }

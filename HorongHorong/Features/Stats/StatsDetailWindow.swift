@@ -41,6 +41,7 @@ struct StatsDetailWindow: View {
     let todoRepository: TodoRepository
     let reflectionRepository: PomodoroReflectionRepository
     let statsRepository: StatsRecordRepository
+    let statsEditorRepository: StatsRecordEditorRepository
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
@@ -97,6 +98,7 @@ struct StatsDetailWindow: View {
         todoRepository: TodoRepository,
         reflectionRepository: PomodoroReflectionRepository,
         statsRepository: StatsRecordRepository,
+        statsEditorRepository: StatsRecordEditorRepository,
         initialViewMode: StatsViewMode = .daily,
         initialContentMode: StatsContentMode = .period,
         initialSelectedDate: Date? = nil
@@ -104,6 +106,7 @@ struct StatsDetailWindow: View {
         self.todoRepository = todoRepository
         self.reflectionRepository = reflectionRepository
         self.statsRepository = statsRepository
+        self.statsEditorRepository = statsEditorRepository
         _viewMode = State(initialValue: initialViewMode)
         _contentMode = State(initialValue: initialContentMode)
         if let initialSelectedDate {
@@ -196,7 +199,10 @@ struct StatsDetailWindow: View {
             invalidateLoadCache()
             loadRecords()
         }) {
-            ManualSegmentEditorView(date: selectedDate)
+            ManualSegmentEditorView(
+                date: selectedDate,
+                repository: statsEditorRepository
+            )
         }
     }
 
