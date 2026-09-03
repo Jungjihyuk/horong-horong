@@ -1,4 +1,3 @@
-import SwiftData
 import Foundation
 import CoreGraphics
 
@@ -16,8 +15,7 @@ final class TimerManager {
     private var postBreakPromptTimer: Timer?
     private var appState: AppState
     private var repository: FocusSessionRepository?
-    /// 회고 패널에만 넘기는 컨텍스트. 그 화면이 저장소로 옮겨지면 사라진다. `[확인 필요]`
-    private var reflectionContext: ModelContext?
+    private var reflections: PomodoroReflectionRepository?
     /// 진행 중인 세션의 **식별자만** 든다. `@Model` 을 들면 그게 화면 쪽까지 새어 나온다.
     private var currentSessionID: UUID?
     /// 이번 집중이 몇 분짜리였나. 타이머가 끝까지 갔을 때 기록할 시간을 여기서 안다.
@@ -52,9 +50,12 @@ final class TimerManager {
         }
     }
 
-    func setRepository(_ repository: FocusSessionRepository, reflectionContext: ModelContext) {
-        self.repository = repository
-        self.reflectionContext = reflectionContext
+    func setRepositories(
+        focusSessions: FocusSessionRepository,
+        reflections: PomodoroReflectionRepository
+    ) {
+        self.repository = focusSessions
+        self.reflections = reflections
     }
 
     func startFocus(
@@ -396,14 +397,9 @@ final class TimerManager {
         }
     }
 
-    /// 회고 패널은 아직 `ModelContext` 를 직접 쓴다. 그 화면을 옮길 때 함께 정리한다.
-    /// `[확인 필요]`
     private func showReflection(focusSessionID: UUID?) {
-        guard let focusSessionID, let reflectionContext else { return }
-        PomodoroReflectionPanel.shared.show(
-            focusSessionID: focusSessionID,
-            modelContext: reflectionContext
-        )
+        guard let focusSessionID, let reflections else { return }
+        PomodoroReflectionPanel.shared.show(focusSessionID: focusSessionID, repository: reflections)
     }
 
     private func schedulePostBreakTransitionPrompt(breakEndedAt: Date, previousCategory: String) {

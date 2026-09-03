@@ -37,8 +37,9 @@ enum StatsContentMode {
 }
 
 struct StatsDetailWindow: View {
-    /// 집중 상세의 «할 일 연결» 시트에만 쓰인다. 여기서는 넘기기만 한다.
+    /// 집중 상세에만 쓰인다. 여기서는 넘기기만 한다.
     let todoRepository: TodoRepository
+    let reflectionRepository: PomodoroReflectionRepository
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
@@ -77,6 +78,7 @@ struct StatsDetailWindow: View {
     private var focusDetail: some View {
         FocusDetailView(
             sessions: pomodoroComparisonSessions,
+            reflectionRepository: reflectionRepository,
             todoRepository: todoRepository,
             reflections: pomodoroReflections,
             taskCompletions: pomodoroTaskCompletions,
@@ -91,11 +93,13 @@ struct StatsDetailWindow: View {
 
     init(
         todoRepository: TodoRepository,
+        reflectionRepository: PomodoroReflectionRepository,
         initialViewMode: StatsViewMode = .daily,
         initialContentMode: StatsContentMode = .period,
         initialSelectedDate: Date? = nil
     ) {
         self.todoRepository = todoRepository
+        self.reflectionRepository = reflectionRepository
         _viewMode = State(initialValue: initialViewMode)
         _contentMode = State(initialValue: initialContentMode)
         if let initialSelectedDate {
@@ -2243,6 +2247,7 @@ private struct FocusResponseBucket: Identifiable {
 
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
+    let reflectionRepository: PomodoroReflectionRepository
     /// 이 화면이 할 일을 쓰는 곳은 «할 일 연결» 시트 하나뿐이다.
     ///
     /// **`@Query` 를 걷어냈다.** 메모를 하나 고칠 때마다 이 창(4,400줄)이 통째로 다시
@@ -4236,7 +4241,7 @@ struct FocusDetailView: View {
     private func showReflection(for row: FocusSessionRow) {
         PomodoroReflectionPanel.shared.show(
             focusSessionID: row.id,
-            modelContext: modelContext
+            repository: reflectionRepository
         )
     }
 

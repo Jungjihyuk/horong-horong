@@ -1,5 +1,4 @@
 import AppKit
-import SwiftData
 import SwiftUI
 
 @MainActor
@@ -10,42 +9,11 @@ final class PomodoroReflectionPanel {
 
     private init() {}
 
-    func show(focusSessionID: UUID, modelContext: ModelContext) {
+    func show(focusSessionID: UUID, repository: PomodoroReflectionRepository) {
+        // 이미 답한 세션이면 저장소가 `nil` 을 준다 — 두 번 묻지 않는다.
+        guard let prompt = repository.prompt(for: focusSessionID) else { return }
         let sessionID = focusSessionID
-        let descriptor = FetchDescriptor<PomodoroReflection>(
-            predicate: #Predicate { reflection in
-                reflection.focusSessionID == sessionID
-            }
-        )
-        guard ((try? modelContext.fetchCount(descriptor)) ?? 0) == 0 else { return }
-
-        let sessionDescriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { $0.id == sessionID }
-        )
-        let session = try? modelContext.fetch(sessionDescriptor).first
-        let canRecordLinkedTaskCompletion = session?.linkedMemoID.map {
-            PomodoroTaskCompletionRecorder.hasLinkedMemo(id: $0, modelContext: modelContext)
-        } ?? false
-        let suggestedAppCategory = session?.category ?? Constants.defaultFocusCategory
-        let focusIntervals = session.map(FocusScoreHistory.focusIntervals) ?? []
-        let unclassifiedAssessment = AppClassificationService.unclassifiedAssessment(
-            activeIntervals: focusIntervals,
-            modelContext: modelContext
-        )
-        let unclassifiedApps: [UnclassifiedAppUsage]
-        let unclassifiedRatio: Double?
-        if unclassifiedAssessment.needsClassificationFollowUp {
-            unclassifiedApps = unclassifiedAssessment.apps
-            unclassifiedRatio = unclassifiedAssessment.unclassifiedRatio
-        } else {
-            unclassifiedApps = []
-            unclassifiedRatio = nil
-        }
-        let productivityManagementAppUsages =
-            AppClassificationService.productivityManagementAppUsages(
-                activeIntervals: focusIntervals,
-                modelContext: modelContext
-            )
+        let unclassifiedApps = prompt.unclassifiedApps
 
         close(animated: false)
 
@@ -77,13 +45,13 @@ final class PomodoroReflectionPanel {
         }
 
         let contentView = PomodoroReflectionView(
-            taskTitle: session?.taskTitleSnapshot,
-            isLinkedTask: session?.linkedMemoID != nil,
-            canRecordLinkedTaskCompletion: canRecordLinkedTaskCompletion,
-            suggestedAppCategory: suggestedAppCategory,
+            taskTitle: prompt.taskTitle,
+            isLinkedTask: prompt.isLinkedTask,
+            canRecordLinkedTaskCompletion: prompt.canRecordLinkedTaskCompletion,
+            suggestedAppCategory: prompt.suggestedAppCategory,
             unclassifiedApps: unclassifiedApps,
-            unclassifiedRatio: unclassifiedRatio,
-            productivityManagementAppUsages: productivityManagementAppUsages,
+            unclassifiedRatio: prompt.unclassifiedRatio,
+            productivityManagementAppUsages: prompt.productivityManagementAppUsages,
             onSaveFeedback: {
                 focusExperience,
                 progressResult,
@@ -91,100 +59,31 @@ final class PomodoroReflectionPanel {
                 guard !progressResult.requiresReason || incompleteReason != nil else {
                     throw PomodoroReflectionSaveError.missingIncompleteReason
                 }
-
-                let answeredAt = Date()
-                let reflection = PomodoroReflection(
-                    focusSessionID: sessionID,
+                try repository.saveReflection(
+                    sessionID: sessionID,
                     focusExperience: focusExperience,
                     progressResult: progressResult,
                     incompleteReason: incompleteReason,
-                    answeredAt: answeredAt
+                    answeredAt: Date()
                 )
-                modelContext.insert(reflection)
-                session?.reflectionDeferredAt = nil
-                do {
-                    let recordsLinkedTaskCompletion = progressResult == .completedAsPlanned
-                        && session?.linkedMemoID.map {
-                            PomodoroTaskCompletionRecorder.hasLinkedMemo(
-                                id: $0,
-                                modelContext: modelContext
-                            )
-                        } == true
-                    let affectedMemo: Memo?
-                    if recordsLinkedTaskCompletion, let session {
-                        affectedMemo = try PomodoroTaskCompletionRecorder.recordCompletion(
-                            for: session,
-                            completedAt: answeredAt,
-                            modelContext: modelContext
-                        )
-                    } else {
-                        affectedMemo = nil
-                    }
-                    try modelContext.save()
-                    NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
-                    NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
-                    if recordsLinkedTaskCompletion,
-                       let linkedMemoID = session?.linkedMemoID {
-                        NotificationCenter.default.post(
-                            name: .pomodoroLinkedTaskDidComplete,
-                            object: linkedMemoID
-                        )
-                    }
-                    if let affectedMemo {
-                        PomodoroTaskCompletionRecorder.applyPostSaveEffects(
-                            to: affectedMemo,
-                            modelContext: modelContext
-                        )
-                    }
-                } catch {
-                    modelContext.rollback()
-                    throw error
-                }
             },
             onSaveClassification: {
                 [weak self] appChoices,
                 productivityManagementAppCategories in
-                do {
-                    try AppClassificationService.apply(
-                        choices: appChoices,
-                        apps: unclassifiedApps,
-                        modelContext: modelContext
-                    )
-                    for (bundleIdentifier, category) in productivityManagementAppCategories {
-                        for interval in focusIntervals {
-                            try AppClassificationService
-                                .prepareProductivityManagementAppSessionClassification(
-                                    bundleIdentifier: bundleIdentifier,
-                                    from: interval.start,
-                                    to: interval.end,
-                                    category: category,
-                                    modelContext: modelContext
-                                )
-                        }
-                    }
-                    try modelContext.save()
-                    CategoryManager.shared.loadUserRules(from: modelContext)
-                    NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
-                    self?.close()
-                } catch {
-                    modelContext.rollback()
-                    throw error
-                }
+                try repository.saveClassification(
+                    sessionID: sessionID,
+                    choices: appChoices,
+                    apps: unclassifiedApps,
+                    productivityManagementAppCategories: productivityManagementAppCategories
+                )
+                self?.close()
             },
             onFinish: { [weak self] in
                 self?.close()
             },
             onCancel: { [weak self] in
-                session?.reflectionDeferredAt = Date()
-                do {
-                    try modelContext.save()
-                    NotificationCenter.default.post(
-                        name: .pomodoroSessionDidChange,
-                        object: sessionID
-                    )
-                } catch {
-                    modelContext.rollback()
-                }
+                // 「나중에 쓰기」. 실패해도 창은 닫는다 — 답을 강요하지 않는다.
+                try? repository.deferReflection(sessionID: sessionID, at: Date())
                 self?.close()
             }
         )

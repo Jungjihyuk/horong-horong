@@ -1544,9 +1544,9 @@ final class ConstantsDefaultsTests: XCTestCase {
         appState.focusMinutes = 50
         appState.breakMinutes = 5
         let manager = TimerManager(appState: appState)
-        manager.setRepository(
-            SwiftDataFocusSessionRepository(context: context),
-            reflectionContext: context
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
         )
 
         manager.startFocus(category: "개발")
@@ -1605,9 +1605,9 @@ final class ConstantsDefaultsTests: XCTestCase {
         let appState = AppState()
         appState.focusMinutes = 30
         let manager = TimerManager(appState: appState)
-        manager.setRepository(
-            SwiftDataFocusSessionRepository(context: context),
-            reflectionContext: context
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
         )
         manager.startFocus(category: "개발")
 
@@ -1640,9 +1640,9 @@ final class ConstantsDefaultsTests: XCTestCase {
         let context = container.mainContext
         let appState = AppState()
         let manager = TimerManager(appState: appState)
-        manager.setRepository(
-            SwiftDataFocusSessionRepository(context: context),
-            reflectionContext: context
+        manager.setRepositories(
+            focusSessions: SwiftDataFocusSessionRepository(context: context),
+            reflections: SwiftDataPomodoroReflectionRepository(context: context)
         )
 
         manager.startFocus(category: "개발")
