@@ -1,5 +1,16 @@
 import SwiftUI
 
+// 1. 일반 & UI 윈도우 레이아웃 (General & Window Layout)
+// 2. 타이머 & 집중 세션 (Timer & Focus Session)
+// 3. 카테고리 & 앱 매핑 (Category & App Mapping)
+// 4. 앱 사용량 트래커 & 통계 (Tracker & Stats)
+// 5. 컴패니언 루미롱 (Companion)
+// 6. 성취 & 보상 (Achievement & Reward)
+// 7. 메모 & Second Brain (Mind / Vault)
+// 8. 뉴스 큐레이션 & AI 실험실 (News & AI Lab)
+// 9. 공통 저장소 키 (Storage Keys)
+// 10. 카테고리 도메인 모델 & 저장소 (Category Models & Store)
+
 enum Constants {
 
     // MARK: - 1. 일반 & UI 윈도우 레이아웃 (General & Window Layout)
