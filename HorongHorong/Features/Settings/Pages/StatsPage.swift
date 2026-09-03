@@ -1,8 +1,7 @@
 import SwiftUI
-import SwiftData
 
 struct StatsPage: View {
-    @Environment(\.modelContext) private var modelContext
+    let repository: StatsRecordRepository
 
     @AppStorage(Constants.AppStorageKey.timelineStartHour)
     private var timelineStartHour: Int = Constants.defaultTimelineStartHour
@@ -322,83 +321,19 @@ struct StatsPage: View {
 
     private func existingRecordCount(start: Date, end: Date) -> Int {
         let (s, e) = dateBounds(start: start, end: end)
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.date >= s && $0.date < e }
-        )
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.startTime >= s && $0.startTime < e }
-        )
-        let focusDescriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { $0.startedAt >= s && $0.startedAt < e }
-        )
-        let attentionDescriptor = FetchDescriptor<AttentionEvent>(
-            predicate: #Predicate { $0.occurredAt >= s && $0.occurredAt < e }
-        )
-        let daySummaryDescriptor = FetchDescriptor<AttentionDaySummary>(
-            predicate: #Predicate { $0.day >= s && $0.day < e }
-        )
-        let recordCount = (try? modelContext.fetch(recordDescriptor).count) ?? 0
-        let segmentCount = (try? modelContext.fetch(segmentDescriptor).count) ?? 0
-        let focusCount = (try? modelContext.fetch(focusDescriptor).count) ?? 0
-        let attentionCount = (try? modelContext.fetch(attentionDescriptor).count) ?? 0
-        let daySummaryCount = (try? modelContext.fetch(daySummaryDescriptor).count) ?? 0
-        return recordCount + segmentCount + focusCount + attentionCount + daySummaryCount
+        return repository.recordCount(start: s, end: e)
+
     }
 
     private func deleteRecords(start: Date, end: Date) {
         let (s, e) = dateBounds(start: start, end: end)
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.date >= s && $0.date < e }
-        )
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.startTime >= s && $0.startTime < e }
-        )
-        let focusDescriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { $0.startedAt >= s && $0.startedAt < e }
-        )
-        let attentionDescriptor = FetchDescriptor<AttentionEvent>(
-            predicate: #Predicate { $0.occurredAt >= s && $0.occurredAt < e }
-        )
-        let daySummaryDescriptor = FetchDescriptor<AttentionDaySummary>(
-            predicate: #Predicate { $0.day >= s && $0.day < e }
-        )
         do {
-            for record in try modelContext.fetch(recordDescriptor) {
-                modelContext.delete(record)
-            }
-            for segment in try modelContext.fetch(segmentDescriptor) {
-                modelContext.delete(segment)
-            }
-
-            var affectedMemosByID: [UUID: Memo] = [:]
-            for session in try modelContext.fetch(focusDescriptor) {
-                if let memo = try PomodoroSessionDeletion.delete(
-                    session,
-                    modelContext: modelContext
-                ) {
-                    affectedMemosByID[memo.id] = memo
-                }
-            }
-            for event in try modelContext.fetch(attentionDescriptor) {
-                modelContext.delete(event)
-            }
-            for summary in try modelContext.fetch(daySummaryDescriptor) {
-                modelContext.delete(summary)
-            }
-            try modelContext.save()
-            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
-            for memo in affectedMemosByID.values {
-                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
-                    to: memo,
-                    modelContext: modelContext
-                )
-            }
+            try repository.deleteRecords(start: s, end: e)
         } catch {
-            modelContext.rollback()
             ToastPanel.shared.show(
                 icon: "⚠️",
                 title: "기록을 삭제하지 못했어요",
-                subtitle: "잠시 후 다시 시도해 주세요."
+                subtitle: error.localizedDescription
             )
         }
     }

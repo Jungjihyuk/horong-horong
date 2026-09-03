@@ -1,10 +1,9 @@
 import Foundation
-import SwiftData
 import SwiftUI
 
 /// 설정 → 몰입. 개인화 비교 상태와 최근 10분 판정 규칙을 한 화면에서 조절한다.
 struct FocusPage: View {
-    @Environment(\.modelContext) private var modelContext
+    let repository: StatsRecordRepository
 
     @AppStorage(Constants.AppStorageKey.companionFocusNudgeEnabled)
     private var isEnabled: Bool = Constants.defaultCompanionFocusNudgeEnabled
@@ -855,9 +854,8 @@ struct FocusPage: View {
             personalization = nil
             return
         }
-        personalization = FocusPersonalizationTrainer.analyze(
-            requiredFeedbackCount: requiredFeedbackCount,
-            modelContext: modelContext
+        personalization = repository.focusPersonalization(
+            requiredFeedbackCount: requiredFeedbackCount
         )
     }
 

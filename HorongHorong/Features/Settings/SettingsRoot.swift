@@ -137,8 +137,14 @@ struct SettingsRoot: View {
         case .timer:      TimerPage()
         case .hotkey:     HotkeyPage()
         case .category:   CategoryMappingPage()
-        case .stats:      StatsPage()
-        case .focus:      FocusPage()
+        case .stats:
+            if let dependencies {
+                StatsPage(repository: dependencies.statsRecordRepository)
+            }
+        case .focus:
+            if let dependencies {
+                FocusPage(repository: dependencies.statsRecordRepository)
+            }
         case .achievement: AchievementPage()
         case .news:       NewsPage()
         case .lab:      LabPage()
