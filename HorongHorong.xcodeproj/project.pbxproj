@@ -1723,18 +1723,18 @@
 			path = Repositories;
 			sourceTree = "<group>";
 		};
-		"TEMP_192E71C8-688E-4FD4-BF17-90E38A10C5D1" /* Stats */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Stats;
-			sourceTree = "<group>";
-		};
-		"TEMP_EDBA932B-2F52-4A61-90E8-48E7840BBD35" /* Settings */ = {
+		"TEMP_183F463A-937C-4905-A8ED-4125C8580CAC" /* Settings */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		"TEMP_F57DEC0A-D3F2-4010-AB10-CDE8BF95AF01" /* Stats */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Stats;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

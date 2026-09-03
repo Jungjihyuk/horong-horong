@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// 완료 목록 대신 «예정» 을 둔다 — 팝오버는 **앞으로 할 것**을 확인하는 자리이고,
 /// 끝난 일을 되짚는 것은 기록 창의 Todo 탭이 맡는다.
-/// 팝오버 메모 탭의 두 갈래. ViewModel 도 쓰므로 파일 밖에서 보인다.
+/// 팝오버 메모 탭의 두 카테고리. ViewModel 도 쓰므로 파일 밖에서 보인다.
 enum MemoListTab: String, CaseIterable {
     case today = "오늘"
     case upcoming = "예정"

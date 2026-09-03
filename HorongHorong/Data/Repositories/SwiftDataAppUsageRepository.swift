@@ -250,7 +250,7 @@ final class SwiftDataAppUsageRepository: AppUsageRepository {
         let elapsed = end.timeIntervalSince(start)
         guard elapsed >= 0 else { return false }
 
-        // 바로 앞 구간을 찾는다 — 같은 앱·같은 갈래로 이 구간이 시작한 시각에 끝난 것.
+        // 바로 앞 구간을 찾는다 — 같은 앱·같은 카테고리로 이 구간이 시작한 시각에 끝난 것.
         let descriptor = FetchDescriptor<AppUsageSegment>(
             predicate: #Predicate {
                 $0.bundleIdentifier == bundleIdentifier &&

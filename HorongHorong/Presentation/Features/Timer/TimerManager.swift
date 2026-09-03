@@ -321,7 +321,7 @@ final class TimerManager {
         case .breaking:
             let breakEndedAt = Date()
             // 쉬는 시간에 들어온 시점에는 집중 세션이 이미 닫혀 있다.
-            // 이어서 할 갈래를 정할 때 쓰는 카테고리는 마지막으로 고른 값에서 읽는다.
+            // 이어서 할지 물을 때 보여줄 «직전 카테고리» 는 마지막으로 고른 값에서 읽는다.
             let previousCategory = UserDefaults.standard
                 .string(forKey: Constants.AppStorageKey.selectedFocusCategory)
                 ?? Constants.defaultFocusCategory

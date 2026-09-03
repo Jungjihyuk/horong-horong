@@ -9,19 +9,19 @@ protocol AppUsageRepository {
     /// 사용자가 정한 분류 규칙. 분류기가 메모리에 올려 두고 쓴다.
     func userDefinedRules() -> [AppCategoryRuleSnapshot]
 
-    /// 설정 화면이 보여줄 전체 규칙. 갈래 → 앱 이름 순.
+    /// 설정 화면이 보여줄 전체 규칙. 카테고리 → 앱 이름 순.
     func allRules() -> [AppCategoryRuleDetail]
 
-    /// 아직 갈래를 못 정한 앱들.
+    /// 아직 카테고리를 못 정한 앱들.
     func unclassifiedApps() -> [UnclassifiedAppUsage]
 
     /// 기본 규칙 중 빠진 것을 채워 넣는다.
     func reconcileDefaultRules()
 
-    /// 규칙을 새로 만든다. 그 앱의 «미분류» 기록도 이 갈래로 다시 매긴다.
+    /// 규칙을 새로 만든다. 그 앱의 «미분류» 기록도 이 카테고리로 다시 매긴다.
     func addRule(bundleIdentifier: String, appName: String, category: String) throws
 
-    /// 규칙의 갈래를 바꾼다.
+    /// 규칙의 카테고리를 바꾼다.
     ///
     /// - Parameter includeExistingUsage: 이미 쌓인 기록도 다시 매길지.
     ///   `false` 면 앞으로 기록되는 것에만 적용된다.
@@ -39,20 +39,20 @@ protocol AppUsageRepository {
     /// 규칙을 지운다. 기본 규칙이었으면 다시 나타나지 않게 숨김 표시도 남긴다.
     func deleteRule(bundleIdentifier: String)
 
-    /// 미분류 앱에 갈래를 매긴다.
+    /// 미분류 앱에 카테고리를 매긴다.
     func classifyUnclassified(_ app: UnclassifiedAppUsage, as category: String) throws
 
-    /// 갈래 이름을 바꾼다. 기록·규칙·세션에 남은 옛 이름을 전부 옮긴다.
+    /// 카테고리 이름을 바꾼다. 기록·규칙·세션에 남은 옛 이름을 전부 옮긴다.
     ///
-    /// - Parameter movesBehaviorConditions: 그 갈래에 걸린 행동 조건도 따라 옮길지.
-    ///   `false` 면 조건은 지운다(갈래를 없애는 경우).
+    /// - Parameter movesBehaviorConditions: 그 카테고리에 걸린 행동 조건도 따라 옮길지.
+    ///   `false` 면 조건은 지운다(카테고리를 없애는 경우).
     func renameCategory(from oldName: String, to newName: String, movesBehaviorConditions: Bool) throws
 
-    /// 저장하지 않은 변경이 남아 있는가. 갈래 이름 변경 전에 확인한다 —
+    /// 저장하지 않은 변경이 남아 있는가. 카테고리 이름 변경 전에 확인한다 —
     /// 도중에 실패하면 되돌릴 범위가 뒤섞인다.
     var hasPendingChanges: Bool { get }
 
-    /// 옛 이름으로 저장된 «생산성 관리» 갈래를 지금 이름으로 옮긴다.
+    /// 옛 이름으로 저장된 «생산성 관리» 카테고리를 지금 이름으로 옮긴다.
     /// 규칙·세그먼트·일일 기록 전부를 훑으므로 규칙을 읽기 직전에 한 번만 부른다.
     func migrateLegacyProductivityManagementCategory()
 
@@ -67,7 +67,7 @@ protocol AppUsageRepository {
 
     /// 방금 머문 구간을 타임라인에 남긴다.
     ///
-    /// **바로 앞 구간이 같은 앱·같은 갈래로 끝났으면 그것을 늘린다.** 5초 폴링마다
+    /// **바로 앞 구간이 같은 앱·같은 카테고리로 끝났으면 그것을 늘린다.** 5초 폴링마다
     /// 새 구간을 만들면 타임라인이 조각으로 뒤덮인다.
     /// 반환값은 실제로 기록했는지 — 너무 짧은 구간은 버린다.
     func recordSegment(

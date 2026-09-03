@@ -19,7 +19,7 @@ protocol PomodoroReflectionRepository {
         answeredAt: Date
     ) throws
 
-    /// 분류하지 못한 앱들에 사용자가 고른 갈래를 적용한다.
+    /// 분류하지 못한 앱들에 사용자가 고른 카테고리를 적용한다.
     func saveClassification(
         sessionID: UUID,
         choices: [String: UnclassifiedAppChoice],
@@ -41,9 +41,9 @@ struct PomodoroReflectionPrompt: Equatable, Sendable {
     ///
     /// `isLinkedTask` 와 다르다 — 연결은 돼 있는데 그 할 일이 이미 지워졌을 수 있다.
     let canRecordLinkedTaskCompletion: Bool
-    /// 분류 질문의 기본값으로 쓸 갈래. 이 세션의 카테고리다.
+    /// 분류 질문의 기본값으로 쓸 카테고리. 이 세션의 카테고리다.
     let suggestedAppCategory: String
-    /// 갈래를 못 정한 앱들. 비어 있으면 분류 질문을 건너뛴다.
+    /// 카테고리를 못 정한 앱들. 비어 있으면 분류 질문을 건너뛴다.
     let unclassifiedApps: [UnclassifiedAppUsage]
     let unclassifiedRatio: Double?
     let productivityManagementAppUsages: [ProductivityManagementAppUsage]
