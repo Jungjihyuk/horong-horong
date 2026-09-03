@@ -85,6 +85,7 @@
 		22096773FE333A7C8178163E /* AttentionAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C408AFAC9BFE24B79BE605 /* AttentionAnalytics.swift */; };
 		223AAB560B033322EE6CC080 /* VaultRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DE37A644E619CBF6989C05 /* VaultRepository.swift */; };
 		2275F3124391E92F8E83E501 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 802AEE6A7D12725CB82EDA4C /* MLXHuggingFace */; };
+		229BF31B02896ED7CDFC90BC /* FocusDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 692E7A35B4362ADDAAA33A3C /* FocusDetailView.swift */; };
 		22B12387A813064082D8A8CC /* HorongHorongMigrationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = E155D586E5E0D8EF202B4F30 /* HorongHorongMigrationPlan.swift */; };
 		22FFB283444A37508A0E1074 /* TrackerStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FB56FA192461454EC6B19E /* TrackerStateStore.swift */; };
 		23BA2F33C970C84982BF0B18 /* AgentPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238D256756151E551641598F /* AgentPlanTests.swift */; };
@@ -310,6 +311,7 @@
 		821AFDAB5C395CE6ADA72BB3 /* LabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C5C32AC1BE00095B11B466 /* LabView.swift */; };
 		828BBD79C49AB60B72FBA6F3 /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C5D6091CF19B1DFE537811 /* CompanionBriefing.swift */; };
 		837115C6F0DB6DCB835BBE28 /* CompanionSettingsIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287F91122A75DA5DB4D5BB69 /* CompanionSettingsIndex.swift */; };
+		8381D12C52731446471FA0C5 /* FocusDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 692E7A35B4362ADDAAA33A3C /* FocusDetailView.swift */; };
 		83BB304CEDB82EF1245D4174 /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F19084B1B000B3326F2ACCA /* CompanionView.swift */; };
 		840ACD0D2387EA542FE00F87 /* ReferencesBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC02B20C57A3F4EF634C462 /* ReferencesBrowserView.swift */; };
 		84FFF5E7FA6F5D676A2DD427 /* StatsDetailWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */; };
@@ -724,6 +726,7 @@
 		655CFFAFA153975887808698 /* FocusPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusPage.swift; sourceTree = "<group>"; };
 		6713093A736F8C38031F282D /* BreakTransitionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakTransitionIntent.swift; sourceTree = "<group>"; };
 		68026CA84402BDF405ABBF64 /* DailyAttentionReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyAttentionReport.swift; sourceTree = "<group>"; };
+		692E7A35B4362ADDAAA33A3C /* FocusDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusDetailView.swift; sourceTree = "<group>"; };
 		693FF2A1FCAF34F9CA82F416 /* HealthSleepMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSleepMath.swift; sourceTree = "<group>"; };
 		699FB2CBB6237C8593FAD8BF /* NewsReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsReport.swift; sourceTree = "<group>"; };
 		69AE5508FCDD57E1FFDA021C /* USER_GUIDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = USER_GUIDE.md; sourceTree = "<group>"; };
@@ -1598,6 +1601,7 @@
 			isa = PBXGroup;
 			children = (
 				99FC0E833B83C6871FAD5BDA /* DailyTimelineView.swift */,
+				692E7A35B4362ADDAAA33A3C /* FocusDetailView.swift */,
 				2A3803D628E9203EC096F3A7 /* FocusNudgeTrendCard.swift */,
 				FEA2CED721CEAA91CBAFBD1A /* FocusPulseCard.swift */,
 				DEBFC3D6CA0821BD00B62D19 /* ManualSegmentEditorView.swift */,
@@ -1773,7 +1777,7 @@
 			path = Repositories;
 			sourceTree = "<group>";
 		};
-		"TEMP_BB4138C4-7845-4ADF-B8D2-DE6EED1EF088" /* Settings */ = {
+		"TEMP_4E379544-9DB2-4EDF-86EE-D5D42E890726" /* Settings */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -2059,6 +2063,7 @@
 				99AC6D0F4792618E720E6A9C /* DiaryViewModel.swift in Sources */,
 				FD8550E8307CBDE4C388E4C9 /* ExperimentPlanText.swift in Sources */,
 				56C957DE425210BE9F11FE59 /* FileSystemVaultRepository.swift in Sources */,
+				229BF31B02896ED7CDFC90BC /* FocusDetailView.swift in Sources */,
 				56D20C1D6D94C5E7C213EB17 /* FocusNudge.swift in Sources */,
 				4CCDC6FA7C3CC3B9F284EBB7 /* FocusNudgeCatalog.swift in Sources */,
 				C7058993602302CC5B316419 /* FocusNudgeEvent.swift in Sources */,
@@ -2310,6 +2315,7 @@
 				ABB45BA4307414765779ACA6 /* DiaryViewModel.swift in Sources */,
 				C51DBB5E59AB945A3CA4A057 /* ExperimentPlanText.swift in Sources */,
 				706C30A0150AE59A7880CF85 /* FileSystemVaultRepository.swift in Sources */,
+				8381D12C52731446471FA0C5 /* FocusDetailView.swift in Sources */,
 				FDE93F8771E509A5F6DBC69B /* FocusNudge.swift in Sources */,
 				A2395E230841989F3D338051 /* FocusNudgeCatalog.swift in Sources */,
 				BAF2D0F707F6DFE4BCE6A9BF /* FocusNudgeEvent.swift in Sources */,
