@@ -44,8 +44,8 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
     }
 
     @discardableResult
-    func add(content: String) throws -> QuickNote {
-        let memo = Memo(content: content, section: .quickNote)
+    func add(content: String, icon: String? = nil) throws -> QuickNote {
+        let memo = Memo(content: content, icon: icon, section: .quickNote)
         context.insert(memo)
         try context.save()
         return Self.toNote(memo)

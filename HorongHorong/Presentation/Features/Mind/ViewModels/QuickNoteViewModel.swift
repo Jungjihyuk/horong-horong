@@ -69,7 +69,7 @@ final class QuickNoteViewModel {
     func submitComposer() {
         let content = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
-        guard let created = try? repository.add(content: content) else { return }
+        guard let created = try? repository.add(content: content, icon: nil) else { return }
         composerText = ""
         limit = Self.pageSize
         reload()

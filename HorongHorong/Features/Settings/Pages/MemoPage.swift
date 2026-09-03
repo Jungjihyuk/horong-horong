@@ -1,10 +1,10 @@
 import SwiftUI
-import SwiftData
 import AppKit
 
 struct MemoPage: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Memo.updatedAt, order: .reverse) private var allMemos: [Memo]
+    /// 미리알림 가져오기·되돌리기만 저장소를 쓴다.
+    /// `@Query` 를 걷어낸 이유: 메모를 하나 고칠 때마다 설정 창이 다시 계산됐다.
+    let reminderImports: ReminderImportRepository
 
     @State private var store = HotkeyStore.shared
     @State private var autoClose: Bool = true
@@ -39,16 +39,8 @@ struct MemoPage: View {
         }
     }
 
-    private var uncheckedLinkedReminderMemos: [Memo] {
-        let selectedIDs = selectedReminderCalendarIDs
-        return allMemos.filter { memo in
-            guard memo.isLinkedToRemindersValue,
-                  memo.reminderIdentifier != nil,
-                  let calendarID = memo.reminderCalendarIdentifier else {
-                return false
-            }
-            return !selectedIDs.contains(calendarID)
-        }
+    private var uncheckedLinkedReminderMemos: [ImportedReminderMemo] {
+        reminderImports.memosLinkedToUnselectedCalendars(selectedCalendarIDs: selectedReminderCalendarIDs)
     }
 
     var body: some View {
@@ -297,22 +289,7 @@ struct MemoPage: View {
         Task { @MainActor in
             do {
                 let items = try await MemoReminderLinkService.shared.reminderItems(calendarIDs: calendarIDs)
-                let existingReminderIDs = Set(allMemos.compactMap(\.reminderIdentifier))
-                var importedCount = 0
-
-                for item in items where !item.isCompleted && !existingReminderIDs.contains(item.id) {
-                    let memo = Memo(content: memoContent(from: item), icon: MemoIcon.defaultIcon)
-                    let schedule = Self.schedule(for: item, history: allMemos)
-                    memo.startDate = schedule.start
-                    memo.deadline = schedule.deadline
-                    memo.reminderIdentifier = item.id
-                    memo.reminderCalendarIdentifier = item.calendarIdentifier
-                    memo.isLinkedToRemindersValue = true
-                    modelContext.insert(memo)
-                    importedCount += 1
-                }
-
-                try modelContext.save()
+                let importedCount = try reminderImports.importReminders(items)
                 reminderImportMessage = importedCount == 0
                     ? "새로 가져올 미완료 미리알림이 없습니다."
                     : "\(importedCount)개의 미리알림을 메모로 가져왔습니다."
@@ -325,22 +302,6 @@ struct MemoPage: View {
 
     /// 미리알림의 시각을 메모의 시작일·마감으로 나눈다.
     ///
-    /// 미리알림 앱에서 정하는 날짜/시간은 **시작 시각**으로 본다. 거기에는 "얼마나 걸리는지"가
-    /// 없으므로 마감은 지난 메모에서 미루어 붙인다. 다른 앱이 시작·마감을 둘 다 넣어둔
-    /// 미리알림이라면 그건 그대로 존중한다.
-    private static func schedule(
-        for item: ReminderListItem,
-        history: [Memo]
-    ) -> (start: Date?, deadline: Date?) {
-        if let start = item.startDate, let due = item.dueDate, due > start {
-            return (start, due)
-        }
-        guard let anchor = item.dueDate ?? item.startDate else {
-            return (nil, nil)
-        }
-        let duration = MemoDurationEstimator.estimate(title: item.title, history: history)
-        return (anchor, anchor.addingTimeInterval(duration))
-    }
 
     private func revertUncheckedReminderMemos() {
         let targets = uncheckedLinkedReminderMemos
@@ -351,13 +312,9 @@ struct MemoPage: View {
 
         isRevertingUncheckedReminders = true
         Task { @MainActor in
-            for memo in targets {
-                NotificationManager.shared.cancel(identifier: "memo.deadline.\(memo.id.uuidString)")
-                modelContext.delete(memo)
-            }
-
             do {
-                try modelContext.save()
+                // 알림 정리도 저장소가 함께 한다.
+                try reminderImports.deleteImportedMemos(ids: targets.map { $0.id })
                 reminderImportMessage = "\(targets.count)개의 메모를 호롱호롱에서 제거했습니다. 미리알림 앱의 원본은 그대로 남아 있습니다."
             } catch {
                 reminderImportMessage = error.localizedDescription
@@ -366,16 +323,6 @@ struct MemoPage: View {
         }
     }
 
-    private func memoContent(from item: ReminderListItem) -> String {
-        var lines = [item.title]
-        if let notes = item.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
-            lines.append(notes)
-        }
-        if let url = item.url?.absoluteString, !lines.contains(where: { $0.contains(url) }) {
-            lines.append(url)
-        }
-        return lines.joined(separator: "\n")
-    }
 
     private func refocusSettingsWindow() {
         DispatchQueue.main.async {

@@ -32,7 +32,7 @@ final class QuickNoteViewModelTests: XCTestCase {
         func note(id: UUID) throws -> QuickNote? { items.first { $0.id == id } }
 
         @discardableResult
-        func add(content: String) throws -> QuickNote {
+        func add(content: String, icon: String?) throws -> QuickNote {
             let made = QuickNote(id: UUID(), content: content, isPinned: false, createdAt: Date(), updatedAt: Date())
             items.append(made)
             return made

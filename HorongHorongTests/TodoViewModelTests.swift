@@ -26,12 +26,15 @@ final class TodoViewModelTests: XCTestCase {
 
         func todo(id: UUID) throws -> TodoItem? { items.first { $0.id == id } }
 
+        func linkableTodos(matching query: String) throws -> [TodoItem] { filter(items, query) }
+
         @discardableResult
         func add(title: String) throws -> TodoItem {
             let made = TodoItem(
                 id: UUID(), content: title, startDate: Date(), deadline: nil,
                 isCompleted: false, deletedAt: nil, isLinkedToReminders: false,
-                reminderCalendarIdentifier: nil
+                reminderCalendarIdentifier: nil,
+                icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date(), isArchived: false
             )
             items.append(made)
             return made
@@ -65,6 +68,16 @@ final class TodoViewModelTests: XCTestCase {
                     .with(deletedAt: .some(nil))
             }
         }
+
+        func setPinned(id: UUID, isPinned: Bool) throws {
+            replace(id) { $0.withPinned(isPinned) }
+        }
+
+        func setIcon(id: UUID, icon: String) throws {
+            replace(id) { $0.withIcon(icon) }
+        }
+
+        func archive(id: UUID) throws { items.removeAll { $0.id == id } }
 
         func setReminderList(id: UUID, listID: String) throws {
             replace(id) { $0.with(reminderCalendarIdentifier: .some(listID)) }
@@ -123,7 +136,8 @@ final class TodoViewModelTests: XCTestCase {
         TodoItem(
             id: UUID(), content: content, startDate: start, deadline: nil,
             isCompleted: completed, deletedAt: deletedAt, isLinkedToReminders: linked,
-            reminderCalendarIdentifier: nil
+            reminderCalendarIdentifier: nil,
+            icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date(), isArchived: false
         )
     }
 
@@ -414,6 +428,26 @@ final class TodoViewModelTests: XCTestCase {
 ///
 /// `Optional` 필드는 «안 바꿈» 과 «nil 로 바꿈» 을 구분해야 해서 이중 옵셔널을 받는다.
 private extension TodoItem {
+    func withPinned(_ value: Bool) -> TodoItem {
+        TodoItem(
+            id: id, content: content, startDate: startDate, deadline: deadline,
+            isCompleted: isCompleted, deletedAt: deletedAt,
+            isLinkedToReminders: isLinkedToReminders,
+            reminderCalendarIdentifier: reminderCalendarIdentifier,
+            icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt, isArchived: isArchived
+        )
+    }
+
+    func withIcon(_ value: String) -> TodoItem {
+        TodoItem(
+            id: id, content: content, startDate: startDate, deadline: deadline,
+            isCompleted: isCompleted, deletedAt: deletedAt,
+            isLinkedToReminders: isLinkedToReminders,
+            reminderCalendarIdentifier: reminderCalendarIdentifier,
+            icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt, isArchived: isArchived
+        )
+    }
+
     func with(
         content: String? = nil,
         startDate: Date?? = nil,
@@ -431,7 +465,12 @@ private extension TodoItem {
             isCompleted: isCompleted ?? self.isCompleted,
             deletedAt: deletedAt ?? self.deletedAt,
             isLinkedToReminders: isLinkedToReminders ?? self.isLinkedToReminders,
-            reminderCalendarIdentifier: reminderCalendarIdentifier ?? self.reminderCalendarIdentifier
+            reminderCalendarIdentifier: reminderCalendarIdentifier ?? self.reminderCalendarIdentifier,
+            icon: icon,
+            isPinned: isPinned,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            isArchived: isArchived
         )
     }
 }

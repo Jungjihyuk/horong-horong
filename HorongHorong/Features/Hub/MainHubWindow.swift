@@ -33,8 +33,8 @@ struct MainHubWindow: View {
                     NewsReportArchiveWindow()
                         .hubTabVisible(appState.hubTab == .news)
                 }
-                if openedTabs.contains(.stats) {
-                    StatsDetailWindow()
+                if openedTabs.contains(.stats), let dependencies {
+                    StatsDetailWindow(todoRepository: dependencies.todoRepository)
                         .hubTabVisible(appState.hubTab == .stats)
                 }
                 if openedTabs.contains(.achievement), let dependencies {

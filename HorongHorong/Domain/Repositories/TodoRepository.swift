@@ -21,6 +21,10 @@ protocol TodoRepository {
 
     func todo(id: UUID) throws -> TodoItem?
 
+    /// 무언가에 **연결할 대상**으로 고를 할 일. 완료·보관한 것도 포함한다 —
+    /// 이미 연결해 둔 것을 다시 찾을 수 있어야 하기 때문이다.
+    func linkableTodos(matching query: String) throws -> [TodoItem]
+
     /// 오늘 오전 9시로 시작일을 잡아 추가한다.
     @discardableResult
     func add(title: String) throws -> TodoItem
@@ -37,6 +41,12 @@ protocol TodoRepository {
     func place(id: UUID, into bucket: TodoBucket, now: Date) throws
 
     func setReminderList(id: UUID, listID: String) throws
+
+    /// 목록 맨 위에 붙여 둔다.
+    func setPinned(id: UUID, isPinned: Bool) throws
+    func setIcon(id: UUID, icon: String) throws
+    /// 보관한다. 목록에서는 빠지지만 지워지지는 않는다.
+    func archive(id: UUID) throws
 
     /// 미리알림 앱과 연결한다. 실패하면 던진다 — 메시지는 화면이 보여준다.
     func linkReminder(id: UUID) async throws

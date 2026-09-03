@@ -22,6 +22,7 @@ final class DependencyContainer {
     let rewardRepository: RewardRepository
     let achievementRepository: AchievementRepository
     let pomodoroTaskRepository: PomodoroTaskRepository
+    let reminderImportRepository: ReminderImportRepository
 
     init(modelContainer: ModelContainer, newsPipelineService: NewsPipelineService) {
         let context = modelContainer.mainContext
@@ -37,6 +38,7 @@ final class DependencyContainer {
         rewardRepository = SwiftDataRewardRepository(context: context)
         achievementRepository = SwiftDataAchievementRepository(context: context)
         pomodoroTaskRepository = SwiftDataPomodoroTaskRepository(context: context)
+        reminderImportRepository = SwiftDataReminderImportRepository(context: context)
     }
 }
 

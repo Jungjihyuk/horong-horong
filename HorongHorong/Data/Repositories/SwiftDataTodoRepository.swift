@@ -35,6 +35,14 @@ final class SwiftDataTodoRepository: TodoRepository {
         try find(id).map(Self.toItem)
     }
 
+    func linkableTodos(matching query: String) throws -> [TodoItem] {
+        try fetch(
+            #Predicate<Memo> { $0.sectionRaw == "todo" },
+            matching: query,
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+    }
+
     // MARK: - 쓰기
 
     @discardableResult
@@ -96,6 +104,19 @@ final class SwiftDataTodoRepository: TodoRepository {
 
     func setReminderList(id: UUID, listID: String) throws {
         try change(id, syncLinkedReminder: true) { $0.reminderCalendarIdentifier = listID }
+    }
+
+    func setPinned(id: UUID, isPinned: Bool) throws {
+        try change(id) { $0.isPinned = isPinned }
+    }
+
+    func setIcon(id: UUID, icon: String) throws {
+        try change(id) { $0.icon = icon }
+    }
+
+    func archive(id: UUID) throws {
+        // 보관해도 알림이 남으면 없는 할 일이 울린다. `touch` 안의 재예약이 그걸 취소한다.
+        try change(id) { $0.isArchivedValue = true }
     }
 
     // MARK: - 미리알림
@@ -260,7 +281,12 @@ final class SwiftDataTodoRepository: TodoRepository {
             isCompleted: memo.isCompletedValue,
             deletedAt: memo.deletedAt,
             isLinkedToReminders: memo.isLinkedToRemindersValue,
-            reminderCalendarIdentifier: memo.reminderCalendarIdentifier
+            reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
+            icon: memo.icon,
+            isPinned: memo.isPinned,
+            createdAt: memo.createdAt,
+            updatedAt: memo.updatedAt,
+            isArchived: memo.isArchivedValue
         )
     }
 }

@@ -1,90 +1,35 @@
 import SwiftUI
-import SwiftData
 
 /// 팝오버가 보여줄 할 일 묶음.
 ///
 /// 완료 목록 대신 «예정» 을 둔다 — 팝오버는 **앞으로 할 것**을 확인하는 자리이고,
 /// 끝난 일을 되짚는 것은 기록 창의 Todo 탭이 맡는다.
-private enum MemoListTab: String, CaseIterable {
+/// 팝오버 메모 탭의 두 갈래. ViewModel 도 쓰므로 파일 밖에서 보인다.
+enum MemoListTab: String, CaseIterable {
     case today = "오늘"
     case upcoming = "예정"
 }
 
 struct MemoListView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Environment(AppState.self) private var appState
-    // 이 화면은 «오늘»·«완료» 두 탭 모두 todo 만 보여준다. 거르는 일을 DB 에 시킨다.
-    // `resolvedSection` 은 계산 프로퍼티라 SQL 로 번역되지 않으므로 저장 컬럼을 쓴다.
-    @Query(
-        filter: #Predicate<Memo> { $0.sectionRaw == "todo" },
-        sort: \Memo.createdAt,
-        order: .reverse
-    )
-    private var todos: [Memo]
+
+    @State private var viewModel: MemoListViewModel
     @State private var selectedTab: MemoListTab = .today
-    @State private var editingMemo: Memo?
+    @State private var editingMemoID: UUID?
     @State private var editContent: String = ""
     @State private var showNewMemoField: Bool = false
     @State private var newMemoContent: String = ""
     @State private var newMemoIcon: String = MemoIcon.defaultIcon
     @State private var hostWindow: NSWindow?
 
-    private var todayTodos: [Memo] {
-        todos.filter { memo in
-            // 섹션은 `@Query` 술어가 이미 걸렀다.
-            !memo.isArchivedValue
-                && !memo.isRecentlyDeleted
-                && !memo.isCompletedValue
-                && TodoBucket.of(
-                    startDate: memo.startDate,
-                    deadline: memo.deadline,
-                    isCompleted: false,
-                    now: Date()
-                ) == .today
-        }
+    init(repository: TodoRepository, quickNotes: QuickNoteRepository) {
+        _viewModel = State(initialValue: MemoListViewModel(repository: repository, quickNotes: quickNotes))
     }
 
-    private var activeMemos: [Memo] {
-        sortedActiveMemos(todayTodos)
-    }
-
-    /// 오늘 이후로 잡힌 할 일. 가까운 것부터 보여준다.
-    private var upcomingMemos: [Memo] {
-        todos
-            .filter { memo in
-                // 섹션은 `@Query` 술어가 이미 걸렀다.
-                !memo.isArchivedValue
-                    && !memo.isRecentlyDeleted
-                    && !memo.isCompletedValue
-                    && TodoBucket.of(
-                        startDate: memo.startDate,
-                        deadline: memo.deadline,
-                        isCompleted: false,
-                        now: Date()
-                    ) == .upcoming
-            }
-            .sorted {
-                let left = $0.deadline ?? $0.startDate ?? .distantFuture
-                let right = $1.deadline ?? $1.startDate ?? .distantFuture
-                return left < right
-            }
-    }
-
-    private var visibleMemos: [Memo] {
-        selectedTab == .today ? activeMemos : upcomingMemos
-    }
-
-    private var hasMemoRows: Bool {
-        !activeMemos.isEmpty || !upcomingMemos.isEmpty
-    }
-
-    private func sortedActiveMemos(_ memos: [Memo]) -> [Memo] {
-        let pinned = memos.filter { $0.isPinned }
-        let recent = memos.filter { !$0.isPinned }
-        return pinned + recent
-    }
+    private var visibleMemos: [TodoItem] { viewModel.rows(for: selectedTab) }
+    private var hasMemoRows: Bool { viewModel.hasRows }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -105,6 +50,7 @@ struct MemoListView: View {
         .configureHostWindow { window in
             hostWindow = window
         }
+        .onAppear { viewModel.reload() }
     }
 
     private var memoBrowserButton: some View {
@@ -138,7 +84,7 @@ struct MemoListView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Text(tab.rawValue)
-                        Text("\(tab == .today ? activeMemos.count : upcomingMemos.count)")
+                        Text("\(viewModel.rows(for: tab).count)")
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .monospacedDigit()
                     }
@@ -197,9 +143,9 @@ struct MemoListView: View {
         }
     }
 
-    private func memoRow(_ memo: Memo) -> some View {
+    private func memoRow(_ memo: TodoItem) -> some View {
         VStack(alignment: .leading, spacing: appearanceDensity.popoverMetric(4)) {
-            if editingMemo?.id == memo.id {
+            if editingMemoID == memo.id {
                 editView(memo)
             } else {
                 displayView(memo)
@@ -208,7 +154,7 @@ struct MemoListView: View {
         .popoverCard(padding: appearanceDensity.popoverMetric(10), radius: 14)
     }
 
-    private func displayView(_ memo: Memo) -> some View {
+    private func displayView(_ memo: TodoItem) -> some View {
         HStack(alignment: .top, spacing: appearanceDensity.popoverMetric(10)) {
             memoIconButton(for: memo)
 
@@ -227,37 +173,16 @@ struct MemoListView: View {
             }
             Spacer()
             Menu {
-                Button(memo.isPinned ? "고정 해제" : "고정") {
-                    memo.isPinned.toggle()
-                    memo.updatedAt = Date()
-                    try? modelContext.save()
-                }
+                Button(memo.isPinned ? "고정 해제" : "고정") { viewModel.togglePinned(memo) }
                 Button("편집") {
                     editContent = memo.content
-                    editingMemo = memo
+                    editingMemoID = memo.id
                 }
-                Button(memo.isCompletedValue ? "완료 해제" : "완료") {
-                    memo.isCompletedValue.toggle()
-                    memo.updatedAt = Date()
-                    try? modelContext.save()
-                }
-                Button("보관") {
-                    memo.isArchivedValue = true
-                    memo.updatedAt = Date()
-                    try? modelContext.save()
-                }
+                Button(memo.isCompleted ? "완료 해제" : "완료") { viewModel.toggleCompleted(memo) }
+                Button("보관") { viewModel.archive(memo.id) }
                 Divider()
-                Button("삭제", role: .destructive) {
-                    NotificationManager.shared.cancel(identifier: "memo.deadline.\(memo.id.uuidString)")
-                    if memo.isLinkedToRemindersValue {
-                        try? MemoReminderLinkService.shared.removeReminder(for: memo)
-                        memo.isLinkedToRemindersValue = false
-                        memo.reminderIdentifier = nil
-                    }
-                    memo.deletedAt = Date()
-                    memo.updatedAt = Date()
-                    try? modelContext.save()
-                }
+                // 알림 취소와 미리알림 연동 해제는 저장소가 함께 한다.
+                Button("삭제", role: .destructive) { viewModel.delete(memo.id) }
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 14, weight: .semibold))
@@ -270,16 +195,14 @@ struct MemoListView: View {
         }
     }
 
-    private func memoIconButton(for memo: Memo) -> some View {
+    private func memoIconButton(for memo: TodoItem) -> some View {
         Menu {
             if memo.isPinned {
                 Text("고정된 메모")
             } else {
                 ForEach(MemoIcon.options, id: \.self) { icon in
                     Button {
-                        memo.icon = icon
-                        memo.updatedAt = Date()
-                        try? modelContext.save()
+                        viewModel.setIcon(memo.id, icon: icon)
                     } label: {
                         Text("\(icon) \(MemoIcon.label(for: icon))")
                     }
@@ -295,7 +218,7 @@ struct MemoListView: View {
         .help(memo.isPinned ? "고정된 메모" : "아이콘 변경")
     }
 
-    private func editView(_ memo: Memo) -> some View {
+    private func editView(_ memo: TodoItem) -> some View {
         VStack(spacing: 6) {
             TextEditor(text: $editContent)
                 .font(.system(size: appearanceDensity.popoverMetric(13)))
@@ -305,15 +228,13 @@ struct MemoListView: View {
             HStack {
                 Spacer()
                 Button("취소") {
-                    editingMemo = nil
+                    editingMemoID = nil
                 }
                 .controlSize(.small)
 
                 Button("저장") {
-                    memo.content = editContent
-                    memo.updatedAt = Date()
-                    try? modelContext.save()
-                    editingMemo = nil
+                    viewModel.updateContent(memo.id, content: editContent)
+                    editingMemoID = nil
                 }
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
@@ -343,10 +264,7 @@ struct MemoListView: View {
                         .controlSize(.small)
 
                         Button("저장") {
-                            guard !newMemoContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                            let memo = Memo(content: newMemoContent, icon: newMemoIcon, section: .quickNote)
-                            modelContext.insert(memo)
-                            try? modelContext.save()
+                            viewModel.addQuickNote(content: newMemoContent, icon: newMemoIcon)
                             newMemoContent = ""
                             newMemoIcon = MemoIcon.defaultIcon
                             showNewMemoField = false

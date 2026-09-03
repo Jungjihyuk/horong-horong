@@ -728,6 +728,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .settings(let tab):
             let view = SettingsRoot(initialSelection: tab)
                 .environment(appState)
+                .environment(\.dependencies, dependencies)
                 .modelContainer(modelContainer)
                 .frame(
                     width: SettingsTheme.windowDefaultSize.width,
@@ -744,6 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .statsDetail(let mode, let contentMode, _):
             return AnyView(
                 StatsDetailWindow(
+                    todoRepository: dependencies.todoRepository,
                     initialViewMode: mode,
                     initialContentMode: contentMode,
                     initialSelectedDate: referenceDate
@@ -1121,6 +1123,7 @@ struct HorongHorongApp: App {
         Settings {
             SettingsRoot()
                 .environment(appDelegate.appState)
+                .environment(\.dependencies, appDelegate.dependencies)
                 .modelContainer(appDelegate.modelContainer)
                 .frame(
                     minWidth: SettingsTheme.windowMinSize.width,

@@ -37,6 +37,9 @@ enum StatsContentMode {
 }
 
 struct StatsDetailWindow: View {
+    /// 집중 상세의 «할 일 연결» 시트에만 쓰인다. 여기서는 넘기기만 한다.
+    let todoRepository: TodoRepository
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appearanceDensity) private var appearanceDensity
     @AppStorage(Constants.AppStorageKey.popoverTheme)
@@ -69,11 +72,30 @@ struct StatsDetailWindow: View {
     )
     private static let loadCacheLimit = 6
 
+    /// **별도 프로퍼티로 뗀 이유**: body 안에 두면 인자가 늘었을 때
+    /// 타입 검사기가 시간 안에 끝내지 못한다("unable to type-check in reasonable time").
+    private var focusDetail: some View {
+        FocusDetailView(
+            sessions: pomodoroComparisonSessions,
+            todoRepository: todoRepository,
+            reflections: pomodoroReflections,
+            taskCompletions: pomodoroTaskCompletions,
+            viewMode: viewMode,
+            referenceDate: selectedDate,
+            onNavigate: { mode, date in
+                selectedDate = date
+                viewMode = mode
+            }
+        )
+    }
+
     init(
+        todoRepository: TodoRepository,
         initialViewMode: StatsViewMode = .daily,
         initialContentMode: StatsContentMode = .period,
         initialSelectedDate: Date? = nil
     ) {
+        self.todoRepository = todoRepository
         _viewMode = State(initialValue: initialViewMode)
         _contentMode = State(initialValue: initialContentMode)
         if let initialSelectedDate {
@@ -95,17 +117,7 @@ struct StatsDetailWindow: View {
                 ScrollView {
                     Group {
                         if contentMode == .focus {
-                            FocusDetailView(
-                                sessions: pomodoroComparisonSessions,
-                                reflections: pomodoroReflections,
-                                taskCompletions: pomodoroTaskCompletions,
-                                viewMode: viewMode,
-                                referenceDate: selectedDate,
-                                onNavigate: { mode, date in
-                                    selectedDate = date
-                                    viewMode = mode
-                                }
-                            )
+                            focusDetail
                         } else {
                             StatsChartView(
                                 records: records,
@@ -2231,6 +2243,12 @@ private struct FocusResponseBucket: Identifiable {
 
 struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
+    /// 이 화면이 할 일을 쓰는 곳은 «할 일 연결» 시트 하나뿐이다.
+    ///
+    /// **`@Query` 를 걷어냈다.** 메모를 하나 고칠 때마다 이 창(4,400줄)이 통째로 다시
+    /// 계산됐다 — 허브에서 통계 탭을 한 번이라도 열면 그 뒤로 계속 그랬다.
+    /// 이제 시트를 열 때만 읽는다. 거르기·정렬은 `linkableTodos(matching:)` 이 한다.
+    let todoRepository: TodoRepository
     let reflections: [PomodoroReflection]
     let taskCompletions: [PomodoroTaskCompletion]
     let viewMode: StatsViewMode
@@ -2238,17 +2256,7 @@ struct FocusDetailView: View {
     let onNavigate: (StatsViewMode, Date) -> Void
 
     @Environment(\.modelContext) private var modelContext
-    // 이 화면이 `linkableTodos` 를 쓰는 곳은 «할 일 연결» 시트 하나뿐이라 todo 만 있으면 된다.
-    // 완료·보관된 것도 고를 수 있어야 하므로(시트 안내 문구) 그 둘은 거르지 않는다.
-    //
-    // 정렬 키는 `updatedAt` 그대로 둔다 — 최근에 고친 할 일이 위에 오는 것이
-    // 고르는 사람에게 유용하고, 키를 바꾸면 그 순서가 달라진다.
-    @Query(
-        filter: #Predicate<Memo> { $0.sectionRaw == "todo" },
-        sort: \Memo.updatedAt,
-        order: .reverse
-    )
-    private var linkableTodos: [Memo]
+    @State private var linkableTodos: [TodoItem] = []
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
     @State private var showsScoreInfo = false
@@ -2332,12 +2340,16 @@ struct FocusDetailView: View {
         Set(taskCompletions.map(\.focusSessionID))
     }
 
-    private var taskEditorMemos: [Memo] {
+    private var taskEditorMemos: [TodoItem] {
         let query = taskEditorSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return linkableTodos }
         return linkableTodos.filter {
             $0.content.localizedCaseInsensitiveContains(query)
         }
+    }
+
+    private func reloadLinkableTodos() {
+        linkableTodos = (try? todoRepository.linkableTodos(matching: "")) ?? []
     }
 
     private var periodCalendar: Calendar {
@@ -4061,6 +4073,8 @@ struct FocusDetailView: View {
         return Button {
             taskEditorSearchText = ""
             taskLinkErrorMessage = nil
+            // 시트를 열 때만 읽는다. 창이 살아 있는 내내 들고 있을 이유가 없다.
+            reloadLinkableTodos()
             taskEditorSessionID = row.id
         } label: {
             Label(
@@ -4105,7 +4119,7 @@ struct FocusDetailView: View {
 
             if row.linkedMemoID != nil {
                 Button {
-                    updateTaskLink(for: row, memo: nil)
+                    updateTaskLink(for: row, memoID: nil)
                 } label: {
                     Label("연결 해제", systemImage: "link.badge.minus")
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -4145,14 +4159,14 @@ struct FocusDetailView: View {
     }
 
     private func taskLinkMemoButton(
-        _ memo: Memo,
+        _ memo: TodoItem,
         for row: FocusSessionRow
     ) -> some View {
         let title = PomodoroTaskCandidateBuilder.taskTitle(memo.content)
         let displayTitle = title.isEmpty ? "제목 없는 할 일" : title
         let isSelected = row.linkedMemoID == memo.id
         return Button {
-            updateTaskLink(for: row, memo: memo)
+            updateTaskLink(for: row, memoID: memo.id)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -4181,21 +4195,31 @@ struct FocusDetailView: View {
         .buttonStyle(.plain)
     }
 
-    private func taskLinkMemoMetadata(_ memo: Memo) -> String {
+    private func taskLinkMemoMetadata(_ memo: TodoItem) -> String {
         var parts = [
             memo.updatedAt.formatted(date: .abbreviated, time: .omitted),
         ]
-        if memo.isCompletedValue {
+        if memo.isCompleted {
             parts.append("완료")
         }
-        if memo.isArchivedValue {
+        if memo.isArchived {
             parts.append("보관")
         }
         return parts.joined(separator: " · ")
     }
 
-    private func updateTaskLink(for row: FocusSessionRow, memo: Memo?) {
+    /// `FocusSession.updateTaskLink` 이 `Memo` 를 요구해 여기서 다시 찾는다.
+    /// 집중 세션 쪽은 아직 `ModelContext` 를 직접 쓰는 계층이다. `[확인 필요]`
+    private func updateTaskLink(for row: FocusSessionRow, memoID: UUID?) {
         do {
+            let memo: Memo?
+            if let memoID {
+                var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == memoID })
+                descriptor.fetchLimit = 1
+                memo = try modelContext.fetch(descriptor).first
+            } else {
+                memo = nil
+            }
             try FocusSession.updateTaskLink(
                 sessionID: row.id,
                 memo: memo,

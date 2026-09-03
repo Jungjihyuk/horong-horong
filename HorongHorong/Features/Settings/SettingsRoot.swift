@@ -3,6 +3,7 @@ import HorongAIMLX
 import SwiftUI
 
 struct SettingsRoot: View {
+    @Environment(\.dependencies) private var dependencies
     @State private var selection: SettingsTab = .general
     @State private var query: String = ""
     @State private var showResetConfirm: Bool = false
@@ -142,10 +143,16 @@ struct SettingsRoot: View {
         case .news:       NewsPage()
         case .lab:      LabPage()
         case .companion:  CompanionPage()
-        case .memo:       MemoPage()
+        case .memo:
+            if let dependencies {
+                MemoPage(reminderImports: dependencies.reminderImportRepository)
+            }
         case .data:       DataPage()
         case .about:      AboutPage()
-        case .ailab:      AILabView()
+        case .ailab:
+            if let dependencies {
+                AILabView(repository: dependencies.achievementRepository)
+            }
         }
     }
 

@@ -15,7 +15,7 @@ protocol QuickNoteRepository {
     func note(id: UUID) throws -> QuickNote?
 
     @discardableResult
-    func add(content: String) throws -> QuickNote
+    func add(content: String, icon: String?) throws -> QuickNote
 
     func updateContent(id: UUID, content: String) throws
     func setPinned(id: UUID, isPinned: Bool) throws

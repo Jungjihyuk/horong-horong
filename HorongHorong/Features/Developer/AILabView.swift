@@ -1,11 +1,14 @@
 import SwiftUI
-import SwiftData
 import HorongAI
 
 /// 앱 내부에서 실제 AI 실행 기록(`RunRecord`) 및 평가 결과를 시각적으로 확인하는 AI 실험실 뷰
-public struct AILabView: View {
-    @Query private var allMemos: [Memo]
-    @Query private var allGoals: [AchievementGoalRecord]
+/// 앱 타깃 안에서만 쓰인다. `public` 이었지만 밖에서 부르는 곳이 없어 내부로 낮췄다.
+struct AILabView: View {
+    /// 입력 항목 상세 시트에서만 쓴다. `@Query` 를 걷어낸 이유는 다른 화면과 같다 —
+    /// 메모를 하나 고칠 때마다 이 창이 다시 계산됐다. 시트를 열 때만 읽는다.
+    let repository: AchievementRepository
+    @State private var allMemos: [AchievementMemoDetail] = []
+    @State private var allGoals: [AchievementGoalDetail] = []
 
     /// 실사용 실행을 run_id + task 단위로 묶은 구조
     struct LiveRunGroup: Identifiable {
@@ -107,9 +110,11 @@ public struct AILabView: View {
     private let caseColumnWidth: CGFloat = 200
     private let minCellWidth: CGFloat = 260
 
-    public init() {}
+    init(repository: AchievementRepository) {
+        self.repository = repository
+    }
 
-    public var body: some View {
+    var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
@@ -139,6 +144,12 @@ public struct AILabView: View {
                 goals: allGoals
             )
         }
+    }
+
+    /// 시트를 열 때만 읽는다. 창이 살아 있는 내내 들고 있을 이유가 없다.
+    private func reloadInputItems() {
+        allMemos = repository.memos()
+        allGoals = repository.goals()
     }
 
     // MARK: - 헤더
@@ -357,6 +368,7 @@ public struct AILabView: View {
 
                 if !group.itemIDs.isEmpty {
                     Button {
+                        reloadInputItems()
                         selectedInputItemIDs = group.itemIDs
                     } label: {
                         HStack(spacing: 4) {
@@ -389,6 +401,7 @@ public struct AILabView: View {
                             updateRating(key: ratingKey) { $0.note = n }
                         },
                         onViewInputs: { ids in
+                            reloadInputItems()
                             selectedInputItemIDs = ids
                         }
                     )
@@ -1378,8 +1391,8 @@ private struct ItemIDsWrapper: Identifiable {
 
 private struct InputItemsDetailSheet: View {
     let itemIDs: [String]
-    let memos: [Memo]
-    let goals: [AchievementGoalRecord]
+    let memos: [AchievementMemoDetail]
+    let goals: [AchievementGoalDetail]
 
     @Environment(\.dismiss) private var dismiss
 
@@ -1422,7 +1435,7 @@ private struct InputItemsDetailSheet: View {
         .frame(minWidth: 500, minHeight: 400)
     }
 
-    private func memoRow(_ memo: Memo) -> some View {
+    private func memoRow(_ memo: AchievementMemoDetail) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(memo.icon ?? "📝")
                 .font(.title3)
@@ -1434,7 +1447,7 @@ private struct InputItemsDetailSheet: View {
                     if let deadline = memo.deadline {
                         Text("마감: \(deadline.formatted(date: .numeric, time: .omitted))")
                     }
-                    if memo.isCompleted == true {
+                    if memo.isCompleted {
                         Text("완료됨").foregroundStyle(.green)
                     }
                 }
@@ -1447,7 +1460,7 @@ private struct InputItemsDetailSheet: View {
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
     }
 
-    private func goalRow(_ goal: AchievementGoalRecord) -> some View {
+    private func goalRow(_ goal: AchievementGoalDetail) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(goal.emoji)
                 .font(.title3)
