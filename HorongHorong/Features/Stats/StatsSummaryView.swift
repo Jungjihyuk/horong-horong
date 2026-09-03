@@ -1,24 +1,22 @@
 import AppKit
 import SwiftUI
-import SwiftData
 
 /*
  메뉴바 팝오버에서 오늘·이번 주의 활동 및 집중 통계를 요약해 보여준다.
 
  이 파일의 책임
  - 카테고리별 사용 시간·집중 상태·전환 횟수·최장 세션과 주간 추이를 카드와 차트로 표시한다.
- - `AppUsageSegment`·`AppUsageRecord`·`FocusSession`을 SwiftData에서 조회하고 팝오버용 합계로 집계한다.
- - 날짜 경계에서 사용 구간을 자르고, 포모도로 시간과 겹친 구간을 선택한 집중 카테고리에 귀속한다.
+ - 저장소가 집계한 카테고리별 사용 시간과 집중 상태를 팝오버에 표시한다.
  - 오늘/이번 주 범위를 전환하고 상세 통계 창을 열며, 완료된 전날의 일별 요약 확정을 요청한다.
 
  이 파일의 책임이 아닌 것
  - 앱 사용 구간과 집중 세션의 원본 기록 수집은 Tracker와 `TimerManager`가 담당한다.
+ - 날짜 경계 처리와 포모도로 시간의 집중 카테고리 귀속은 저장소가 담당한다.
  - 타임라인 버킷·집중 요약 계산은 `TimelineAnalytics`, 주의 흐름 판정은 Attention 분석 타입들이 담당한다.
- - 완료된 날짜의 `AttentionDaySummary` 생성·저장은 `AttentionDaySummaryRecorder`가 담당한다.
+ - 완료된 날짜의 일별 요약 확정은 저장소가 담당한다.
  - 전체 기간 탐색과 상세 분석 화면은 통계 상세 창이 담당한다.
 
- 현재는 화면 표시 외에도 SwiftData 조회와 팝오버 전용 집계를 직접 수행한다. MVVM + Repository로
- 이전할 때는 조회와 집계를 함께 ViewModel 밖으로 옮겨 View에 `modelContext`가 남지 않게 한다.
+ 조회와 집계는 `StatsSummaryViewModel` 뒤의 저장소에서 수행한다.
  */
 
 struct CategoryUsage: Identifiable {
@@ -39,12 +37,6 @@ struct CategoryUsage: Identifiable {
     }
 }
 
-private struct SummaryPomodoroFocusWindow {
-    let start: Date
-    let end: Date
-    let category: String
-}
-
 private enum StatsSummaryScope: String, CaseIterable, Identifiable {
     case today = "오늘"
     case week = "이번 주"
@@ -53,29 +45,25 @@ private enum StatsSummaryScope: String, CaseIterable, Identifiable {
 }
 
 struct StatsSummaryView: View {
-    @Environment(\.modelContext) private var modelContext
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "E"
+        return formatter
+    }()
+
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
     @Environment(AppState.self) private var appState
-    @State private var categoryUsages: [CategoryUsage] = []
-    @State private var weeklyDailyTotals: [(date: Date, durationSeconds: Int)] = []
-    @State private var todayFocusSummary = DailyFocusSummary(
-        totalSeconds: 0,
-        switches: 0,
-        longestFocusSeconds: 0,
-        topCategory: nil,
-        overallScore: 0
-    )
-    @State private var hasTodaySegmentDetails = false
-    @State private var focusNudge: FocusNudgeSnapshot?
-    @State private var weekLongestSessionSeconds: Int = 0
+    @State private var viewModel: StatsSummaryViewModel
     @State private var hoveredScope: StatsSummaryScope?
     @State private var scope: StatsSummaryScope = .today
     @State private var hostWindow: NSWindow?
     private let referenceDate: Date
 
-    init(referenceDate: Date = Date()) {
+    init(repository: StatsSummaryRepository, referenceDate: Date = Date()) {
         self.referenceDate = referenceDate
+        _viewModel = State(initialValue: StatsSummaryViewModel(repository: repository))
     }
 
     var body: some View {
@@ -304,7 +292,7 @@ struct StatsSummaryView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text(focusNudge?.nudge.badge ?? "오늘의 관찰")
+                    Text(focusNudge?.badge ?? "오늘의 관찰")
                         .font(.system(size: 12.5, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.accent)
                     if focusNudge == nil {
@@ -313,7 +301,7 @@ struct StatsSummaryView: View {
                             .foregroundStyle(PopoverChrome.inkSecondary)
                     }
                 }
-                Text(focusNudge?.nudge.message ?? horongStatusMessage)
+                Text(focusNudge?.message ?? horongStatusMessage)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -381,7 +369,7 @@ struct StatsSummaryView: View {
         }
     }
 
-    private func weekBar(_ day: (date: Date, durationSeconds: Int)) -> some View {
+    private func weekBar(_ day: StatsDayDuration) -> some View {
         let maxDuration = max(weekChartMaxDuration, 1)
         let height = day.durationSeconds > 0 ? max(8, CGFloat(day.durationSeconds) / CGFloat(maxDuration) * 78) : 8
         let calendar = Calendar.current
@@ -489,6 +477,23 @@ struct StatsSummaryView: View {
         }
     }
 
+    private var categoryUsages: [CategoryUsage] {
+        viewModel.categoryDurations.map {
+            CategoryUsage(
+                category: $0.category,
+                emoji: Constants.categoryEmoji(for: $0.category),
+                color: Constants.categoryColor(for: $0.category),
+                durationSeconds: $0.durationSeconds
+            )
+        }
+    }
+
+    private var weeklyDailyTotals: [StatsDayDuration] { viewModel.dailyDurations }
+    private var todayFocusSummary: DailyFocusSummary { viewModel.todayFocusSummary }
+    private var hasTodaySegmentDetails: Bool { viewModel.hasTodaySegmentDetails }
+    private var focusNudge: StatsSummaryNudge? { viewModel.nudge }
+    private var weekLongestSessionSeconds: Int { viewModel.weekLongestSessionSeconds }
+
     private var topCategoryUsages: [CategoryUsage] {
         Array(categoryUsages.prefix(3))
     }
@@ -551,297 +556,10 @@ struct StatsSummaryView: View {
     private func loadData() {
         switch scope {
         case .today:
-            loadTodayData()
+            viewModel.loadToday(referenceDate: referenceDate)
         case .week:
-            loadWeekData()
+            viewModel.loadWeek(referenceDate: referenceDate)
         }
-    }
-
-    private func loadTodayData() {
-        let today = Calendar.current.startOfDay(for: referenceDate)
-        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else {
-            return
-        }
-        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today) {
-            _ = AttentionDaySummaryRecorder.finalizeCompletedDays(
-                from: yesterday,
-                to: today,
-                modelContext: modelContext
-            )
-        }
-
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.startTime < tomorrow && $0.endTime > today }
-        )
-
-        let segments = (try? modelContext.fetch(segmentDescriptor)) ?? []
-        let visibleSegments = segments.filter {
-            !Constants.hiddenLegacyCategories.contains($0.category)
-        }
-        hasTodaySegmentDetails = !visibleSegments.isEmpty
-        focusNudge = FocusNudgeSnapshot.make(day: today, modelContext: modelContext)
-        let timerSessions = loadTimerSessions(from: today, to: tomorrow)
-        let buckets = TimelineAnalytics.buckets(
-            for: today,
-            segments: visibleSegments,
-            timerSessions: timerSessions
-        )
-        todayFocusSummary = TimelineAnalytics.summary(
-            for: today,
-            segments: visibleSegments,
-            buckets: buckets,
-            timerSessions: timerSessions
-        )
-        if !visibleSegments.isEmpty {
-            let focusWindows = loadFocusWindows(from: today, to: tomorrow)
-            var categoryDurations: [String: Int] = [:]
-            for segment in visibleSegments {
-                for slice in attributedSlices(for: segment, from: today, to: tomorrow, focusWindows: focusWindows) {
-                    categoryDurations[slice.category, default: 0] += slice.durationSeconds
-                }
-            }
-            categoryUsages = makeCategoryUsages(from: categoryDurations)
-            return
-        }
-
-        let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-            predicate: #Predicate { $0.date == today }
-        )
-
-        guard let records = try? modelContext.fetch(recordDescriptor) else { return }
-
-        var categoryDurations: [String: Int] = [:]
-        for record in records {
-            guard !Constants.hiddenLegacyCategories.contains(record.category) else { continue }
-            guard !record.bundleIdentifier.hasPrefix(Constants.focusSessionBundlePrefix) else { continue }
-            categoryDurations[record.category, default: 0] += record.durationSeconds
-        }
-
-        categoryUsages = makeCategoryUsages(from: categoryDurations)
-        if todayFocusSummary.totalSeconds == 0 {
-            todayFocusSummary = DailyFocusSummary(
-                totalSeconds: categoryDurations.values.reduce(0, +),
-                switches: 0,
-                longestFocusSeconds: categoryDurations.values.max() ?? 0,
-                topCategory: categoryDurations.max { $0.value < $1.value }?.key,
-                overallScore: categoryDurations.isEmpty ? 0 : 0.35
-            )
-        }
-    }
-
-    private func loadWeekData() {
-        let calendar = Calendar.current
-        let weekStart = Constants.mondayWeekStart(for: referenceDate, calendar: calendar)
-        guard let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
-            return
-        }
-
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.startTime < weekEnd && $0.endTime > weekStart }
-        )
-        let segments = ((try? modelContext.fetch(segmentDescriptor)) ?? []).filter {
-            !Constants.hiddenLegacyCategories.contains($0.category)
-        }
-
-        var categoryDurations: [String: Int] = [:]
-        var dailyDurations: [Date: Int] = [:]
-
-        if !segments.isEmpty {
-            let focusWindows = loadFocusWindows(from: weekStart, to: weekEnd)
-            for segment in segments {
-                for slice in attributedSlices(for: segment, from: weekStart, to: weekEnd, focusWindows: focusWindows) {
-                    categoryDurations[slice.category, default: 0] += slice.durationSeconds
-                }
-                addDailySegmentDuration(segment, from: weekStart, to: weekEnd, to: &dailyDurations)
-            }
-            weekLongestSessionSeconds = longestSessionSeconds(from: segments, start: weekStart, end: weekEnd)
-        } else {
-            let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-                predicate: #Predicate { $0.date >= weekStart && $0.date < weekEnd }
-            )
-            for record in (try? modelContext.fetch(recordDescriptor)) ?? [] {
-                guard !Constants.hiddenLegacyCategories.contains(record.category) else { continue }
-                guard !record.bundleIdentifier.hasPrefix(Constants.focusSessionBundlePrefix) else { continue }
-                categoryDurations[record.category, default: 0] += record.durationSeconds
-                dailyDurations[calendar.startOfDay(for: record.date), default: 0] += record.durationSeconds
-            }
-            weekLongestSessionSeconds = dailyDurations.values.max() ?? 0
-        }
-
-        categoryUsages = makeCategoryUsages(from: categoryDurations)
-        weeklyDailyTotals = (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart) else { return nil }
-            return (date: day, durationSeconds: dailyDurations[calendar.startOfDay(for: day)] ?? 0)
-        }
-    }
-
-    private func longestSessionSeconds(from segments: [AppUsageSegment], start: Date, end: Date) -> Int {
-        let clipped: [(start: Date, end: Date, category: String)] = segments.compactMap { segment in
-            let clippedStart = max(segment.startTime, start)
-            let clippedEnd = min(segment.endTime, end)
-            guard clippedEnd > clippedStart else { return nil }
-            return (clippedStart, clippedEnd, segment.category)
-        }
-        .sorted { $0.start < $1.start }
-
-        let maxGap: TimeInterval = 120
-        var longest: TimeInterval = 0
-        var runStart: Date?
-        var runEnd: Date?
-        var runCategory: String?
-
-        for segment in clipped {
-            if let category = runCategory,
-               category == segment.category,
-               let currentEnd = runEnd,
-               segment.start.timeIntervalSince(currentEnd) <= maxGap {
-                runEnd = segment.end
-            } else {
-                if let start = runStart, let end = runEnd {
-                    longest = max(longest, end.timeIntervalSince(start))
-                }
-                runStart = segment.start
-                runEnd = segment.end
-                runCategory = segment.category
-            }
-        }
-
-        if let start = runStart, let end = runEnd {
-            longest = max(longest, end.timeIntervalSince(start))
-        }
-
-        return Int(longest)
-    }
-
-    private func addDailySegmentDuration(
-        _ segment: AppUsageSegment,
-        from start: Date,
-        to end: Date,
-        to dailyDurations: inout [Date: Int]
-    ) {
-        let calendar = Calendar.current
-        var cursor = max(segment.startTime, start)
-        let segmentEnd = min(segment.endTime, end)
-        while cursor < segmentEnd {
-            let day = calendar.startOfDay(for: cursor)
-            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-            let chunkEnd = min(segmentEnd, nextDay)
-            let duration = Int(chunkEnd.timeIntervalSince(cursor))
-            if duration > 0 {
-                dailyDurations[day, default: 0] += duration
-            }
-            cursor = chunkEnd
-        }
-    }
-
-    private func clippedDuration(_ segment: AppUsageSegment, from start: Date, to end: Date) -> Int {
-        let clippedStart = max(segment.startTime, start)
-        let clippedEnd = min(segment.endTime, end)
-        guard clippedEnd > clippedStart else { return 0 }
-        return Int(clippedEnd.timeIntervalSince(clippedStart))
-    }
-
-    private func loadFocusWindows(from start: Date, to end: Date) -> [SummaryPomodoroFocusWindow] {
-        loadTimerSessions(from: start, to: end).compactMap { session in
-            guard isCompletedPomodoro(session),
-                  let focusEnd = focusEnd(for: session) else {
-                return nil
-            }
-
-            let windowStart = max(session.startedAt, start)
-            let windowEnd = min(focusEnd, end)
-            guard windowEnd > windowStart else { return nil }
-
-            return SummaryPomodoroFocusWindow(
-                start: windowStart,
-                end: windowEnd,
-                category: session.category ?? Constants.defaultFocusCategory
-            )
-        }
-    }
-
-    private func loadTimerSessions(from start: Date, to end: Date) -> [FocusSession] {
-        let calendar = Calendar.current
-        let bufferStart = calendar.date(byAdding: .hour, value: -4, to: start) ?? start
-        let descriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { $0.startedAt >= bufferStart && $0.startedAt < end },
-            sortBy: [SortDescriptor(\.startedAt)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
-
-    private func attributedSlices(
-        for segment: AppUsageSegment,
-        from start: Date,
-        to end: Date,
-        focusWindows: [SummaryPomodoroFocusWindow]
-    ) -> [(category: String, durationSeconds: Int)] {
-        let segmentStart = max(segment.startTime, start)
-        let segmentEnd = min(segment.endTime, end)
-        guard segmentEnd > segmentStart else { return [] }
-
-        var remaining: [(start: Date, end: Date)] = [(segmentStart, segmentEnd)]
-        var slices: [(category: String, durationSeconds: Int)] = []
-
-        for window in focusWindows {
-            let overlapStart = max(segmentStart, window.start)
-            let overlapEnd = min(segmentEnd, window.end)
-            guard overlapEnd > overlapStart else { continue }
-
-            let duration = Int(overlapEnd.timeIntervalSince(overlapStart))
-            if duration > 0 {
-                slices.append((window.category, duration))
-            }
-
-            remaining = remaining.flatMap { interval -> [(start: Date, end: Date)] in
-                let clippedStart = max(interval.start, overlapStart)
-                let clippedEnd = min(interval.end, overlapEnd)
-                guard clippedEnd > clippedStart else { return [interval] }
-
-                var parts: [(start: Date, end: Date)] = []
-                if interval.start < clippedStart {
-                    parts.append((interval.start, clippedStart))
-                }
-                if clippedEnd < interval.end {
-                    parts.append((clippedEnd, interval.end))
-                }
-                return parts
-            }
-        }
-
-        for interval in remaining {
-            let duration = Int(interval.end.timeIntervalSince(interval.start))
-            guard duration > 0 else { continue }
-            slices.append((segment.category, duration))
-        }
-
-        return slices
-    }
-
-    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
-        guard let endedAt = session.endedAt else { return false }
-        let expectedSeconds = max(0, session.focusMinutes) * 60
-        guard expectedSeconds > 0 else { return false }
-        return session.completed || endedAt.timeIntervalSince(session.startedAt) >= TimeInterval(expectedSeconds)
-    }
-
-    private func focusEnd(for session: FocusSession) -> Date? {
-        guard let endedAt = session.endedAt else { return nil }
-        let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
-        return min(endedAt, expectedEnd)
-    }
-
-    private func makeCategoryUsages(from durations: [String: Int]) -> [CategoryUsage] {
-        durations
-            .sorted { $0.value > $1.value }
-            .map { key, value in
-                CategoryUsage(
-                    category: key,
-                    emoji: Constants.categoryEmoji(for: key),
-                    color: Constants.categoryColor(for: key),
-                    durationSeconds: value
-                )
-            }
     }
 
     private func shortDuration(_ seconds: Int) -> String {
@@ -870,9 +588,6 @@ struct StatsSummaryView: View {
     }
 
     private func weekdayLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "E"
-        return formatter.string(from: date)
+        Self.weekdayFormatter.string(from: date)
     }
 }

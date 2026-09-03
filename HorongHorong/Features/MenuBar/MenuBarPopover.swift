@@ -357,7 +357,12 @@ struct MenuBarPopover: View {
                 )
             }
         case .stats:
-            StatsSummaryView(referenceDate: referenceDate)
+            if let dependencies {
+                StatsSummaryView(
+                    repository: dependencies.statsSummaryRepository,
+                    referenceDate: referenceDate
+                )
+            }
         case .news:
             if let dependencies {
                 NewsView(
