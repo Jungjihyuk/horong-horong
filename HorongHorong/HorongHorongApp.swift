@@ -765,6 +765,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .statsDetail(let mode, let contentMode, _):
             return AnyView(
                 StatsDetailWindow(
+                    repository: dependencies.statsDetailRepository,
                     todoRepository: dependencies.todoRepository,
                     reflectionRepository: dependencies.reflectionRepository,
                     statsRepository: dependencies.statsRecordRepository,

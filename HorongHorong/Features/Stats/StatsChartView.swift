@@ -172,6 +172,25 @@ enum PomodoroSessionObservationBuilder {
         to end: Date,
         segments: [AppUsageSegment]
     ) -> PomodoroSessionObservation {
+        observation(from: start, to: end, segments: segments.map {
+            StatsAppUsageSegment(
+                id: $0.id,
+                appName: $0.appName,
+                bundleIdentifier: $0.bundleIdentifier,
+                category: $0.category,
+                startTime: $0.startTime,
+                endTime: $0.endTime,
+                isManual: $0.isManual,
+                isUserModified: $0.isUserModified
+            )
+        })
+    }
+
+    static func observation(
+        from start: Date,
+        to end: Date,
+        segments: [StatsAppUsageSegment]
+    ) -> PomodoroSessionObservation {
         let sessionSeconds = max(0, Int(end.timeIntervalSince(start)))
         guard end > start else { return emptyObservation(sessionSeconds: sessionSeconds) }
 
@@ -1851,32 +1870,32 @@ enum StatsViewMode: String, CaseIterable, Identifiable {
 // MARK: - Main view
 
 struct StatsChartView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let records: [AppUsageRecord]
+    let statsDetailRepository: StatsDetailRepository
+    let records: [StatsAppUsageRecord]
     let viewMode: StatsViewMode
     let referenceDate: Date
     /// 선택한 날짜의 세그먼트 (일간 뷰 타임라인용). 다른 뷰모드에서는 비어 있음.
-    var dailySegments: [AppUsageSegment] = []
+    var dailySegments: [StatsAppUsageSegment] = []
     /// 주간 뷰에서 해당 주 7일 세그먼트. 다른 뷰모드에서는 비어 있음.
-    var weekSegments: [AppUsageSegment] = []
+    var weekSegments: [StatsAppUsageSegment] = []
     /// 현재 선택 기간 전체 세그먼트. 통계 집계의 우선 원천으로 사용한다.
-    var periodSegments: [AppUsageSegment] = []
+    var periodSegments: [StatsAppUsageSegment] = []
     /// 선택 기간에 시작한 전체 포모도로와 회고 세션의 전체 구간 행동 기록.
     var pomodoroComparisonSessions: [PomodoroSessionBreakdown] = []
     /// 현재 기간과 겹치는 타이머 세션. 전환 카운트 예외 판단에 쓰인다.
-    var timerSessions: [FocusSession] = []
+    var timerSessions: [StatsFocusSession] = []
     /// 일간 뷰에서 포모도로 세션에 연결해 보여줄 사용자 회고.
-    var pomodoroReflections: [PomodoroReflection] = []
+    var pomodoroReflections: [StatsPomodoroReflection] = []
     /// 연결한 할 일을 실제로 완료했다고 명시한 세션 근거.
-    var pomodoroTaskCompletions: [PomodoroTaskCompletion] = []
+    var pomodoroTaskCompletions: [StatsPomodoroTaskCompletion] = []
     /// 휴식 후 다음 흐름 선택 기록. 주의 전환 실패 판정에서 계획된 전환/외부 업무를 제외하는 데 사용한다.
-    var breakTransitionIntents: [BreakTransitionIntent] = []
+    var breakTransitionIntents: [StatsBreakTransitionIntent] = []
     /// 주간/월간 탭에서 원본 세그먼트 재집계를 피하기 위해 부모가 넘겨주는 집계 캐시.
     var aggregateSnapshot: StatsAggregateSnapshot? = nil
     /// 하루가 지난 뒤 확정 저장된 대표 주의 상태. 과거 날짜의 상태 점에 우선 사용한다.
-    var attentionDaySummaries: [AttentionDaySummary] = []
+    var attentionDaySummaries: [StatsAttentionDaySummary] = []
     /// 오늘 일간 탭 상단에 보여줄 넛지와 근거 지표. 과거 날짜에서는 nil.
     var focusNudge: FocusNudgeSnapshot? = nil
     /// 선택한 과거 날짜까지의 최근 7일과 그 직전 7일을 비교한 몰입 흐름.
@@ -1886,8 +1905,8 @@ struct StatsChartView: View {
     @State private var dailyAngleSelection: Double? = nil
     @State private var expandedObservationSessionIDs: Set<UUID> = []
     @State private var expandedReflectionSessionIDs: Set<UUID> = []
-    @State private var editingPomodoroReflection: PomodoroReflection?
-    @State private var reflectionPendingDeletion: PomodoroReflection?
+    @State private var editingPomodoroReflection: StatsPomodoroReflection?
+    @State private var reflectionPendingDeletion: StatsPomodoroReflection?
     @State private var categoryStore = CategoryStore.shared
     /// 부모(StatsDetailWindow)가 미리 계산해서 넘겨주는 휴가 일자 집합. 차트가 직접 store 를 관찰하지 않도록 함.
     var vacationDays: Set<Date> = []
@@ -1904,15 +1923,15 @@ struct StatsChartView: View {
         category: "StatsChart"
     )
 
-    private var activeRecords: [AppUsageRecord] {
+    private var activeRecords: [StatsAppUsageRecord] {
         records.filter { !Constants.hiddenLegacyCategories.contains($0.category) }
     }
 
-    private var activeSegments: [AppUsageSegment] {
+    private var activeSegments: [StatsAppUsageSegment] {
         periodSegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) }
     }
 
-    private var activeUsageRecords: [AppUsageRecord] {
+    private var activeUsageRecords: [StatsAppUsageRecord] {
         activeRecords.filter {
             !$0.bundleIdentifier.hasPrefix(Constants.focusSessionBundlePrefix)
         }
@@ -1945,7 +1964,7 @@ struct StatsChartView: View {
             let session = pomodoroTimeSummaries.first { $0.id == reflection.focusSessionID }
             let hasCompletion = pomodoroTaskCompletionBySessionID[reflection.focusSessionID] != nil
             let hasAvailableLinkedMemo = session?.linkedMemoID.map {
-                PomodoroTaskCompletionRecorder.hasLinkedMemo(id: $0, modelContext: modelContext)
+                statsDetailRepository.hasLinkedMemo(id: $0)
             } ?? false
             let usesLinkedTaskCompletionOption = hasCompletion
                 || (hasAvailableLinkedMemo && reflection.progressResult != .completedAsPlanned)
@@ -2045,8 +2064,8 @@ struct StatsChartView: View {
     private var dailyBuckets: [TimelineBucket] {
         TimelineAnalytics.buckets(
             for: referenceDate,
-            segments: dailySegments,
-            timerSessions: timerSessions
+            segments: dailySegments.map(\.asRecord),
+            timerSessions: timerSessions.map(\.asRecord)
         )
     }
 
@@ -2063,9 +2082,9 @@ struct StatsChartView: View {
         } else {
             summary = TimelineAnalytics.summary(
                 for: referenceDate,
-                segments: dailySegments,
+                segments: dailySegments.map(\.asRecord),
                 buckets: dailyBuckets,
-                timerSessions: timerSessions
+                timerSessions: timerSessions.map(\.asRecord)
             )
         }
 
@@ -2081,10 +2100,10 @@ struct StatsChartView: View {
     private var dailyAttentionSummary: AttentionSummary {
         AttentionAnalytics.summary(
             for: referenceDate,
-            segments: dailySegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) },
-            timerSessions: timerSessions,
+            segments: dailySegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) }.map(\.asRecord),
+            timerSessions: timerSessions.map(\.asRecord),
             thresholds: AttentionThresholdStore.shared.thresholds,
-            breakTransitions: breakTransitionIntents
+            breakTransitions: breakTransitionIntents.map(\.asRecord)
         )
     }
 
@@ -2092,8 +2111,8 @@ struct StatsChartView: View {
         DailyAttentionReportBuilder.build(
             day: referenceDate,
             buckets: dailyBuckets,
-            segments: dailySegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) },
-            timerSessions: timerSessions,
+            segments: dailySegments.filter { !Constants.hiddenLegacyCategories.contains($0.category) }.map(\.asRecord),
+            timerSessions: timerSessions.map(\.asRecord),
             attentionSummary: dailyAttentionSummary,
             thresholds: AttentionThresholdStore.shared.thresholds,
             isFinalized: isReferenceDateFinalized
@@ -2185,8 +2204,8 @@ struct StatsChartView: View {
 
         let analytics = TimelineAnalytics.buckets(
             for: referenceDate,
-            segments: dailySegments,
-            timerSessions: timerSessions,
+            segments: dailySegments.map(\.asRecord),
+            timerSessions: timerSessions.map(\.asRecord),
             bucketSeconds: bucketSec
         )
         let byStart = Dictionary(uniqueKeysWithValues: analytics.map { ($0.startTime, $0) })
@@ -2427,7 +2446,7 @@ struct StatsChartView: View {
         }
         return WeeklyAttentionTrendReportBuilder.build(
             weekStart: weekStart,
-            summaries: attentionDaySummaries
+            summaries: attentionDaySummaries.map(\.asRecord)
         )
     }
 
@@ -2635,7 +2654,7 @@ struct StatsChartView: View {
     private var monthlyAttentionPatternReport: MonthlyAttentionPatternReport {
         return MonthlyAttentionPatternReportBuilder.build(
             monthStart: referenceMonthStart,
-            summaries: attentionDaySummaries
+            summaries: attentionDaySummaries.map(\.asRecord)
         )
     }
 
@@ -2697,13 +2716,13 @@ struct StatsChartView: View {
 
     // MARK: - Pomodoro
 
-    private var pomodoroReflectionBySessionID: [UUID: PomodoroReflection] {
+    private var pomodoroReflectionBySessionID: [UUID: StatsPomodoroReflection] {
         pomodoroReflections.reduce(into: [:]) { result, reflection in
             result[reflection.focusSessionID] = reflection
         }
     }
 
-    private var pomodoroTaskCompletionBySessionID: [UUID: PomodoroTaskCompletion] {
+    private var pomodoroTaskCompletionBySessionID: [UUID: StatsPomodoroTaskCompletion] {
         pomodoroTaskCompletions.reduce(into: [:]) { result, completion in
             result[completion.focusSessionID] = completion
         }
@@ -2718,94 +2737,27 @@ struct StatsChartView: View {
     }
 
     private func updatePomodoroReflection(
-        _ reflection: PomodoroReflection,
+        _ reflection: StatsPomodoroReflection,
         focusExperience: PomodoroFocusExperience,
         progressResult: PomodoroProgressResult,
         incompleteReason: PomodoroIncompleteReason?
     ) throws {
-        let previousProgressResult = reflection.progressResult
-        let session = timerSessions.first { $0.id == reflection.focusSessionID }
-        let existingCompletion = try PomodoroTaskCompletionRecorder.completion(
+        try statsDetailRepository.updatePomodoroReflection(
             focusSessionID: reflection.focusSessionID,
-            modelContext: modelContext
-        )
-
-        reflection.updateAnswers(
             focusExperience: focusExperience,
             progressResult: progressResult,
             incompleteReason: incompleteReason
         )
-
-        do {
-            var didCreateCompletion = false
-            let affectedMemo: Memo?
-            if let session,
-               PomodoroTaskCompletionRecorder.shouldRecordCompletionOnEdit(
-                   previousResult: previousProgressResult,
-                   newResult: progressResult,
-                   hasExistingCompletion: existingCompletion != nil
-               ) {
-                affectedMemo = try PomodoroTaskCompletionRecorder.recordCompletion(
-                    for: session,
-                    completedAt: Date(),
-                    modelContext: modelContext
-                )
-                let recordedCompletion = try PomodoroTaskCompletionRecorder.completion(
-                    focusSessionID: reflection.focusSessionID,
-                    modelContext: modelContext
-                )
-                didCreateCompletion = existingCompletion == nil && recordedCompletion != nil
-            } else if existingCompletion != nil,
-                      progressResult != .completedAsPlanned {
-                affectedMemo = try PomodoroTaskCompletionRecorder.removeCompletion(
-                    focusSessionID: reflection.focusSessionID,
-                    modelContext: modelContext
-                )
-            } else {
-                affectedMemo = nil
-            }
-
-            try modelContext.save()
-            editingPomodoroReflection = nil
-            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
-            if didCreateCompletion, let linkedMemoID = session?.linkedMemoID {
-                NotificationCenter.default.post(
-                    name: .pomodoroLinkedTaskDidComplete,
-                    object: linkedMemoID
-                )
-            }
-            if let affectedMemo {
-                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
-                    to: affectedMemo,
-                    modelContext: modelContext
-                )
-            }
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+        editingPomodoroReflection = nil
     }
 
-    private func deletePomodoroReflection(_ reflection: PomodoroReflection) {
+    private func deletePomodoroReflection(_ reflection: StatsPomodoroReflection) {
         let sessionID = reflection.focusSessionID
         reflectionPendingDeletion = nil
         do {
-            let affectedMemo = try PomodoroTaskCompletionRecorder.removeCompletion(
-                focusSessionID: sessionID,
-                modelContext: modelContext
-            )
-            modelContext.delete(reflection)
-            try modelContext.save()
+            try statsDetailRepository.deletePomodoroReflection(focusSessionID: sessionID)
             expandedReflectionSessionIDs.remove(sessionID)
-            NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
-            if let affectedMemo {
-                PomodoroTaskCompletionRecorder.applyPostSaveEffects(
-                    to: affectedMemo,
-                    modelContext: modelContext
-                )
-            }
         } catch {
-            modelContext.rollback()
             ToastPanel.shared.show(
                 icon: "⚠️",
                 title: "회고 기록을 삭제하지 못했어요",
@@ -2927,7 +2879,7 @@ struct StatsChartView: View {
         }
     }
 
-    private func clippedDuration(_ segment: AppUsageSegment) -> Int {
+    private func clippedDuration(_ segment: StatsAppUsageSegment) -> Int {
         guard let bounds = periodBounds else { return 0 }
         let start = max(segment.startTime, bounds.start)
         let end = min(segment.endTime, bounds.end)
@@ -2935,7 +2887,7 @@ struct StatsChartView: View {
         return Int(end.timeIntervalSince(start))
     }
 
-    private func clippedDuration(_ segment: AppUsageSegment, in day: Date) -> Int {
+    private func clippedDuration(_ segment: StatsAppUsageSegment, in day: Date) -> Int {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: day)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return 0 }
@@ -2945,19 +2897,19 @@ struct StatsChartView: View {
         return Int(end.timeIntervalSince(start))
     }
 
-    private func attributedSlices(for segment: AppUsageSegment) -> [AttributedUsageSlice] {
+    private func attributedSlices(for segment: StatsAppUsageSegment) -> [AttributedUsageSlice] {
         guard let bounds = periodBounds else { return [] }
         return attributedSlices(for: segment, from: bounds.start, to: bounds.end)
     }
 
-    private func attributedSlices(for segment: AppUsageSegment, in day: Date) -> [AttributedUsageSlice] {
+    private func attributedSlices(for segment: StatsAppUsageSegment, in day: Date) -> [AttributedUsageSlice] {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: day)
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
         return attributedSlices(for: segment, from: dayStart, to: dayEnd)
     }
 
-    private func attributedSlices(for segment: AppUsageSegment, from start: Date, to end: Date) -> [AttributedUsageSlice] {
+    private func attributedSlices(for segment: StatsAppUsageSegment, from start: Date, to end: Date) -> [AttributedUsageSlice] {
         let segmentStart = max(segment.startTime, start)
         let segmentEnd = min(segment.endTime, end)
         guard segmentEnd > segmentStart else { return [] }
@@ -3139,7 +3091,7 @@ struct StatsChartView: View {
     }
 
     private func addRecordDetails(
-        _ records: [AppUsageRecord],
+        _ records: [StatsAppUsageRecord],
         to details: inout [String: (appName: String, category: String, duration: Int)]
     ) {
         for record in records {
@@ -3153,7 +3105,7 @@ struct StatsChartView: View {
     }
 
     private func addRecordBreakdown(
-        _ records: [AppUsageRecord],
+        _ records: [StatsAppUsageRecord],
         to groups: inout [String: [String: Int]]
     ) {
         for record in records {
@@ -3233,8 +3185,8 @@ struct StatsChartView: View {
     private var pomodoroTaskSummaries: [PomodoroTaskSummary] {
         PomodoroTaskSummaryBuilder.summaries(
             sessions: pomodoroTimeSummaries,
-            reflections: pomodoroReflections,
-            completions: pomodoroTaskCompletions
+            reflections: pomodoroReflections.map(\.asRecord),
+            completions: pomodoroTaskCompletions.map(\.asRecord)
         )
     }
 
@@ -3274,14 +3226,14 @@ struct StatsChartView: View {
         Self.logger.notice("StatsChart data build mode=\(viewMode.rawValue, privacy: .public) name=\(name, privacy: .public) source=\(source, privacy: .public) rows=\(rows) elapsed=\(elapsedMs)ms")
     }
 
-    private func isCompletedPomodoro(_ session: FocusSession) -> Bool {
+    private func isCompletedPomodoro(_ session: StatsFocusSession) -> Bool {
         guard let endedAt = session.endedAt else { return false }
         let expectedSeconds = max(0, session.focusMinutes) * 60
         guard expectedSeconds > 0 else { return false }
         return session.completed || endedAt.timeIntervalSince(session.startedAt) >= TimeInterval(expectedSeconds)
     }
 
-    private func focusEnd(for session: FocusSession) -> Date? {
+    private func focusEnd(for session: StatsFocusSession) -> Date? {
         guard let endedAt = session.endedAt else { return nil }
         let expectedEnd = session.startedAt.addingTimeInterval(TimeInterval(max(0, session.focusMinutes) * 60))
         return min(endedAt, expectedEnd)
@@ -3506,5 +3458,102 @@ struct HeatmapCalendar: View {
             cells.append(Cell(id: 1000 + cells.count, date: nil))
         }
         return cells
+    }
+}
+
+private extension StatsAppUsageSegment {
+    var asRecord: AppUsageSegment {
+        let seg = AppUsageSegment(
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            category: category,
+            startTime: startTime,
+            endTime: endTime,
+            isManual: isManual,
+            isUserModified: isUserModified
+        )
+        seg.id = id
+        return seg
+    }
+}
+
+private extension StatsFocusSession {
+    var asRecord: FocusSession {
+        let s = FocusSession(
+            focusMinutes: focusMinutes,
+            breakMinutes: 0,
+            category: category,
+            linkedMemoID: linkedMemoID,
+            taskTitleSnapshot: taskTitleSnapshot
+        )
+        s.id = id
+        s.startedAt = startedAt
+        s.endedAt = endedAt
+        s.completed = completed
+        s.markerColorKey = markerColorKey
+        return s
+    }
+}
+
+private extension StatsBreakTransitionIntent {
+    var asRecord: BreakTransitionIntent {
+        let b = BreakTransitionIntent(
+            breakEndedAt: breakEndedAt,
+            decision: decision,
+            previousCategory: previousCategory,
+            nextCategory: nextCategory,
+            decidedAt: decidedAt
+        )
+        b.id = id
+        return b
+    }
+}
+
+private extension StatsAttentionDaySummary {
+    var asRecord: AttentionDaySummary {
+        let a = AttentionDaySummary(
+            day: day,
+            dayKey: dayKey,
+            flowState: flowState,
+            overallScore: overallScore,
+            selectiveEventCount: selectiveEventCount,
+            sustainedEventCount: sustainedEventCount,
+            returnEventCount: returnEventCount,
+            representativeReason: representativeReason
+        )
+        a.id = id
+        return a
+    }
+}
+
+private extension StatsPomodoroReflection {
+    var asRecord: PomodoroReflection {
+        let r = PomodoroReflection(
+            focusSessionID: focusSessionID,
+            focusExperience: focusExperience ?? .deeplyFocused,
+            progressResult: progressResult ?? .meaningfulProgress,
+            incompleteReason: incompleteReason,
+            answeredAt: answeredAt
+        )
+        r.id = id
+        r.focusExperienceRawValue = focusExperienceRawValue
+        r.progressResultRawValue = progressResultRawValue
+        r.incompleteReasonRawValue = incompleteReasonRawValue
+        return r
+    }
+}
+
+private extension StatsPomodoroTaskCompletion {
+    var asRecord: PomodoroTaskCompletion {
+        let c = PomodoroTaskCompletion(
+            focusSessionID: focusSessionID,
+            linkedMemoID: linkedMemoID,
+            taskTitleSnapshot: taskTitleSnapshot,
+            completedAt: completedAt,
+            didMarkMemoCompleted: false,
+            memoWasPinnedBeforeCompletion: false
+        )
+        c.id = id
+        return c
     }
 }

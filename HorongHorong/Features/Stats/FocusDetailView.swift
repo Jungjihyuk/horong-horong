@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import OSLog
 import Charts
 
@@ -1242,19 +1241,18 @@ struct FocusDetailView: View {
     let sessions: [PomodoroSessionBreakdown]
     let reflectionRepository: PomodoroReflectionRepository
     let statsRepository: StatsRecordRepository
+    let statsDetailRepository: StatsDetailRepository
     /// 이 화면이 할 일을 쓰는 곳은 «할 일 연결» 시트 하나뿐이다.
     ///
     /// **`@Query` 를 걷어냈다.** 메모를 하나 고칠 때마다 이 창(4,400줄)이 통째로 다시
     /// 계산됐다 — 허브에서 통계 탭을 한 번이라도 열면 그 뒤로 계속 그랬다.
     /// 이제 시트를 열 때만 읽는다. 거르기·정렬은 `linkableTodos(matching:)` 이 한다.
     let todoRepository: TodoRepository
-    let reflections: [PomodoroReflection]
-    let taskCompletions: [PomodoroTaskCompletion]
+    let reflections: [StatsPomodoroReflection]
+    let taskCompletions: [StatsPomodoroTaskCompletion]
     let viewMode: StatsViewMode
     let referenceDate: Date
     let onNavigate: (StatsViewMode, Date) -> Void
-
-    @Environment(\.modelContext) private var modelContext
     @State private var linkableTodos: [TodoItem] = []
     @State private var xMetric: FocusSessionMetric = .continuousFocus
     @State private var selectedSessionID: UUID?
@@ -3000,12 +2998,7 @@ struct FocusDetailView: View {
 
     private func setMarkerColor(_ key: String?, for row: FocusSessionRow) {
         colorPickerSessionID = nil
-        let id = row.id
-        var descriptor = FetchDescriptor<FocusSession>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let session = try? modelContext.fetch(descriptor).first else { return }
-        session.markerColorKey = key
-        try? modelContext.save()
+        try? statsDetailRepository.updateSessionMarkerColor(sessionID: row.id, colorKey: key)
         NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
     }
 
@@ -3204,23 +3197,9 @@ struct FocusDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// `FocusSession.updateTaskLink` 이 `Memo` 를 요구해 여기서 다시 찾는다.
-    /// 집중 세션 쪽은 아직 `ModelContext` 를 직접 쓰는 계층이다. `[확인 필요]`
     private func updateTaskLink(for row: FocusSessionRow, memoID: UUID?) {
         do {
-            let memo: Memo?
-            if let memoID {
-                var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == memoID })
-                descriptor.fetchLimit = 1
-                memo = try modelContext.fetch(descriptor).first
-            } else {
-                memo = nil
-            }
-            try FocusSession.updateTaskLink(
-                sessionID: row.id,
-                memo: memo,
-                modelContext: modelContext
-            )
+            try statsDetailRepository.updateTaskLink(sessionID: row.id, memoID: memoID)
             taskEditorSessionID = nil
             taskLinkErrorMessage = nil
             NotificationCenter.default.post(

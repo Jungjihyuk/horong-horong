@@ -35,6 +35,7 @@ struct MainHubWindow: View {
                 }
                 if openedTabs.contains(.stats), let dependencies {
                     StatsDetailWindow(
+                        repository: dependencies.statsDetailRepository,
                         todoRepository: dependencies.todoRepository,
                         reflectionRepository: dependencies.reflectionRepository,
                         statsRepository: dependencies.statsRecordRepository,

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PomodoroReflectionEditSheet: View {
-    let reflection: PomodoroReflection
+    let reflection: StatsPomodoroReflection
     let linkedTaskTitle: String?
     let usesLinkedTaskCompletionOption: Bool
     let recordsLinkedTaskCompletion: Bool
@@ -19,7 +19,7 @@ struct PomodoroReflectionEditSheet: View {
     @State private var isSaving = false
 
     init(
-        reflection: PomodoroReflection,
+        reflection: StatsPomodoroReflection,
         linkedTaskTitle: String?,
         usesLinkedTaskCompletionOption: Bool,
         recordsLinkedTaskCompletion: Bool,

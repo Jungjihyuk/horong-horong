@@ -27,6 +27,7 @@ final class DependencyContainer {
     let statsRecordRepository: StatsRecordRepository
     let statsRecordEditorRepository: StatsRecordEditorRepository
     let statsSummaryRepository: StatsSummaryRepository
+    let statsDetailRepository: StatsDetailRepository
     let appUsageRepository: AppUsageRepository
     let companionRepository: CompanionRepository
 
@@ -49,6 +50,7 @@ final class DependencyContainer {
         statsRecordRepository = SwiftDataStatsRecordRepository(context: context)
         statsRecordEditorRepository = SwiftDataStatsRecordEditorRepository(context: context)
         statsSummaryRepository = SwiftDataStatsSummaryRepository(context: context)
+        statsDetailRepository = SwiftDataStatsDetailRepository(context: context)
         appUsageRepository = SwiftDataAppUsageRepository(context: context)
         companionRepository = SwiftDataCompanionRepository(context: context)
     }
