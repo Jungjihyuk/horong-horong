@@ -136,7 +136,13 @@ struct SettingsRoot: View {
         case .appearance: AppearancePage()
         case .timer:      TimerPage()
         case .hotkey:     HotkeyPage()
-        case .category:   CategoryMappingPage()
+        case .category:
+            if let dependencies {
+                CategoryMappingPage(
+                    repository: dependencies.appUsageRepository,
+                    statsRepository: dependencies.statsRecordRepository
+                )
+            }
         case .stats:
             if let dependencies {
                 StatsPage(repository: dependencies.statsRecordRepository)

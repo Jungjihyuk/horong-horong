@@ -1,13 +1,12 @@
 import AppKit
 import SwiftUI
-import SwiftData
 import UniformTypeIdentifiers
 
 struct CategoryMappingPage: View {
     private static let excludedRuleGroup = "__tracking_excluded__"
 
     private struct PendingRuleCategoryChange {
-        let rule: AppCategoryRule
+        let rule: AppCategoryRuleDetail
         let displayName: String
         let oldCategory: String
         let newCategory: String
@@ -15,13 +14,15 @@ struct CategoryMappingPage: View {
         let closesAddRuleForm: Bool
     }
 
-    @Environment(\.modelContext) private var modelContext
+    let repository: AppUsageRepository
+    /// 집중 점수 표본과 세션 색 되돌리기. 분류 설정이 통계 쪽 값을 함께 쓴다.
+    let statsRepository: StatsRecordRepository
     @AppStorage(Constants.AppStorageKey.unmappedAppHandling)
     private var unmappedAppHandlingRaw: String =
         Constants.defaultUnmappedAppHandling.rawValue
 
-    @State private var categoryRules: [AppCategoryRule] = []
-    @State private var websiteRules: [AppCategoryRule] = []
+    @State private var categoryRules: [AppCategoryRuleDetail] = []
+    @State private var websiteRules: [AppCategoryRuleDetail] = []
     @State private var unclassifiedApps: [UnclassifiedAppUsage] = []
     @State private var focusSamples: [FocusScoreSample] = []
     @State private var categoryStore = CategoryStore.shared
@@ -397,7 +398,7 @@ struct CategoryMappingPage: View {
         return category
     }
 
-    private func appRuleRow(_ rule: AppCategoryRule) -> some View {
+    private func appRuleRow(_ rule: AppCategoryRuleDetail) -> some View {
         SettingsRow(
             rule.appName,
             subtitle: rule.bundleIdentifier
@@ -584,7 +585,7 @@ struct CategoryMappingPage: View {
         }
     }
 
-    private func websiteRuleRow(_ rule: AppCategoryRule) -> some View {
+    private func websiteRuleRow(_ rule: AppCategoryRuleDetail) -> some View {
         let domain = WebsiteCategoryRule.domain(from: rule.bundleIdentifier) ?? rule.appName
         let aliases = Constants.websiteAliases(for: domain)
         let subtitle = aliases.isEmpty
@@ -850,7 +851,7 @@ struct CategoryMappingPage: View {
             + generatedKeys.sorted().compactMap(CategoryColorPalette.option)
     }
 
-    private var groupedCategoryRules: [(category: String, rules: [AppCategoryRule])] {
+    private var groupedCategoryRules: [(category: String, rules: [AppCategoryRuleDetail])] {
         let grouped = Dictionary(grouping: categoryRules) {
             if $0.isExcluded {
                 return Self.excludedRuleGroup
@@ -941,11 +942,7 @@ struct CategoryMappingPage: View {
 
     private func resetSessionMarkerColors(for category: String) {
         do {
-            let resetCount = try FocusSession.resetMarkerColors(
-                for: category,
-                in: modelContext
-            )
-            if resetCount > 0 {
+            if statsRepository.resetSessionMarkerColors(for: category) > 0 {
                 NotificationCenter.default.post(name: .pomodoroSessionDidChange, object: nil)
             }
         } catch {
@@ -1008,66 +1005,11 @@ struct CategoryMappingPage: View {
         to newName: String,
         movesBehaviorConditions: Bool = true
     ) throws {
-        guard oldName != newName else { return }
-        guard !modelContext.hasChanges else {
-            throw CategoryBehaviorConditionSetValidationError.pendingChanges
-        }
-
-        let oldCategory = oldName
-        let newCategory = newName
-
-        let segmentDescriptor = FetchDescriptor<AppUsageSegment>(
-            predicate: #Predicate { $0.category == oldCategory }
+        try repository.renameCategory(
+            from: oldName,
+            to: newName,
+            movesBehaviorConditions: movesBehaviorConditions
         )
-        do {
-            for segment in try modelContext.fetch(segmentDescriptor) {
-                segment.category = newCategory
-            }
-
-            let recordDescriptor = FetchDescriptor<AppUsageRecord>(
-                predicate: #Predicate { $0.category == oldCategory }
-            )
-            for record in try modelContext.fetch(recordDescriptor) {
-                record.category = newCategory
-            }
-
-            let focusDescriptor = FetchDescriptor<FocusSession>()
-            for session in try modelContext.fetch(focusDescriptor)
-                where session.category == oldCategory {
-                session.category = newCategory
-            }
-
-            let ruleDescriptor = FetchDescriptor<AppCategoryRule>(
-                predicate: #Predicate { $0.category == oldCategory }
-            )
-            for rule in try modelContext.fetch(ruleDescriptor) {
-                rule.category = newCategory
-                if let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier),
-                   defaultRule.category == newCategory {
-                    rule.isUserDefined = false
-                } else {
-                    rule.isUserDefined = true
-                }
-            }
-
-            if movesBehaviorConditions {
-                try CategoryBehaviorConditionSetStore.prepareCategoryRename(
-                    from: oldCategory,
-                    to: newCategory,
-                    modelContext: modelContext
-                )
-            } else {
-                try CategoryBehaviorConditionSetStore.prepareCategoryDeletion(
-                    category: oldCategory,
-                    modelContext: modelContext
-                )
-            }
-
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
     }
 
     private func applyCategoryMigrationSideEffects(
@@ -1087,7 +1029,7 @@ struct CategoryMappingPage: View {
         }
 
         pairStore.renameCategory(from: oldCategory, to: newCategory)
-        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: modelContext))
+        CategoryManager.shared.loadUserRules(from: repository)
     }
 
     private func resetCategorySelections() {
@@ -1125,13 +1067,8 @@ struct CategoryMappingPage: View {
 
     private func loadRules() {
         insertMissingDefaultRules()
-        CategoryManager.shared.loadUserRules(from: SwiftDataAppUsageRepository(context: modelContext))
-        var descriptor = FetchDescriptor<AppCategoryRule>()
-        descriptor.sortBy = [
-            SortDescriptor(\AppCategoryRule.category),
-            SortDescriptor(\AppCategoryRule.appName),
-        ]
-        let allRules = (try? modelContext.fetch(descriptor)) ?? []
+        CategoryManager.shared.loadUserRules(from: repository)
+        let allRules = repository.allRules()
         categoryRules = allRules.filter {
             WebsiteCategoryRule.domain(from: $0.bundleIdentifier) == nil
         }
@@ -1141,14 +1078,12 @@ struct CategoryMappingPage: View {
         .sorted {
             $0.appName.localizedCaseInsensitiveCompare($1.appName) == .orderedAscending
         }
-        unclassifiedApps = AppClassificationService.allUnclassifiedApps(
-            modelContext: modelContext
-        )
-        focusSamples = FocusScoreHistory.samples(modelContext: modelContext)
+        unclassifiedApps = repository.unclassifiedApps()
+        focusSamples = statsRepository.focusScoreSamples()
     }
 
     private func insertMissingDefaultRules() {
-        try? DefaultAppCategoryRuleStore.reconcile(in: modelContext)
+        repository.reconcileDefaultRules()
     }
 
     @discardableResult
@@ -1167,27 +1102,10 @@ struct CategoryMappingPage: View {
             return false
         }
 
-        Constants.restoreDefaultCategoryRule(bundleId)
-        let rule = AppCategoryRule(
-            bundleIdentifier: bundleId,
-            appName: appName,
-            category: newCategory,
-            isUserDefined: true
-        )
-        modelContext.insert(rule)
         do {
-            try AppClassificationService.reclassifyUnclassifiedUsage(
-                bundleIdentifier: bundleId,
-                category: newCategory,
-                modelContext: modelContext
-            )
-            CategoryManager.shared.setUserRule(
-                bundleIdentifier: bundleId,
-                category: newCategory
-            )
+            try repository.addRule(bundleIdentifier: bundleId, appName: appName, category: newCategory)
             return true
         } catch {
-            modelContext.rollback()
             categoryMutationError = error.localizedDescription
             return false
         }
@@ -1196,39 +1114,28 @@ struct CategoryMappingPage: View {
     private func addWebsiteRule() {
         guard let domain = normalizedNewWebsiteDomain else { return }
         let bundleIdentifier = WebsiteCategoryRule.bundleIdentifier(for: domain)
-        let rule = AppCategoryRule(
+        try? repository.addRule(
             bundleIdentifier: bundleIdentifier,
             appName: domain,
-            category: newWebsiteCategory,
-            isUserDefined: true
-        )
-        modelContext.insert(rule)
-        try? modelContext.save()
-        CategoryManager.shared.setUserRule(
-            bundleIdentifier: bundleIdentifier,
             category: newWebsiteCategory
         )
     }
 
-    private func updateRule(_ rule: AppCategoryRule, category: String) {
+    private func updateRule(_ rule: AppCategoryRuleDetail, category: String) {
         requestRuleCategoryChange(rule, category: category)
     }
 
-    private func excludeRule(_ rule: AppCategoryRule) {
-        try? AppClassificationService.exclude(
-            bundleIdentifier: rule.bundleIdentifier,
-            appName: rule.appName,
-            modelContext: modelContext
-        )
+    private func excludeRule(_ rule: AppCategoryRuleDetail) {
+        try? repository.excludeRule(bundleIdentifier: rule.bundleIdentifier, appName: rule.appName)
         loadRules()
     }
 
-    private func canResetRule(_ rule: AppCategoryRule) -> Bool {
+    private func canResetRule(_ rule: AppCategoryRuleDetail) -> Bool {
         guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) else { return false }
         return rule.isUserDefined || rule.category != defaultRule.category
     }
 
-    private func resetRuleToDefault(_ rule: AppCategoryRule) {
+    private func resetRuleToDefault(_ rule: AppCategoryRuleDetail) {
         guard let defaultRule = Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) else { return }
         requestRuleCategoryChange(
             rule,
@@ -1245,7 +1152,7 @@ struct CategoryMappingPage: View {
     }
 
     private func requestRuleCategoryChange(
-        _ rule: AppCategoryRule,
+        _ rule: AppCategoryRuleDetail,
         category: String,
         replacementAppName: String? = nil,
         closesAddRuleForm: Bool = false
@@ -1269,75 +1176,32 @@ struct CategoryMappingPage: View {
 
     private func applyPendingRuleCategoryChange(includeExistingUsage: Bool) {
         guard let change = pendingRuleCategoryChange else { return }
-        let rule = change.rule
-        let bundleIdentifier = rule.bundleIdentifier
-
-        if let replacementAppName = change.replacementAppName {
-            rule.appName = replacementAppName
-        }
-        rule.category = change.newCategory
-        rule.isExcluded = false
-        Constants.restoreDefaultCategoryRule(bundleIdentifier)
-        if let defaultRule = Constants.defaultCategoryRule(for: bundleIdentifier),
-           defaultRule.category == change.newCategory {
-            rule.isUserDefined = false
-        } else {
-            rule.isUserDefined = true
-        }
-
         do {
-            if includeExistingUsage {
-                try AppClassificationService.reclassifyExistingUsage(
-                    ruleBundleIdentifier: bundleIdentifier,
-                    category: change.newCategory,
-                    modelContext: modelContext
-                )
-            } else {
-                try modelContext.save()
-            }
-
-            if rule.isUserDefined {
-                CategoryManager.shared.setUserRule(
-                    bundleIdentifier: bundleIdentifier,
-                    category: change.newCategory
-                )
-            } else {
-                CategoryManager.shared.removeUserRule(
-                    bundleIdentifier: bundleIdentifier
-                )
-            }
+            try repository.changeRuleCategory(
+                bundleIdentifier: change.rule.bundleIdentifier,
+                to: change.newCategory,
+                replacementAppName: change.replacementAppName,
+                includeExistingUsage: includeExistingUsage
+            )
             if change.closesAddRuleForm {
                 showAddRule = false
                 resetRuleForm()
             }
-            pendingRuleCategoryChange = nil
-            loadRules()
         } catch {
-            modelContext.rollback()
-            pendingRuleCategoryChange = nil
             categoryMutationError = error.localizedDescription
-            loadRules()
         }
+        pendingRuleCategoryChange = nil
+        loadRules()
     }
 
-    private func deleteRule(_ rule: AppCategoryRule) {
-        if Constants.defaultCategoryRule(for: rule.bundleIdentifier, includingHidden: true) != nil {
-            Constants.hideDefaultCategoryRule(rule.bundleIdentifier)
-        }
-        modelContext.delete(rule)
-        try? modelContext.save()
-        CategoryManager.shared.removeUserRule(bundleIdentifier: rule.bundleIdentifier)
+    private func deleteRule(_ rule: AppCategoryRuleDetail) {
+        repository.deleteRule(bundleIdentifier: rule.bundleIdentifier)
         loadRules()
     }
 
     private func classify(_ app: UnclassifiedAppUsage, as category: String) {
         do {
-            try AppClassificationService.classify(
-                bundleIdentifier: app.bundleIdentifier,
-                appName: app.appName,
-                category: category,
-                modelContext: modelContext
-            )
+            try repository.classifyUnclassified(app, as: category)
             loadRules()
         } catch {
             categoryMutationError = error.localizedDescription
@@ -1346,11 +1210,7 @@ struct CategoryMappingPage: View {
 
     private func exclude(_ app: UnclassifiedAppUsage) {
         do {
-            try AppClassificationService.exclude(
-                bundleIdentifier: app.bundleIdentifier,
-                appName: app.appName,
-                modelContext: modelContext
-            )
+            try repository.excludeRule(bundleIdentifier: app.bundleIdentifier, appName: app.appName)
             loadRules()
         } catch {
             categoryMutationError = error.localizedDescription

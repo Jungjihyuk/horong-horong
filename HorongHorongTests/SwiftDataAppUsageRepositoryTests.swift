@@ -230,3 +230,103 @@ final class SwiftDataAppUsageRepositoryTests: XCTestCase {
         XCTAssertEqual(try segments(context).first?.category, current)
     }
 }
+
+/// 분류 규칙 쓰기. 설정 화면이 직접 하던 일들이다.
+@MainActor
+final class SwiftDataAppCategoryRuleTests: XCTestCase {
+    private func makeContainer() throws -> ModelContainer {
+        let schema = HorongHorongModelSchema.make()
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    func testAddRuleIsUserDefined() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAppUsageRepository(context: container.mainContext)
+
+        try repository.addRule(bundleIdentifier: "com.a", appName: "앱", category: "개발")
+
+        let rule = try XCTUnwrap(repository.allRules().first)
+        XCTAssertEqual(rule.category, "개발")
+        XCTAssertTrue(rule.isUserDefined)
+    }
+
+    /// **기본값과 같은 갈래로 되돌리면 «사용자가 손댄 규칙» 표시가 풀린다.**
+    /// 안 풀면 설정 화면에서 「기본으로 되돌리기」를 눌러도 계속 손댄 것으로 보인다.
+    func testChangingBackToDefaultClearsUserDefinedFlag() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = SwiftDataAppUsageRepository(context: context)
+        let defaultRule = try XCTUnwrap(Constants.defaultCategoryRules.first)
+
+        try repository.addRule(
+            bundleIdentifier: defaultRule.bundleId,
+            appName: defaultRule.appName,
+            category: "개발"
+        )
+        XCTAssertEqual(repository.allRules().first?.isUserDefined, true)
+
+        try repository.changeRuleCategory(
+            bundleIdentifier: defaultRule.bundleId,
+            to: defaultRule.category,
+            replacementAppName: nil,
+            includeExistingUsage: false
+        )
+
+        XCTAssertEqual(repository.allRules().first?.isUserDefined, false)
+    }
+
+    func testChangeRuleCategoryRenamesApp() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAppUsageRepository(context: container.mainContext)
+        try repository.addRule(bundleIdentifier: "com.a", appName: "옛 이름", category: "개발")
+
+        try repository.changeRuleCategory(
+            bundleIdentifier: "com.a",
+            to: "학습",
+            replacementAppName: "새 이름",
+            includeExistingUsage: false
+        )
+
+        let rule = try XCTUnwrap(repository.allRules().first)
+        XCTAssertEqual(rule.appName, "새 이름")
+        XCTAssertEqual(rule.category, "학습")
+    }
+
+    func testDeleteRuleRemovesIt() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAppUsageRepository(context: container.mainContext)
+        try repository.addRule(bundleIdentifier: "com.a", appName: "앱", category: "개발")
+
+        repository.deleteRule(bundleIdentifier: "com.a")
+
+        XCTAssertTrue(repository.allRules().isEmpty)
+    }
+
+    /// 갈래 이름을 바꾸면 규칙·구간·기록에 남은 옛 이름이 전부 따라온다.
+    func testRenameCategoryCascades() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = SwiftDataAppUsageRepository(context: context)
+        try repository.addRule(bundleIdentifier: "com.a", appName: "앱", category: "옛갈래")
+        context.insert(AppUsageSegment(
+            appName: "앱", bundleIdentifier: "com.a", category: "옛갈래",
+            startTime: Date(timeIntervalSince1970: 0), endTime: Date(timeIntervalSince1970: 60)
+        ))
+        try context.save()
+
+        try repository.renameCategory(from: "옛갈래", to: "새갈래", movesBehaviorConditions: true)
+
+        XCTAssertEqual(repository.allRules().first?.category, "새갈래")
+        let segments = try context.fetch(FetchDescriptor<AppUsageSegment>())
+        XCTAssertEqual(segments.first?.category, "새갈래")
+    }
+
+    /// 같은 이름으로 바꾸라고 하면 아무 일도 안 한다.
+    func testRenamingToSameNameIsNoOp() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataAppUsageRepository(context: container.mainContext)
+
+        XCTAssertNoThrow(try repository.renameCategory(from: "개발", to: "개발", movesBehaviorConditions: true))
+    }
+}

@@ -72,6 +72,15 @@ final class SwiftDataStatsRecordRepository: StatsRecordRepository {
         )
     }
 
+    func focusScoreSamples() -> [FocusScoreSample] {
+        FocusScoreHistory.samples(modelContext: context)
+    }
+
+    @discardableResult
+    func resetSessionMarkerColors(for category: String) -> Int {
+        (try? FocusSession.resetMarkerColors(for: category, in: context)) ?? 0
+    }
+
     private func count<T>(_ descriptor: FetchDescriptor<T>) -> Int {
         (try? context.fetchCount(descriptor)) ?? 0
     }

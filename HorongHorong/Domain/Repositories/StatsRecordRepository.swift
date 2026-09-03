@@ -16,4 +16,12 @@ protocol StatsRecordRepository {
 
     /// 개인화 학습에 쓸 표본을 분석한다. 설정 화면이 「얼마나 모였나」를 보여준다.
     func focusPersonalization(requiredFeedbackCount: Int) -> FocusPersonalizationAnalysis?
+
+    /// 집중 점수 표본. 분류 설정 화면이 갈래별 분포를 보여줄 때 쓴다.
+    func focusScoreSamples() -> [FocusScoreSample]
+
+    /// 그 갈래로 칠해 둔 세션 색을 기본값으로 되돌린다. 갈래를 지울 때 부른다.
+    /// 반환값은 되돌린 개수 — 0 이면 알릴 것이 없다.
+    @discardableResult
+    func resetSessionMarkerColors(for category: String) -> Int
 }

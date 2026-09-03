@@ -35,6 +35,169 @@ final class SwiftDataAppUsageRepository: AppUsageRepository {
         }
     }
 
+    func allRules() -> [AppCategoryRuleDetail] {
+        var descriptor = FetchDescriptor<AppCategoryRule>()
+        descriptor.sortBy = [
+            SortDescriptor(\AppCategoryRule.category),
+            SortDescriptor(\AppCategoryRule.appName),
+        ]
+        return fetch(descriptor).map {
+            AppCategoryRuleDetail(
+                bundleIdentifier: $0.bundleIdentifier,
+                appName: $0.appName,
+                category: $0.category,
+                isUserDefined: $0.isUserDefined,
+                isExcluded: $0.isExcluded
+            )
+        }
+    }
+
+    func unclassifiedApps() -> [UnclassifiedAppUsage] {
+        AppClassificationService.allUnclassifiedApps(modelContext: context)
+    }
+
+    func reconcileDefaultRules() {
+        try? DefaultAppCategoryRuleStore.reconcile(in: context)
+    }
+
+    var hasPendingChanges: Bool { context.hasChanges }
+
+    // MARK: - 규칙 쓰기
+
+    func addRule(bundleIdentifier: String, appName: String, category: String) throws {
+        // 기본 규칙을 숨겨 뒀다면 되살린다 — 사용자가 다시 등록하는 것이므로.
+        Constants.restoreDefaultCategoryRule(bundleIdentifier)
+        context.insert(AppCategoryRule(
+            bundleIdentifier: bundleIdentifier,
+            appName: appName,
+            category: category,
+            isUserDefined: true
+        ))
+        do {
+            try AppClassificationService.reclassifyUnclassifiedUsage(
+                bundleIdentifier: bundleIdentifier,
+                category: category,
+                modelContext: context
+            )
+            CategoryManager.shared.setUserRule(bundleIdentifier: bundleIdentifier, category: category)
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    func changeRuleCategory(
+        bundleIdentifier: String,
+        to category: String,
+        replacementAppName: String?,
+        includeExistingUsage: Bool
+    ) throws {
+        guard let rule = findRule(bundleIdentifier) else { return }
+
+        if let replacementAppName { rule.appName = replacementAppName }
+        rule.category = category
+        rule.isExcluded = false
+        Constants.restoreDefaultCategoryRule(bundleIdentifier)
+        // 기본값과 같아졌으면 «사용자가 손댄 규칙» 표시를 뗀다.
+        rule.isUserDefined = Constants.defaultCategoryRule(for: bundleIdentifier)?.category != category
+
+        do {
+            if includeExistingUsage {
+                try AppClassificationService.reclassifyExistingUsage(
+                    ruleBundleIdentifier: bundleIdentifier,
+                    category: category,
+                    modelContext: context
+                )
+            } else {
+                try context.save()
+            }
+
+            if rule.isUserDefined {
+                CategoryManager.shared.setUserRule(bundleIdentifier: bundleIdentifier, category: category)
+            } else {
+                CategoryManager.shared.removeUserRule(bundleIdentifier: bundleIdentifier)
+            }
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    func excludeRule(bundleIdentifier: String, appName: String) throws {
+        try AppClassificationService.exclude(
+            bundleIdentifier: bundleIdentifier,
+            appName: appName,
+            modelContext: context
+        )
+    }
+
+    func deleteRule(bundleIdentifier: String) {
+        guard let rule = findRule(bundleIdentifier) else { return }
+        // 기본 규칙이면 지워도 다음 실행에 되살아난다. 숨김 표시를 남겨 막는다.
+        if Constants.defaultCategoryRule(for: bundleIdentifier, includingHidden: true) != nil {
+            Constants.hideDefaultCategoryRule(bundleIdentifier)
+        }
+        context.delete(rule)
+        try? context.save()
+        CategoryManager.shared.removeUserRule(bundleIdentifier: bundleIdentifier)
+    }
+
+    func classifyUnclassified(_ app: UnclassifiedAppUsage, as category: String) throws {
+        try AppClassificationService.classify(
+            bundleIdentifier: app.bundleIdentifier,
+            appName: app.appName,
+            category: category,
+            modelContext: context
+        )
+    }
+
+    func renameCategory(from oldName: String, to newName: String, movesBehaviorConditions: Bool) throws {
+        guard oldName != newName else { return }
+        // 저장 안 된 변경이 섞여 있으면 실패했을 때 되돌릴 범위가 뒤섞인다.
+        guard !context.hasChanges else {
+            throw CategoryBehaviorConditionSetValidationError.pendingChanges
+        }
+
+        do {
+            for segment in fetch(FetchDescriptor<AppUsageSegment>(predicate: #Predicate { $0.category == oldName })) {
+                segment.category = newName
+            }
+            for record in fetch(FetchDescriptor<AppUsageRecord>(predicate: #Predicate { $0.category == oldName })) {
+                record.category = newName
+            }
+            // `FocusSession.category` 는 옵셔널이라 술어로 거르지 않고 전량에서 고른다.
+            for session in fetch(FetchDescriptor<FocusSession>()) where session.category == oldName {
+                session.category = newName
+            }
+            for rule in fetch(FetchDescriptor<AppCategoryRule>(predicate: #Predicate { $0.category == oldName })) {
+                rule.category = newName
+                rule.isUserDefined = Constants.defaultCategoryRule(for: rule.bundleIdentifier)?.category != newName
+            }
+
+            if movesBehaviorConditions {
+                try CategoryBehaviorConditionSetStore.prepareCategoryRename(
+                    from: oldName, to: newName, modelContext: context
+                )
+            } else {
+                try CategoryBehaviorConditionSetStore.prepareCategoryDeletion(
+                    category: oldName, modelContext: context
+                )
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    private func findRule(_ bundleIdentifier: String) -> AppCategoryRule? {
+        var descriptor = FetchDescriptor<AppCategoryRule>(
+            predicate: #Predicate { $0.bundleIdentifier == bundleIdentifier }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
     func migrateLegacyProductivityManagementCategory() {
         let legacy = Constants.legacySupportAppCategory
         let current = Constants.productivityManagementAppCategory
