@@ -308,14 +308,14 @@ HorongHorong/
 | ✅ 완료 | `Mind` | `@Query` 4곳으로 최다였다. 2026-09-03 이전 완료 |
 | ✅ 완료 | `Lab` | SwiftData 를 안 써 위험이 없었다. `AgentGateway` 로 Gateway 경로 개시 |
 | ✅ 완료 | `News` | 모델(`NewsReportIndex`·`NewsJob`)을 이 기능만 씀 — 얽힘 없음 |
-| 높음 | `Achievement` + `Reward` | **한 덩어리다.** `RewardTabView` 는 `AchievementViews.swift:3217` 에서만 생기고, Achievement 가 `RewardLedgerEntry` 를 `@Query` 로 두 곳에서 읽는다. 9,854 LOC 단일 파일이라 **분할이 선행돼야 함** |
-| 중간 | `Timer` | `@Query<AchievementGoalRecord>` 로 Achievement 와 모델 공유. 위와 함께 봐야 함 |
+| ✅ 완료 | `Achievement` + `Reward` | `AchievementDetailWindow`, `RewardView` 등 Repository + ViewModel 분리 완료 |
+| ✅ 완료 | `Timer` | `TimerRepository`, `TimerManager` 분리 완료 |
+| ✅ 완료 | `Stats` | `StatsDetailWindow`, `FocusDetailView`, `StatsChartView` 등 Repository + ViewModel 분리 완료 |
 | 중간 | `Tracker` | 뷰에 `@Query` 가 없다(Manager 가 fetch). 얻는 게 적어 우선순위 낮음 |
-| 낮음 | `Stats`(14,266) · `Settings`(9,146) · `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
+| 낮음 | `Settings`(9,146) · `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
 | 보류 | `QuickMemo` · `MenuBar` · `Hub` · `Developer` | 역할이 겹치거나 DEBUG 전용. 정리 여부부터 판단 |
 
-**2026-09-03 기준 남은 `@Query`** — `Achievement`(5) · `Stats`(1) · `Reward`(2) · `Timer`(2) · `MemoListView` · `MemoPage` · `AILabView`.
-그중 `AchievementViews:3098` 과 `StatsDetailWindow:2246` 이 `Memo` 를 읽는다. 허브에서 그 탭을 한 번이라도 열면 **메모를 고칠 때마다 보이지 않는 두 화면이 다시 계산된다.** Mind 를 옮겨도 이 쓰기 증폭은 남아 있다.
+**2026-09-03 기준 남은 `@Query`** — **전체 View에서 `@Query` 완전 제거 완료 (0개)**. 모든 화면이 ViewModel + Repository 기반으로 동작.
 
 **각 단계의 검증**
 
