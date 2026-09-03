@@ -404,7 +404,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }
-        dependencies = DependencyContainer(modelContainer: modelContainer)
+        dependencies = DependencyContainer(
+            modelContainer: modelContainer,
+            newsPipelineService: appState.newsPipelineService
+        )
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {

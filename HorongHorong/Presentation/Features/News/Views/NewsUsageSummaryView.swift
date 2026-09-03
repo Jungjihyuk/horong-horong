@@ -99,7 +99,7 @@ struct NewsUsageEstimateLabel: View {
 
 /// 마지막 실행의 실제 소모량 한 줄.
 struct NewsUsageActualLabel: View {
-    let job: NewsJob
+    let usage: NewsJobUsage
 
     var body: some View {
         if let text {
@@ -115,37 +115,37 @@ struct NewsUsageActualLabel: View {
     }
 
     private var text: String? {
-        if let delta = job.usagePrimaryPercentDelta {
-            let window = NewsUsageFormat.windowLabel(minutes: job.usagePrimaryWindowMinutes)
+        if let delta = usage.primaryPercentDelta {
+            let window = NewsUsageFormat.windowLabel(minutes: usage.primaryWindowMinutes)
             let suffix = window.map { " (\($0))" } ?? ""
             var line = "이번 실행 \(NewsUsageFormat.percent(delta)) 차감\(suffix)"
-            if let secondary = job.usageSecondaryPercentDelta,
+            if let secondary = usage.secondaryPercentDelta,
                let secondaryWindow = NewsUsageFormat.windowLabel(
-                   minutes: job.usageSecondaryWindowMinutes
+                   minutes: usage.secondaryWindowMinutes
                ) {
                 line += " · \(secondaryWindow) \(NewsUsageFormat.percent(secondary))"
             }
             return line
         }
 
-        guard let input = job.usageInputTokens, let output = job.usageOutputTokens else {
+        guard let input = usage.inputTokens, let output = usage.outputTokens else {
             // 소모량을 보고하지 않는 provider는 아무것도 표시하지 않는다.
             return nil
         }
         var parts = ["이번 실행 \(NewsUsageFormat.tokens(input + output)) 토큰"]
-        if let cost = job.usageTotalCostUSD {
+        if let cost = usage.totalCostUSD {
             parts.append(NewsUsageFormat.cost(cost))
         }
         return parts.joined(separator: " · ")
     }
 
     private var helpText: String? {
-        guard let calls = job.usageCallCount else { return nil }
+        let calls = usage.callCount
         var lines = ["\(calls)회 호출"]
-        if let plan = job.usagePlanType {
+        if let plan = usage.planType {
             lines.append("요금제: \(plan)")
         }
-        if job.usagePrimaryPercentDelta == nil, job.usageTotalCostUSD != nil {
+        if usage.primaryPercentDelta == nil, usage.totalCostUSD != nil {
             lines.append("이 provider는 구독 잔여 한도를 조회할 수 없어 % 대신 토큰·비용을 표시합니다.")
         }
         return lines.joined(separator: "\n")

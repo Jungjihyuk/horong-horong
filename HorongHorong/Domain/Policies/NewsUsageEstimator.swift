@@ -44,13 +44,12 @@ enum NewsUsageEstimator {
     private static let coldStartTokensPerCall = 1_800.0
     private static let coldStartCallsPerItem = 2.0
 
-    /// - Parameter jobs: 최근 실행 이력. 호출부가 이미 관찰 중인 `@Query` 결과를
-    ///   그대로 넘기면 되므로 이 타입은 SwiftData fetch를 직접 하지 않는다.
-    ///   (뷰 body가 재평가될 때마다 fetch가 도는 것을 피한다.)
+    /// - Parameter jobs: 최근 실행 이력. **저장소를 직접 읽지 않는다** — 호출부가 이미
+    ///   들고 있는 값을 넘긴다. 순수 함수라 SwiftData 없이 테스트한다.
     static func estimate(
         provider: String,
         plannedItems: Int,
-        jobs: [NewsJob]
+        jobs: [NewsJobRun]
     ) -> NewsUsageEstimate {
         let samples = jobs
             .lazy
@@ -103,21 +102,22 @@ enum NewsUsageEstimator {
         var primaryWindowMinutes: Int?
     }
 
-    private static func sample(from job: NewsJob) -> Sample? {
+    private static func sample(from job: NewsJobRun) -> Sample? {
         // 소모량을 보고하지 않는 provider이거나 아직 소모량이 기록되기 전인 실행은 건너뛴다.
         guard
-            let callCount = job.usageCallCount, callCount > 0,
-            let plannedItems = job.usagePlannedItems, plannedItems > 0,
-            let input = job.usageInputTokens,
-            let output = job.usageOutputTokens
+            let usage = job.usage, usage.callCount > 0,
+            let plannedItems = usage.plannedItems, plannedItems > 0,
+            let input = usage.inputTokens,
+            let output = usage.outputTokens
         else { return nil }
 
+        let callCount = Double(usage.callCount)
         return Sample(
-            callsPerItem: Double(callCount) / Double(plannedItems),
-            tokensPerCall: Double(input + output) / Double(callCount),
-            costPerCall: job.usageTotalCostUSD.map { $0 / Double(callCount) },
-            primaryPercentPerCall: job.usagePrimaryPercentDelta.map { $0 / Double(callCount) },
-            primaryWindowMinutes: job.usagePrimaryWindowMinutes
+            callsPerItem: callCount / Double(plannedItems),
+            tokensPerCall: Double(input + output) / callCount,
+            costPerCall: usage.totalCostUSD.map { $0 / callCount },
+            primaryPercentPerCall: usage.primaryPercentDelta.map { $0 / callCount },
+            primaryWindowMinutes: usage.primaryWindowMinutes
         )
     }
 

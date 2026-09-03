@@ -346,7 +346,12 @@ struct MenuBarPopover: View {
         case .stats:
             StatsSummaryView(referenceDate: referenceDate)
         case .news:
-            NewsView()
+            if let dependencies {
+                NewsView(
+                    repository: dependencies.newsRepository,
+                    pipeline: dependencies.newsPipelineGateway
+                )
+            }
         case .lab:
             if let gateway = dependencies?.agentGateway {
                 LabView(gateway: gateway)

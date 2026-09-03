@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import SwiftData
 import SwiftUI
 
 @MainActor
@@ -106,194 +105,19 @@ enum NewsReportMarkdownParser {
     }
 }
 
-struct NewsReportArchiveEntry: Identifiable, Equatable {
-    let id: String
-    let jobId: String
-    let reportDate: Date
-    let reportURL: URL
-    let metaURL: URL
-    let topTitle: String
-    let itemCount: Int
-    let createdAt: Date
-}
-
-struct NewsReportArchiveMetadata: Decodable, Equatable {
-    struct TopItem: Decodable, Equatable {
-        let title: String
-    }
-
-    let jobId: String?
-    let reportDate: String?
-    let itemCount: Int?
-    let interestKeywords: [String]
-    let topItems: [TopItem]
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        jobId = try container.decodeIfPresent(String.self, forKey: .jobId)
-        reportDate = try container.decodeIfPresent(String.self, forKey: .reportDate)
-        itemCount = try container.decodeIfPresent(Int.self, forKey: .itemCount)
-        interestKeywords = try container.decodeIfPresent([String].self, forKey: .interestKeywords) ?? []
-        topItems = try container.decodeIfPresent([TopItem].self, forKey: .topItems) ?? []
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case jobId
-        case reportDate
-        case itemCount
-        case interestKeywords
-        case topItems
-    }
-}
-
-enum NewsReportArchiveStore {
-    static func reportDirectoryURL(dataBasePath: String) -> URL {
-        URL(fileURLWithPath: dataBasePath, isDirectory: true)
-            .appendingPathComponent("data", isDirectory: true)
-            .appendingPathComponent("reports", isDirectory: true)
-    }
-
-    static func configuredReportURL(reportPath: String, dataBasePath: String) -> URL {
-        reportDirectoryURL(dataBasePath: dataBasePath)
-            .appendingPathComponent(URL(fileURLWithPath: reportPath).lastPathComponent)
-    }
-
-    static func loadEntries(
-        dataBasePath: String,
-        fileManager: FileManager = .default
-    ) -> [NewsReportArchiveEntry] {
-        let reportDirectory = reportDirectoryURL(dataBasePath: dataBasePath)
-        let metaDirectory = URL(fileURLWithPath: dataBasePath, isDirectory: true)
-            .appendingPathComponent("data", isDirectory: true)
-            .appendingPathComponent("meta", isDirectory: true)
-        let resourceKeys: Set<URLResourceKey> = [.contentModificationDateKey, .isRegularFileKey]
-        guard let reportURLs = try? fileManager.contentsOfDirectory(
-            at: reportDirectory,
-            includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        return reportURLs.compactMap { reportURL in
-            guard reportURL.pathExtension.lowercased() == "md",
-                  let resourceValues = try? reportURL.resourceValues(forKeys: resourceKeys),
-                  resourceValues.isRegularFile == true else {
-                return nil
-            }
-
-            let baseName = reportURL.deletingPathExtension().lastPathComponent
-            let metaURL = metaDirectory.appendingPathComponent("\(baseName).meta.json")
-            let metadata = loadMetadata(at: metaURL)
-            let fallbackDate = resourceValues.contentModificationDate ?? .distantPast
-            let reportDate = parsedDate(metadata?.reportDate ?? baseName) ?? fallbackDate
-            let topTitle = metadata?.topItems.first?.title
-                ?? markdownTitle(at: reportURL)
-                ?? reportURL.lastPathComponent
-
-            return NewsReportArchiveEntry(
-                id: reportURL.standardizedFileURL.path,
-                jobId: metadata?.jobId ?? reportURL.standardizedFileURL.path,
-                reportDate: reportDate,
-                reportURL: reportURL,
-                metaURL: metaURL,
-                topTitle: topTitle,
-                itemCount: metadata?.itemCount ?? metadata?.topItems.count ?? 0,
-                createdAt: resourceValues.contentModificationDate ?? reportDate
-            )
-        }
-        .sorted {
-            if $0.reportDate != $1.reportDate { return $0.reportDate > $1.reportDate }
-            return $0.createdAt > $1.createdAt
-        }
-    }
-
-    static func loadMetadata(at url: URL) -> NewsReportArchiveMetadata? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(NewsReportArchiveMetadata.self, from: data)
-    }
-
-    private static func parsedDate(_ value: String) -> Date? {
-        let dateText = String(value.prefix(10))
-        let parts = dateText.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 3 else { return nil }
-        return Calendar.current.date(
-            from: DateComponents(year: parts[0], month: parts[1], day: parts[2])
-        )
-    }
-
-    private static func markdownTitle(at url: URL) -> String? {
-        guard let markdown = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return markdown.components(separatedBy: .newlines)
-            .first { $0.hasPrefix("# ") }
-            .map { String($0.dropFirst(2)) }
-    }
-}
-
-struct NewsReportArchiveDocument: Equatable {
-    let markdown: String
-    let interestKeywords: [String]
-    let fileSize: Int64?
-    let errorMessage: String?
-
-    static func load(reportPath: String, metaPath: String) -> NewsReportArchiveDocument {
-        let reportURL = URL(fileURLWithPath: reportPath)
-        let markdown: String
-        let errorMessage: String?
-        do {
-            markdown = try String(contentsOf: reportURL, encoding: .utf8)
-            errorMessage = nil
-        } catch {
-            markdown = ""
-            errorMessage = "Markdown 파일을 읽을 수 없습니다."
-        }
-
-        let keywords: [String]
-        if let metadata = NewsReportArchiveStore.loadMetadata(at: URL(fileURLWithPath: metaPath)) {
-            keywords = metadata.interestKeywords
-        } else {
-            keywords = []
-        }
-
-        let attributes = try? FileManager.default.attributesOfItem(atPath: reportPath)
-        let fileSize = (attributes?[.size] as? NSNumber)?.int64Value
-        return NewsReportArchiveDocument(
-            markdown: markdown,
-            interestKeywords: keywords,
-            fileSize: fileSize,
-            errorMessage: errorMessage
-        )
-    }
-
-    func matches(query: String, title: String, filename: String) -> Bool {
-        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return true }
-        return title.localizedCaseInsensitiveContains(normalized)
-            || filename.localizedCaseInsensitiveContains(normalized)
-            || interestKeywords.contains { $0.localizedCaseInsensitiveContains(normalized) }
-            || markdown.localizedCaseInsensitiveContains(normalized)
-    }
-
-}
-
 struct NewsReportArchiveWindow: View {
     @Environment(\.appearanceDensity) private var appearanceDensity
-    @Query(sort: \NewsReportIndex.createdAt, order: .reverse)
-    private var indexedReports: [NewsReportIndex]
     @ObservedObject private var selection = NewsReportArchiveSelection.shared
     @AppStorage(Constants.NewsStorageKey.dataBasePath)
     private var dataBasePath = Constants.defaultNewsDataBasePath
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme = Constants.defaultPopoverTheme
 
-    @State private var entries: [NewsReportArchiveEntry] = []
-    @State private var selectedEntryID: String?
-    @State private var searchText = ""
-    @State private var documents: [String: NewsReportArchiveDocument] = [:]
+    @State private var viewModel = NewsArchiveViewModel()
 
     var body: some View {
-        let visibleEntries = matchingEntries()
-        let selectedEntry = selectedEntry(from: visibleEntries)
+        let visibleEntries = viewModel.visibleEntries
+        let selectedEntry = viewModel.selectedEntry
 
         VStack(spacing: 0) {
             toolbar
@@ -310,28 +134,22 @@ struct NewsReportArchiveWindow: View {
         .background(PopoverChrome.surface)
         .id(popoverTheme)
         .onAppear {
-            reloadArchive()
-            applySelectionRequest(selection.request, filteredEntries: matchingEntries())
+            viewModel.reload(dataBasePath: dataBasePath)
+            viewModel.applySelectionRequest(reportID: selection.request.reportID)
         }
         .onChange(of: selection.request) { _, request in
-            applySelectionRequest(request, filteredEntries: matchingEntries())
-        }
-        .onChange(of: indexedReports.map(\.jobId)) { _, _ in
-            reloadArchive()
+            viewModel.applySelectionRequest(reportID: request.reportID)
         }
         .onChange(of: dataBasePath) { _, _ in
-            reloadArchive()
+            viewModel.reload(dataBasePath: dataBasePath)
         }
-        .onChange(of: searchText) { _, _ in
-            let matches = matchingEntries()
-            if let selectedEntryID,
-               matches.contains(where: { $0.id == selectedEntryID }) {
-                return
-            }
-            selectedEntryID = matches.first?.id
+        // `@Query` 로 색인을 관찰하던 자리. 리포트는 파이프라인이 끝날 때만 늘어난다.
+        .onReceive(NotificationCenter.default.publisher(for: .newsPipelineJobFinished)) { _ in
+            viewModel.reload(dataBasePath: dataBasePath)
         }
+        // 앱 밖에서 파일을 지우거나 옮겼을 수 있다.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            reloadArchive()
+            viewModel.reload(dataBasePath: dataBasePath)
         }
     }
 
@@ -353,7 +171,7 @@ struct NewsReportArchiveWindow: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
-                TextField("리포트 검색...", text: $searchText)
+                TextField("리포트 검색...", text: $viewModel.searchText)
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 11)
@@ -378,7 +196,7 @@ struct NewsReportArchiveWindow: View {
 
     private func reportList(_ filteredEntries: [NewsReportArchiveEntry]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(searchText.isEmpty ? "\(entries.count)개 리포트" : "검색 결과 \(filteredEntries.count)개")
+            Text(viewModel.searchText.isEmpty ? "\(viewModel.entries.count)개 리포트" : "검색 결과 \(filteredEntries.count)개")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
                 .padding(.horizontal, 16)
@@ -387,10 +205,10 @@ struct NewsReportArchiveWindow: View {
 
             if filteredEntries.isEmpty {
                 VStack(spacing: 9) {
-                    Image(systemName: entries.isEmpty ? "doc.text.magnifyingglass" : "magnifyingglass")
+                    Image(systemName: viewModel.entries.isEmpty ? "doc.text.magnifyingglass" : "magnifyingglass")
                         .font(.system(size: 26))
                         .foregroundStyle(PopoverChrome.inkTertiary)
-                    Text(entries.isEmpty ? "저장된 리포트가 없습니다" : "일치하는 리포트가 없습니다")
+                    Text(viewModel.entries.isEmpty ? "저장된 리포트가 없습니다" : "일치하는 리포트가 없습니다")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -415,11 +233,11 @@ struct NewsReportArchiveWindow: View {
     }
 
     private func reportCard(_ entry: NewsReportArchiveEntry) -> some View {
-        let document = documents[entry.id]
-        let isSelected = selectedEntryID == entry.id
+        let document = viewModel.document(for: entry)
+        let isSelected = viewModel.selectedEntryID == entry.id
 
         return Button {
-            selectedEntryID = entry.id
+            viewModel.select(entry.id)
         } label: {
             VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(8)) {
                 Text(entry.reportURL.lastPathComponent)
@@ -469,7 +287,7 @@ struct NewsReportArchiveWindow: View {
                     Image(systemName: "newspaper")
                         .font(.system(size: 34))
                         .foregroundStyle(PopoverChrome.inkTertiary)
-                    Text(entries.isEmpty ? "리포트를 생성하면 이곳에서 볼 수 있습니다" : "왼쪽에서 리포트를 선택해주세요")
+                    Text(viewModel.entries.isEmpty ? "리포트를 생성하면 이곳에서 볼 수 있습니다" : "왼쪽에서 리포트를 선택해주세요")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
@@ -481,7 +299,7 @@ struct NewsReportArchiveWindow: View {
     }
 
     private func detailHeader(_ entry: NewsReportArchiveEntry) -> some View {
-        let document = documents[entry.id]
+        let document = viewModel.document(for: entry)
 
         return HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: appearanceDensity.informationMetric(7)) {
@@ -521,7 +339,7 @@ struct NewsReportArchiveWindow: View {
 
     @ViewBuilder
     private func reportBody(_ entry: NewsReportArchiveEntry) -> some View {
-        if let document = documents[entry.id] {
+        if let document = viewModel.document(for: entry) {
             if let errorMessage = document.errorMessage {
                 VStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle")
@@ -673,60 +491,6 @@ struct NewsReportArchiveWindow: View {
 
         case .divider:
             Divider().overlay(PopoverChrome.divider)
-        }
-    }
-
-    private func matchingEntries() -> [NewsReportArchiveEntry] {
-        entries.filter { entry in
-            let filename = entry.reportURL.lastPathComponent
-            guard let document = documents[entry.id] else {
-                return searchText.isEmpty
-                    || entry.topTitle.localizedCaseInsensitiveContains(searchText)
-                    || filename.localizedCaseInsensitiveContains(searchText)
-            }
-            return document.matches(query: searchText, title: entry.topTitle, filename: filename)
-        }
-    }
-
-    private func selectedEntry(from filteredEntries: [NewsReportArchiveEntry]) -> NewsReportArchiveEntry? {
-        if let selectedEntryID,
-           let selected = entries.first(where: { $0.id == selectedEntryID }) {
-            return selected
-        }
-        return filteredEntries.first
-    }
-
-    private func reloadArchive() {
-        entries = NewsReportArchiveStore.loadEntries(dataBasePath: dataBasePath)
-        documents = Dictionary(uniqueKeysWithValues: entries.map { entry in
-            (
-                entry.id,
-                NewsReportArchiveDocument.load(
-                    reportPath: entry.reportURL.path,
-                    metaPath: entry.metaURL.path
-                )
-            )
-        })
-        ensureValidSelection(in: matchingEntries())
-    }
-
-    private func applySelectionRequest(
-        _ request: NewsReportArchiveSelection.Request,
-        filteredEntries: [NewsReportArchiveEntry]
-    ) {
-        if let requestedID = request.reportID,
-           let requestedEntry = entries.first(where: { $0.jobId == requestedID }) {
-            selectedEntryID = requestedEntry.id
-        } else {
-            selectedEntryID = filteredEntries.first?.id ?? entries.first?.id
-        }
-    }
-
-    private func ensureValidSelection(in filteredEntries: [NewsReportArchiveEntry]) {
-        guard let selectedEntryID,
-              entries.contains(where: { $0.id == selectedEntryID }) else {
-            self.selectedEntryID = filteredEntries.first?.id ?? entries.first?.id
-            return
         }
     }
 

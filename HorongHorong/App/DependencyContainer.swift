@@ -17,8 +17,10 @@ final class DependencyContainer {
     let sleepGateway: SleepGateway
     let vaultRepository: VaultRepository
     let agentGateway: AgentGateway
+    let newsRepository: NewsRepository
+    let newsPipelineGateway: NewsPipelineGateway
 
-    init(modelContainer: ModelContainer) {
+    init(modelContainer: ModelContainer, newsPipelineService: NewsPipelineService) {
         let context = modelContainer.mainContext
         referenceRepository = SwiftDataReferenceRepository(context: context)
         quickNoteRepository = SwiftDataQuickNoteRepository(context: context)
@@ -27,6 +29,8 @@ final class DependencyContainer {
         sleepGateway = HealthSleepGateway()
         vaultRepository = FileSystemVaultRepository()
         agentGateway = CLIAgentAdapter()
+        newsRepository = SwiftDataNewsRepository(context: context)
+        newsPipelineGateway = NewsPipelineAdapter(service: newsPipelineService, context: context)
     }
 }
 

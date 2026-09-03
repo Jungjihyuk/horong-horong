@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import AppKit
 
 /*
@@ -23,7 +22,6 @@ import AppKit
 
 struct NewsView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appearanceDensity) private var appearanceDensity
     @AppStorage(Constants.NewsStorageKey.dataBasePath) private var dataBasePath = Constants.defaultNewsDataBasePath
@@ -47,10 +45,14 @@ struct NewsView: View {
     @State private var ollamaInstallProgress: Double?
     @State private var isRunButtonHovered = false
     @AppStorage(Constants.NewsStorageKey.maxItemsPerSource) private var maxItemsPerSource = Constants.defaultNewsMaxItemsPerSource
-    @Query(sort: \NewsReportIndex.createdAt, order: .reverse) private var recentReports: [NewsReportIndex]
-    @Query(sort: \NewsJob.requestedAt, order: .reverse) private var recentJobs: [NewsJob]
-    @State private var selectedReport: NewsReportIndex?
+    @State private var viewModel: NewsViewModel
+    /// 고른 리포트의 `jobId`. 보관함 창에 무엇을 열지 알려줄 때만 쓴다.
+    @State private var selectedReportID: String?
     @State private var hostWindow: NSWindow?
+
+    init(repository: NewsRepository, pipeline: NewsPipelineGateway) {
+        _viewModel = State(initialValue: NewsViewModel(repository: repository, pipeline: pipeline))
+    }
 
     private let pipelineSteps = ["collect", "normalize", "dedupe", "classify", "rank", "summarize", "render"]
     private var pipelineService: NewsPipelineService { appState.newsPipelineService }
@@ -72,8 +74,8 @@ struct NewsView: View {
                         NewsUsageEstimateLabel(estimate: usageEstimate)
                     }
 
-                    if let lastFinishedJob {
-                        NewsUsageActualLabel(job: lastFinishedJob)
+                    if let usage = viewModel.lastReportedUsage {
+                        NewsUsageActualLabel(usage: usage)
                     }
 
                     if let nextCollectionText {
@@ -116,11 +118,14 @@ struct NewsView: View {
         }
         .onAppear {
             applyDefaultPathsIfNeeded()
+            viewModel.reload()
         }
         .configureHostWindow { window in
             hostWindow = window
         }
         .onReceive(NotificationCenter.default.publisher(for: .newsPipelineJobFinished)) { _ in
+            // `@Query` 를 걷어낸 자리. 리포트와 실행 이력은 파이프라인이 끝날 때만 늘어난다.
+            viewModel.reload()
             if pipelineService.lastJobStatus == "failed", let err = pipelineService.lastErrorMessage {
                 let lowerErr = err.lowercased()
                 if lowerErr.contains("rate limit") || lowerErr.contains("usage limit") || lowerErr.contains("429") || lowerErr.contains("exceeded") || err.contains("한도") || err.contains("제한") {
@@ -367,19 +372,13 @@ struct NewsView: View {
         }
     }
 
-    private var availableRecentReports: [NewsReportIndex] {
-        recentReports.filter { report in
-            let configuredURL = NewsReportArchiveStore.configuredReportURL(
-                reportPath: report.reportPath,
-                dataBasePath: dataBasePath
-            )
-            return FileManager.default.fileExists(atPath: configuredURL.path)
-        }
+    private var availableRecentReports: [NewsReport] {
+        viewModel.availableReports(dataBasePath: dataBasePath)
     }
 
-    private func reportRow(report: NewsReportIndex) -> some View {
+    private func reportRow(report: NewsReport) -> some View {
         Button {
-            selectedReport = report
+            selectedReportID = report.jobId
             openReportArchive(report: report)
         } label: {
             HStack(alignment: .center, spacing: appearanceDensity.popoverMetric(10)) {
@@ -403,7 +402,7 @@ struct NewsView: View {
             }
             .popoverCard(padding: appearanceDensity.popoverMetric(12), radius: 10)
             .background(
-                selectedReport?.jobId == report.jobId
+                selectedReportID == report.jobId
                     ? PopoverChrome.accentSoft.opacity(0.22)
                     : Color.clear,
                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -412,7 +411,7 @@ struct NewsView: View {
         .buttonStyle(.plain)
     }
 
-    private func openReportArchive(report: NewsReportIndex?) {
+    private func openReportArchive(report: NewsReport?) {
         NewsReportArchiveSelection.shared.select(reportID: report?.jobId)
         HubWindowPresenter.present(
             tab: .news,
@@ -657,29 +656,13 @@ struct NewsView: View {
             .filter { !$0.isEmpty }
     }
 
-    /// 소모량이 기록된 가장 최근 실행.
-    ///
-    /// 소모량을 보고하지 않는 provider로 돌린 실행은 건너뛰어, provider를 바꿔
-    /// 한 번 돌렸다고 직전 실측치가 사라지지 않게 한다.
-    private var lastFinishedJob: NewsJob? {
-        recentJobs.first { $0.usageCallCount != nil }
-    }
-
     /// 현재 설정으로 실행했을 때의 예상 소모량.
     private var usageEstimate: NewsUsageEstimate? {
-        guard selectedProvider != "ollama" else { return nil }
-
-        let sources = NewsPipelineService.resolvedSources(
-            interestKeywords: interestKeywordList,
-            youtubeChannelIds: youtubeChannelIds
-        )
-        let plannedItems = sources.count * max(1, maxItemsPerSource)
-        guard plannedItems > 0 else { return nil }
-
-        return NewsUsageEstimator.estimate(
+        viewModel.usageEstimate(
             provider: selectedProvider,
-            plannedItems: plannedItems,
-            jobs: recentJobs
+            interestKeywords: interestKeywordList,
+            youtubeChannelIds: youtubeChannelIds,
+            maxItemsPerSource: maxItemsPerSource
         )
     }
 
@@ -763,9 +746,7 @@ struct NewsView: View {
     }
 
     private func startPipelineJob() {
-        NewsPipelineLaunchConfiguration
-            .current()
-            .launch(on: pipelineService, context: modelContext)
+        viewModel.launchPipeline()
         if pipelineService.lastErrorCode == "E_ENV" || pipelineService.lastErrorCode == "E_PROVIDER_CLI" {
             executionEnvironmentAlertMessage = pipelineService.lastErrorMessage ?? "uv 또는 Python 3 실행 환경을 확인해주세요."
             showExecutionEnvironmentAlert = true

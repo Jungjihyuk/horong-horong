@@ -115,7 +115,9 @@ struct NewsRateLimitSnapshot: Codable {
 /// Provider별로 얻을 수 있는 정보가 다르다. Claude는 토큰과 비용을 주지만 구독
 /// 잔여 한도를 노출하지 않고, Codex는 비용 대신 요금제 사용률을 노출한다.
 /// Antigravity/Opencode/Hermes는 아무것도 보고하지 않아 usage 자체가 nil이다.
-struct NewsJobUsage: Codable {
+/// 사이드카가 JSON 으로 보고하는 소모량. **외부 형식이라 `DTO` 를 붙인다**(CLAUDE.md §5).
+/// 화면·정책이 쓰는 값 타입은 `Domain/Entities` 의 `NewsJobUsage` 다.
+struct NewsJobUsageDTO: Codable {
     var inputTokens: Int
     var outputTokens: Int
     var cachedInputTokens: Int
@@ -158,7 +160,7 @@ struct NewsJobResultPayload: Codable {
     var sourceStats: [String: NewsSourceStats]?
     var topItems: [NewsTopItem]?
     var warnings: [String]?
-    var usage: NewsJobUsage?
+    var usage: NewsJobUsageDTO?
     var errorCode: String?
     var errorMessage: String?
 }
@@ -719,7 +721,7 @@ final class NewsPipelineService: @unchecked Sendable {
     /// runner가 보고한 소모량을 NewsJob에 옮긴다.
     ///
     /// 소모량을 보고하지 않는 provider는 usage가 nil이므로 아무것도 쓰지 않는다.
-    private func applyUsage(_ usage: NewsJobUsage?, to job: NewsJob) {
+    private func applyUsage(_ usage: NewsJobUsageDTO?, to job: NewsJob) {
         guard let usage else { return }
         job.usageInputTokens = usage.inputTokens
         job.usageOutputTokens = usage.outputTokens
