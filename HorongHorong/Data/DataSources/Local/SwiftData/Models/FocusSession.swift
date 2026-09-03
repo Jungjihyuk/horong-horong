@@ -793,7 +793,7 @@ enum PomodoroTaskCompletionRecorder {
 
     static func applyPostSaveEffects(to memo: Memo, modelContext: ModelContext) {
         let reminderIdentifier = "memo.deadline.\(memo.id.uuidString)"
-        if memo.isCompletedValue || memo.isArchivedValue || memo.isRecentlyDeleted {
+        if memo.isCompletedValue || memo.isRecentlyDeleted {
             NotificationManager.shared.cancel(identifier: reminderIdentifier)
         } else if let fireDate = memo.reminderFireDate {
             let reminderBody = memo.content

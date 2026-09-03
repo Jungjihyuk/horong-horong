@@ -482,7 +482,7 @@ final class TimerManager: @unchecked Sendable {
         )
         descriptor.fetchLimit = 1
         guard let memo = try? context.fetch(descriptor).first else { return false }
-        return !memo.isCompletedValue && !memo.isArchivedValue && !memo.isRecentlyDeleted
+        return !memo.isCompletedValue && !memo.isRecentlyDeleted
     }
 
     private func updateLastCompletedTaskContext(for session: FocusSession) {

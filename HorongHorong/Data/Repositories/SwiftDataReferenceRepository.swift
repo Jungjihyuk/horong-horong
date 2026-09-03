@@ -67,7 +67,7 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
     /// 보관한 것은 목록에서 뺀다. `nil` 이 빠지지 않는 것은 `normalizeMemoFlags` 가
     /// 실행마다 `nil` 을 `false` 로 메우기 때문이다 — 그 보정이 없으면 SQL 3값 논리에 걸린다.
     private static let referenceSection = #Predicate<Memo> {
-        $0.sectionRaw == "reference" && $0.isArchived != true
+        $0.sectionRaw == "reference"
     }
 
     private func find(_ id: UUID) throws -> Memo? {

@@ -19,9 +19,6 @@ struct TodoItem: Identifiable, Equatable, Sendable {
     let isPinned: Bool
     let createdAt: Date
     let updatedAt: Date
-    /// 보관한 할 일. 목록에서는 빠지지만 **연결 고르기** 에서는 보인다 —
-    /// 예전에 연결해 둔 것을 찾을 수 있어야 한다.
-    let isArchived: Bool
 
     var isRecentlyDeleted: Bool { deletedAt != nil }
 

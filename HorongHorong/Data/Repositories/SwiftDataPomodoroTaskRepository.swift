@@ -16,7 +16,7 @@ final class SwiftDataPomodoroTaskRepository: PomodoroTaskRepository {
         // 정렬 키는 `updatedAt` 그대로 둔다. 후보 목록이 이 순서로 **재정렬 없이 그대로**
         // 표시되므로, 키를 바꾸면 사용자가 보는 순서가 달라진다.
         let descriptor = FetchDescriptor<Memo>(
-            predicate: #Predicate { $0.isCompleted != true && $0.isArchived != true && $0.deletedAt == nil },
+            predicate: #Predicate { $0.isCompleted != true && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         return ((try? context.fetch(descriptor)) ?? []).map {

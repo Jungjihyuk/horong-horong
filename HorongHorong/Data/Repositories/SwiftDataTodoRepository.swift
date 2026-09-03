@@ -114,11 +114,6 @@ final class SwiftDataTodoRepository: TodoRepository {
         try change(id) { $0.icon = icon }
     }
 
-    func archive(id: UUID) throws {
-        // 보관해도 알림이 남으면 없는 할 일이 울린다. `touch` 안의 재예약이 그걸 취소한다.
-        try change(id) { $0.isArchivedValue = true }
-    }
-
     // MARK: - 미리알림
 
     func reminderLists() async throws -> [ReminderListOption] {
@@ -189,7 +184,7 @@ final class SwiftDataTodoRepository: TodoRepository {
     /// `!= true` 가 `nil` 을 빠뜨리지 않는 것은 `normalizeMemoFlags` 가 실행마다 `nil` 을
     /// `false` 로 메워 주기 때문이다. 그 보정이 없으면 SQL 3값 논리에 걸린다.
     private static let activeSection = #Predicate<Memo> {
-        $0.sectionRaw == "todo" && $0.isArchived != true && $0.deletedAt == nil
+        $0.sectionRaw == "todo" && $0.deletedAt == nil
     }
 
     private static let deletedSection = #Predicate<Memo> {
@@ -241,7 +236,6 @@ final class SwiftDataTodoRepository: TodoRepository {
     private func rescheduleLocalReminder(for memo: Memo) {
         let identifier = Self.localReminderIdentifier(for: memo.id)
         guard !memo.isCompletedValue,
-              !memo.isArchivedValue,
               !memo.isRecentlyDeleted,
               let fireDate = memo.reminderFireDate else {
             notifications.cancel(identifier: identifier)
@@ -285,8 +279,7 @@ final class SwiftDataTodoRepository: TodoRepository {
             icon: memo.icon,
             isPinned: memo.isPinned,
             createdAt: memo.createdAt,
-            updatedAt: memo.updatedAt,
-            isArchived: memo.isArchivedValue
+            updatedAt: memo.updatedAt
         )
     }
 }

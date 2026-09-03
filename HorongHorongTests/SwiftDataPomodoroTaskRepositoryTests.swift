@@ -14,7 +14,7 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 
-    func testExcludesCompletedArchivedAndDeleted() throws {
+    func testExcludesCompletedAndDeleted() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
@@ -23,9 +23,6 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let completed = Memo(content: "완료", section: .todo)
         completed.isCompletedValue = true
         context.insert(completed)
-        let archived = Memo(content: "보관", section: .todo)
-        archived.isArchivedValue = true
-        context.insert(archived)
         let deleted = Memo(content: "최근 삭제", section: .todo)
         deleted.deletedAt = Date()
         context.insert(deleted)

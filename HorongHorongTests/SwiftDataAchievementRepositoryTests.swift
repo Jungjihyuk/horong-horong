@@ -308,13 +308,13 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         done.isCompletedValue = true
         context.insert(done)
         context.insert(Memo(content: "쪽지", section: .quickNote))
-        let archived = Memo(content: "보관", section: .todo)
-        archived.isArchivedValue = true
-        context.insert(archived)
+        let deleted = Memo(content: "최근 삭제", section: .todo)
+        deleted.deletedAt = Date()
+        context.insert(deleted)
         try context.save()
 
         XCTAssertEqual(repository.linkableMemos().map(\.content), ["할 일"])
-        XCTAssertEqual(repository.memos().count, 3, "보관한 것은 전체 조회에서도 빠진다")
+        XCTAssertEqual(repository.memos().count, 3, "최근 삭제는 전체 조회에서도 빠진다")
     }
 
     // MARK: - 역할·비전

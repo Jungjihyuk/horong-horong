@@ -526,14 +526,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// `isCompleted`·`isArchived` 의 `nil` 을 `false` 로 메운다.
+    /// `isCompleted` 의 `nil` 을 `false` 로 메운다.
     ///
-    /// 두 필드는 나중에 추가돼서 그 전에 만든 기록은 값이 비어 있다
-    /// (실측 2026-09-02: 실사용 190건 중 45건·52건이 NULL).
+    /// 나중에 추가된 필드라 그 전에 만든 기록은 값이 비어 있다
+    /// (실측 2026-09-02: 실사용 190건 중 45건).
+    ///
+    /// `isArchived` 는 더 이상 어느 술어도 읽지 않아 메울 필요가 없다(2026-09-03,
+    /// «보관» 기능 제거).
     ///
     /// 코드에서는 `isCompletedValue` 가 `== true` 로 읽어 `nil` 과 `false` 가 이미 같다.
-    /// **그런데 SQL 은 다르다.** `#Predicate` 의 `isArchived != true` 는
-    /// `ZISARCHIVED != 1` 이 되는데, 3값 논리에서 `NULL != 1` 은 TRUE 가 아니라 NULL 이라
+    /// **그런데 SQL 은 다르다.** `#Predicate` 의 `isCompleted != true` 는
+    /// `ZISCOMPLETED != 1` 이 되는데, 3값 논리에서 `NULL != 1` 은 TRUE 가 아니라 NULL 이라
     /// **그 행이 결과에서 조용히 빠진다.** 화면에서 기록이 사라지는 것으로 나타난다.
     ///
     /// 술어마다 `(x == false || x == nil)` 로 쓸 수도 있지만, 그러면 모든 호출부가 그 사정을
@@ -541,12 +544,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func normalizeMemoFlags(in context: ModelContext) {
         do {
             let memos = try context.fetch(FetchDescriptor<Memo>(
-                predicate: #Predicate { $0.isCompleted == nil || $0.isArchived == nil }
+                predicate: #Predicate { $0.isCompleted == nil }
             ))
             guard !memos.isEmpty else { return }
             for memo in memos {
                 if memo.isCompleted == nil { memo.isCompleted = false }
-                if memo.isArchived == nil { memo.isArchived = false }
             }
             try context.save()
         } catch {

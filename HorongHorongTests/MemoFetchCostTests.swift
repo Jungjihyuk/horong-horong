@@ -89,7 +89,7 @@ final class MemoFetchCostTests: XCTestCase {
         // 실체화 비용: fetch 한 뒤 실제로 속성을 읽으면 얼마나 더 드는가
         let all = try context.fetch(FetchDescriptor<Memo>())
         try time("⑥ 전량 순회하며 속성 읽기  ← makeSnapshot 이 하는 일") {
-            all.filter { $0.resolvedSection == .todo && !$0.isArchivedValue }.count
+            all.filter { $0.resolvedSection == .todo && !$0.isRecentlyDeleted }.count
         }
     }
 }

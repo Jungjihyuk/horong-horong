@@ -10,6 +10,14 @@ final class Memo {
     var isPinned: Bool
     var isCompleted: Bool?
     var completionStateChangedAt: Date?
+    /// **더 이상 쓰지 않는다**(2026-09-03, «보관» 기능 제거).
+    ///
+    /// 보관은 되돌릴 방법이 없는 숨김이었다 — 보관함 화면도, 해제 버튼도 없었다.
+    /// 「삭제」는 최근 삭제로 가서 복원할 수 있는데 「보관」이 오히려 더 영구적이었다.
+    ///
+    /// 컬럼은 남겨 둔다. 지우면 스키마 변경이라 마이그레이션이 필요한데, 안 읽는 컬럼
+    /// 하나를 없애자고 치를 값이 아니다. **새로 읽지 않는다** — 이 값이 필요해 보이면
+    /// 「보관」을 되살리는 결정부터 해야 한다.
     var isArchived: Bool?
     var icon: String?
     var startDate: Date?
@@ -88,11 +96,6 @@ extension Memo {
         }
         isCompleted = value
         completionStateChangedAt = changedAt
-    }
-
-    var isArchivedValue: Bool {
-        get { isArchived == true }
-        set { isArchived = newValue }
     }
 
     var isRecentlyDeleted: Bool {

@@ -179,7 +179,6 @@ struct MemoListView: View {
                     editingMemoID = memo.id
                 }
                 Button(memo.isCompleted ? "완료 해제" : "완료") { viewModel.toggleCompleted(memo) }
-                Button("보관") { viewModel.archive(memo.id) }
                 Divider()
                 // 알림 취소와 미리알림 연동 해제는 저장소가 함께 한다.
                 Button("삭제", role: .destructive) { viewModel.delete(memo.id) }

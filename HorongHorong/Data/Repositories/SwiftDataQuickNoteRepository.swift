@@ -80,11 +80,11 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
     /// 보관한 것은 목록에서 뺀다. `nil` 이 빠지지 않는 것은 `normalizeMemoFlags` 가
     /// 실행마다 `nil` 을 `false` 로 메우기 때문이다 — 그 보정이 없으면 SQL 3값 논리에 걸린다.
     private static let pinnedSection = #Predicate<Memo> {
-        $0.sectionRaw == "quickNote" && $0.isArchived != true && $0.isPinned
+        $0.sectionRaw == "quickNote" && $0.isPinned
     }
 
     private static let unpinnedSection = #Predicate<Memo> {
-        $0.sectionRaw == "quickNote" && $0.isArchived != true && !$0.isPinned
+        $0.sectionRaw == "quickNote" && !$0.isPinned
     }
 
     private static let recentFirst = [SortDescriptor(\Memo.updatedAt, order: .reverse)]

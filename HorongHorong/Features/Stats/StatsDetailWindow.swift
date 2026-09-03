@@ -4202,9 +4202,6 @@ struct FocusDetailView: View {
         if memo.isCompleted {
             parts.append("완료")
         }
-        if memo.isArchived {
-            parts.append("보관")
-        }
         return parts.joined(separator: " · ")
     }
 

@@ -15,7 +15,6 @@ enum TodayPlanningReminderPolicy {
         calendar: Calendar = .current
     ) -> Bool {
         guard !memo.isCompletedValue,
-              !memo.isArchivedValue,
               !memo.isRecentlyDeleted else {
             return false
         }

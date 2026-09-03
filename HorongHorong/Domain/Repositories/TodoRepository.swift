@@ -45,8 +45,6 @@ protocol TodoRepository {
     /// 목록 맨 위에 붙여 둔다.
     func setPinned(id: UUID, isPinned: Bool) throws
     func setIcon(id: UUID, icon: String) throws
-    /// 보관한다. 목록에서는 빠지지만 지워지지는 않는다.
-    func archive(id: UUID) throws
 
     /// 미리알림 앱과 연결한다. 실패하면 던진다 — 메시지는 화면이 보여준다.
     func linkReminder(id: UUID) async throws

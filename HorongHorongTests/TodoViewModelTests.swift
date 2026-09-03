@@ -34,7 +34,7 @@ final class TodoViewModelTests: XCTestCase {
                 id: UUID(), content: title, startDate: Date(), deadline: nil,
                 isCompleted: false, deletedAt: nil, isLinkedToReminders: false,
                 reminderCalendarIdentifier: nil,
-                icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date(), isArchived: false
+                icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
             )
             items.append(made)
             return made
@@ -76,8 +76,6 @@ final class TodoViewModelTests: XCTestCase {
         func setIcon(id: UUID, icon: String) throws {
             replace(id) { $0.withIcon(icon) }
         }
-
-        func archive(id: UUID) throws { items.removeAll { $0.id == id } }
 
         func setReminderList(id: UUID, listID: String) throws {
             replace(id) { $0.with(reminderCalendarIdentifier: .some(listID)) }
@@ -137,7 +135,7 @@ final class TodoViewModelTests: XCTestCase {
             id: UUID(), content: content, startDate: start, deadline: nil,
             isCompleted: completed, deletedAt: deletedAt, isLinkedToReminders: linked,
             reminderCalendarIdentifier: nil,
-            icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date(), isArchived: false
+            icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
         )
     }
 
@@ -434,7 +432,7 @@ private extension TodoItem {
             isCompleted: isCompleted, deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
-            icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt, isArchived: isArchived
+            icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt
         )
     }
 
@@ -444,7 +442,7 @@ private extension TodoItem {
             isCompleted: isCompleted, deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
-            icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt, isArchived: isArchived
+            icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt
         )
     }
 
@@ -469,8 +467,7 @@ private extension TodoItem {
             icon: icon,
             isPinned: isPinned,
             createdAt: createdAt,
-            updatedAt: updatedAt,
-            isArchived: isArchived
+            updatedAt: updatedAt
         )
     }
 }

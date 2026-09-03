@@ -349,16 +349,13 @@ final class ConstantsDefaultsTests: XCTestCase {
         let completed = Memo(content: "완료한 일")
         completed.startDate = now
         completed.isCompletedValue = true
-        let archived = Memo(content: "보관한 일")
-        archived.startDate = now
-        archived.isArchivedValue = true
         let deleted = Memo(content: "지운 오늘 할 일")
         deleted.startDate = now
         deleted.deletedAt = now
 
         XCTAssertFalse(
             TodayPlanningReminderPolicy.hasTodayTask(
-                in: [completed, archived, deleted],
+                in: [completed, deleted],
                 now: now,
                 calendar: calendar
             )

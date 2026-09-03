@@ -63,11 +63,6 @@ final class MemoListViewModel {
         reload()
     }
 
-    func archive(_ id: UUID) {
-        try? repository.archive(id: id)
-        reload()
-    }
-
     /// 최근 삭제로 보낸다. 걸어둔 알림·미리알림 연동은 저장소가 함께 뗀다.
     func delete(_ id: UUID) {
         try? repository.moveToRecentlyDeleted(id: id)

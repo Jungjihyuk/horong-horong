@@ -380,7 +380,6 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     private func rescheduleLocalReminder(for memo: Memo) {
         let identifier = "memo.deadline.\(memo.id.uuidString)"
         guard !memo.isCompletedValue,
-              !memo.isArchivedValue,
               !memo.isRecentlyDeleted,
               let fireDate = memo.reminderFireDate else {
             notifications.cancel(identifier: identifier)
@@ -416,7 +415,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     /// 보관·최근 삭제는 여기서 떨군다. 화면이 매번 같은 조건을 다시 쓰지 않게.
     private func activeMemoRecords() -> [Memo] {
         let descriptor = FetchDescriptor<Memo>(
-            predicate: #Predicate { $0.isArchived != true && $0.deletedAt == nil },
+            predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         return (try? context.fetch(descriptor)) ?? []
