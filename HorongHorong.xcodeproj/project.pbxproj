@@ -436,6 +436,7 @@
 		D3A7AF1B5C2F2BFA3827CE1B /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214CF0D4CCCD0DC041B81763 /* CompanionView.swift */; };
 		D3A9B0E1BC89A9372DEBDA71 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 35D04CBF0379115D83507E57 /* MLXLMCommon */; };
 		D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */; };
+		D572FFFFD409E12DD01351B2 /* SwiftDataRewardRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */; };
 		D5D883C554C57A445BDE4F5C /* AchievementFoundationGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B4299829AE7FE9336446AF /* AchievementFoundationGoalSuggestionProvider.swift */; };
 		D634D073242C9906042BD277 /* AchievementDetailRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C48605082C89744CBA9EA3DC /* AchievementDetailRows.swift */; };
 		D7282E6EE4EE7518C643767E /* HotkeyPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41F124D194AD141C45AD373 /* HotkeyPage.swift */; };
@@ -756,6 +757,7 @@
 		D8ABB6C8778FAB48B167C255 /* CompanionMood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionMood.swift; sourceTree = "<group>"; };
 		D8BB4ABECC3DDFCF3F7D0679 /* TelemetryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryClient.swift; sourceTree = "<group>"; };
 		D97A0B996748542CF8CE5D43 /* CategoryMappingPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryMappingPage.swift; sourceTree = "<group>"; };
+		D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataRewardRepositoryTests.swift; sourceTree = "<group>"; };
 		DA003DE36768E94825C2E07A /* Memo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Memo.swift; sourceTree = "<group>"; };
 		DCC11D8BC2DC99FBD8F60635 /* CompanionBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionBriefing.swift; sourceTree = "<group>"; };
 		DCF423D2618F1E211EF966F2 /* LanternButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanternButtonStyles.swift; sourceTree = "<group>"; };
@@ -1180,6 +1182,7 @@
 				B2190648ED872F82BC91540F /* RewardViewModelTests.swift */,
 				CC60BDB2A30491E0AED1E7BB /* SchemaVersioningTests.swift */,
 				9285AA21F4EDE4D8D6EEA785 /* SuggestionExecutionStrategyTests.swift */,
+				D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
 				00D754FE7D4BDE2F31CC9AE7 /* TodoViewModelTests.swift */,
 				64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */,
@@ -2253,6 +2256,7 @@
 				C8AE6FE869B65C10292DE465 /* RewardViewModelTests.swift in Sources */,
 				2F9975A03095D6C00BE6B6F0 /* SchemaVersioningTests.swift in Sources */,
 				E8A977F2D213038EA96275D1 /* SuggestionExecutionStrategyTests.swift in Sources */,
+				D572FFFFD409E12DD01351B2 /* SwiftDataRewardRepositoryTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
 				D37807286F7056A880AA400A /* TodoViewModelTests.swift in Sources */,
 				D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */,
