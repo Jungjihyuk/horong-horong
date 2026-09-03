@@ -251,14 +251,11 @@ HorongHorong/
 | ✅ OS 연동 | `Data/DataSources/System/` — `NotificationManager`·`HotKeyManager`·`AppActivation` |
 | ✅ 저장소 위치 | `Data/DataSources/Local/SwiftData/SwiftDataStoreLocation.swift` |
 
-**`Utilities/` 에 일부러 남긴 것** — 어느 계층인지 판단이 필요하고, 그 판단은 관련 기능을 이전할 때 하는 편이 낫다.
-
-| 파일 | 왜 남겼나 |
-|---|---|
-| `Constants.swift` | 1,800줄. AppStorage 키·기본값·UI 상수가 섞여 있어 쪼개기 전에는 어느 계층도 아니다 |
-| `KoreanParticle.swift` | 순수하지만 «업무 규칙» 이 아니라 문장 조사 처리다. Presentation 인지 Domain 인지 애매 |
-| `HotkeyStore.swift` | 설정 상태 소유. `Store` 규칙(§5)엔 맞으나 Presentation·Data 판단이 남음 |
-| `AIRunLog` · `SuggestionExecutionStrategy` · `SuggestionModelUnloader` | AI 실행 계층 소속. `Agent` Gateway/Adapter 를 만들 때 함께 정한다 |
+**`Utilities/` 정리 완료 (2026-09-04)**: `Constants.swift`를 제외한 모든 잔여 유틸리티 파일들을 목표 아키텍처 계층으로 재배치 완료했다.
+- `KoreanParticle.swift` → `Presentation/DesignSystem/`
+- AI 실행 도구 3종(`AIRunLog`, `SuggestionExecutionStrategy`, `SuggestionModelUnloader`) → `Data/Adapters/Agent/`
+- 설정/임계값 스토어 5종(`HotkeyStore`, `TrackerStateStore`, `AttentionThresholdStore`, `IdleThresholdStore`, `CategoryPairStore`) → `Data/DataSources/Local/`
+- `Constants.swift`는 10대 기능 섹션 및 UI 순서대로 가이드 주석(`// MARK: -`)과 함께 구조화 완료하여 전역 설정 파일로 단독 유지.
 
 **동반 타입 분리 완료 (2026-09-03)**: `FocusSession.swift`(926줄)와 `AppCategoryRule.swift`(752줄)에 혼재되어 있던 동반 타입들을 완전히 분리했다. 각 `@Model`(`FocusSession`, `PomodoroReflection`, `CategoryBehaviorConditionSet`, `PomodoroTaskCompletion`, `AppCategoryRule`)은 1파일 1모델로 독립시켰고, 순수 규칙/엔티티는 `Domain/`으로, Data 계층 Store/Service는 `Data/DataSources/Local/`로 정돈했다.
 
