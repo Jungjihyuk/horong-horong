@@ -1,6 +1,22 @@
 import AppKit
 import SwiftUI
 
+private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
+    case minutes = 1
+    case hours = 60
+    case days = 1_440
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .minutes: "분"
+        case .hours: "시간"
+        case .days: "일"
+        }
+    }
+}
+
 /// 할 일 목록과 상세.
 ///
 /// **`@Query`·`ModelContext` 를 쓰지 않는다.** 화면은 ViewModel 이 준 값 타입만 본다.
@@ -15,6 +31,9 @@ struct TodoBrowserView: View {
     @State private var swipeOffset: CGFloat = 0
     @State private var swipingID: UUID?
     @State private var confirmEmptyTrash = false
+    @State private var showsCustomDuration = false
+    @State private var customDurationAmount = 30
+    @State private var customDurationUnit = TodoDurationUnit.minutes
     @FocusState private var composerFocused: Bool
     @ObservedObject private var listColors = ReminderListColorStore.shared
 
@@ -477,24 +496,97 @@ struct TodoBrowserView: View {
         VStack(alignment: .leading, spacing: 11) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 9) {
-                    fieldLabel("날짜")
-                    DatePicker("", selection: whenBinding(for: item), displayedComponents: .date)
+                    fieldLabel("시작")
+                    if item.startDate != nil {
+                        DatePicker(
+                            "",
+                            selection: startBinding(for: item),
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
                         .labelsHidden()
                         .datePickerStyle(.compact)
+                    } else {
+                        Text("정하지 않음")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(PopoverChrome.inkTertiary)
+                    }
                     Spacer(minLength: 0)
                 }
                 HStack(spacing: 6) {
                     fieldLabel("")
-                    dateQuick("오늘", selected: viewModel.isWhen(item, dayOffset: 0)) {
-                        viewModel.setWhen(item.id, dayOffset: 0)
+                    quickChip("오늘", selected: viewModel.isStartDay(item, dayOffset: 0)) {
+                        viewModel.setStartDay(item.id, dayOffset: 0)
                     }
-                    dateQuick("내일", selected: viewModel.isWhen(item, dayOffset: 1)) {
-                        viewModel.setWhen(item.id, dayOffset: 1)
+                    quickChip("내일", selected: viewModel.isStartDay(item, dayOffset: 1)) {
+                        viewModel.setStartDay(item.id, dayOffset: 1)
                     }
-                    dateQuick("없음", selected: item.startDate == nil && item.deadline == nil) {
-                        viewModel.setWhen(item.id, date: nil)
+                    quickChip("없음", selected: item.startDate == nil) {
+                        viewModel.clearSchedule(item.id)
                     }
                     Spacer(minLength: 0)
+                }
+
+                if let startDate = item.startDate {
+                    HStack(spacing: 6) {
+                        fieldLabel("소요")
+                        durationChip("30분", minutes: 30, item: item)
+                        durationChip("60분", minutes: 60, item: item)
+                        durationChip("2시간", minutes: 120, item: item)
+                        Button {
+                            prepareCustomDuration(item)
+                            showsCustomDuration = true
+                        } label: {
+                            Text("직접")
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(isCustomDuration(item) ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 26)
+                        .background(
+                            isCustomDuration(item) ? PopoverChrome.accent : PopoverChrome.card,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(isCustomDuration(item) ? Color.clear : PopoverChrome.border, lineWidth: 1.5)
+                        )
+                        .popover(isPresented: $showsCustomDuration) {
+                            customDurationPopover(for: item)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    HStack(spacing: 9) {
+                        fieldLabel("종료")
+                        if item.deadline != nil {
+                            DatePicker(
+                                "",
+                                selection: deadlineBinding(for: item),
+                                in: startDate...Date.distantFuture,
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+
+                            Button {
+                                viewModel.clearDeadline(item.id)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(PopoverChrome.inkTertiary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("종료 시각 지우기")
+                        } else {
+                            Button("종료 시각 지정") {
+                                viewModel.setDuration(item.id, minutes: 60)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.accent)
+                        }
+                        Spacer(minLength: 0)
+                    }
                 }
             }
 
@@ -569,7 +661,7 @@ struct TodoBrowserView: View {
             .frame(width: 50, alignment: .leading)
     }
 
-    private func dateQuick(_ title: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
+    private func quickChip(_ title: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11.5, weight: .bold, design: .rounded))
@@ -586,6 +678,86 @@ struct TodoBrowserView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    private func durationChip(_ title: String, minutes: Int, item: TodoItem) -> some View {
+        quickChip(title, selected: item.durationMinutes == minutes) {
+            viewModel.setDuration(item.id, minutes: minutes)
+        }
+    }
+
+    private func isCustomDuration(_ item: TodoItem) -> Bool {
+        guard let minutes = item.durationMinutes else { return false }
+        return ![30, 60, 120].contains(minutes)
+    }
+
+    private func prepareCustomDuration(_ item: TodoItem) {
+        let minutes = item.durationMinutes ?? 30
+        if minutes.isMultiple(of: 1_440) {
+            customDurationAmount = minutes / 1_440
+            customDurationUnit = .days
+        } else if minutes.isMultiple(of: 60) {
+            customDurationAmount = minutes / 60
+            customDurationUnit = .hours
+        } else {
+            customDurationAmount = minutes
+            customDurationUnit = .minutes
+        }
+    }
+
+    private func customDurationPopover(for item: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("소요 시간")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+
+            HStack(spacing: 8) {
+                Button {
+                    customDurationAmount = max(1, customDurationAmount - 1)
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(.borderless)
+                .help("줄이기")
+
+                NumberField(
+                    value: $customDurationAmount,
+                    range: 1...999,
+                    width: 58
+                )
+
+                Picker("", selection: $customDurationUnit) {
+                    ForEach(TodoDurationUnit.allCases) { unit in
+                        Text(unit.title).tag(unit)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 72)
+
+                Button {
+                    customDurationAmount = min(999, customDurationAmount + 1)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help("늘리기")
+            }
+
+            HStack {
+                Spacer()
+                Button("적용") {
+                    let amount = min(999, max(1, customDurationAmount))
+                    viewModel.setDuration(item.id, minutes: amount * customDurationUnit.rawValue)
+                    showsCustomDuration = false
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .frame(width: 240)
+        .background(PopoverChrome.surface)
+        .appearanceAccentTint(.popover)
     }
 
     private func footerButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -746,13 +918,20 @@ struct TodoBrowserView: View {
         collapsedGroups.remove(item.bucket(now: viewModel.todayReferenceDate).title)
     }
 
-    private func whenBinding(for item: TodoItem) -> Binding<Date> {
+    private func startBinding(for item: TodoItem) -> Binding<Date> {
         Binding(
             get: {
-                item.deadline ?? item.startDate
+                item.startDate
                     ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
             },
-            set: { viewModel.setWhen(item.id, date: $0) }
+            set: { viewModel.setStartDate(item.id, date: $0) }
+        )
+    }
+
+    private func deadlineBinding(for item: TodoItem) -> Binding<Date> {
+        Binding(
+            get: { item.deadline ?? item.startDate?.addingTimeInterval(3_600) ?? Date() },
+            set: { viewModel.setDeadline(item.id, date: $0) }
         )
     }
 

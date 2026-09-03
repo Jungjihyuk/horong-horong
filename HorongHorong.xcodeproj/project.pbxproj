@@ -352,6 +352,7 @@
 		A532291A1CBD75640C0D3D78 /* companion in Resources */ = {isa = PBXBuildFile; fileRef = BC0E743139EFA49E2F373801 /* companion */; };
 		A5968B859FDA8332E8D3D7CD /* PomodoroReflectionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F763CC32D3A0F31D2C073A /* PomodoroReflectionPanel.swift */; };
 		A5A899F873928691D361DCEE /* TimerPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35727BD3F08417C6C3821B41 /* TimerPage.swift */; };
+		A63CB4C0FABD711AAA02D602 /* SwiftDataTodoRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */; };
 		A64256F8AE4DEEA8FB2B2C8D /* PackageChatProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43B6B7A5E5F1C57A8943B041 /* PackageChatProviderAdapter.swift */; };
 		A6BBF1D54DC0BDB45890439E /* NewsReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 699FB2CBB6237C8593FAD8BF /* NewsReport.swift */; };
 		A726B9351B4593D55DD9A80F /* PopoverChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB9968CC6DAEFE2C5203DB6 /* PopoverChrome.swift */; };
@@ -701,6 +702,7 @@
 		7BD28D2BA1737B364102CE7F /* AchievementPersonaVisionComposerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementPersonaVisionComposerSheet.swift; sourceTree = "<group>"; };
 		7DB2BD8A8F69624285FC2534 /* StatsDetailWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsDetailWindow.swift; sourceTree = "<group>"; };
 		7EC81BC0350A644911C703B3 /* AchievementDetailRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementDetailRows.swift; sourceTree = "<group>"; };
+		80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTodoRepositoryTests.swift; sourceTree = "<group>"; };
 		81DB21EE4A3CD71E450F7170 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
 		8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStoreLocationTests.swift; sourceTree = "<group>"; };
 		84208C64E5FF8177FE973E1A /* OllamaModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OllamaModelPicker.swift; sourceTree = "<group>"; };
@@ -1269,6 +1271,7 @@
 				0B2006B5F5B428A06ED848FB /* SwiftDataPomodoroTaskRepositoryTests.swift */,
 				D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
+				80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */,
 				00D754FE7D4BDE2F31CC9AE7 /* TodoViewModelTests.swift */,
 				64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */,
 				4A427A130A0424FFC34C2B4F /* VaultViewModelTests.swift */,
@@ -2388,6 +2391,7 @@
 				39CFD58E6F6723454B060AFC /* SwiftDataPomodoroTaskRepositoryTests.swift in Sources */,
 				D572FFFFD409E12DD01351B2 /* SwiftDataRewardRepositoryTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
+				A63CB4C0FABD711AAA02D602 /* SwiftDataTodoRepositoryTests.swift in Sources */,
 				D37807286F7056A880AA400A /* TodoViewModelTests.swift in Sources */,
 				D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */,
 				551415C3F546C96A452F6179 /* VaultViewModelTests.swift in Sources */,

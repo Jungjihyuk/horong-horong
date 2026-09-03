@@ -48,8 +48,10 @@ final class TodoViewModelTests: XCTestCase {
             replace(id) { $0.with(isCompleted: isCompleted) }
         }
 
-        func setWhen(id: UUID, date: Date?) throws {
-            replace(id) { $0.with(startDate: .some(date), deadline: .some(nil)) }
+        func setSchedule(id: UUID, startDate: Date?, deadline: Date?) throws {
+            replace(id) {
+                $0.with(startDate: .some(startDate), deadline: .some(deadline))
+            }
         }
 
         func place(id: UUID, into bucket: TodoBucket, now: Date) throws {
@@ -127,12 +129,13 @@ final class TodoViewModelTests: XCTestCase {
     private func item(
         _ content: String,
         start: Date? = nil,
+        deadline: Date? = nil,
         completed: Bool = false,
         linked: Bool = false,
         deletedAt: Date? = nil
     ) -> TodoItem {
         TodoItem(
-            id: UUID(), content: content, startDate: start, deadline: nil,
+            id: UUID(), content: content, startDate: start, deadline: deadline,
             isCompleted: completed, deletedAt: deletedAt, isLinkedToReminders: linked,
             reminderCalendarIdentifier: nil,
             icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
@@ -250,15 +253,92 @@ final class TodoViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canSubmitComposer)
     }
 
-    func testSetWhenToNilMovesToSomeday() {
+    func testClearScheduleMovesToSomeday() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
         let target = try! XCTUnwrap(viewModel.today.first)
 
-        viewModel.setWhen(target.id, date: nil)
+        viewModel.clearSchedule(target.id)
 
         XCTAssertTrue(viewModel.today.isEmpty)
         XCTAssertEqual(viewModel.someday.count, 2)
+    }
+
+    func testSetDurationCalculatesDeadlineFromStart() {
+        let start = day(0)
+        let repository = FakeRepository()
+        let target = item("집중할 일", start: start)
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.setDuration(target.id, minutes: 90)
+
+        let changed = try! XCTUnwrap(repository.items.first)
+        XCTAssertEqual(changed.startDate, start)
+        XCTAssertEqual(changed.deadline, start.addingTimeInterval(90 * 60))
+        XCTAssertEqual(changed.durationMinutes, 90)
+    }
+
+    func testMovingStartPreservesDuration() {
+        let start = day(0)
+        let repository = FakeRepository()
+        let target = item(
+            "옮길 일",
+            start: start,
+            deadline: start.addingTimeInterval(30 * 60)
+        )
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+        let movedStart = start.addingTimeInterval(3 * 60 * 60)
+
+        viewModel.setStartDate(target.id, date: movedStart)
+
+        let changed = try! XCTUnwrap(repository.items.first)
+        XCTAssertEqual(changed.startDate, movedStart)
+        XCTAssertEqual(changed.deadline, movedStart.addingTimeInterval(30 * 60))
+        XCTAssertEqual(changed.durationMinutes, 30)
+    }
+
+    func testEditingDeadlineRecalculatesDuration() {
+        let start = day(0)
+        let repository = FakeRepository()
+        let target = item("늘릴 일", start: start, deadline: start.addingTimeInterval(30 * 60))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.setDeadline(target.id, date: start.addingTimeInterval(150 * 60))
+
+        XCTAssertEqual(repository.items.first?.durationMinutes, 150)
+    }
+
+    func testDeadlineBeforeStartIsIgnored() {
+        let start = day(0)
+        let repository = FakeRepository()
+        let target = item("범위 검사", start: start, deadline: start.addingTimeInterval(60 * 60))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.setDeadline(target.id, date: start.addingTimeInterval(-60))
+
+        XCTAssertEqual(repository.items.first?.deadline, start.addingTimeInterval(60 * 60))
+    }
+
+    func testClearingDeadlineKeepsStart() {
+        let start = day(0)
+        let repository = FakeRepository()
+        let target = item("종료만 지울 일", start: start, deadline: start.addingTimeInterval(60 * 60))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.clearDeadline(target.id)
+
+        XCTAssertEqual(repository.items.first?.startDate, start)
+        XCTAssertNil(repository.items.first?.deadline)
     }
 
     /// 끌어다 놓으면 그 묶음의 규칙대로 날짜·완료가 다시 정해진다.

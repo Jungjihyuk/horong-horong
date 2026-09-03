@@ -709,6 +709,13 @@ struct TimerView: View {
 
                         Spacer(minLength: 8)
 
+                        if let minutes = selectedTask?.durationMinutes {
+                            Text(durationText(minutes))
+                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(PopoverChrome.inkTertiary)
+                                .fixedSize()
+                        }
+
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(PopoverChrome.inkTertiary)
@@ -849,7 +856,8 @@ struct TimerView: View {
                             title: task.title,
                             systemImage: "circle",
                             isSelected: selectedTaskID == task.id,
-                            isHovered: hoveredTaskID == task.id
+                            isHovered: hoveredTaskID == task.id,
+                            trailingText: task.durationMinutes.map(durationText)
                         )
                     }
                     .buttonStyle(.plain)
@@ -865,7 +873,8 @@ struct TimerView: View {
         title: String,
         systemImage: String,
         isSelected: Bool,
-        isHovered: Bool
+        isHovered: Bool,
+        trailingText: String? = nil
     ) -> some View {
         HStack(spacing: 9) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : systemImage)
@@ -880,6 +889,13 @@ struct TimerView: View {
                 .multilineTextAlignment(.leading)
 
             Spacer(minLength: 8)
+
+            if let trailingText {
+                Text(trailingText)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .fixedSize()
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 9)
@@ -945,16 +961,17 @@ struct TimerView: View {
         guard selectedTaskID != taskID else { return }
         selectedTaskID = taskID
         
-        if currentPreset == .custom {
-            if let task = selectedTask {
-                let duration = (task.durationMinutes ?? 0) > 0 ? task.durationMinutes! : Constants.defaultCustomFocusMinutes
-                customFocusMinutes = duration
-                appState.focusMinutes = duration
-            } else {
-                customFocusMinutes = Constants.defaultCustomFocusMinutes
-                appState.focusMinutes = Constants.defaultCustomFocusMinutes
-            }
+        if currentPreset == .custom, let duration = selectedTask?.durationMinutes {
+            customFocusMinutes = duration
+            appState.focusMinutes = duration
         }
+    }
+
+    private func durationText(_ minutes: Int) -> String {
+        if minutes.isMultiple(of: 1_440) { return "\(minutes / 1_440)일" }
+        if minutes.isMultiple(of: 60) { return "\(minutes / 60)시간" }
+        if minutes > 60 { return "\(minutes / 60)시간 \(minutes % 60)분" }
+        return "\(minutes)분"
     }
 
     private func startFocus() {

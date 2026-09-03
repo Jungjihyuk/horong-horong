@@ -32,10 +32,9 @@ protocol TodoRepository {
     func updateContent(id: UUID, content: String) throws
     func setCompleted(id: UUID, isCompleted: Bool) throws
 
-    /// 날짜를 정한다. `nil` 이면 시작·마감을 모두 지운다(«언젠가»로 간다).
-    ///
-    /// 시작만 있는 할 일은 시작을, 마감이 있으면 마감을 옮긴다 — 뒤집힘 방지는 모델이 한다.
-    func setWhen(id: UUID, date: Date?) throws
+    /// 시작과 종료를 한 번에 저장한다. 둘 다 `nil` 이면 «언젠가»로 간다.
+    /// 종료는 시작보다 앞설 수 없다.
+    func setSchedule(id: UUID, startDate: Date?, deadline: Date?) throws
 
     /// 끌어다 놓은 묶음에 맞게 날짜·완료 상태를 다시 정한다.
     func place(id: UUID, into bucket: TodoBucket, now: Date) throws

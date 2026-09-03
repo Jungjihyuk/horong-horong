@@ -102,9 +102,9 @@ final class TodoViewModel {
         return item.isLinkedToReminders ? reminderLists.first(where: \.isDefault) : nil
     }
 
-    /// 날짜 빠른 선택(«오늘»·«내일»)이 눌린 상태인지.
-    func isWhen(_ item: TodoItem, dayOffset: Int) -> Bool {
-        guard let basis = item.deadline ?? item.startDate else { return false }
+    /// 시작 날짜 빠른 선택(«오늘»·«내일»)이 눌린 상태인지.
+    func isStartDay(_ item: TodoItem, dayOffset: Int) -> Bool {
+        guard let basis = item.startDate else { return false }
         let calendar = Calendar.current
         let target = calendar.date(byAdding: .day, value: dayOffset, to: todayReferenceDate) ?? todayReferenceDate
         return calendar.isDate(basis, inSameDayAs: target)
@@ -127,15 +127,54 @@ final class TodoViewModel {
         refresh(item.id)
     }
 
-    /// `date` 가 `nil` 이면 «언젠가» 로 보낸다.
-    func setWhen(_ id: UUID, date: Date?) {
-        try? repository.setWhen(id: id, date: date)
+    func clearSchedule(_ id: UUID) {
+        try? repository.setSchedule(id: id, startDate: nil, deadline: nil)
         refresh(id)
     }
 
-    func setWhen(_ id: UUID, dayOffset: Int) {
-        let day = Calendar.current.date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
-        setWhen(id, date: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
+    /// 시작을 옮길 때 이미 정한 소요 시간은 유지한다.
+    func setStartDate(_ id: UUID, date: Date) {
+        guard let item = try? repository.todo(id: id) else { return }
+        let duration = item.startDate.flatMap { start in
+            item.deadline.map { $0.timeIntervalSince(start) }
+        }
+        let deadline = duration.flatMap { $0 > 0 ? date.addingTimeInterval($0) : nil }
+        try? repository.setSchedule(id: id, startDate: date, deadline: deadline)
+        refresh(id)
+    }
+
+    func setStartDay(_ id: UUID, dayOffset: Int) {
+        guard let item = try? repository.todo(id: id) else { return }
+        let calendar = Calendar.current
+        let day = calendar.date(byAdding: .day, value: dayOffset, to: todayReferenceDate) ?? todayReferenceDate
+        let time = item.startDate.map { calendar.dateComponents([.hour, .minute], from: $0) }
+            ?? DateComponents(hour: 9, minute: 0)
+        var components = calendar.dateComponents([.year, .month, .day], from: day)
+        components.hour = time.hour
+        components.minute = time.minute
+        setStartDate(id, date: calendar.date(from: components) ?? day)
+    }
+
+    func setDuration(_ id: UUID, minutes: Int) {
+        guard minutes > 0,
+              let item = try? repository.todo(id: id),
+              let startDate = item.startDate else { return }
+        let deadline = startDate.addingTimeInterval(TimeInterval(minutes * 60))
+        try? repository.setSchedule(id: id, startDate: startDate, deadline: deadline)
+        refresh(id)
+    }
+
+    func setDeadline(_ id: UUID, date: Date) {
+        guard let item = try? repository.todo(id: id),
+              item.startDate.map({ date >= $0 }) ?? true else { return }
+        try? repository.setSchedule(id: id, startDate: item.startDate, deadline: date)
+        refresh(id)
+    }
+
+    func clearDeadline(_ id: UUID) {
+        guard let item = try? repository.todo(id: id) else { return }
+        try? repository.setSchedule(id: id, startDate: item.startDate, deadline: nil)
+        refresh(id)
     }
 
     func setReminderList(_ id: UUID, listID: String) {

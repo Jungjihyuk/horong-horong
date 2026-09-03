@@ -43,6 +43,12 @@ struct TodoItem: Identifiable, Equatable, Sendable {
     /// 그룹 안 정렬 키. 날짜가 없으면 맨 뒤로 간다.
     var dueSortKey: Date { deadline ?? startDate ?? .distantFuture }
 
+    /// 시작과 종료가 모두 정해진 할 일의 예상 소요 시간.
+    var durationMinutes: Int? {
+        guard let startDate, let deadline, deadline > startDate else { return nil }
+        return Int((deadline.timeIntervalSince(startDate) / 60).rounded())
+    }
+
     /// 본문에서 제목과 메모를 합친다. 편집기가 두 칸을 하나로 되돌릴 때 쓴다.
     static func joined(title: String, note: String) -> String {
         note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : title + "\n" + note

@@ -66,18 +66,11 @@ final class SwiftDataTodoRepository: TodoRepository {
         }
     }
 
-    func setWhen(id: UUID, date: Date?) throws {
+    func setSchedule(id: UUID, startDate: Date?, deadline: Date?) throws {
         try change(id, syncLinkedReminder: true) { memo in
-            guard let date else {
-                memo.startDate = nil
-                memo.deadline = nil
-                return
-            }
-            // 마감이 있으면 마감을, 없으면 시작을 옮긴다. 뒤집힘 보정은 모델이 한다.
-            if memo.deadline != nil {
-                memo.setDeadline(date)
-            } else {
-                memo.setStartDate(date)
+            memo.startDate = startDate
+            memo.deadline = deadline.map { end in
+                startDate.map { max($0, end) } ?? end
             }
         }
     }
