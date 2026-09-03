@@ -222,7 +222,7 @@ HorongHorong/
 
 모든 하위 폴더를 미리 만들지 않는다. 파일이 하나뿐이면 기능 폴더에 평평하게 두고 두 개 이상의 같은 역할이 생길 때 분리한다. 새 추상화와 빈 폴더는 그것 때문에 쉬워지는 구체적 변경이 있을 때만 만든다.
 
-현재 소스는 Features/, Models/, Services/, Utilities/ 중심의 레거시 구조다. 요청받은 기능을 마이그레이션할 때만 목표 구조로 옮긴다. 폴더 정리만을 이유로 요청 범위 밖의 파일을 이동하지 않는다.
+현재 소스는 `Features/`와 `Models/` 폴더가 완전히 소멸되었으며, `Services/`와 `Utilities/`의 잔여 공통 모듈을 제외하고 대부분 Presentation, Domain, Data 목표 구조로 전환되었다. 요청받은 기능을 마이그레이션할 때만 목표 구조로 옮긴다. 폴더 정리만을 이유로 요청 범위 밖의 파일을 이동하지 않는다.
 
 ### 이전 순서
 
@@ -311,9 +311,10 @@ HorongHorong/
 | ✅ 완료 | `Achievement` + `Reward` | `AchievementDetailWindow`, `RewardView` 등 Repository + ViewModel 분리 완료 |
 | ✅ 완료 | `Timer` | `TimerRepository`, `TimerManager` 분리 완료 |
 | ✅ 완료 | `Stats` | `StatsDetailWindow`, `FocusDetailView`, `StatsChartView` 등 Repository + ViewModel 분리 완료 |
+| ✅ 완료 | `Settings` · `Hub` · `MenuBar` · `Developer` | `Presentation/` 으로 이동 완료. 레거시 `Features/` 폴더 소멸 |
 | 중간 | `Tracker` | 뷰에 `@Query` 가 없다(Manager 가 fetch). 얻는 게 적어 우선순위 낮음 |
-| 낮음 | `Settings`(9,146) · `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
-| 보류 | `QuickMemo` · `MenuBar` · `Hub` · `Developer` | 역할이 겹치거나 DEBUG 전용. 정리 여부부터 판단 |
+| 낮음 | `Companion`(7,086) | 크고, 지금 성능·정확성 문제가 없음 |
+| 보류 | `QuickMemo` | Presentation 내 위치. 향후 정리 여부 판단 |
 
 **2026-09-03 기준 남은 `@Query`** — **전체 View에서 `@Query` 완전 제거 완료 (0개)**. 모든 화면이 ViewModel + Repository 기반으로 동작.
 
