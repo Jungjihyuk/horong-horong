@@ -100,13 +100,13 @@ final class MemoReminderLinkService {
     func saveReminder(for memo: Memo) async throws -> String {
         try await requestAccessIfNeeded()
 
-        let content = reminderContent(for: memo)
-        let reminder = existingReminder(for: memo) ?? EKReminder(eventStore: eventStore)
-        reminder.calendar = targetCalendar(for: memo) ?? reminder.calendar ?? eventStore.defaultCalendarForNewReminders()
+        let content = reminderContent(content: memo.content)
+        let reminder = existingReminder(identifier: memo.reminderIdentifier) ?? EKReminder(eventStore: eventStore)
+        reminder.calendar = targetCalendar(calendarID: memo.reminderCalendarIdentifier) ?? reminder.calendar ?? eventStore.defaultCalendarForNewReminders()
         reminder.title = content.title
         reminder.notes = content.notes
         reminder.url = content.url
-        reminder.priority = reminderPriority(for: memo)
+        reminder.priority = reminderPriority(isPinned: memo.isPinned, icon: memo.icon)
         reminder.isCompleted = memo.isCompletedValue
 
         if let startDate = memo.startDate {
@@ -115,16 +115,45 @@ final class MemoReminderLinkService {
             reminder.startDateComponents = nil
         }
 
-        // 미리알림 앱은 마감(due)만 화면에 보여준다. 여기에 메모의 마감을 넣으면 미리알림에서
-        // 가져온 항목이 동기화할 때마다 뒤로 밀린다(10시 할일 → 시작 10시·마감 11시 → 11시 할일).
-        // 그래서 미리알림에 보이는 시각은 언제나 "시작 시각"으로 맞춘다. 시작일이 없는 메모만
-        // 마감을 대신 쓴다.
         if let visible = memo.startDate ?? memo.deadline {
             reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: visible)
         } else {
             reminder.dueDateComponents = nil
         }
-        syncAlarm(for: reminder, memo: memo)
+        syncAlarm(for: reminder, fireDate: memo.reminderFireDate)
+
+        do {
+            try eventStore.save(reminder, commit: true)
+        } catch {
+            throw normalizedError(error)
+        }
+        return reminder.calendarItemIdentifier
+    }
+
+    func saveReminder(for record: SecondBrainRecord) async throws -> String {
+        try await requestAccessIfNeeded()
+
+        let content = reminderContent(content: record.content)
+        let reminder = existingReminder(identifier: record.reminderIdentifier) ?? EKReminder(eventStore: eventStore)
+        reminder.calendar = targetCalendar(calendarID: record.reminderCalendarIdentifier) ?? reminder.calendar ?? eventStore.defaultCalendarForNewReminders()
+        reminder.title = content.title
+        reminder.notes = content.notes
+        reminder.url = content.url
+        reminder.priority = reminderPriority(isPinned: record.isPinned, icon: record.icon)
+        reminder.isCompleted = record.isCompletedValue
+
+        if let startDate = record.startDate {
+            reminder.startDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: startDate)
+        } else {
+            reminder.startDateComponents = nil
+        }
+
+        if let visible = record.startDate ?? record.deadline {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: visible)
+        } else {
+            reminder.dueDateComponents = nil
+        }
+        syncAlarm(for: reminder, fireDate: record.reminderFireDate)
 
         do {
             try eventStore.save(reminder, commit: true)
@@ -135,7 +164,16 @@ final class MemoReminderLinkService {
     }
 
     func removeReminder(for memo: Memo) throws {
-        guard let reminder = existingReminder(for: memo) else { return }
+        guard let reminder = existingReminder(identifier: memo.reminderIdentifier) else { return }
+        do {
+            try eventStore.remove(reminder, commit: true)
+        } catch {
+            throw normalizedError(error)
+        }
+    }
+
+    func removeReminder(for record: SecondBrainRecord) throws {
+        guard let reminder = existingReminder(identifier: record.reminderIdentifier) else { return }
         do {
             try eventStore.remove(reminder, commit: true)
         } catch {
@@ -208,19 +246,19 @@ final class MemoReminderLinkService {
         eventStore.refreshSourcesIfNecessary()
     }
 
-    private func existingReminder(for memo: Memo) -> EKReminder? {
-        guard let identifier = memo.reminderIdentifier,
+    private func existingReminder(identifier: String?) -> EKReminder? {
+        guard let identifier,
               let item = eventStore.calendarItem(withIdentifier: identifier) as? EKReminder else {
             return nil
         }
         return item
     }
 
-    private func targetCalendar(for memo: Memo) -> EKCalendar? {
-        guard let identifier = memo.reminderCalendarIdentifier else {
+    private func targetCalendar(calendarID: String?) -> EKCalendar? {
+        guard let calendarID else {
             return eventStore.defaultCalendarForNewReminders()
         }
-        return eventStore.calendar(withIdentifier: identifier) ?? eventStore.defaultCalendarForNewReminders()
+        return eventStore.calendar(withIdentifier: calendarID) ?? eventStore.defaultCalendarForNewReminders()
     }
 
     private static func date(from components: DateComponents?) -> Date? {
@@ -229,8 +267,8 @@ final class MemoReminderLinkService {
         return components.date
     }
 
-    private func reminderContent(for memo: Memo) -> ReminderContent {
-        let trimmed = memo.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func reminderContent(content: String) -> ReminderContent {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return ReminderContent(title: "호롱호롱 메모", notes: nil, url: nil)
         }
@@ -259,16 +297,16 @@ final class MemoReminderLinkService {
         return detector.firstMatch(in: text, options: [], range: range)?.url
     }
 
-    private func reminderPriority(for memo: Memo) -> Int {
-        if memo.isPinned || memo.icon == "⭐️" {
+    private func reminderPriority(isPinned: Bool, icon: String?) -> Int {
+        if isPinned || icon == "⭐️" {
             return 1
         }
         return 0
     }
 
-    private func syncAlarm(for reminder: EKReminder, memo: Memo) {
+    private func syncAlarm(for reminder: EKReminder, fireDate: Date?) {
         reminder.alarms?.forEach { reminder.removeAlarm($0) }
-        guard let fireDate = memo.reminderFireDate else {
+        guard let fireDate else {
             return
         }
         reminder.addAlarm(EKAlarm(absoluteDate: fireDate))

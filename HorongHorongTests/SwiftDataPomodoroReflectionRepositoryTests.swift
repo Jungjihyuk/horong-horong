@@ -41,7 +41,7 @@ final class SwiftDataPomodoroReflectionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataPomodoroReflectionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         context.insert(memo)
         let session = insertSession(context, linkedMemoID: memo.id, taskTitle: "할 일", category: "학습")
 
@@ -112,7 +112,7 @@ final class SwiftDataPomodoroReflectionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataPomodoroReflectionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         context.insert(memo)
         let session = insertSession(context, linkedMemoID: memo.id, taskTitle: "할 일")
 
@@ -132,7 +132,7 @@ final class SwiftDataPomodoroReflectionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataPomodoroReflectionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         context.insert(memo)
         let session = insertSession(context, linkedMemoID: memo.id, taskTitle: "할 일")
 

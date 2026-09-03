@@ -238,7 +238,7 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let repository = SwiftDataAchievementRepository(context: context)
         let calendar = Calendar.current
 
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 9, minute: 30))!
         memo.startDate = start
         context.insert(memo)
@@ -262,8 +262,8 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let calendar = Calendar.current
         let base = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 9))!
 
-        let memos = (0..<3).map { index -> Memo in
-            let memo = Memo(content: "할 일 \(index)", section: .todo)
+        let memos = (0..<3).map { index -> SecondBrainRecord in
+            let memo = SecondBrainRecord(content: "할 일 \(index)", section: .todo)
             memo.startDate = base
             context.insert(memo)
             return memo
@@ -287,7 +287,7 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataAchievementRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         memo.isPinned = true
         context.insert(memo)
         try context.save()
@@ -303,12 +303,12 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataAchievementRepository(context: context)
 
-        context.insert(Memo(content: "할 일", section: .todo))
-        let done = Memo(content: "끝낸 일", section: .todo)
+        context.insert(SecondBrainRecord(content: "할 일", section: .todo))
+        let done = SecondBrainRecord(content: "끝낸 일", section: .todo)
         done.isCompletedValue = true
         context.insert(done)
-        context.insert(Memo(content: "쪽지", section: .quickNote))
-        let deleted = Memo(content: "최근 삭제", section: .todo)
+        context.insert(SecondBrainRecord(content: "쪽지", section: .quickNote))
+        let deleted = SecondBrainRecord(content: "최근 삭제", section: .todo)
         deleted.deletedAt = Date()
         context.insert(deleted)
         try context.save()

@@ -683,37 +683,36 @@ enum FocusNudgeSnapshotLoader {
         modelContext: ModelContext
     ) -> (open: Int, total: Int, overdue: Int, next: FocusNudgeContext.TaskCandidate?) {
         struct ScopedTask {
-            let memo: Memo
+            let record: SecondBrainRecord
             let at: Date?
             let isOverdue: Bool
         }
 
-        // Memo 의 날짜 필드는 옵셔널이라 #Predicate 로 다루기 번거롭고, 메모 수는 많지 않으므로 메모리에서 걸러낸다.
-        let memos = ((try? modelContext.fetch(FetchDescriptor<Memo>())) ?? []).filter {
+        let records = ((try? modelContext.fetch(FetchDescriptor<SecondBrainRecord>())) ?? []).filter {
             !$0.isRecentlyDeleted
         }
 
         var todayTasks: [ScopedTask] = []
         var candidates: [ScopedTask] = []
-        for memo in memos {
-            let todayDates = [memo.startDate, memo.deadline]
+        for record in records {
+            let todayDates = [record.startDate, record.deadline]
                 .compactMap { $0 }
                 .filter { $0 >= dayStart && $0 < dayEnd }
             if let at = todayDates.min() {
                 let task = ScopedTask(
-                    memo: memo,
+                    record: record,
                     at: at,
-                    isOverdue: (memo.deadline ?? .distantFuture) < now
+                    isOverdue: (record.deadline ?? .distantFuture) < now
                 )
                 todayTasks.append(task)
                 candidates.append(task)
-            } else if let deadline = memo.deadline, deadline < dayStart, !memo.isCompletedValue {
-                candidates.append(ScopedTask(memo: memo, at: deadline, isOverdue: true))
+            } else if let deadline = record.deadline, deadline < dayStart, !record.isCompletedValue {
+                candidates.append(ScopedTask(record: record, at: deadline, isOverdue: true))
             }
         }
 
-        let openTodayTasks = todayTasks.filter { !$0.memo.isCompletedValue }
-        let openCandidates = candidates.filter { !$0.memo.isCompletedValue }
+        let openTodayTasks = todayTasks.filter { !$0.record.isCompletedValue }
+        let openCandidates = candidates.filter { !$0.record.isCompletedValue }
         let upcoming = openCandidates
             .filter { ($0.at ?? .distantPast) >= now }
             .min { ($0.at ?? .distantFuture) < ($1.at ?? .distantFuture) }
@@ -728,7 +727,7 @@ enum FocusNudgeSnapshotLoader {
             overdue: openCandidates.filter(\.isOverdue).count,
             next: next.map {
                 FocusNudgeContext.TaskCandidate(
-                    title: taskTitle($0.memo.content),
+                    title: taskTitle($0.record.content),
                     at: $0.at,
                     isOverdue: $0.isOverdue
                 )

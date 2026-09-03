@@ -21,6 +21,18 @@ enum TodayPlanningReminderPolicy {
         return isTodayTask(startDate: memo.startDate, now: now, calendar: calendar)
     }
 
+    static func isTodayTask(
+        _ record: SecondBrainRecord,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard !record.isCompletedValue,
+              !record.isRecentlyDeleted else {
+            return false
+        }
+        return isTodayTask(startDate: record.startDate, now: now, calendar: calendar)
+    }
+
     /// `@Model` 없이 같은 판정을 한다. 이미 살아 있는 할일만 넘어온 자리에서 쓴다
     /// (뽀모도로 후보 목록). 규칙이 두 벌이 되지 않게 위 버전이 이걸 부른다.
     static func isTodayTask(
@@ -42,6 +54,16 @@ enum TodayPlanningReminderPolicy {
         }
     }
 
+    static func hasTodayTask(
+        in records: [SecondBrainRecord],
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        records.contains {
+            isTodayTask($0, now: now, calendar: calendar)
+        }
+    }
+
     static func shouldPrompt(
         isEnabled: Bool,
         memos: [Memo],
@@ -50,6 +72,20 @@ enum TodayPlanningReminderPolicy {
         calendar: Calendar = .current
     ) -> Bool {
         guard isEnabled, !hasTodayTask(in: memos, now: now, calendar: calendar) else {
+            return false
+        }
+        guard let lastPromptedAt else { return true }
+        return !calendar.isDate(lastPromptedAt, inSameDayAs: now)
+    }
+
+    static func shouldPrompt(
+        isEnabled: Bool,
+        records: [SecondBrainRecord],
+        lastPromptedAt: Date?,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard isEnabled, !hasTodayTask(in: records, now: now, calendar: calendar) else {
             return false
         }
         guard let lastPromptedAt else { return true }
@@ -152,9 +188,9 @@ final class TodayPlanningReminderCoordinator {
         }
 
         let now = Date()
-        let memos: [Memo]
+        let records: [SecondBrainRecord]
         do {
-            memos = try modelContext.fetch(FetchDescriptor<Memo>())
+            records = try modelContext.fetch(FetchDescriptor<SecondBrainRecord>())
         } catch {
             print("오늘 할 일 계획 알림 판정 실패: \(error.localizedDescription)")
             scheduleRetryOrNextDay()
@@ -164,7 +200,7 @@ final class TodayPlanningReminderCoordinator {
         let lastPromptedAt = lastPromptedAtFromDefaults()
         guard TodayPlanningReminderPolicy.shouldPrompt(
             isEnabled: true,
-            memos: memos,
+            records: records,
             lastPromptedAt: lastPromptedAt,
             now: now
         ) else {
@@ -212,9 +248,9 @@ final class TodayPlanningReminderCoordinator {
         }
 
         do {
-            let latestMemos = try modelContext.fetch(FetchDescriptor<Memo>())
+            let latestRecords = try modelContext.fetch(FetchDescriptor<SecondBrainRecord>())
             guard !TodayPlanningReminderPolicy.hasTodayTask(
-                in: latestMemos,
+                in: latestRecords,
                 now: promptedAt
             ) else {
                 NotificationManager.shared.cancel(

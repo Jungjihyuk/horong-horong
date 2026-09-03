@@ -19,11 +19,11 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        context.insert(Memo(content: "살아 있는 할 일", section: .todo))
-        let completed = Memo(content: "완료", section: .todo)
+        context.insert(SecondBrainRecord(content: "살아 있는 할 일", section: .todo))
+        let completed = SecondBrainRecord(content: "완료", section: .todo)
         completed.isCompletedValue = true
         context.insert(completed)
-        let deleted = Memo(content: "최근 삭제", section: .todo)
+        let deleted = SecondBrainRecord(content: "최근 삭제", section: .todo)
         deleted.deletedAt = Date()
         context.insert(deleted)
         try context.save()
@@ -37,8 +37,8 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        context.insert(Memo(content: "할 일", section: .todo))
-        context.insert(Memo(content: "쪽지", section: .quickNote))
+        context.insert(SecondBrainRecord(content: "할 일", section: .todo))
+        context.insert(SecondBrainRecord(content: "쪽지", section: .quickNote))
         try context.save()
 
         XCTAssertEqual(Set(repository.candidateMemos().map(\.content)), ["할 일", "쪽지"])
@@ -50,7 +50,7 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        let memo = Memo(content: "묶인 할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "묶인 할 일", section: .todo)
         context.insert(memo)
         context.insert(AchievementGoalRecord(title: "목표 하나", linkedMemoIDs: [memo.id]))
         context.insert(AchievementGoalRecord(title: "목표 둘", linkedMemoIDs: [memo.id]))
@@ -65,9 +65,9 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        let older = Memo(content: "오래된 것", section: .todo)
+        let older = SecondBrainRecord(content: "오래된 것", section: .todo)
         older.updatedAt = Date(timeIntervalSince1970: 1_000)
-        let newer = Memo(content: "최근 것", section: .todo)
+        let newer = SecondBrainRecord(content: "최근 것", section: .todo)
         newer.updatedAt = Date(timeIntervalSince1970: 2_000)
         context.insert(older)
         context.insert(newer)

@@ -161,7 +161,7 @@ final class SwiftDataFocusSessionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataFocusSessionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         context.insert(memo)
         try context.save()
 
@@ -179,7 +179,7 @@ final class SwiftDataFocusSessionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataFocusSessionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         memo.isCompletedValue = true
         context.insert(memo)
         try context.save()
@@ -196,7 +196,7 @@ final class SwiftDataFocusSessionRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataFocusSessionRepository(context: context)
-        let memo = Memo(content: "할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "할 일", section: .todo)
         memo.deletedAt = Date()
         context.insert(memo)
         try context.save()

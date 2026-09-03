@@ -14,7 +14,7 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataTodoRepository(context: context)
-        let memo = Memo(content: "집중할 일", section: .todo)
+        let memo = SecondBrainRecord(content: "집중할 일", section: .todo)
         context.insert(memo)
         try context.save()
         let start = Date(timeIntervalSince1970: 1_800_000_000)
@@ -32,7 +32,7 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataTodoRepository(context: context)
-        let memo = Memo(content: "범위 검사", section: .todo)
+        let memo = SecondBrainRecord(content: "범위 검사", section: .todo)
         context.insert(memo)
         try context.save()
         let start = Date(timeIntervalSince1970: 1_800_000_000)

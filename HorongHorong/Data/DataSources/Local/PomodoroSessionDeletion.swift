@@ -7,9 +7,9 @@ enum PomodoroSessionDeletion {
     static func delete(
         _ session: FocusSession,
         modelContext: ModelContext
-    ) throws -> Memo? {
+    ) throws -> SecondBrainRecord? {
         let sessionID = session.id
-        let affectedMemo = try PomodoroTaskCompletionRecorder.removeCompletion(
+        let affectedRecord = try PomodoroTaskCompletionRecorder.removeCompletion(
             focusSessionID: sessionID,
             modelContext: modelContext
         )
@@ -20,41 +20,41 @@ enum PomodoroSessionDeletion {
             modelContext.delete(reflection)
         }
         modelContext.delete(session)
-        return affectedMemo
+        return affectedRecord
     }
 
-    static func repairOrphanedRecords(modelContext: ModelContext) throws -> [Memo] {
+    static func repairOrphanedRecords(modelContext: ModelContext) throws -> [SecondBrainRecord] {
         let existingSessionIDs = Set(
             try modelContext.fetch(FetchDescriptor<FocusSession>()).map(\.id)
         )
         let completions = try modelContext.fetch(FetchDescriptor<PomodoroTaskCompletion>())
-        let memosByID = Dictionary(
-            uniqueKeysWithValues: try modelContext.fetch(FetchDescriptor<Memo>()).map {
+        let recordsByID = Dictionary(
+            uniqueKeysWithValues: try modelContext.fetch(FetchDescriptor<SecondBrainRecord>()).map {
                 ($0.id, $0)
             }
         )
         for completion in completions where completion.didMarkMemoCompleted {
             let stateChangedAt = completion.memoStateChangedAt ?? completion.completedAt
-            guard let memo = memosByID[completion.linkedMemoID],
-                  memo.isCompletedValue,
-                  memo.completionStateChangedAt == nil,
-                  memo.updatedAt == stateChangedAt else {
+            guard let record = recordsByID[completion.linkedMemoID],
+                  record.isCompletedValue,
+                  record.completionStateChangedAt == nil,
+                  record.updatedAt == stateChangedAt else {
                 continue
             }
-            memo.completionStateChangedAt = stateChangedAt
+            record.completionStateChangedAt = stateChangedAt
         }
 
         let orphanedCompletionSessionIDs = completions
             .map(\.focusSessionID)
             .filter { !existingSessionIDs.contains($0) }
 
-        var affectedMemosByID: [UUID: Memo] = [:]
+        var affectedRecordsByID: [UUID: SecondBrainRecord] = [:]
         for sessionID in orphanedCompletionSessionIDs {
-            if let memo = try PomodoroTaskCompletionRecorder.removeCompletion(
+            if let record = try PomodoroTaskCompletionRecorder.removeCompletion(
                 focusSessionID: sessionID,
                 modelContext: modelContext
             ) {
-                affectedMemosByID[memo.id] = memo
+                affectedRecordsByID[record.id] = record
             }
         }
 
@@ -63,6 +63,6 @@ enum PomodoroSessionDeletion {
         for reflection in orphanedReflections {
             modelContext.delete(reflection)
         }
-        return Array(affectedMemosByID.values)
+        return Array(affectedRecordsByID.values)
     }
 }

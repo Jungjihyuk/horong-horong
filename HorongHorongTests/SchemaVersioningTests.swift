@@ -67,15 +67,75 @@ final class SchemaVersioningTests: XCTestCase {
         XCTAssertEqual(HorongHorongSchemaV1.models.count, 19)
     }
 
-    /// 실사용 저장소 복사본으로도 확인했다 (2026-09-03, 190건 그대로 읽힘).
-    /// 그 검사는 로컬 파일 경로에 의존해 저장소에 남기지 않았다 — 합성 데이터로는
-    /// «옛 앱이 실제로 남긴 파일»(나중에 추가된 필드가 NULL 인 행 등)을 재현할 수 없으므로,
-    /// 스키마를 손댈 때는 매번 실제 복사본으로 한 번 열어 보는 편이 좋다.
-    ///
-    /// 아직 옮길 단계가 없다. V2 를 추가할 때 이 기대값도 함께 바꾼다.
-    func testMigrationPlanHasSingleVersionAndNoStages() {
-        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 1)
-        XCTAssertTrue(HorongHorongMigrationPlan.stages.isEmpty)
+    /// V2 가 실제 스키마와 같은 것을 가리키는지. 어긋나면 기존 저장소를 못 연다.
+    func testV2DeclaresEveryRegisteredModel() {
+        let names = Set(HorongHorongSchemaV2.models.map { String(describing: $0) })
+
+        for expected in ["SecondBrainRecord", "Memo", "DiaryEntry", "AchievementGoalRecord", "FocusSession",
+                         "AppUsageRecord", "AppUsageSegment", "AttentionEvent",
+                         "RewardLedgerEntry", "NewsJob", "NewsReportIndex"] {
+            XCTAssertTrue(names.contains(expected), "\(expected) 가 V2 에 없다")
+        }
+        XCTAssertEqual(HorongHorongSchemaV2.models.count, 20)
+    }
+
+    /// V2 도입에 따른 마이그레이션 계획 검증.
+    func testMigrationPlanHasTwoVersionsAndStage() {
+        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 2)
+        XCTAssertEqual(HorongHorongMigrationPlan.stages.count, 1)
         XCTAssertEqual(HorongHorongSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
+    }
+
+    /// V1 저장소(Memo)를 V2 스키마(SecondBrainRecord)로 마이그레이션하고 데이터가 무손실 이전되는지 검증한다.
+    func testV1StoreMigratesToV2AndCopiesMemoToSecondBrainRecord() throws {
+        let v1Schema = Schema(versionedSchema: HorongHorongSchemaV1.self)
+        let configuration = ModelConfiguration(schema: v1Schema, url: storeURL)
+
+        var testMemoID = UUID()
+        let now = Date()
+
+        // ① V1 스키마 컨테이너에서 Memo 데이터 저장
+        do {
+            let v1Container = try ModelContainer(for: v1Schema, configurations: [configuration])
+            let v1Context = v1Container.mainContext
+            let memo1 = Memo(content: "할 일 1", section: .todo)
+            testMemoID = memo1.id
+            memo1.startDate = now
+            memo1.deadline = now.addingTimeInterval(3600)
+            memo1.isPinned = true
+            let memo2 = Memo(content: "참고자료 2", section: .reference)
+            v1Context.insert(memo1)
+            v1Context.insert(memo2)
+            try v1Context.save()
+        }
+
+        // ② V2 스키마 + 마이그레이션 플랜으로 컨테이너 열기
+        let v2Schema = HorongHorongModelSchema.make()
+        let v2Configuration = ModelConfiguration(schema: v2Schema, url: storeURL)
+        let v2Container = try ModelContainer(
+            for: v2Schema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [v2Configuration]
+        )
+        let v2Context = v2Container.mainContext
+
+        // ③ Memo -> SecondBrainRecord 데이터 복사 마이그레이션 실행
+        let testDefaults = UserDefaults(suiteName: "test-\(UUID().uuidString)")!
+        AppDelegate.migrateMemoToSecondBrainRecords(in: v2Context, defaults: testDefaults)
+
+        // ④ 검증: SecondBrainRecord로 데이터가 온전히 복사되었는가
+        let records = try v2Context.fetch(FetchDescriptor<SecondBrainRecord>(sortBy: [SortDescriptor(\.createdAt)]))
+        XCTAssertEqual(records.count, 2, "2건의 기록이 SecondBrainRecord로 이전되어야 한다")
+
+        let migratedMemo1 = try XCTUnwrap(records.first { $0.id == testMemoID })
+        XCTAssertEqual(migratedMemo1.content, "할 일 1")
+        XCTAssertEqual(migratedMemo1.resolvedSection, .todo)
+        XCTAssertTrue(migratedMemo1.isPinned)
+        XCTAssertEqual(migratedMemo1.startDate, now)
+
+        // ⑤ 검증: 구 Memo 테이블은 비워졌는가
+        let remainingMemos = try v2Context.fetchCount(FetchDescriptor<Memo>())
+        XCTAssertEqual(remainingMemos, 0, "기존 Memo 테이블의 데이터는 이전 완료 후 정리되어야 한다")
     }
 }

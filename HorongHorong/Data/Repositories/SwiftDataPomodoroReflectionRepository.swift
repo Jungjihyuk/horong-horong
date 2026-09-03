@@ -67,7 +67,7 @@ final class SwiftDataPomodoroReflectionRepository: PomodoroReflectionRepository 
                     PomodoroTaskCompletionRecorder.hasLinkedMemo(id: $0, modelContext: context)
                 } == true
 
-            let affectedMemo: Memo?
+            let affectedMemo: SecondBrainRecord?
             if completesLinkedTask, let session {
                 affectedMemo = try PomodoroTaskCompletionRecorder.recordCompletion(
                     for: session,

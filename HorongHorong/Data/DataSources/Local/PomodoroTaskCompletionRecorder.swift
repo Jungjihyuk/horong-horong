@@ -36,17 +36,17 @@ enum PomodoroTaskCompletionRecorder {
         for session: FocusSession,
         completedAt: Date,
         modelContext: ModelContext
-    ) throws -> Memo? {
+    ) throws -> SecondBrainRecord? {
         guard let linkedMemoID = session.linkedMemoID else { return nil }
         if try completion(focusSessionID: session.id, modelContext: modelContext) != nil {
             return nil
         }
 
-        guard let memo = try memo(id: linkedMemoID, modelContext: modelContext) else {
+        guard let record = try memo(id: linkedMemoID, modelContext: modelContext) else {
             return nil
         }
-        let didMarkMemoCompleted = !memo.isCompletedValue
-        let memoWasPinned = memo.isPinned
+        let didMarkMemoCompleted = !record.isCompletedValue
+        let memoWasPinned = record.isPinned
         let completion = PomodoroTaskCompletion(
             focusSessionID: session.id,
             linkedMemoID: linkedMemoID,
@@ -58,10 +58,10 @@ enum PomodoroTaskCompletionRecorder {
         modelContext.insert(completion)
 
         guard didMarkMemoCompleted else { return nil }
-        memo.setCompleted(true, at: completedAt)
-        memo.isPinned = false
-        memo.updatedAt = completedAt
-        return memo
+        record.setCompleted(true, at: completedAt)
+        record.isPinned = false
+        record.updatedAt = completedAt
+        return record
     }
 
     @discardableResult
@@ -69,7 +69,7 @@ enum PomodoroTaskCompletionRecorder {
         focusSessionID: UUID,
         removedAt: Date = Date(),
         modelContext: ModelContext
-    ) throws -> Memo? {
+    ) throws -> SecondBrainRecord? {
         guard let completion = try completion(
             focusSessionID: focusSessionID,
             modelContext: modelContext
@@ -90,11 +90,11 @@ enum PomodoroTaskCompletionRecorder {
 
         guard
             didMarkMemoCompleted,
-            let memo = try memo(id: linkedMemoID, modelContext: modelContext),
-            memo.isCompletedValue else {
+            let record = try memo(id: linkedMemoID, modelContext: modelContext),
+            record.isCompletedValue else {
             return nil
         }
-        let currentCompletionStateChangedAt = memo.completionStateChangedAt ?? memo.updatedAt
+        let currentCompletionStateChangedAt = record.completionStateChangedAt ?? record.updatedAt
         guard currentCompletionStateChangedAt == memoStateChangedAt else {
             return nil
         }
@@ -111,34 +111,34 @@ enum PomodoroTaskCompletionRecorder {
             return nil
         }
 
-        memo.setCompleted(false, at: removedAt)
-        if !memo.isPinned {
-            memo.isPinned = memoWasPinnedBeforeCompletion
+        record.setCompleted(false, at: removedAt)
+        if !record.isPinned {
+            record.isPinned = memoWasPinnedBeforeCompletion
         }
-        memo.updatedAt = removedAt
-        return memo
+        record.updatedAt = removedAt
+        return record
     }
 
-    static func applyPostSaveEffects(to memo: Memo, modelContext: ModelContext) {
-        let reminderIdentifier = "memo.deadline.\(memo.id.uuidString)"
-        if memo.isCompletedValue || memo.isRecentlyDeleted {
+    static func applyPostSaveEffects(to record: SecondBrainRecord, modelContext: ModelContext) {
+        let reminderIdentifier = "memo.deadline.\(record.id.uuidString)"
+        if record.isCompletedValue || record.isRecentlyDeleted {
             NotificationManager.shared.cancel(identifier: reminderIdentifier)
-        } else if let fireDate = memo.reminderFireDate {
-            let reminderBody = memo.content
+        } else if let fireDate = record.reminderFireDate {
+            let reminderBody = record.content
                 .split(whereSeparator: \.isNewline)
                 .map(String.init)
                 .first?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             NotificationManager.shared.scheduleMemoReminder(
                 identifier: reminderIdentifier,
-                title: memo.reminderNotificationTitle,
+                title: record.reminderNotificationTitle,
                 body: reminderBody.isEmpty ? "제목 없음" : reminderBody,
                 at: fireDate
             )
         }
 
-        guard memo.isLinkedToRemindersValue else { return }
-        enqueueReminderSync(memoID: memo.id, modelContext: modelContext)
+        guard record.isLinkedToRemindersValue else { return }
+        enqueueReminderSync(memoID: record.id, modelContext: modelContext)
     }
 
     static func hasLinkedMemo(id: UUID, modelContext: ModelContext) -> Bool {
@@ -157,12 +157,12 @@ enum PomodoroTaskCompletionRecorder {
             }
 
             do {
-                guard let memo = try memo(id: memoID, modelContext: modelContext),
-                      memo.isLinkedToRemindersValue else {
+                guard let record = try memo(id: memoID, modelContext: modelContext),
+                      record.isLinkedToRemindersValue else {
                     return
                 }
-                memo.reminderIdentifier = try await MemoReminderLinkService.shared.saveReminder(
-                    for: memo
+                record.reminderIdentifier = try await MemoReminderLinkService.shared.saveReminder(
+                    for: record
                 )
                 try modelContext.save()
             } catch {
@@ -177,9 +177,9 @@ enum PomodoroTaskCompletionRecorder {
         reminderSyncJobs[memoID] = ReminderSyncJob(token: token, task: task)
     }
 
-    private static func memo(id: UUID, modelContext: ModelContext) throws -> Memo? {
+    private static func memo(id: UUID, modelContext: ModelContext) throws -> SecondBrainRecord? {
         let memoID = id
-        var descriptor = FetchDescriptor<Memo>(
+        var descriptor = FetchDescriptor<SecondBrainRecord>(
             predicate: #Predicate { $0.id == memoID }
         )
         descriptor.fetchLimit = 1

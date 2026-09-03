@@ -108,6 +108,42 @@ final class FocusSession {
         }
     }
 
+    @MainActor
+    static func updateTaskLink(
+        sessionID: UUID,
+        record: SecondBrainRecord?,
+        modelContext: ModelContext
+    ) throws {
+        guard !modelContext.hasChanges else {
+            throw FocusSessionTaskLinkUpdateError.pendingChanges
+        }
+
+        let targetID = sessionID
+        var descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { $0.id == targetID }
+        )
+        descriptor.fetchLimit = 1
+        guard let session = try modelContext.fetch(descriptor).first else {
+            throw FocusSessionTaskLinkUpdateError.sessionNotFound
+        }
+        guard try PomodoroTaskCompletionRecorder.completion(
+            focusSessionID: sessionID,
+            modelContext: modelContext
+        ) == nil else {
+            throw FocusSessionTaskLinkUpdateError.taskCompletionExists
+        }
+
+        session.linkedMemoID = record?.id
+        session.taskTitleSnapshot = record.map { taskTitle(from: $0.content) }
+
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     private static func taskTitle(from content: String) -> String {
         let title = content
             .components(separatedBy: .newlines)

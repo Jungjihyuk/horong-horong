@@ -261,19 +261,19 @@ final class SwiftDataStatsDetailRepository: StatsDetailRepository {
     }
 
     func updateTaskLink(sessionID: UUID, memoID: UUID?) throws {
-        let memo: Memo?
+        let record: SecondBrainRecord?
         if let memoID {
-            var memoDescriptor = FetchDescriptor<Memo>(
+            var memoDescriptor = FetchDescriptor<SecondBrainRecord>(
                 predicate: #Predicate { $0.id == memoID }
             )
             memoDescriptor.fetchLimit = 1
-            memo = try context.fetch(memoDescriptor).first
+            record = try context.fetch(memoDescriptor).first
         } else {
-            memo = nil
+            record = nil
         }
         try FocusSession.updateTaskLink(
             sessionID: sessionID,
-            memo: memo,
+            record: record,
             modelContext: context
         )
     }
@@ -308,7 +308,7 @@ final class SwiftDataStatsDetailRepository: StatsDetailRepository {
 
         do {
             var didCreateCompletion = false
-            let affectedMemo: Memo?
+            let affectedMemo: SecondBrainRecord?
             if let session,
                PomodoroTaskCompletionRecorder.shouldRecordCompletionOnEdit(
                    previousResult: previousProgressResult,

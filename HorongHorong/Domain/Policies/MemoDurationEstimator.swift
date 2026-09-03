@@ -23,7 +23,15 @@ enum MemoDurationEstimator {
     ///   - title: 가져오는 미리알림의 제목.
     ///   - history: 이력으로 볼 기존 메모들.
     static func estimate(title: String, history: [Memo]) -> TimeInterval {
-        let samples = self.samples(from: history)
+        estimate(title: title, items: history.map { ($0.content, $0.startDate, $0.deadline) })
+    }
+
+    static func estimate(title: String, history: [SecondBrainRecord]) -> TimeInterval {
+        estimate(title: title, items: history.map { ($0.content, $0.startDate, $0.deadline) })
+    }
+
+    static func estimate(title: String, items: [(content: String, startDate: Date?, deadline: Date?)]) -> TimeInterval {
+        let samples = self.samples(from: items)
         // 이력이 얼마 없을 때는 넘겨짚지 않고 기본값을 쓴다.
         guard samples.count >= minimumHistory else { return fallback }
 
@@ -56,12 +64,12 @@ enum MemoDurationEstimator {
         let duration: TimeInterval
     }
 
-    private static func samples(from history: [Memo]) -> [Sample] {
-        history.compactMap { memo in
-            guard let start = memo.startDate, let deadline = memo.deadline else { return nil }
+    private static func samples(from items: [(content: String, startDate: Date?, deadline: Date?)]) -> [Sample] {
+        items.compactMap { item in
+            guard let start = item.startDate, let deadline = item.deadline else { return nil }
             let duration = deadline.timeIntervalSince(start)
             guard plausible.contains(duration) else { return nil }
-            return Sample(key: normalize(firstLine(of: memo.content)), duration: duration)
+            return Sample(key: normalize(firstLine(of: item.content)), duration: duration)
         }
     }
 

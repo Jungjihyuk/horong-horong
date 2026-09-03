@@ -344,18 +344,18 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     // MARK: - 일정 옮기기
 
     /// 요일만 바꾸고 **시각은 유지한다.** 오전 9시에 하던 일이 옮긴다고 자정이 되면 안 된다.
-    private func moveSchedule(_ memo: Memo, to targetDay: Date) {
-        switch (memo.startDate, memo.deadline) {
+    private func moveSchedule(_ record: SecondBrainRecord, to targetDay: Date) {
+        switch (record.startDate, record.deadline) {
         case let (startDate?, deadline?):
             let newStart = Self.date(on: targetDay, preservingTimeOf: startDate)
-            memo.startDate = newStart
-            memo.deadline = Self.deadlineDate(on: targetDay, preservingTimeOf: deadline, notBefore: newStart)
+            record.startDate = newStart
+            record.deadline = Self.deadlineDate(on: targetDay, preservingTimeOf: deadline, notBefore: newStart)
         case let (startDate?, nil):
-            memo.startDate = Self.date(on: targetDay, preservingTimeOf: startDate)
+            record.startDate = Self.date(on: targetDay, preservingTimeOf: startDate)
         case let (nil, deadline?):
-            memo.deadline = Self.date(on: targetDay, preservingTimeOf: deadline)
+            record.deadline = Self.date(on: targetDay, preservingTimeOf: deadline)
         default:
-            memo.startDate = Self.date(on: targetDay, preservingTimeOf: Date())
+            record.startDate = Self.date(on: targetDay, preservingTimeOf: Date())
         }
     }
 
@@ -377,18 +377,18 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         return Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: targetDay) ?? start
     }
 
-    private func rescheduleLocalReminder(for memo: Memo) {
-        let identifier = "memo.deadline.\(memo.id.uuidString)"
-        guard !memo.isCompletedValue,
-              !memo.isRecentlyDeleted,
-              let fireDate = memo.reminderFireDate else {
+    private func rescheduleLocalReminder(for record: SecondBrainRecord) {
+        let identifier = "memo.deadline.\(record.id.uuidString)"
+        guard !record.isCompletedValue,
+              !record.isRecentlyDeleted,
+              let fireDate = record.reminderFireDate else {
             notifications.cancel(identifier: identifier)
             return
         }
         notifications.scheduleMemoReminder(
             identifier: identifier,
-            title: memo.reminderNotificationTitle,
-            body: Self.shortText(memo.content, limit: 40),
+            title: record.reminderNotificationTitle,
+            body: Self.shortText(record.content, limit: 40),
             at: fireDate
         )
     }
@@ -413,8 +413,8 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     }
 
     /// 보관·최근 삭제는 여기서 떨군다. 화면이 매번 같은 조건을 다시 쓰지 않게.
-    private func activeMemoRecords() -> [Memo] {
-        let descriptor = FetchDescriptor<Memo>(
+    private func activeMemoRecords() -> [SecondBrainRecord] {
+        let descriptor = FetchDescriptor<SecondBrainRecord>(
             predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -427,8 +427,8 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         return try? context.fetch(descriptor).first
     }
 
-    private func findMemo(_ id: UUID) -> Memo? {
-        var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == id })
+    private func findMemo(_ id: UUID) -> SecondBrainRecord? {
+        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
@@ -498,15 +498,15 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         )
     }
 
-    private static func toMemoDetail(_ memo: Memo) -> AchievementMemoDetail {
+    private static func toMemoDetail(_ record: SecondBrainRecord) -> AchievementMemoDetail {
         AchievementMemoDetail(
-            id: memo.id,
-            content: memo.content,
-            icon: memo.icon,
-            startDate: memo.startDate,
-            deadline: memo.deadline,
-            updatedAt: memo.updatedAt,
-            isCompleted: memo.isCompletedValue
+            id: record.id,
+            content: record.content,
+            icon: record.icon,
+            startDate: record.startDate,
+            deadline: record.deadline,
+            updatedAt: record.updatedAt,
+            isCompleted: record.isCompletedValue
         )
     }
 }

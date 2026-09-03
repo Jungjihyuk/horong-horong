@@ -722,14 +722,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testPomodoroTaskCompletionMarksLinkedMemoAndStoresEvidence() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "  완료 근거 저장  ")
+        let memo = SecondBrainRecord(content: "  완료 근거 저장  ")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -770,7 +770,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testCompletionForAlreadyCompletedMemoNeverTakesRestorationOwnership() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
@@ -778,7 +778,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
         let originalUpdatedAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let memo = Memo(content: "직접 완료한 할 일")
+        let memo = SecondBrainRecord(content: "직접 완료한 할 일")
         memo.isCompletedValue = true
         memo.isPinned = true
         memo.updatedAt = originalUpdatedAt
@@ -826,7 +826,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testCompletionForMissingLinkedMemoDoesNotStoreEvidence() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
@@ -863,14 +863,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingPomodoroTaskCompletionSafelyRestoresMemoState() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "완료 취소")
+        let memo = SecondBrainRecord(content: "완료 취소")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -907,7 +907,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingPomodoroSessionRemovesReflectionAndRestoresLinkedMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             PomodoroTaskCompletion.self,
@@ -915,7 +915,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "세션 삭제 시 되돌릴 할 일")
+        let memo = SecondBrainRecord(content: "세션 삭제 시 되돌릴 할 일")
         memo.isPinned = true
         let session = FocusSession(
             focusMinutes: 25,
@@ -956,7 +956,7 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRepairingOrphanedPomodoroRecordsRestoresPreviouslyDeletedSessionMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             PomodoroTaskCompletion.self,
@@ -964,7 +964,7 @@ final class ConstantsDefaultsTests: XCTestCase {
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "기존 삭제 오류 복구")
+        let memo = SecondBrainRecord(content: "기존 삭제 오류 복구")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -1008,14 +1008,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingFirstOfMultipleCompletionsTransfersSafeMemoRestoration() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "여러 완료 근거")
+        let memo = SecondBrainRecord(content: "여러 완료 근거")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1079,14 +1079,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testDeletingNonOwningCompletionFirstStillRestoresMemo() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "완료 근거 삭제 순서")
+        let memo = SecondBrainRecord(content: "완료 근거 삭제 순서")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1148,14 +1148,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCurrentCompletionDoesNotTransferToHistoricalOwner() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "다시 진행한 할 일")
+        let memo = SecondBrainRecord(content: "다시 진행한 할 일")
         memo.isPinned = true
         let firstSession = FocusSession(
             focusMinutes: 25,
@@ -1213,14 +1213,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCompletionDoesNotUndoLaterCompletionDecision() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "나중에 다시 완료한 일")
+        let memo = SecondBrainRecord(content: "나중에 다시 완료한 일")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,
@@ -1256,14 +1256,14 @@ final class ConstantsDefaultsTests: XCTestCase {
     @MainActor
     func testRemovingCompletionPreservesUnrelatedMemoEditsAndRestoresCheck() throws {
         let schema = Schema([
-            Memo.self,
+            SecondBrainRecord.self,
             FocusSession.self,
             PomodoroTaskCompletion.self,
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
-        let memo = Memo(content: "수정 전 제목")
+        let memo = SecondBrainRecord(content: "수정 전 제목")
         let session = FocusSession(
             focusMinutes: 25,
             breakMinutes: 5,

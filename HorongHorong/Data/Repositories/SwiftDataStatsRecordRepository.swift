@@ -33,12 +33,12 @@ final class SwiftDataStatsRecordRepository: StatsRecordRepository {
 
             // 집중 세션을 지우면 그 세션이 완료로 찍어 둔 할 일도 되돌려야 한다.
             // 같은 할 일이 여러 세션에 걸릴 수 있어 id 로 모은다.
-            var affectedMemosByID: [UUID: Memo] = [:]
+            var affectedMemosByID: [UUID: SecondBrainRecord] = [:]
             for session in try context.fetch(
                 FetchDescriptor<FocusSession>(predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end })
             ) {
-                if let memo = try PomodoroSessionDeletion.delete(session, modelContext: context) {
-                    affectedMemosByID[memo.id] = memo
+                if let record = try PomodoroSessionDeletion.delete(session, modelContext: context) {
+                    affectedMemosByID[record.id] = record
                 }
             }
 
@@ -55,8 +55,8 @@ final class SwiftDataStatsRecordRepository: StatsRecordRepository {
 
             try context.save()
             NotificationCenter.default.post(name: .pomodoroReflectionDidChange, object: nil)
-            for memo in affectedMemosByID.values {
-                PomodoroTaskCompletionRecorder.applyPostSaveEffects(to: memo, modelContext: context)
+            for record in affectedMemosByID.values {
+                PomodoroTaskCompletionRecorder.applyPostSaveEffects(to: record, modelContext: context)
             }
         } catch {
             // 다섯 종류 중 일부만 지워진 상태를 만들지 않는다.

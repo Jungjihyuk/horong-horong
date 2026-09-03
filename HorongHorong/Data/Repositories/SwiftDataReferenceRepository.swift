@@ -15,7 +15,7 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
     }
 
     func references(matching query: String, limit: Int) throws -> [Reference] {
-        var descriptor = FetchDescriptor<Memo>(
+        var descriptor = FetchDescriptor<SecondBrainRecord>(
             predicate: Self.referenceSection,
             // 화면 정렬과 DB 정렬을 같게 맞춘다. 다르면 앞 50건을 가져온 뒤 다시 정렬하게 되어
             // 51번째에 있는 항목이 위로 올라오지 못한다.
@@ -43,22 +43,22 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
 
     @discardableResult
     func add(content: String) throws -> Reference {
-        let memo = Memo(content: content, section: .reference)
-        context.insert(memo)
+        let record = SecondBrainRecord(content: content, section: .reference)
+        context.insert(record)
         try context.save()
-        return Self.toReference(memo)
+        return Self.toReference(record)
     }
 
     func updateContent(id: UUID, content: String) throws {
-        guard let memo = try find(id) else { return }
-        memo.content = content
-        memo.updatedAt = Date()
+        guard let record = try find(id) else { return }
+        record.content = content
+        record.updatedAt = Date()
         try context.save()
     }
 
     func delete(id: UUID) throws {
-        guard let memo = try find(id) else { return }
-        context.delete(memo)
+        guard let record = try find(id) else { return }
+        context.delete(record)
         try context.save()
     }
 
@@ -66,12 +66,12 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
 
     /// 보관한 것은 목록에서 뺀다. `nil` 이 빠지지 않는 것은 `normalizeMemoFlags` 가
     /// 실행마다 `nil` 을 `false` 로 메우기 때문이다 — 그 보정이 없으면 SQL 3값 논리에 걸린다.
-    private static let referenceSection = #Predicate<Memo> {
+    private static let referenceSection = #Predicate<SecondBrainRecord> {
         $0.sectionRaw == "reference"
     }
 
-    private func find(_ id: UUID) throws -> Memo? {
-        var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == id })
+    private func find(_ id: UUID) throws -> SecondBrainRecord? {
+        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
@@ -81,7 +81,7 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
     /// **별도 `Mapper` 파일로 빼지 않았다.** 지금은 이 Repository 만 쓰는 네 줄이라,
     /// 파일을 늘리면 읽을 것만 는다. 같은 매핑을 두 곳 이상이 쓰게 되면 그때
     /// `Data/Mappers/ReferenceMapper.swift` 로 뺀다(CLAUDE.md §3 «두 개 이상일 때 분리»).
-    private static func toReference(_ memo: Memo) -> Reference {
-        Reference(id: memo.id, content: memo.content, updatedAt: memo.updatedAt)
+    private static func toReference(_ record: SecondBrainRecord) -> Reference {
+        Reference(id: record.id, content: record.content, updatedAt: record.updatedAt)
     }
 }

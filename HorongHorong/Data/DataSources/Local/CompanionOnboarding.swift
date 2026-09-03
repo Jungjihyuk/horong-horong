@@ -244,7 +244,7 @@ final class CompanionOnboardingDemoStore: ObservableObject {
             ("지난주 회고 정리", "☕️", false, true),
         ]
         let memos = memoSeeds.enumerated().map { index, seed in
-            let memo = Memo(content: seed.content, icon: seed.icon)
+            let memo = SecondBrainRecord(content: seed.content, icon: seed.icon)
             memo.isPinned = seed.pinned
             memo.startDate = today
             memo.deadline = calendar.date(byAdding: .day, value: index % 3 + 1, to: today)
@@ -465,7 +465,7 @@ final class CompanionOnboardingDemoStore: ObservableObject {
         start: Date,
         durationMinutes: Int,
         category: String,
-        memo: Memo,
+        memo: SecondBrainRecord,
         inputRatio: Double,
         endKind: FocusSessionEndKind
     ) -> FocusSession {

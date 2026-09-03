@@ -429,6 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.migrateMindDefaults()
         migrateRemovedDocumentCategory(in: context)
         migrateMemoSections(in: context)
+        Self.migrateMemoToSecondBrainRecords(in: context)
         mergeDuplicateDiaryEntries(in: context)
         normalizeMemoFlags(in: context)
         seedDefaultCategoryRules(in: context)
@@ -546,6 +547,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// 기존 `Memo` 테이블의 데이터를 신규 `SecondBrainRecord` 테이블로 1:1 복사 이전한다.
+    static func migrateMemoToSecondBrainRecords(in context: ModelContext, defaults: UserDefaults = .standard) {
+        let migrationKey = "migration.memoToSecondBrain.v1"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+
+        do {
+            let legacyMemos = try context.fetch(FetchDescriptor<Memo>())
+            if !legacyMemos.isEmpty {
+                for memo in legacyMemos {
+                    let record = SecondBrainRecord(
+                        id: memo.id,
+                        content: memo.content,
+                        icon: memo.icon,
+                        section: memo.resolvedSection,
+                        createdAt: memo.createdAt,
+                        updatedAt: memo.updatedAt,
+                        isPinned: memo.isPinned,
+                        isCompleted: memo.isCompletedValue,
+                        completionStateChangedAt: memo.completionStateChangedAt,
+                        startDate: memo.startDate,
+                        deadline: memo.deadline,
+                        reminderOffsetMinutes: memo.reminderOffsetMinutes,
+                        reminderIdentifier: memo.reminderIdentifier,
+                        reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
+                        isLinkedToReminders: memo.isLinkedToReminders ?? false,
+                        deletedAt: memo.deletedAt
+                    )
+                    record.isArchived = memo.isArchived
+                    context.insert(record)
+                }
+                try context.save()
+
+                for memo in legacyMemos {
+                    context.delete(memo)
+                }
+                try context.save()
+            }
+            defaults.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
+        }
+    }
+
     /// `isCompleted` 의 `nil` 을 `false` 로 메운다.
     ///
     /// 나중에 추가된 필드라 그 전에 만든 기록은 값이 비어 있다
@@ -566,11 +610,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let memos = try context.fetch(FetchDescriptor<Memo>(
                 predicate: #Predicate { $0.isCompleted == nil }
             ))
-            guard !memos.isEmpty else { return }
             for memo in memos {
                 if memo.isCompleted == nil { memo.isCompleted = false }
             }
-            try context.save()
+            let records = try context.fetch(FetchDescriptor<SecondBrainRecord>(
+                predicate: #Predicate { $0.isCompleted == nil }
+            ))
+            for record in records {
+                if record.isCompleted == nil { record.isCompleted = false }
+            }
+            if !memos.isEmpty || !records.isEmpty {
+                try context.save()
+            }
         } catch {
             context.rollback()
         }
@@ -653,8 +704,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let context = modelContainer.mainContext
-        guard let memos = try? context.fetch(FetchDescriptor<Memo>()) else { return }
-        guard !TodayPlanningReminderPolicy.hasTodayTask(in: memos, now: Date()) else {
+        guard let records = try? context.fetch(FetchDescriptor<SecondBrainRecord>()) else { return }
+        guard !TodayPlanningReminderPolicy.hasTodayTask(in: records, now: Date()) else {
             NotificationManager.shared.cancel(
                 identifier: Constants.todayPlanningReminderNotificationIdentifier
             )

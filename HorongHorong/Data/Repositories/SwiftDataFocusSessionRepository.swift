@@ -93,10 +93,10 @@ final class SwiftDataFocusSessionRepository: FocusSessionRepository {
     func isTaskStillOpen(memoID: UUID?) -> Bool {
         // 연결된 할 일이 없으면 «이어서 하기» 를 막을 이유가 없다.
         guard let memoID else { return true }
-        var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == memoID })
+        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == memoID })
         descriptor.fetchLimit = 1
-        guard let memo = try? context.fetch(descriptor).first else { return false }
-        return !memo.isCompletedValue && !memo.isRecentlyDeleted
+        guard let record = try? context.fetch(descriptor).first else { return false }
+        return !record.isCompletedValue && !record.isRecentlyDeleted
     }
 
     func hasProductiveActivity(since date: Date, minimumSeconds: Int) -> Bool {

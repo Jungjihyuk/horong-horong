@@ -12,6 +12,16 @@ import SwiftData
 /// 2. `schemas` 에 V2 를 더하고 `stages` 에 V1→V2 단계를 넣는다
 /// 3. **실사용 저장소 복사본으로 열어 본다** — 합성 데이터로는 옛 앱이 남긴 파일을 재현할 수 없다
 enum HorongHorongMigrationPlan: SchemaMigrationPlan {
-    nonisolated static var schemas: [any VersionedSchema.Type] { [HorongHorongSchemaV1.self] }
-    nonisolated static var stages: [MigrationStage] { [] }
+    nonisolated static var schemas: [any VersionedSchema.Type] {
+        [HorongHorongSchemaV1.self, HorongHorongSchemaV2.self]
+    }
+
+    static let migrateV1toV2 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV1.self,
+        toVersion: HorongHorongSchemaV2.self
+    )
+
+    nonisolated static var stages: [MigrationStage] {
+        [migrateV1toV2]
+    }
 }

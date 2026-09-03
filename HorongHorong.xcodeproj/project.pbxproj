@@ -72,6 +72,7 @@
 		1BB2EA41DFB005281458F580 /* NoteText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4BACE8D40F6390B21B4EC37 /* NoteText.swift */; };
 		1C1D58FB856F1D7986E43D61 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81DB21EE4A3CD71E450F7170 /* HotKeyManager.swift */; };
 		1C92A4119D8DEC84B3B60A92 /* SleepGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11844F5E2014C8C20FA1CBD8 /* SleepGateway.swift */; };
+		1CE931754EB32326BF4FFFF8 /* SecondBrainRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386FFCB645B3E2B93017ADCA /* SecondBrainRecord.swift */; };
 		1D353F53DFFED724425CD82D /* PomodoroComparisonSegmentScope+Legacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89225214AF982E1F94B0515 /* PomodoroComparisonSegmentScope+Legacy.swift */; };
 		1D3B30368F33CBBAB514BA83 /* AchievementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7AEC7F1CB8D55E1671A3A2 /* AchievementModels.swift */; };
 		1D627F2D125145A074FB4B73 /* FocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEF616ED78677435847A282 /* FocusSessionRepository.swift */; };
@@ -356,6 +357,7 @@
 		9009966E44DB00A42C2E0B6F /* FocusNudgeTrendCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99EB2278FBE95086E6CB05CC /* FocusNudgeTrendCard.swift */; };
 		91DC74A55D4C9D3F7A6C9FAC /* MemoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752E765C19ED682899EFF22D /* MemoSection.swift */; };
 		92124F87045D42E9F6255AAD /* PackageChatProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57C79A03B5237BD5F9AAB2CB /* PackageChatProviderAdapter.swift */; };
+		9312FF19425F9798C2460359 /* SecondBrainRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386FFCB645B3E2B93017ADCA /* SecondBrainRecord.swift */; };
 		9556D226AE6640882CC0F7EA /* VaultViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F228E3DFBB99E088E7BF7319 /* VaultViewModel.swift */; };
 		9562345763F8E027E6BBC090 /* CompanionChatComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43E0FBF35446EAE4AB507F2E /* CompanionChatComposer.swift */; };
 		957BD636A2B9E9A03A7864A6 /* SwiftDataAppUsageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA51C9D309C898AF5CE99F0 /* SwiftDataAppUsageRepository.swift */; };
@@ -486,6 +488,7 @@
 		C499381BD12CA8DC2B06EF59 /* AppUsageRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = F946F6206D1F9837E024AEC5 /* AppUsageRecord.swift */; };
 		C4F0852A8317E726349F510D /* AIRunLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B3B00FE249A950B0A6CBC2 /* AIRunLog.swift */; };
 		C51DBB5E59AB945A3CA4A057 /* ExperimentPlanText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC6890FB75988BF764306C5 /* ExperimentPlanText.swift */; };
+		C599392D7A3D8F192CEF8428 /* HorongHorongSchemaV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A1FE53B1E0765AB85856D8 /* HorongHorongSchemaV2.swift */; };
 		C6175B603FDCC9FA396371F5 /* SwiftDataCompanionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B416584EF9482867760E7635 /* SwiftDataCompanionRepository.swift */; };
 		C62C4087434710DA48CEAC80 /* NewsReportArchiveStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6382EBC6B1ECFBC4F41D10AA /* NewsReportArchiveStore.swift */; };
 		C63E9646D508B87150432693 /* MemoClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD9FBFED125A9E0D2AAD5B41 /* MemoClassifier.swift */; };
@@ -518,6 +521,7 @@
 		D35E142E146B6896CF14F40E /* NewsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4120BACDCF3B8ECF9BB2CC /* NewsRepository.swift */; };
 		D37807286F7056A880AA400A /* TodoViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D754FE7D4BDE2F31CC9AE7 /* TodoViewModelTests.swift */; };
 		D3A9B0E1BC89A9372DEBDA71 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 35D04CBF0379115D83507E57 /* MLXLMCommon */; };
+		D43B7D714C73E02C3D5A5031 /* HorongHorongSchemaV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A1FE53B1E0765AB85856D8 /* HorongHorongSchemaV2.swift */; };
 		D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */; };
 		D4B67242D636E9426FF4C01A /* FocusPulseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06037B24EF7020D9F40DDED5 /* FocusPulseCard.swift */; };
 		D50ADC5DC6C32F0C224B5FA7 /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C5D6091CF19B1DFE537811 /* CompanionBriefing.swift */; };
@@ -702,6 +706,7 @@
 		3334FE083579804E74FCDBE5 /* AchievementFoundationGoalSuggestionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementFoundationGoalSuggestionProvider.swift; sourceTree = "<group>"; };
 		33F4FAF94DD683EDC727EFEF /* CompanionAppFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAppFacts.swift; sourceTree = "<group>"; };
 		37C5C32AC1BE00095B11B466 /* LabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabView.swift; sourceTree = "<group>"; };
+		386FFCB645B3E2B93017ADCA /* SecondBrainRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondBrainRecord.swift; sourceTree = "<group>"; };
 		387F464C45BF01C903A0D019 /* AttentionAnalyticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionAnalyticsTests.swift; sourceTree = "<group>"; };
 		3B31DB4E51995E349060A4BF /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		3B463103E4268494A2CD15B5 /* DiaryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViewModelTests.swift; sourceTree = "<group>"; };
@@ -942,6 +947,7 @@
 		F16A0CA6233EC48B6C11499D /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 		F228E3DFBB99E088E7BF7319 /* VaultViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultViewModel.swift; sourceTree = "<group>"; };
 		F2BB758EEE49CCA072ED8060 /* AppIconManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconManager.swift; sourceTree = "<group>"; };
+		F3A1FE53B1E0765AB85856D8 /* HorongHorongSchemaV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongSchemaV2.swift; sourceTree = "<group>"; };
 		F3C85158EC8AB52EA83E7430 /* WebsiteCategoryRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebsiteCategoryRule.swift; sourceTree = "<group>"; };
 		F3F7BABCF0B7889DC7CF5F6C /* AchievementGoalSuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementGoalSuggestion.swift; sourceTree = "<group>"; };
 		F5DC97A7466DC4F437556D89 /* StatsChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsChartView.swift; sourceTree = "<group>"; };
@@ -1342,6 +1348,7 @@
 				810D02EC07F58F4659B1165E /* PomodoroReflection.swift */,
 				D2BA2E7AE6D588653CBBBFAF /* PomodoroTaskCompletion.swift */,
 				0A758FA8556F09E5A7941D2B /* RewardRecords.swift */,
+				386FFCB645B3E2B93017ADCA /* SecondBrainRecord.swift */,
 				8D3E3F6EB13D712905B0A37A /* StatsAggregateCache.swift */,
 			);
 			path = Models;
@@ -1784,6 +1791,7 @@
 				E155D586E5E0D8EF202B4F30 /* HorongHorongMigrationPlan.swift */,
 				01308C9FAAF943C7FA8CC832 /* HorongHorongModelSchema.swift */,
 				E8649570BBCFACAC5C08D7AC /* HorongHorongSchemaV1.swift */,
+				F3A1FE53B1E0765AB85856D8 /* HorongHorongSchemaV2.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -2166,6 +2174,7 @@
 				22B12387A813064082D8A8CC /* HorongHorongMigrationPlan.swift in Sources */,
 				FAE7BFF469D0C8276193D202 /* HorongHorongModelSchema.swift in Sources */,
 				E41700D429B97570908517E5 /* HorongHorongSchemaV1.swift in Sources */,
+				D43B7D714C73E02C3D5A5031 /* HorongHorongSchemaV2.swift in Sources */,
 				BBE6D4E81B7245E2865F3E6C /* HotKeyManager.swift in Sources */,
 				ADD63820CEF50B4635661423 /* HotkeyPage.swift in Sources */,
 				58B320EA54550E6552663AA3 /* HotkeyRecorderField.swift in Sources */,
@@ -2252,6 +2261,7 @@
 				3A9432626F6D41D1762CCDFB /* RewardTabView.swift in Sources */,
 				BE04F0CDE24AE77C3931ED3A /* RewardUnboxingOverlay.swift in Sources */,
 				0258A4C5671F108D1F6CC0CF /* RewardViewModel.swift in Sources */,
+				1CE931754EB32326BF4FFFF8 /* SecondBrainRecord.swift in Sources */,
 				60DEB7F93D891486C2D1DCAE /* SettingsCard.swift in Sources */,
 				10991F20C66000DF5F99A79A /* SettingsRoot.swift in Sources */,
 				D55B929B2FE34EE81CDFE95B /* SettingsRow.swift in Sources */,
@@ -2437,6 +2447,7 @@
 				DB6DB4E33A400D25A7A4CF9F /* HorongHorongMigrationPlan.swift in Sources */,
 				B5FC043D5B2F672D2053C876 /* HorongHorongModelSchema.swift in Sources */,
 				5CC8D453D8540672E52CA7C5 /* HorongHorongSchemaV1.swift in Sources */,
+				C599392D7A3D8F192CEF8428 /* HorongHorongSchemaV2.swift in Sources */,
 				1C1D58FB856F1D7986E43D61 /* HotKeyManager.swift in Sources */,
 				51DDD1233FC375E91882CCC0 /* HotkeyPage.swift in Sources */,
 				0514535001F0CEA701E0C8DE /* HotkeyRecorderField.swift in Sources */,
@@ -2523,6 +2534,7 @@
 				C8675B31569D2ECABD5F1C2B /* RewardTabView.swift in Sources */,
 				4A0C5E729635E9980FCC31AA /* RewardUnboxingOverlay.swift in Sources */,
 				98C95594436F4F63663F29B8 /* RewardViewModel.swift in Sources */,
+				9312FF19425F9798C2460359 /* SecondBrainRecord.swift in Sources */,
 				D9EB7CAB12F7D9CB43036A87 /* SettingsCard.swift in Sources */,
 				FD540D3D08A6CD6D3FB96CD7 /* SettingsRoot.swift in Sources */,
 				5219EA9C3A0E8436CF25DB7E /* SettingsRow.swift in Sources */,

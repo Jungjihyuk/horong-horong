@@ -13,7 +13,7 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
     }
 
     func memosLinkedToUnselectedCalendars(selectedCalendarIDs: Set<String>) -> [ImportedReminderMemo] {
-        allMemos().compactMap { memo in
+        allRecords().compactMap { memo in
             guard memo.isLinkedToRemindersValue,
                   memo.reminderIdentifier != nil,
                   let calendarID = memo.reminderCalendarIdentifier,
@@ -30,19 +30,19 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
 
     @discardableResult
     func importReminders(_ items: [ReminderListItem]) throws -> Int {
-        let history = allMemos()
+        let history = allRecords()
         let existing = Set(history.compactMap(\.reminderIdentifier))
         var imported = 0
 
         for item in items where !item.isCompleted && !existing.contains(item.id) {
-            let memo = Memo(content: Self.content(from: item), icon: MemoIcon.defaultIcon)
+            let record = SecondBrainRecord(content: Self.content(from: item), icon: MemoIcon.defaultIcon)
             let schedule = Self.schedule(for: item, history: history)
-            memo.startDate = schedule.start
-            memo.deadline = schedule.deadline
-            memo.reminderIdentifier = item.id
-            memo.reminderCalendarIdentifier = item.calendarIdentifier
-            memo.isLinkedToRemindersValue = true
-            context.insert(memo)
+            record.startDate = schedule.start
+            record.deadline = schedule.deadline
+            record.reminderIdentifier = item.id
+            record.reminderCalendarIdentifier = item.calendarIdentifier
+            record.isLinkedToRemindersValue = true
+            context.insert(record)
             imported += 1
         }
 
@@ -52,10 +52,10 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
 
     func deleteImportedMemos(ids: [UUID]) throws {
         for id in ids {
-            guard let memo = find(id) else { continue }
+            guard let record = find(id) else { continue }
             // 지운 메모의 마감 알림이 남으면 없는 할 일이 울린다.
-            notifications.cancel(identifier: "memo.deadline.\(memo.id.uuidString)")
-            context.delete(memo)
+            notifications.cancel(identifier: "memo.deadline.\(record.id.uuidString)")
+            context.delete(record)
         }
         try context.save()
     }
@@ -66,7 +66,7 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
     /// **지난 기록에서 추정한 소요 시간**만큼 뒤를 마감으로 잡는다.
     private static func schedule(
         for item: ReminderListItem,
-        history: [Memo]
+        history: [SecondBrainRecord]
     ) -> (start: Date?, deadline: Date?) {
         if let start = item.startDate, let due = item.dueDate, due > start {
             return (start, due)
@@ -90,13 +90,13 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
         return lines.joined(separator: "\n")
     }
 
-    private func allMemos() -> [Memo] {
-        let descriptor = FetchDescriptor<Memo>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+    private func allRecords() -> [SecondBrainRecord] {
+        let descriptor = FetchDescriptor<SecondBrainRecord>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    private func find(_ id: UUID) -> Memo? {
-        var descriptor = FetchDescriptor<Memo>(predicate: #Predicate { $0.id == id })
+    private func find(_ id: UUID) -> SecondBrainRecord? {
+        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
