@@ -117,14 +117,25 @@ final class TodoBucketTests: XCTestCase {
         calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now))!
     }
 
-    func testDeadlinePreferredOverStart() {
+    func testDateRangeIsTodayFromStartThroughDeadline() {
         XCTAssertEqual(
             TodoBucket.of(startDate: day(-3), deadline: day(0), isCompleted: false, now: now, calendar: calendar),
             .today
         )
         XCTAssertEqual(
             TodoBucket.of(startDate: day(0), deadline: day(2), isCompleted: false, now: now, calendar: calendar),
+            .today
+        )
+    }
+
+    func testDateRangeUsesStartAndDeadlineBoundaries() {
+        XCTAssertEqual(
+            TodoBucket.of(startDate: day(1), deadline: day(3), isCompleted: false, now: now, calendar: calendar),
             .upcoming
+        )
+        XCTAssertEqual(
+            TodoBucket.of(startDate: day(-3), deadline: day(-1), isCompleted: false, now: now, calendar: calendar),
+            .overdue
         )
     }
 
@@ -145,6 +156,31 @@ final class TodoBucketTests: XCTestCase {
     func testCompletedOverridesDates() {
         XCTAssertEqual(
             TodoBucket.of(startDate: day(-2), deadline: day(-1), isCompleted: true, now: now, calendar: calendar),
+            .completed
+        )
+    }
+
+    func testCompletedTodayStaysTodayOnlyUntilTheNextDay() {
+        XCTAssertEqual(
+            TodoBucket.of(
+                startDate: day(0),
+                deadline: day(1),
+                isCompleted: true,
+                completionStateChangedAt: now,
+                now: now,
+                calendar: calendar
+            ),
+            .today
+        )
+        XCTAssertEqual(
+            TodoBucket.of(
+                startDate: day(0),
+                deadline: day(2),
+                isCompleted: true,
+                completionStateChangedAt: now,
+                now: day(1),
+                calendar: calendar
+            ),
             .completed
         )
     }

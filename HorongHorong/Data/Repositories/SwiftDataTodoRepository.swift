@@ -287,6 +287,7 @@ final class SwiftDataTodoRepository: TodoRepository {
             startDate: record.startDate,
             deadline: record.deadline,
             isCompleted: record.isCompletedValue,
+            completionStateChangedAt: record.completionStateChangedAt,
             deletedAt: record.deletedAt,
             isLinkedToReminders: record.isLinkedToRemindersValue,
             reminderCalendarIdentifier: record.reminderCalendarIdentifier,

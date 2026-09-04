@@ -7,6 +7,14 @@ import XCTest
 /// 눈으로 봐야 했다. 계층을 나눈 이유 중 하나가 이것이다.
 @MainActor
 final class TodoViewModelTests: XCTestCase {
+    func testBrowserInitiallyExpandsOnlyTodayAndUpcoming() {
+        let expandedGroups = Set(TodoBucket.allCases.map(\.title))
+            .subtracting(TodoBrowserView.initiallyCollapsedGroups)
+
+        XCTAssertEqual(expandedGroups, ["오늘", "예정"])
+        XCTAssertTrue(TodoBrowserView.initiallyCollapsedGroups.contains("최근 삭제"))
+    }
+
     /// 저장소를 흉내 내는 가짜. SwiftData 도 EventKit 도 알림도 쓰지 않는다.
     private final class FakeRepository: TodoRepository {
         var items: [TodoItem] = []
@@ -37,7 +45,8 @@ final class TodoViewModelTests: XCTestCase {
         func add(title: String) throws -> TodoItem {
             let made = TodoItem(
                 id: UUID(), content: title, startDate: Date(), deadline: nil,
-                isCompleted: false, deletedAt: nil, isLinkedToReminders: false,
+                isCompleted: false, completionStateChangedAt: nil,
+                deletedAt: nil, isLinkedToReminders: false,
                 reminderCalendarIdentifier: nil,
                 icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
             )
@@ -50,7 +59,12 @@ final class TodoViewModelTests: XCTestCase {
         }
 
         func setCompleted(id: UUID, isCompleted: Bool) throws {
-            replace(id) { $0.with(isCompleted: isCompleted) }
+            replace(id) {
+                $0.with(
+                    isCompleted: isCompleted,
+                    completionStateChangedAt: .some(Date())
+                )
+            }
         }
 
         func setSchedule(id: UUID, startDate: Date?, deadline: Date?) throws {
@@ -136,12 +150,14 @@ final class TodoViewModelTests: XCTestCase {
         start: Date? = nil,
         deadline: Date? = nil,
         completed: Bool = false,
+        completedAt: Date? = nil,
         linked: Bool = false,
         deletedAt: Date? = nil
     ) -> TodoItem {
         TodoItem(
             id: UUID(), content: content, startDate: start, deadline: deadline,
-            isCompleted: completed, deletedAt: deletedAt, isLinkedToReminders: linked,
+            isCompleted: completed, completionStateChangedAt: completedAt,
+            deletedAt: deletedAt, isLinkedToReminders: linked,
             reminderCalendarIdentifier: nil,
             icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
         )
@@ -223,15 +239,21 @@ final class TodoViewModelTests: XCTestCase {
 
     // MARK: - 쓰기
 
-    func testToggleCompletedMovesBucket() {
+    func testToggleCompletedKeepsTodayItemInTodayBucket() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
         let target = try! XCTUnwrap(viewModel.today.first)
 
         viewModel.toggleCompleted(target)
 
-        XCTAssertTrue(viewModel.today.isEmpty)
-        XCTAssertEqual(viewModel.completed.count, 2)
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["오늘 할 일"])
+        XCTAssertEqual(viewModel.today.first?.isCompleted, true)
+        XCTAssertEqual(viewModel.completed.count, 1)
+
+        viewModel.toggleCompleted(try! XCTUnwrap(viewModel.today.first))
+
+        XCTAssertEqual(viewModel.today.first?.isCompleted, false)
+        XCTAssertEqual(viewModel.completed.count, 1)
     }
 
     func testSubmitComposerAddsAndSelects() {
@@ -514,7 +536,8 @@ private extension TodoItem {
     func withPinned(_ value: Bool) -> TodoItem {
         TodoItem(
             id: id, content: content, startDate: startDate, deadline: deadline,
-            isCompleted: isCompleted, deletedAt: deletedAt,
+            isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
+            deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
             icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt
@@ -524,7 +547,8 @@ private extension TodoItem {
     func withIcon(_ value: String) -> TodoItem {
         TodoItem(
             id: id, content: content, startDate: startDate, deadline: deadline,
-            isCompleted: isCompleted, deletedAt: deletedAt,
+            isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
+            deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
             icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt
@@ -536,6 +560,7 @@ private extension TodoItem {
         startDate: Date?? = nil,
         deadline: Date?? = nil,
         isCompleted: Bool? = nil,
+        completionStateChangedAt: Date?? = nil,
         deletedAt: Date?? = nil,
         isLinkedToReminders: Bool? = nil,
         reminderCalendarIdentifier: String?? = nil
@@ -546,6 +571,7 @@ private extension TodoItem {
             startDate: startDate ?? self.startDate,
             deadline: deadline ?? self.deadline,
             isCompleted: isCompleted ?? self.isCompleted,
+            completionStateChangedAt: completionStateChangedAt ?? self.completionStateChangedAt,
             deletedAt: deletedAt ?? self.deletedAt,
             isLinkedToReminders: isLinkedToReminders ?? self.isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier ?? self.reminderCalendarIdentifier,

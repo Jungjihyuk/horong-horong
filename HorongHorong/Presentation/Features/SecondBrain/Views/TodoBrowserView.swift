@@ -23,9 +23,16 @@ private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
 /// 여기 남은 `@State` 는 저장하지 않는 화면 상태뿐이다 — 접힌 그룹, 끌어다 놓는 중인 위치,
 /// 스와이프 거리처럼 앱을 껐다 켜면 사라져도 되는 것들.
 struct TodoBrowserView: View {
+    static let initiallyCollapsedGroups: Set<String> = [
+        TodoBucket.overdue.title,
+        TodoBucket.someday.title,
+        TodoBucket.completed.title,
+        "최근 삭제"
+    ]
+
     @State private var viewModel: TodoViewModel
 
-    @State private var collapsedGroups: Set<String> = ["완료", "최근 삭제"]
+    @State private var collapsedGroups = Self.initiallyCollapsedGroups
     @State private var dropTargetTitle: String?
     @State private var colorPickerListID: String?
     @State private var swipeOffset: CGFloat = 0
@@ -50,7 +57,7 @@ struct TodoBrowserView: View {
         }
         .onAppear {
             viewModel.loadReminderLists()
-            viewModel.reload()
+            viewModel.dayChanged()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             viewModel.dayChanged()

@@ -33,21 +33,39 @@ enum TodoBucket: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 기준일 = 마감, 없으면 시작일. 날짜 없음 = 언젠가.
+    /// 시작일부터 마감일까지는 진행 중인 «오늘»이다. 날짜가 하나뿐이면 그 날짜만 쓴다.
+    /// 오늘 완료한 진행 중 항목은 자정 전까지 «오늘»에 남겨 바로 되돌릴 수 있게 한다.
     static func of(
         startDate: Date?,
         deadline: Date?,
         isCompleted: Bool,
+        completionStateChangedAt: Date? = nil,
         now: Date,
         calendar: Calendar = .current
     ) -> TodoBucket {
-        if isCompleted { return .completed }
-        guard let basis = deadline ?? startDate else { return .someday }
-        let day = calendar.startOfDay(for: basis)
+        guard let firstScheduledDate = startDate ?? deadline else {
+            return isCompleted ? .completed : .someday
+        }
+
+        let startDay = calendar.startOfDay(for: startDate ?? firstScheduledDate)
+        let endDay = calendar.startOfDay(for: deadline ?? firstScheduledDate)
         let today = calendar.startOfDay(for: now)
-        if day < today { return .overdue }
-        if day == today { return .today }
-        return .upcoming
+        let scheduledBucket: TodoBucket
+        if today < startDay {
+            scheduledBucket = .upcoming
+        } else if today <= endDay {
+            scheduledBucket = .today
+        } else {
+            scheduledBucket = .overdue
+        }
+
+        guard isCompleted else { return scheduledBucket }
+        guard scheduledBucket == .today,
+              let completionStateChangedAt,
+              calendar.isDate(completionStateChangedAt, inSameDayAs: now) else {
+            return .completed
+        }
+        return .today
     }
 
     /// 카드를 섹션으로 떨어뜨렸을 때 날짜·완료 상태를 어떻게 바꿀지.

@@ -311,7 +311,7 @@ final class TodoViewModel {
     /// 한 건이 바뀌었을 때. 고른 항목을 다시 읽고 목록을 다시 묶는다.
     ///
     /// 목록을 통째로 다시 읽는 것은 낭비로 보이지만, 한 건만 고쳐도 **묶음이 바뀔 수 있다**
-    /// (오늘 → 완료, 예정 → 오늘). 자리를 직접 옮기려면 그 규칙을 여기에 한 벌 더 두게 된다.
+    /// (예정 → 오늘, 언젠가 → 완료). 자리를 직접 옮기려면 그 규칙을 여기에 한 벌 더 두게 된다.
     private func refresh(_ id: UUID) {
         if selected?.id == id { selected = try? repository.todo(id: id) }
         reload()
