@@ -9,13 +9,13 @@ import Foundation
 @MainActor
 protocol ReferenceRepository {
     /// 최근에 고친 순서로 `limit` 개. `query` 가 있으면 본문에서 찾는다.
-    func references(matching query: String, limit: Int) throws -> [Reference]
+    func references(matching query: String, limit: Int) throws -> [ReferenceItem]
 
     /// 목록과 무관하게 한 건만. 고른 항목이 현재 페이지 밖일 수 있어서 필요하다.
-    func reference(id: UUID) throws -> Reference?
+    func reference(id: UUID) throws -> ReferenceItem?
 
     @discardableResult
-    func add(content: String) throws -> Reference
+    func add(content: String) throws -> ReferenceItem
 
     func updateContent(id: UUID, content: String) throws
     func delete(id: UUID) throws

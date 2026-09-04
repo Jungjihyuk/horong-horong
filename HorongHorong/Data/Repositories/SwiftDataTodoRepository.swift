@@ -37,7 +37,7 @@ final class SwiftDataTodoRepository: TodoRepository {
 
     func linkableTodos(matching query: String) throws -> [TodoItem] {
         try fetch(
-            #Predicate<SecondBrainRecord> { $0.sectionRaw == "todo" },
+            Self.activeSection,
             matching: query,
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
@@ -47,7 +47,7 @@ final class SwiftDataTodoRepository: TodoRepository {
 
     @discardableResult
     func add(title: String) throws -> TodoItem {
-        let record = SecondBrainRecord(content: title, section: .todo)
+        let record = Todo(content: title)
         record.startDate = Self.daytime(Date(), hour: 9)
         context.insert(record)
         try touch(record)
@@ -56,7 +56,7 @@ final class SwiftDataTodoRepository: TodoRepository {
 
     @discardableResult
     func addTodayTask(content: String, icon: String?) throws -> TodoItem {
-        let record = SecondBrainRecord(content: content, icon: icon, section: .todo)
+        let record = Todo(content: content, icon: icon)
         record.startDate = Date()
         context.insert(record)
         try touch(record)
@@ -172,7 +172,7 @@ final class SwiftDataTodoRepository: TodoRepository {
     }
 
     func emptyRecentlyDeleted() throws {
-        for record in try context.fetch(FetchDescriptor<SecondBrainRecord>(predicate: Self.deletedSection)) {
+        for record in try context.fetch(FetchDescriptor<Todo>(predicate: Self.deletedSection)) {
             detachReminders(record)
             context.delete(record)
         }
@@ -183,25 +183,22 @@ final class SwiftDataTodoRepository: TodoRepository {
 
     /// 살아 있는 할 일. 보관·최근 삭제는 SQL 에서 떨군다 —
     /// 예전에는 전량을 가져와 Swift 에서 걸렀다.
-    ///
-    /// `!= true` 가 `nil` 을 빠뜨리지 않는 것은 `normalizeMemoFlags` 가 실행마다 `nil` 을
-    /// `false` 로 메워 주기 때문이다. 그 보정이 없으면 SQL 3값 논리에 걸린다.
-    private static let activeSection = #Predicate<SecondBrainRecord> {
-        $0.sectionRaw == "todo" && $0.deletedAt == nil
+    private static let activeSection = #Predicate<Todo> {
+        $0.deletedAt == nil
     }
 
-    private static let deletedSection = #Predicate<SecondBrainRecord> {
-        $0.sectionRaw == "todo" && $0.deletedAt != nil
+    private static let deletedSection = #Predicate<Todo> {
+        $0.deletedAt != nil
     }
 
     // MARK: - 내부
 
     private func fetch(
-        _ predicate: Predicate<SecondBrainRecord>,
+        _ predicate: Predicate<Todo>,
         matching query: String,
-        sortBy: [SortDescriptor<SecondBrainRecord>] = [SortDescriptor(\.createdAt, order: .reverse)]
+        sortBy: [SortDescriptor<Todo>] = [SortDescriptor(\.createdAt, order: .reverse)]
     ) throws -> [TodoItem] {
-        let items = try context.fetch(FetchDescriptor<SecondBrainRecord>(predicate: predicate, sortBy: sortBy))
+        let items = try context.fetch(FetchDescriptor<Todo>(predicate: predicate, sortBy: sortBy))
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return items.map(Self.toItem) }
         // `localizedCaseInsensitiveContains` 는 SQL 로 번역되지 않아 여기서 거른다.
@@ -210,13 +207,13 @@ final class SwiftDataTodoRepository: TodoRepository {
             .map(Self.toItem)
     }
 
-    private func find(_ id: UUID) throws -> SecondBrainRecord? {
-        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
+    private func find(_ id: UUID) throws -> Todo? {
+        var descriptor = FetchDescriptor<Todo>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
-    private func change(_ id: UUID, syncLinkedReminder: Bool = false, _ edit: (SecondBrainRecord) -> Void) throws {
+    private func change(_ id: UUID, syncLinkedReminder: Bool = false, _ edit: (Todo) -> Void) throws {
         guard let record = try find(id) else { return }
         edit(record)
         try touch(record, syncLinkedReminder: syncLinkedReminder)
@@ -225,7 +222,7 @@ final class SwiftDataTodoRepository: TodoRepository {
     /// 고친 뒤 `updatedAt` 을 올리고, 로컬 알림을 다시 걸고, 저장한다.
     ///
     /// 미리알림 앱 쪽 반영은 시간이 걸려 `Task` 로 뗀다 — 실패해도 저장은 이미 끝나 있다.
-    private func touch(_ record: SecondBrainRecord, syncLinkedReminder: Bool = false) throws {
+    private func touch(_ record: Todo, syncLinkedReminder: Bool = false) throws {
         record.updatedAt = Date()
         rescheduleLocalReminder(for: record)
         try context.save()
@@ -236,7 +233,7 @@ final class SwiftDataTodoRepository: TodoRepository {
         }
     }
 
-    private func rescheduleLocalReminder(for record: SecondBrainRecord) {
+    private func rescheduleLocalReminder(for record: Todo) {
         let identifier = Self.localReminderIdentifier(for: record.id)
         guard !record.isCompletedValue,
               !record.isRecentlyDeleted,
@@ -253,7 +250,7 @@ final class SwiftDataTodoRepository: TodoRepository {
     }
 
     /// 지우기 전에 걸어둔 알림·미리알림을 떼어낸다. 안 떼면 없는 할 일의 알림이 울린다.
-    private func detachReminders(_ record: SecondBrainRecord) {
+    private func detachReminders(_ record: Todo) {
         notifications.cancel(identifier: Self.localReminderIdentifier(for: record.id))
         guard record.isLinkedToRemindersValue else { return }
         try? reminders.removeReminder(for: record)
@@ -269,7 +266,7 @@ final class SwiftDataTodoRepository: TodoRepository {
         Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
     }
 
-    private static func toItem(_ record: SecondBrainRecord) -> TodoItem {
+    private static func toItem(_ record: Todo) -> TodoItem {
         TodoItem(
             id: record.id,
             content: record.content,

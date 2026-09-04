@@ -133,7 +133,7 @@ struct QuickNoteBrowserView: View {
         }
     }
 
-    private func rowMenu(_ note: QuickNote) -> some View {
+    private func rowMenu(_ note: QuickNoteItem) -> some View {
         Menu {
             Button(note.isPinned ? "고정 해제" : "고정") { viewModel.togglePinned(note.id) }
             Divider()
@@ -188,7 +188,7 @@ struct QuickNoteBrowserView: View {
         }
     }
 
-    private func editorHeader(_ note: QuickNote) -> some View {
+    private func editorHeader(_ note: QuickNoteItem) -> some View {
         HStack {
             Text("\(QuickNoteElapsed.text(note.createdAt)) · 자동 저장됨")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -218,7 +218,7 @@ struct QuickNoteBrowserView: View {
         .padding(.bottom, 9)
     }
 
-    private func promoteBar(_ note: QuickNote) -> some View {
+    private func promoteBar(_ note: QuickNoteItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("여기서 자라면 →")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -270,7 +270,7 @@ struct QuickNoteBrowserView: View {
 
 /// 목록의 한 행. **값만 들고 있어 `Equatable` 이 성립한다** — 내용이 그대로면 다시 그리지 않는다.
 private struct QuickNoteRowView: View, Equatable {
-    let note: QuickNote
+    let note: QuickNoteItem
     let isSelected: Bool
 
     var body: some View {

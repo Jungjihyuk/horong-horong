@@ -39,7 +39,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
 
     func linkableMemos() -> [AchievementMemoDetail] {
         activeMemoRecords()
-            .filter { $0.resolvedSection == .todo && !$0.isCompletedValue }
+            .filter { !$0.isCompletedValue }
             .map(Self.toMemoDetail)
     }
 
@@ -344,7 +344,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     // MARK: - 일정 옮기기
 
     /// 요일만 바꾸고 **시각은 유지한다.** 오전 9시에 하던 일이 옮긴다고 자정이 되면 안 된다.
-    private func moveSchedule(_ record: SecondBrainRecord, to targetDay: Date) {
+    private func moveSchedule(_ record: Todo, to targetDay: Date) {
         switch (record.startDate, record.deadline) {
         case let (startDate?, deadline?):
             let newStart = Self.date(on: targetDay, preservingTimeOf: startDate)
@@ -377,7 +377,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         return Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: targetDay) ?? start
     }
 
-    private func rescheduleLocalReminder(for record: SecondBrainRecord) {
+    private func rescheduleLocalReminder(for record: Todo) {
         let identifier = "memo.deadline.\(record.id.uuidString)"
         guard !record.isCompletedValue,
               !record.isRecentlyDeleted,
@@ -413,8 +413,8 @@ final class SwiftDataAchievementRepository: AchievementRepository {
     }
 
     /// 보관·최근 삭제는 여기서 떨군다. 화면이 매번 같은 조건을 다시 쓰지 않게.
-    private func activeMemoRecords() -> [SecondBrainRecord] {
-        let descriptor = FetchDescriptor<SecondBrainRecord>(
+    private func activeMemoRecords() -> [Todo] {
+        let descriptor = FetchDescriptor<Todo>(
             predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -427,8 +427,8 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         return try? context.fetch(descriptor).first
     }
 
-    private func findMemo(_ id: UUID) -> SecondBrainRecord? {
-        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
+    private func findMemo(_ id: UUID) -> Todo? {
+        var descriptor = FetchDescriptor<Todo>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }
@@ -468,9 +468,10 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         let trimmed = value
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .first { !$0.isEmpty } ?? ""
         guard trimmed.count > limit else { return trimmed }
-        return "\(trimmed.prefix(limit))..."
+        let index = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<index]) + "…"
     }
 
     private static func toDetail(_ record: AchievementGoalRecord) -> AchievementGoalDetail {
@@ -498,7 +499,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         )
     }
 
-    private static func toMemoDetail(_ record: SecondBrainRecord) -> AchievementMemoDetail {
+    private static func toMemoDetail(_ record: Todo) -> AchievementMemoDetail {
         AchievementMemoDetail(
             id: record.id,
             content: record.content,

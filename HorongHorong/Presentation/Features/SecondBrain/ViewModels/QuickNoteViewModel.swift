@@ -8,8 +8,8 @@ import Observation
 @MainActor
 @Observable
 final class QuickNoteViewModel {
-    private(set) var notes: [QuickNote] = []
-    private(set) var selected: QuickNote?
+    private(set) var notes: [QuickNoteItem] = []
+    private(set) var selected: QuickNoteItem?
     private(set) var canLoadMore = false
 
     var searchText = "" { didSet { guard searchText != oldValue else { return }; reload() } }

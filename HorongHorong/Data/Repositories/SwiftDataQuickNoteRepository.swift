@@ -13,11 +13,11 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
         self.context = context
     }
 
-    func notes(matching query: String, limit: Int) throws -> [QuickNote] {
+    func notes(matching query: String, limit: Int) throws -> [QuickNoteItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        var pinnedDescriptor = FetchDescriptor<SecondBrainRecord>(predicate: Self.pinnedSection, sortBy: Self.recentFirst)
-        var restDescriptor = FetchDescriptor<SecondBrainRecord>(predicate: Self.unpinnedSection, sortBy: Self.recentFirst)
+        var pinnedDescriptor = FetchDescriptor<QuickNote>(predicate: Self.pinnedSection, sortBy: Self.recentFirst)
+        var restDescriptor = FetchDescriptor<QuickNote>(predicate: Self.unpinnedSection, sortBy: Self.recentFirst)
 
         // 검색 중에는 개수를 제한하지 않는다. `localizedCaseInsensitiveContains` 는
         // SQL 로 번역되지 않아 앱에서 걸러야 하는데, 앞 50건만 가져와 거르면
@@ -39,13 +39,13 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
             .map(Self.toNote)
     }
 
-    func note(id: UUID) throws -> QuickNote? {
+    func note(id: UUID) throws -> QuickNoteItem? {
         try find(id).map(Self.toNote)
     }
 
     @discardableResult
-    func add(content: String, icon: String? = nil) throws -> QuickNote {
-        let record = SecondBrainRecord(content: content, icon: icon, section: .quickNote)
+    func add(content: String, icon: String? = nil) throws -> QuickNoteItem {
+        let record = QuickNote(content: content, icon: icon)
         context.insert(record)
         try context.save()
         return Self.toNote(record)
@@ -60,13 +60,19 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
     }
 
     func promoteToTodo(id: UUID) throws {
-        try touch(id) { record in
-            record.assignSection(.todo)
-            // 날짜가 하나도 없으면 Todo 목록에서 «언제» 를 못 정해 아무 묶음에도 못 들어간다.
-            if record.startDate == nil && record.deadline == nil {
-                record.startDate = Date()
-            }
-        }
+        guard let note = try find(id) else { return }
+        let todo = Todo(
+            id: note.id,
+            content: note.content,
+            icon: note.icon,
+            createdAt: note.createdAt,
+            updatedAt: Date(),
+            isPinned: note.isPinned,
+            startDate: Date()
+        )
+        context.insert(todo)
+        context.delete(note)
+        try context.save()
     }
 
     func delete(id: UUID) throws {
@@ -77,34 +83,32 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
 
     // MARK: - 내부
 
-    /// 보관한 것은 목록에서 뺀다. `nil` 이 빠지지 않는 것은 `normalizeMemoFlags` 가
-    /// 실행마다 `nil` 을 `false` 로 메우기 때문이다 — 그 보정이 없으면 SQL 3값 논리에 걸린다.
-    private static let pinnedSection = #Predicate<SecondBrainRecord> {
-        $0.sectionRaw == "quickNote" && $0.isPinned
+    private static let pinnedSection = #Predicate<QuickNote> {
+        $0.isPinned
     }
 
-    private static let unpinnedSection = #Predicate<SecondBrainRecord> {
-        $0.sectionRaw == "quickNote" && !$0.isPinned
+    private static let unpinnedSection = #Predicate<QuickNote> {
+        !$0.isPinned
     }
 
-    private static let recentFirst = [SortDescriptor(\SecondBrainRecord.updatedAt, order: .reverse)]
+    private static let recentFirst = [SortDescriptor(\QuickNote.updatedAt, order: .reverse)]
 
-    private func find(_ id: UUID) throws -> SecondBrainRecord? {
-        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
+    private func find(_ id: UUID) throws -> QuickNote? {
+        var descriptor = FetchDescriptor<QuickNote>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
     /// 고친 뒤 `updatedAt` 을 올리고 저장한다. 쓰기 메서드가 넷이라 한 곳에 모았다.
-    private func touch(_ id: UUID, _ change: (SecondBrainRecord) -> Void) throws {
+    private func touch(_ id: UUID, _ change: (QuickNote) -> Void) throws {
         guard let record = try find(id) else { return }
         change(record)
         record.updatedAt = Date()
         try context.save()
     }
 
-    private static func toNote(_ record: SecondBrainRecord) -> QuickNote {
-        QuickNote(
+    private static func toNote(_ record: QuickNote) -> QuickNoteItem {
+        QuickNoteItem(
             id: record.id,
             content: record.content,
             isPinned: record.isPinned,

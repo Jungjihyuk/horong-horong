@@ -9,10 +9,10 @@ final class QuickNoteViewModelTests: XCTestCase {
     /// **실제 구현과 같은 규칙을 지킨다** — 고정한 것 먼저, `limit` 은 고정하지 않은 쪽에만.
     /// 이걸 어기면 테스트가 통과해도 실기에서 다르게 동작한다.
     private final class FakeRepository: QuickNoteRepository {
-        var items: [QuickNote] = []
+        var items: [QuickNoteItem] = []
         private(set) var fetchCount = 0
 
-        func notes(matching query: String, limit: Int) throws -> [QuickNote] {
+        func notes(matching query: String, limit: Int) throws -> [QuickNoteItem] {
             fetchCount += 1
             let sorted = items.sorted { $0.updatedAt > $1.updatedAt }
             let pinned = sorted.filter(\.isPinned)
@@ -29,21 +29,21 @@ final class QuickNoteViewModelTests: XCTestCase {
             )
         }
 
-        func note(id: UUID) throws -> QuickNote? { items.first { $0.id == id } }
+        func note(id: UUID) throws -> QuickNoteItem? { items.first { $0.id == id } }
 
         @discardableResult
-        func add(content: String, icon: String?) throws -> QuickNote {
-            let made = QuickNote(id: UUID(), content: content, isPinned: false, createdAt: Date(), updatedAt: Date())
+        func add(content: String, icon: String?) throws -> QuickNoteItem {
+            let made = QuickNoteItem(id: UUID(), content: content, isPinned: false, createdAt: Date(), updatedAt: Date())
             items.append(made)
             return made
         }
 
         func updateContent(id: UUID, content: String) throws {
-            replace(id) { QuickNote(id: id, content: content, isPinned: $0.isPinned, createdAt: $0.createdAt, updatedAt: Date()) }
+            replace(id) { QuickNoteItem(id: id, content: content, isPinned: $0.isPinned, createdAt: $0.createdAt, updatedAt: Date()) }
         }
 
         func setPinned(id: UUID, isPinned: Bool) throws {
-            replace(id) { QuickNote(id: id, content: $0.content, isPinned: isPinned, createdAt: $0.createdAt, updatedAt: Date()) }
+            replace(id) { QuickNoteItem(id: id, content: $0.content, isPinned: isPinned, createdAt: $0.createdAt, updatedAt: Date()) }
         }
 
         /// Todo 로 간 기록은 Quick Note 목록에서 사라진다 — 가짜에서는 지우는 것으로 흉내 낸다.
@@ -51,7 +51,7 @@ final class QuickNoteViewModelTests: XCTestCase {
 
         func delete(id: UUID) throws { items.removeAll { $0.id == id } }
 
-        private func replace(_ id: UUID, _ change: (QuickNote) -> QuickNote) {
+        private func replace(_ id: UUID, _ change: (QuickNoteItem) -> QuickNoteItem) {
             guard let index = items.firstIndex(where: { $0.id == id }) else { return }
             items[index] = change(items[index])
         }
@@ -64,13 +64,13 @@ final class QuickNoteViewModelTests: XCTestCase {
         let base = Date()
         repository.items =
             (0..<pinned).map {
-                QuickNote(
+                QuickNoteItem(
                     id: UUID(), content: "고정 \($0)", isPinned: true,
                     createdAt: base, updatedAt: base.addingTimeInterval(Double($0) - 10_000)
                 )
             }
             + (0..<unpinned).map {
-                QuickNote(
+                QuickNoteItem(
                     id: UUID(), content: "기록 \($0)", isPinned: false,
                     createdAt: base, updatedAt: base.addingTimeInterval(Double($0))
                 )
@@ -191,14 +191,14 @@ final class QuickNoteViewModelTests: XCTestCase {
 
     /// 제목·나머지 줄 규칙은 `NoteText` 한 곳에 있다. Quick Note 와 References 가 같이 쓴다.
     func testNoteTextRules() {
-        let note = QuickNote(
+        let note = QuickNoteItem(
             id: UUID(), content: "\n\n첫 줄\n  둘째 \n\n셋째",
             isPinned: false, createdAt: Date(), updatedAt: Date()
         )
         XCTAssertEqual(note.title, "첫 줄", "빈 줄은 건너뛴다")
         XCTAssertEqual(note.rest, "둘째 셋째", "나머지는 한 줄로 잇는다")
 
-        let single = QuickNote(id: UUID(), content: "한 줄뿐", isPinned: false, createdAt: Date(), updatedAt: Date())
+        let single = QuickNoteItem(id: UUID(), content: "한 줄뿐", isPinned: false, createdAt: Date(), updatedAt: Date())
         XCTAssertNil(single.rest)
 
         XCTAssertEqual(NoteText.title(of: "   \n\n "), "제목 없음")

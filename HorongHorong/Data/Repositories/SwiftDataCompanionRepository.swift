@@ -17,7 +17,7 @@ struct SwiftDataCompanionRepository: CompanionRepository {
         startDate: Date?,
         deadline: Date?
     ) throws -> UUID {
-        let record = SecondBrainRecord(content: content, icon: icon)
+        let record = Todo(content: content, icon: icon)
         record.startDate = startDate
         record.deadline = deadline
         context.insert(record)
@@ -33,14 +33,14 @@ struct SwiftDataCompanionRepository: CompanionRepository {
 
     func onboardingCounts() -> CompanionOnboardingCounts {
         CompanionOnboardingCounts(
-            memoCount: (try? context.fetchCount(FetchDescriptor<SecondBrainRecord>())) ?? 0,
+            memoCount: (try? context.fetchCount(FetchDescriptor<Todo>())) ?? 0,
             focusSessionCount: (try? context.fetchCount(FetchDescriptor<FocusSession>())) ?? 0,
             achievementGoalCount: (try? context.fetchCount(FetchDescriptor<AchievementGoalRecord>())) ?? 0
         )
     }
 
     func briefingMemos() -> [CompanionMemoSummary] {
-        let records = (try? context.fetch(FetchDescriptor<SecondBrainRecord>())) ?? []
+        let records = (try? context.fetch(FetchDescriptor<Todo>())) ?? []
         return records
             .filter { !$0.isRecentlyDeleted }
             .map {

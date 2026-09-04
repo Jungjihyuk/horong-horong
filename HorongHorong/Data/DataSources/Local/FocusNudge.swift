@@ -683,12 +683,12 @@ enum FocusNudgeSnapshotLoader {
         modelContext: ModelContext
     ) -> (open: Int, total: Int, overdue: Int, next: FocusNudgeContext.TaskCandidate?) {
         struct ScopedTask {
-            let record: SecondBrainRecord
+            let record: Todo
             let at: Date?
             let isOverdue: Bool
         }
 
-        let records = ((try? modelContext.fetch(FetchDescriptor<SecondBrainRecord>())) ?? []).filter {
+        let records = ((try? modelContext.fetch(FetchDescriptor<Todo>())) ?? []).filter {
             !$0.isRecentlyDeleted
         }
 

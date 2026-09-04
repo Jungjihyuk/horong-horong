@@ -19,11 +19,11 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        context.insert(SecondBrainRecord(content: "살아 있는 할 일", section: .todo))
-        let completed = SecondBrainRecord(content: "완료", section: .todo)
+        context.insert(Todo(content: "살아 있는 할 일"))
+        let completed = Todo(content: "완료")
         completed.isCompletedValue = true
         context.insert(completed)
-        let deleted = SecondBrainRecord(content: "최근 삭제", section: .todo)
+        let deleted = Todo(content: "최근 삭제")
         deleted.deletedAt = Date()
         context.insert(deleted)
         try context.save()
@@ -31,17 +31,17 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         XCTAssertEqual(repository.candidateMemos().map(\.content), ["살아 있는 할 일"])
     }
 
-    /// 섹션은 안 가린다 — 쪽지에 시작일을 넣어 두고 그걸로 뽀모도로를 돌리기도 한다.
+    /// Todo 모델에서 살아 있는 항목들을 가져온다.
     func testIncludesEverySectionThatIsStillAlive() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        context.insert(SecondBrainRecord(content: "할 일", section: .todo))
-        context.insert(SecondBrainRecord(content: "쪽지", section: .quickNote))
+        context.insert(Todo(content: "할 일 1"))
+        context.insert(Todo(content: "할 일 2"))
         try context.save()
 
-        XCTAssertEqual(Set(repository.candidateMemos().map(\.content)), ["할 일", "쪽지"])
+        XCTAssertEqual(Set(repository.candidateMemos().map(\.content)), ["할 일 1", "할 일 2"])
     }
 
     /// 목표에 묶인 id 를 모은다. 같은 할일이 여러 목표에 묶여 있어도 하나로 센다.
@@ -50,7 +50,7 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        let memo = SecondBrainRecord(content: "묶인 할 일", section: .todo)
+        let memo = Todo(content: "묶인 할 일")
         context.insert(memo)
         context.insert(AchievementGoalRecord(title: "목표 하나", linkedMemoIDs: [memo.id]))
         context.insert(AchievementGoalRecord(title: "목표 둘", linkedMemoIDs: [memo.id]))
@@ -65,9 +65,9 @@ final class SwiftDataPomodoroTaskRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataPomodoroTaskRepository(context: context)
 
-        let older = SecondBrainRecord(content: "오래된 것", section: .todo)
+        let older = Todo(content: "오래된 것")
         older.updatedAt = Date(timeIntervalSince1970: 1_000)
-        let newer = SecondBrainRecord(content: "최근 것", section: .todo)
+        let newer = Todo(content: "최근 것")
         newer.updatedAt = Date(timeIntervalSince1970: 2_000)
         context.insert(older)
         context.insert(newer)
