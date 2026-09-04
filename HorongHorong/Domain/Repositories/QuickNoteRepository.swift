@@ -9,13 +9,13 @@ protocol QuickNoteRepository {
     ///
     /// `limit` 은 **고정하지 않은 쪽에만** 걸린다. 고정한 기록은 몇 건 안 되고 항상 맨 위에
     /// 있어야 하는데, 한 번에 잘라 오면 고정한 것이 51번째에 있을 때 아예 안 보인다.
-    func notes(matching query: String, limit: Int) throws -> [QuickNote]
+    func notes(matching query: String, limit: Int) throws -> [QuickNoteItem]
 
     /// 목록과 무관하게 한 건만. 고른 항목이 현재 페이지 밖일 수 있어서 필요하다.
-    func note(id: UUID) throws -> QuickNote?
+    func note(id: UUID) throws -> QuickNoteItem?
 
     @discardableResult
-    func add(content: String, icon: String?) throws -> QuickNote
+    func add(content: String, icon: String?) throws -> QuickNoteItem
 
     func updateContent(id: UUID, content: String) throws
     func setPinned(id: UUID, isPinned: Bool) throws

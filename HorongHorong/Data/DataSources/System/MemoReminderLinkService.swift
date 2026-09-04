@@ -163,6 +163,39 @@ final class MemoReminderLinkService {
         return reminder.calendarItemIdentifier
     }
 
+    func saveReminder(for todo: Todo) async throws -> String {
+        try await requestAccessIfNeeded()
+
+        let content = reminderContent(content: todo.content)
+        let reminder = existingReminder(identifier: todo.reminderIdentifier) ?? EKReminder(eventStore: eventStore)
+        reminder.calendar = targetCalendar(calendarID: todo.reminderCalendarIdentifier) ?? reminder.calendar ?? eventStore.defaultCalendarForNewReminders()
+        reminder.title = content.title
+        reminder.notes = content.notes
+        reminder.url = content.url
+        reminder.priority = reminderPriority(isPinned: todo.isPinned, icon: todo.icon)
+        reminder.isCompleted = todo.isCompletedValue
+
+        if let startDate = todo.startDate {
+            reminder.startDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: startDate)
+        } else {
+            reminder.startDateComponents = nil
+        }
+
+        if let visible = todo.startDate ?? todo.deadline {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: visible)
+        } else {
+            reminder.dueDateComponents = nil
+        }
+        syncAlarm(for: reminder, fireDate: todo.reminderFireDate)
+
+        do {
+            try eventStore.save(reminder, commit: true)
+        } catch {
+            throw normalizedError(error)
+        }
+        return reminder.calendarItemIdentifier
+    }
+
     func removeReminder(for memo: Memo) throws {
         guard let reminder = existingReminder(identifier: memo.reminderIdentifier) else { return }
         do {
@@ -180,6 +213,16 @@ final class MemoReminderLinkService {
             throw normalizedError(error)
         }
     }
+
+    func removeReminder(for todo: Todo) throws {
+        guard let reminder = existingReminder(identifier: todo.reminderIdentifier) else { return }
+        do {
+            try eventStore.remove(reminder, commit: true)
+        } catch {
+            throw normalizedError(error)
+        }
+    }
+
 
     private func requestAccessIfNeeded() async throws {
         let status = EKEventStore.authorizationStatus(for: .reminder)

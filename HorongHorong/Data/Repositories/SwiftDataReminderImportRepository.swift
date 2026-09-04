@@ -35,7 +35,7 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
         var imported = 0
 
         for item in items where !item.isCompleted && !existing.contains(item.id) {
-            let record = SecondBrainRecord(content: Self.content(from: item), icon: MemoIcon.defaultIcon)
+            let record = Todo(content: Self.content(from: item), icon: MemoIcon.defaultIcon)
             let schedule = Self.schedule(for: item, history: history)
             record.startDate = schedule.start
             record.deadline = schedule.deadline
@@ -66,7 +66,7 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
     /// **지난 기록에서 추정한 소요 시간**만큼 뒤를 마감으로 잡는다.
     private static func schedule(
         for item: ReminderListItem,
-        history: [SecondBrainRecord]
+        history: [Todo]
     ) -> (start: Date?, deadline: Date?) {
         if let start = item.startDate, let due = item.dueDate, due > start {
             return (start, due)
@@ -90,13 +90,13 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
         return lines.joined(separator: "\n")
     }
 
-    private func allRecords() -> [SecondBrainRecord] {
-        let descriptor = FetchDescriptor<SecondBrainRecord>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+    private func allRecords() -> [Todo] {
+        let descriptor = FetchDescriptor<Todo>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    private func find(_ id: UUID) -> SecondBrainRecord? {
-        var descriptor = FetchDescriptor<SecondBrainRecord>(predicate: #Predicate { $0.id == id })
+    private func find(_ id: UUID) -> Todo? {
+        var descriptor = FetchDescriptor<Todo>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         return try? context.fetch(descriptor).first
     }

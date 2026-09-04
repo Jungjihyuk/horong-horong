@@ -30,6 +30,11 @@ enum MemoDurationEstimator {
         estimate(title: title, items: history.map { ($0.content, $0.startDate, $0.deadline) })
     }
 
+    static func estimate(title: String, history: [Todo]) -> TimeInterval {
+        estimate(title: title, items: history.map { ($0.content, $0.startDate, $0.deadline) })
+    }
+
+
     static func estimate(title: String, items: [(content: String, startDate: Date?, deadline: Date?)]) -> TimeInterval {
         let samples = self.samples(from: items)
         // 이력이 얼마 없을 때는 넘겨짚지 않고 기본값을 쓴다.

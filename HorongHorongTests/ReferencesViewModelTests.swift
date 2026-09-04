@@ -7,10 +7,10 @@ import XCTest
 final class ReferencesViewModelTests: XCTestCase {
     /// 저장소를 흉내 내는 가짜. SwiftData 도 파일도 쓰지 않는다.
     private final class FakeRepository: ReferenceRepository {
-        var items: [Reference] = []
+        var items: [ReferenceItem] = []
         private(set) var fetchCount = 0
 
-        func references(matching query: String, limit: Int) throws -> [Reference] {
+        func references(matching query: String, limit: Int) throws -> [ReferenceItem] {
             fetchCount += 1
             let sorted = items.sorted { $0.updatedAt > $1.updatedAt }
             let filtered = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -19,18 +19,18 @@ final class ReferencesViewModelTests: XCTestCase {
             return Array(filtered.prefix(limit))
         }
 
-        func reference(id: UUID) throws -> Reference? { items.first { $0.id == id } }
+        func reference(id: UUID) throws -> ReferenceItem? { items.first { $0.id == id } }
 
         @discardableResult
-        func add(content: String) throws -> Reference {
-            let made = Reference(id: UUID(), content: content, updatedAt: Date())
+        func add(content: String) throws -> ReferenceItem {
+            let made = ReferenceItem(id: UUID(), content: content, updatedAt: Date())
             items.append(made)
             return made
         }
 
         func updateContent(id: UUID, content: String) throws {
             guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-            items[index] = Reference(id: id, content: content, updatedAt: Date())
+            items[index] = ReferenceItem(id: id, content: content, updatedAt: Date())
         }
 
         func delete(id: UUID) throws { items.removeAll { $0.id == id } }
@@ -40,7 +40,7 @@ final class ReferencesViewModelTests: XCTestCase {
         let repository = FakeRepository()
         let base = Date()
         repository.items = (0..<count).map {
-            Reference(id: UUID(), content: "참고 \($0)", updatedAt: base.addingTimeInterval(Double($0)))
+            ReferenceItem(id: UUID(), content: "참고 \($0)", updatedAt: base.addingTimeInterval(Double($0)))
         }
         return (ReferencesViewModel(repository: repository), repository)
     }
@@ -138,12 +138,12 @@ final class ReferencesViewModelTests: XCTestCase {
 
     /// Entity 가 링크를 알아본다.
     func testEntityDerivesTitleAndLink() {
-        let link = Reference(id: UUID(), content: "https://example.com/a\n메모", updatedAt: Date())
+        let link = ReferenceItem(id: UUID(), content: "https://example.com/a\n메모", updatedAt: Date())
         XCTAssertEqual(link.title, "https://example.com/a")
         XCTAssertTrue(link.isLink)
         XCTAssertEqual(link.linkURL?.host(), "example.com")
 
-        let note = Reference(id: UUID(), content: "\n\n그냥 쪽지", updatedAt: Date())
+        let note = ReferenceItem(id: UUID(), content: "\n\n그냥 쪽지", updatedAt: Date())
         XCTAssertEqual(note.title, "그냥 쪽지", "빈 줄은 건너뛴다")
         XCTAssertFalse(note.isLink)
     }

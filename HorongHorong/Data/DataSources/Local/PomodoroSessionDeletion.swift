@@ -7,7 +7,7 @@ enum PomodoroSessionDeletion {
     static func delete(
         _ session: FocusSession,
         modelContext: ModelContext
-    ) throws -> SecondBrainRecord? {
+    ) throws -> Todo? {
         let sessionID = session.id
         let affectedRecord = try PomodoroTaskCompletionRecorder.removeCompletion(
             focusSessionID: sessionID,
@@ -23,13 +23,13 @@ enum PomodoroSessionDeletion {
         return affectedRecord
     }
 
-    static func repairOrphanedRecords(modelContext: ModelContext) throws -> [SecondBrainRecord] {
+    static func repairOrphanedRecords(modelContext: ModelContext) throws -> [Todo] {
         let existingSessionIDs = Set(
             try modelContext.fetch(FetchDescriptor<FocusSession>()).map(\.id)
         )
         let completions = try modelContext.fetch(FetchDescriptor<PomodoroTaskCompletion>())
         let recordsByID = Dictionary(
-            uniqueKeysWithValues: try modelContext.fetch(FetchDescriptor<SecondBrainRecord>()).map {
+            uniqueKeysWithValues: try modelContext.fetch(FetchDescriptor<Todo>()).map {
                 ($0.id, $0)
             }
         )
@@ -48,7 +48,7 @@ enum PomodoroSessionDeletion {
             .map(\.focusSessionID)
             .filter { !existingSessionIDs.contains($0) }
 
-        var affectedRecordsByID: [UUID: SecondBrainRecord] = [:]
+        var affectedRecordsByID: [UUID: Todo] = [:]
         for sessionID in orphanedCompletionSessionIDs {
             if let record = try PomodoroTaskCompletionRecorder.removeCompletion(
                 focusSessionID: sessionID,

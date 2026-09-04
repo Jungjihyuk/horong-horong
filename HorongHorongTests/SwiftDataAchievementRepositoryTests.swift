@@ -238,7 +238,7 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let repository = SwiftDataAchievementRepository(context: context)
         let calendar = Calendar.current
 
-        let memo = SecondBrainRecord(content: "할 일", section: .todo)
+        let memo = Todo(content: "할 일")
         let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 9, minute: 30))!
         memo.startDate = start
         context.insert(memo)
@@ -262,8 +262,8 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let calendar = Calendar.current
         let base = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 9))!
 
-        let memos = (0..<3).map { index -> SecondBrainRecord in
-            let memo = SecondBrainRecord(content: "할 일 \(index)", section: .todo)
+        let memos = (0..<3).map { index -> Todo in
+            let memo = Todo(content: "할 일 \(index)")
             memo.startDate = base
             context.insert(memo)
             return memo
@@ -287,7 +287,7 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let repository = SwiftDataAchievementRepository(context: context)
-        let memo = SecondBrainRecord(content: "할 일", section: .todo)
+        let memo = Todo(content: "할 일")
         memo.isPinned = true
         context.insert(memo)
         try context.save()
@@ -303,18 +303,17 @@ final class SwiftDataAchievementRepositoryTests: XCTestCase {
         let context = container.mainContext
         let repository = SwiftDataAchievementRepository(context: context)
 
-        context.insert(SecondBrainRecord(content: "할 일", section: .todo))
-        let done = SecondBrainRecord(content: "끝낸 일", section: .todo)
+        context.insert(Todo(content: "할 일"))
+        let done = Todo(content: "끝낸 일")
         done.isCompletedValue = true
         context.insert(done)
-        context.insert(SecondBrainRecord(content: "쪽지", section: .quickNote))
-        let deleted = SecondBrainRecord(content: "최근 삭제", section: .todo)
+        let deleted = Todo(content: "최근 삭제")
         deleted.deletedAt = Date()
         context.insert(deleted)
         try context.save()
 
         XCTAssertEqual(repository.linkableMemos().map(\.content), ["할 일"])
-        XCTAssertEqual(repository.memos().count, 3, "최근 삭제는 전체 조회에서도 빠진다")
+        XCTAssertEqual(repository.memos().count, 2, "최근 삭제는 전체 조회에서도 빠진다")
     }
 
     // MARK: - 역할·비전

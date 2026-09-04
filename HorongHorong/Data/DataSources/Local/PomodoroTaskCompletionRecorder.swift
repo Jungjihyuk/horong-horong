@@ -36,7 +36,7 @@ enum PomodoroTaskCompletionRecorder {
         for session: FocusSession,
         completedAt: Date,
         modelContext: ModelContext
-    ) throws -> SecondBrainRecord? {
+    ) throws -> Todo? {
         guard let linkedMemoID = session.linkedMemoID else { return nil }
         if try completion(focusSessionID: session.id, modelContext: modelContext) != nil {
             return nil
@@ -69,7 +69,7 @@ enum PomodoroTaskCompletionRecorder {
         focusSessionID: UUID,
         removedAt: Date = Date(),
         modelContext: ModelContext
-    ) throws -> SecondBrainRecord? {
+    ) throws -> Todo? {
         guard let completion = try completion(
             focusSessionID: focusSessionID,
             modelContext: modelContext
@@ -119,7 +119,7 @@ enum PomodoroTaskCompletionRecorder {
         return record
     }
 
-    static func applyPostSaveEffects(to record: SecondBrainRecord, modelContext: ModelContext) {
+    static func applyPostSaveEffects(to record: Todo, modelContext: ModelContext) {
         let reminderIdentifier = "memo.deadline.\(record.id.uuidString)"
         if record.isCompletedValue || record.isRecentlyDeleted {
             NotificationManager.shared.cancel(identifier: reminderIdentifier)
@@ -177,9 +177,9 @@ enum PomodoroTaskCompletionRecorder {
         reminderSyncJobs[memoID] = ReminderSyncJob(token: token, task: task)
     }
 
-    private static func memo(id: UUID, modelContext: ModelContext) throws -> SecondBrainRecord? {
+    private static func memo(id: UUID, modelContext: ModelContext) throws -> Todo? {
         let memoID = id
-        var descriptor = FetchDescriptor<SecondBrainRecord>(
+        var descriptor = FetchDescriptor<Todo>(
             predicate: #Predicate { $0.id == memoID }
         )
         descriptor.fetchLimit = 1

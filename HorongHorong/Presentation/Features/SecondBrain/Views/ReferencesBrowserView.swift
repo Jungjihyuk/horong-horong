@@ -164,7 +164,7 @@ struct ReferencesBrowserView: View {
 
 /// 목록 한 줄. **값 타입을 받는 `struct` 라 자기만의 렌더 경계를 가진다**(CLAUDE.md R3).
 private struct ReferenceRowView: View, Equatable {
-    let reference: Reference
+    let reference: ReferenceItem
     let isSelected: Bool
 
     var body: some View {

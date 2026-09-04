@@ -430,6 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         migrateRemovedDocumentCategory(in: context)
         migrateMemoSections(in: context)
         Self.migrateMemoToSecondBrainRecords(in: context)
+        Self.migrateSecondBrainToDividedModels(in: context)
         mergeDuplicateDiaryEntries(in: context)
         normalizeMemoFlags(in: context)
         seedDefaultCategoryRules(in: context)
@@ -548,42 +549,157 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 기존 `Memo` 테이블의 데이터를 신규 `SecondBrainRecord` 테이블로 1:1 복사 이전한다.
+    ///
+    /// DB 파일과 생명주기가 다른 외부 UserDefaults 플래그에 의존해 조기 중단하지 않고,
+    /// 실제 `Memo` 테이블에 데이터가 남아있는지 확인하여 안전하고 멱등(idempotent)하게 이전한다.
     static func migrateMemoToSecondBrainRecords(in context: ModelContext, defaults: UserDefaults = .standard) {
         let migrationKey = "migration.memoToSecondBrain.v1"
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
         do {
             let legacyMemos = try context.fetch(FetchDescriptor<Memo>())
-            if !legacyMemos.isEmpty {
-                for memo in legacyMemos {
-                    let record = SecondBrainRecord(
-                        id: memo.id,
-                        content: memo.content,
-                        icon: memo.icon,
-                        section: memo.resolvedSection,
-                        createdAt: memo.createdAt,
-                        updatedAt: memo.updatedAt,
-                        isPinned: memo.isPinned,
-                        isCompleted: memo.isCompletedValue,
-                        completionStateChangedAt: memo.completionStateChangedAt,
-                        startDate: memo.startDate,
-                        deadline: memo.deadline,
-                        reminderOffsetMinutes: memo.reminderOffsetMinutes,
-                        reminderIdentifier: memo.reminderIdentifier,
-                        reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
-                        isLinkedToReminders: memo.isLinkedToReminders ?? false,
-                        deletedAt: memo.deletedAt
-                    )
-                    record.isArchived = memo.isArchived
-                    context.insert(record)
-                }
-                try context.save()
-
-                for memo in legacyMemos {
-                    context.delete(memo)
-                }
-                try context.save()
+            guard !legacyMemos.isEmpty else {
+                defaults.set(true, forKey: migrationKey)
+                return
             }
+
+            let existingRecords = try context.fetch(FetchDescriptor<SecondBrainRecord>())
+            let existingIDs = Set(existingRecords.map(\.id))
+
+            for memo in legacyMemos {
+                guard !existingIDs.contains(memo.id) else { continue }
+                let record = SecondBrainRecord(
+                    id: memo.id,
+                    content: memo.content,
+                    icon: memo.icon,
+                    section: memo.resolvedSection,
+                    createdAt: memo.createdAt,
+                    updatedAt: memo.updatedAt,
+                    isPinned: memo.isPinned,
+                    isCompleted: memo.isCompletedValue,
+                    completionStateChangedAt: memo.completionStateChangedAt,
+                    startDate: memo.startDate,
+                    deadline: memo.deadline,
+                    reminderOffsetMinutes: memo.reminderOffsetMinutes,
+                    reminderIdentifier: memo.reminderIdentifier,
+                    reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
+                    isLinkedToReminders: memo.isLinkedToReminders ?? false,
+                    deletedAt: memo.deletedAt
+                )
+                record.isArchived = memo.isArchived
+                context.insert(record)
+            }
+            try context.save()
+
+            for memo in legacyMemos {
+                context.delete(memo)
+            }
+            try context.save()
+            defaults.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
+        }
+    }
+
+    /// 기존 `SecondBrainRecord` 및 `DiaryEntry` 테이블의 데이터를 신규 분리 모델(`Todo`, `QuickNote`, `Reference`, `Diary`)로 분산 복사 이전한다.
+    ///
+    /// 멱등(idempotent)하게 동작하며, 기존 ID를 그대로 계승하여 관계 키(외래키)를 보존한다.
+    static func migrateSecondBrainToDividedModels(in context: ModelContext, defaults: UserDefaults = .standard) {
+        let migrationKey = "migration.secondBrainToDividedModels.v1"
+        do {
+            let records = try context.fetch(FetchDescriptor<SecondBrainRecord>())
+            let diaryEntries = try context.fetch(FetchDescriptor<DiaryEntry>())
+
+            guard !records.isEmpty || !diaryEntries.isEmpty else {
+                defaults.set(true, forKey: migrationKey)
+                return
+            }
+
+            // 1. SecondBrainRecord 분산 이전
+            if !records.isEmpty {
+                let existingTodos = Set((try context.fetch(FetchDescriptor<Todo>())).map(\.id))
+                let existingNotes = Set((try context.fetch(FetchDescriptor<QuickNote>())).map(\.id))
+                let existingRefs = Set((try context.fetch(FetchDescriptor<Reference>())).map(\.id))
+
+                for record in records {
+                    switch record.resolvedSection {
+                    case .todo:
+                        guard !existingTodos.contains(record.id) else { continue }
+                        let todo = Todo(
+                            id: record.id,
+                            content: record.content,
+                            icon: record.icon,
+                            createdAt: record.createdAt,
+                            updatedAt: record.updatedAt,
+                            isPinned: record.isPinned,
+                            isCompleted: record.isCompletedValue,
+                            completionStateChangedAt: record.completionStateChangedAt,
+                            startDate: record.startDate,
+                            deadline: record.deadline,
+                            reminderOffsetMinutes: record.reminderOffsetMinutes,
+                            reminderIdentifier: record.reminderIdentifier,
+                            reminderCalendarIdentifier: record.reminderCalendarIdentifier,
+                            isLinkedToReminders: record.isLinkedToRemindersValue,
+                            deletedAt: record.deletedAt
+                        )
+                        todo.isArchived = record.isArchived ?? false
+                        context.insert(todo)
+                    case .quickNote:
+                        guard !existingNotes.contains(record.id) else { continue }
+                        let note = QuickNote(
+                            id: record.id,
+                            content: record.content,
+                            icon: record.icon,
+                            createdAt: record.createdAt,
+                            updatedAt: record.updatedAt,
+                            isPinned: record.isPinned,
+                            deletedAt: record.deletedAt
+                        )
+                        context.insert(note)
+                    case .reference:
+                        guard !existingRefs.contains(record.id) else { continue }
+                        let ref = Reference(
+                            id: record.id,
+                            content: record.content,
+                            icon: record.icon,
+                            createdAt: record.createdAt,
+                            updatedAt: record.updatedAt,
+                            isPinned: record.isPinned,
+                            deletedAt: record.deletedAt
+                        )
+                        context.insert(ref)
+                    }
+                }
+            }
+
+            // 2. DiaryEntry -> Diary 1:1 이전
+            if !diaryEntries.isEmpty {
+                let existingDiaries = Set((try context.fetch(FetchDescriptor<Diary>())).map(\.id))
+                for entry in diaryEntries {
+                    guard !existingDiaries.contains(entry.id) else { continue }
+                    let diary = Diary(
+                        id: entry.id,
+                        day: entry.day,
+                        moodRaw: entry.moodRaw,
+                        sleepHours: entry.sleepHours,
+                        sleepSourceRaw: entry.sleepSourceRaw,
+                        stress: entry.stress,
+                        body: entry.body,
+                        createdAt: entry.createdAt,
+                        updatedAt: entry.updatedAt
+                    )
+                    context.insert(diary)
+                }
+            }
+
+            try context.save()
+
+            // 3. 신규 모델 저장 확인 후 구 레코드 정리
+            for record in records {
+                context.delete(record)
+            }
+            for entry in diaryEntries {
+                context.delete(entry)
+            }
+            try context.save()
             defaults.set(true, forKey: migrationKey)
         } catch {
             context.rollback()
@@ -629,7 +745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 같은 날짜 일기가 둘 이상이면 하나만 남긴다.
     ///
-    /// `DiaryEntry.day` 에 유일 제약을 걸 수 없어서(`#Unique` 는 macOS 15+) 코드로 지킨다.
+    /// `Diary.day` 에 유일 제약을 걸 수 없어서(`#Unique` 는 macOS 15+) 코드로 지킨다.
     /// 새로 생기는 것은 `DiaryBrowserView.upsert` 가 막고, 이미 생긴 것을 여기서 정리한다.
     /// iCloud 병합·백업 복원처럼 앱 밖에서 들어오는 경로가 있으므로 실행마다 확인한다.
     ///
@@ -637,7 +753,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 어느 쪽이 «원본»인지 따지는 것보다 중요하다. 길이가 같으면 최근에 고친 쪽을 남긴다.
     private func mergeDuplicateDiaryEntries(in context: ModelContext) {
         do {
-            let entries = try context.fetch(FetchDescriptor<DiaryEntry>())
+            let entries = try context.fetch(FetchDescriptor<Diary>())
             let byDay = Dictionary(grouping: entries, by: \.day)
             var didRemove = false
 
@@ -704,8 +820,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let context = modelContainer.mainContext
-        guard let records = try? context.fetch(FetchDescriptor<SecondBrainRecord>()) else { return }
-        guard !TodayPlanningReminderPolicy.hasTodayTask(in: records, now: Date()) else {
+        guard let todos = try? context.fetch(FetchDescriptor<Todo>()) else { return }
+        guard !TodayPlanningReminderPolicy.hasTodayTask(in: todos, now: Date()) else {
             NotificationManager.shared.cancel(
                 identifier: Constants.todayPlanningReminderNotificationIdentifier
             )

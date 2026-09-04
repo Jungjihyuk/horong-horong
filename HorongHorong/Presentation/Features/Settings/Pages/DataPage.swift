@@ -83,7 +83,7 @@ struct DataPage: View {
             }
 
             #if DEBUG
-            MemoSeederCard()
+            SecondBrainSeederCard()
             #endif
         }
     }

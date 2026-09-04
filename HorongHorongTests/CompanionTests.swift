@@ -727,9 +727,9 @@ final class CompanionMemoStoreTests: XCTestCase {
     func testRepositoryReturnsOnboardingCountsAndActiveBriefingMemos() throws {
         let container = try makeAppContainer()
         let context = container.mainContext
-        let active = SecondBrainRecord(content: "오늘 할 일", section: .todo)
+        let active = Todo(content: "오늘 할 일")
         active.startDate = Date(timeIntervalSince1970: 1_800_000_000)
-        let deleted = SecondBrainRecord(content: "지운 할 일", section: .todo)
+        let deleted = Todo(content: "지운 할 일")
         deleted.deletedAt = Date()
         context.insert(active)
         context.insert(deleted)
@@ -761,7 +761,7 @@ final class CompanionMemoStoreTests: XCTestCase {
 
     @MainActor
     func testSaveKeepsOriginalTextAndSelectedOptions() throws {
-        let schema = Schema([SecondBrainRecord.self])
+        let schema = Schema([Todo.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -780,7 +780,7 @@ final class CompanionMemoStoreTests: XCTestCase {
             now: now
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Todo>()).first)
         XCTAssertEqual(memo.content, original)
         XCTAssertEqual(memo.icon, "💡")
         XCTAssertEqual(memo.startDate, now)
@@ -788,7 +788,7 @@ final class CompanionMemoStoreTests: XCTestCase {
 
     @MainActor
     func testRegularMemoDoesNotReceiveStartDate() throws {
-        let schema = Schema([SecondBrainRecord.self])
+        let schema = Schema([Todo.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -804,14 +804,14 @@ final class CompanionMemoStoreTests: XCTestCase {
             in: SwiftDataCompanionRepository(context: context)
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Todo>()).first)
         XCTAssertNil(memo.startDate)
     }
 
     /// 말로 정해준 때는 메모의 시작·마감으로 그대로 들어간다.
     @MainActor
     func testSpokenScheduleIsStoredOnTheMemo() throws {
-        let schema = Schema([SecondBrainRecord.self])
+        let schema = Schema([Todo.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -831,14 +831,14 @@ final class CompanionMemoStoreTests: XCTestCase {
             in: SwiftDataCompanionRepository(context: context)
         )
 
-        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<SecondBrainRecord>()).first)
+        let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Todo>()).first)
         XCTAssertEqual(memo.startDate, start)
         XCTAssertEqual(memo.deadline, end)
     }
 
     @MainActor
     func testSameMessageIsSavedOnlyOnce() throws {
-        let schema = Schema([SecondBrainRecord.self])
+        let schema = Schema([Todo.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext
@@ -858,7 +858,7 @@ final class CompanionMemoStoreTests: XCTestCase {
             return XCTFail("첫 저장은 saved 여야 합니다.")
         }
         XCTAssertEqual(second, .duplicate(firstID))
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<SecondBrainRecord>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Todo>()), 1)
     }
 }
 
@@ -1328,7 +1328,7 @@ final class CompanionOnboardingDemoStoreTests: XCTestCase {
         )
 
         let context = try XCTUnwrap(store.modelContainer).mainContext
-        let memos = try context.fetch(FetchDescriptor<SecondBrainRecord>())
+        let memos = try context.fetch(FetchDescriptor<Todo>())
         let goalRecords = try context.fetch(FetchDescriptor<AchievementGoalRecord>())
         let sessions = try context.fetch(FetchDescriptor<FocusSession>())
         let reflections = try context.fetch(FetchDescriptor<PomodoroReflection>())

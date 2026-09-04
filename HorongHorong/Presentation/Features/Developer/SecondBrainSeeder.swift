@@ -2,7 +2,7 @@
 import SwiftUI
 import SwiftData
 
-/// 성능 측정용 합성 메모 생성기. **Debug 빌드에서만 컴파일된다.**
+/// 성능 측정용 합성 기록 생성기. **Debug 빌드에서만 컴파일된다.**
 ///
 /// 리팩터링 전후를 비교하려면 "기록이 많을 때"를 재현해야 하는데, 실사용 데이터로는
 /// 같은 조건을 두 번 만들 수 없다. 그래서 분포를 고정한 합성 데이터를 쓴다.
@@ -11,7 +11,7 @@ import SwiftData
 /// ① `SwiftDataStoreLocation.currentScope` 가 Debug 에서 `.development` 라 파일이 애초에 다르다
 /// (`HorongHorong-Debug/`). ② 그래도 `guardDevelopmentStore()` 로 한 번 더 막는다 —
 /// 누군가 Release 에서 이 코드를 살려낼 때를 대비한 안전장치다.
-enum MemoSeeder {
+enum SecondBrainSeeder {
     enum SeedError: LocalizedError {
         case notDevelopmentStore
 
@@ -28,7 +28,10 @@ enum MemoSeeder {
     ]
 
     static func count(in context: ModelContext) -> Int {
-        (try? context.fetchCount(FetchDescriptor<SecondBrainRecord>())) ?? 0
+        let todos = (try? context.fetchCount(FetchDescriptor<Todo>())) ?? 0
+        let notes = (try? context.fetchCount(FetchDescriptor<QuickNote>())) ?? 0
+        let references = (try? context.fetchCount(FetchDescriptor<Reference>())) ?? 0
+        return todos + notes + references
     }
 
     /// `count` 건을 넣는다. 저장은 마지막에 한 번만 한다 —
@@ -43,31 +46,44 @@ enum MemoSeeder {
 
         for index in 0..<count {
             let section = weightedSection(&rng)
-            let record = SecondBrainRecord(content: content(index: index, section: section, &rng), section: section)
-
-            // 최근 2년에 흩뿌린다. 정렬·날짜 필터가 실제로 일할 거리를 만든다.
+            let itemContent = content(index: index, section: section, &rng)
             let ageDays = Double(rng.next(upTo: 730))
             let created = now.addingTimeInterval(-ageDays * 86_400)
-            record.createdAt = created
-            record.updatedAt = created
+            let isPinned = rng.next(upTo: 100) < 5
 
-            if section == .todo {
-                applyTodoDates(to: record, now: now, &rng)
+            switch section {
+            case .todo:
+                let todo = Todo(content: itemContent)
+                todo.createdAt = created
+                todo.updatedAt = created
+                todo.isPinned = isPinned
+                applyTodoDates(to: todo, now: now, &rng)
+                context.insert(todo)
+            case .quickNote:
+                let note = QuickNote(content: itemContent)
+                note.createdAt = created
+                note.updatedAt = created
+                note.isPinned = isPinned
+                context.insert(note)
+            case .reference:
+                let reference = Reference(content: itemContent)
+                reference.createdAt = created
+                reference.updatedAt = created
+                reference.isPinned = isPinned
+                context.insert(reference)
             }
-            if rng.next(upTo: 100) < 5 {
-                record.isPinned = true
-            }
-            context.insert(record)
         }
 
         try context.save()
     }
 
-    /// 개발 저장소의 Memo 를 전부 지운다. 합성분만 골라내지 않는 이유는
+    /// 개발 저장소의 기록을 전부 지운다. 합성분만 골라내지 않는 이유는
     /// 표식용 필드를 넣으려면 스키마를 바꿔야 하고, 그건 측정과 무관한 변경이기 때문이다.
     static func deleteAll(in context: ModelContext) throws {
         try guardDevelopmentStore()
-        try context.delete(model: SecondBrainRecord.self)
+        try context.delete(model: Todo.self)
+        try context.delete(model: QuickNote.self)
+        try context.delete(model: Reference.self)
         try context.save()
     }
 
@@ -87,7 +103,7 @@ enum MemoSeeder {
         return .quickNote
     }
 
-    private static func applyTodoDates(to record: SecondBrainRecord, now: Date, _ rng: inout SeededGenerator) {
+    private static func applyTodoDates(to record: Todo, now: Date, _ rng: inout SeededGenerator) {
         // -60 ~ +60일. 지남/오늘/예정 버킷이 골고루 차게 한다.
         let offset = Double(rng.next(upTo: 121) - 60)
         let day = now.addingTimeInterval(offset * 86_400)
@@ -166,7 +182,7 @@ private struct SeededGenerator {
 }
 
 /// 설정 > 데이터 페이지 맨 아래에 붙는 Debug 전용 카드.
-struct MemoSeederCard: View {
+struct SecondBrainSeederCard: View {
     @Environment(\.modelContext) private var modelContext
     @State private var memoCount = 0
     @State private var message = ""
@@ -175,7 +191,7 @@ struct MemoSeederCard: View {
     var body: some View {
         SettingsGroupCard("성능 측정용 합성 데이터 (Debug 전용)") {
             SettingsRow(
-                "현재 Memo",
+                "현재 기록",
                 subtitle: message.isEmpty
                     ? "저장소: \(SwiftDataStoreLocation.currentScope == .development ? "HorongHorong-Debug" : "⚠️ 실사용")"
                     : message
@@ -186,7 +202,7 @@ struct MemoSeederCard: View {
             }
 
             SettingsRow(
-                "합성 메모 생성",
+                "합성 기록 생성",
                 subtitle: "Quick Note 40% · Todo 40% · References 20%. 시드 고정이라 실행할 때마다 같은 데이터가 나온다"
             ) {
                 HStack(spacing: 8) {
@@ -199,7 +215,7 @@ struct MemoSeederCard: View {
 
             SettingsRow(
                 "전부 삭제",
-                subtitle: "개발 저장소의 Memo 를 모두 지운다. 실사용 저장소는 파일이 달라 영향받지 않는다"
+                subtitle: "개발 저장소의 기록을 모두 지운다. 실사용 저장소는 파일이 달라 영향받지 않는다"
             ) {
                 Button("삭제", role: .destructive) { deleteAll() }
                     .controlSize(.small)
@@ -210,13 +226,13 @@ struct MemoSeederCard: View {
     }
 
     private func refresh() {
-        memoCount = MemoSeeder.count(in: modelContext)
+        memoCount = SecondBrainSeeder.count(in: modelContext)
     }
 
     private func seed(_ count: Int) {
         isWorking = true
         do {
-            try MemoSeeder.seed(count: count, into: modelContext)
+            try SecondBrainSeeder.seed(count: count, into: modelContext)
             message = "\(count)건 추가함"
         } catch {
             message = error.localizedDescription
@@ -228,7 +244,7 @@ struct MemoSeederCard: View {
     private func deleteAll() {
         isWorking = true
         do {
-            try MemoSeeder.deleteAll(in: modelContext)
+            try SecondBrainSeeder.deleteAll(in: modelContext)
             message = "모두 삭제함"
         } catch {
             message = error.localizedDescription
