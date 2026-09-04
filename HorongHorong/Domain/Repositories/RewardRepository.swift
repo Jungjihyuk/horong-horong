@@ -52,6 +52,8 @@ protocol RewardRepository {
     func balance() -> Int
     func hasClaimed(goalID: UUID) -> Bool
     func hasRedeemed(goalID: UUID) -> Bool
+    /// 이 목표로 이미 패널티를 받았는지. **목표 하나당 차감도 평생 한 번이다.**
+    func hasPenalized(goalID: UUID) -> Bool
 
     /// 주간 목표 달성 포인트를 적립한다. 미완료거나 이미 받은 목표면 아무것도 하지 않는다.
     @discardableResult
@@ -59,6 +61,17 @@ protocol RewardRepository {
 
     /// 적립을 되돌린다. 할 일을 잘못 체크해 목표가 잠깐 달성 상태가 됐을 때 쓴다.
     func revokeClaim(goalID: UUID) -> Result<Int, RewardRevokeError>
+
+    /// 실패로 마감한 목표의 포인트를 깎는다. 깎을 게 없으면 `nil`.
+    ///
+    /// **잔액은 0 에서 바닥이다** — 명목만큼 다 못 깎으면 깎은 만큼만 적고 그 사정을 `note` 에 남긴다.
+    /// 이미 적립했거나 이미 깎은 목표는 건드리지 않는다.
+    @discardableResult
+    func penalize(goalID: UUID, nominalPoints: Int, note: String, at date: Date) -> RewardPenaltyResult?
+
+    /// 패널티를 되돌린다. 돌려준 포인트를 반환하고, 깎인 적이 없으면 `nil`.
+    @discardableResult
+    func revokePenalty(goalID: UUID) -> Int?
 
     /// 월간 목표 달성 보상을 고른다. 잔액에서 항목 가격만큼 뺀다.
     func redeem(itemID: UUID, forMonthlyGoal goal: RewardClaimableGoal) -> Result<RewardEntry, RewardRedeemError>

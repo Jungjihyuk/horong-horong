@@ -14,6 +14,14 @@ enum RewardLedger {
         entries.contains { $0.kind == .earn && $0.sourceGoalID == goalID }
     }
 
+    /// 이 목표로 이미 패널티를 받았는지.
+    ///
+    /// `hasClaimed` 와 같은 이유로 필요하다 — 성취 창과 팝오버가 같은 틱에 정산할 수 있고,
+    /// 목표를 다시 열었다 닫으면 또 깎일 수 있다. **목표 하나당 차감도 평생 한 번이다.**
+    static func hasPenalized(goalID: UUID, in entries: [RewardEntrySnapshot]) -> Bool {
+        entries.contains { $0.kind == .penalty && $0.sourceGoalID == goalID }
+    }
+
     /// 이 월간 목표로 이미 보상을 골랐는지.
     static func hasRedeemed(goalID: UUID, in entries: [RewardEntrySnapshot]) -> Bool {
         entries.contains { $0.kind == .spend && $0.sourceGoalID == goalID }

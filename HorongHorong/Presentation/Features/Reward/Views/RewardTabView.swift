@@ -413,6 +413,12 @@ private struct RewardHistorySheet: View {
         entries.filter { $0.kind == .spend }.reduce(0) { $0 - $1.amount }
     }
 
+    /// 실패 마감으로 깎인 합. **`spentTotal` 에 섞지 않는다** — 보상을 산 적이 없는데
+    /// «쓴 것» 이 쌓이면 이력을 읽을 수 없다. 따로 세지 않으면 «받은 것 − 쓴 것 ≠ 잔액» 이 된다.
+    private var penalizedTotal: Int {
+        entries.filter { $0.kind == .penalty }.reduce(0) { $0 - $1.amount }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
@@ -420,7 +426,12 @@ private struct RewardHistorySheet: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                 Spacer()
-                Text("모은 \(earnedTotal)P · 쓴 \(spentTotal)P")
+                // 깎인 게 없으면 굳이 «놓친 0P» 를 띄우지 않는다.
+                Text(
+                    penalizedTotal > 0
+                        ? "모은 \(earnedTotal)P · 쓴 \(spentTotal)P · 놓친 \(penalizedTotal)P"
+                        : "모은 \(earnedTotal)P · 쓴 \(spentTotal)P"
+                )
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
             }
@@ -464,18 +475,37 @@ private struct RewardHistorySheet: View {
         .appearanceAccentTint(.popover)
     }
 
+    /// 종류마다 다른 아이콘. **`switch` 로 적는다** — `== .earn` 비교로 두면
+    /// 종류를 늘려도 컴파일러가 여기를 짚어 주지 않아 새 종류가 조용히 «선물» 로 그려진다.
+    private static func icon(for kind: RewardEntryKind) -> String {
+        switch kind {
+        case .earn: return "drop.fill"
+        case .spend: return "gift.fill"
+        case .penalty: return "flame.slash"
+        }
+    }
+
+    private static func fallbackTitle(for kind: RewardEntryKind) -> String {
+        switch kind {
+        case .earn: return "포인트 적립"
+        case .spend: return "보상 사용"
+        case .penalty: return "실패 마감 차감"
+        }
+    }
+
     private func row(_ entry: RewardEntry) -> some View {
         let isEarn = entry.kind == .earn
 
         return HStack(spacing: 10) {
-            // 기름 방울은 채운 것, 선물은 받은 것. 위아래 화살표보다 이 화면의 이야기에 맞는다.
-            Image(systemName: isEarn ? "drop.fill" : "gift.fill")
+            // 기름 방울은 채운 것, 선물은 받은 것, 꺼진 불꽃은 놓친 것.
+            // 위아래 화살표보다 이 화면의 이야기에 맞는다.
+            Image(systemName: Self.icon(for: entry.kind))
                 .font(.system(size: 12))
                 .foregroundStyle(isEarn ? PopoverChrome.accent : PopoverChrome.inkTertiary)
                 .frame(width: 16)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.note.isEmpty ? (isEarn ? "포인트 적립" : "보상 사용") : entry.note)
+                Text(entry.note.isEmpty ? Self.fallbackTitle(for: entry.kind) : entry.note)
                     .font(.system(size: 12.5, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)

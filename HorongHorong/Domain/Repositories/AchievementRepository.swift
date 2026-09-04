@@ -35,6 +35,18 @@ protocol AchievementRepository {
     /// 답이 나오려면 처음 참이 된 순간을 찍어 둬야 한다.
     func markCompleted(ids: [UUID], at date: Date)
 
+    /// 못 이룬 채로 닫는다. 이미 닫혔거나 이미 이룬 목표는 건드리지 않는다.
+    ///
+    /// `markCompleted` 와 같은 규약이다 — **닫힘도 사건이라 한 번만 찍힌다.** 이 가드가
+    /// 없으면 성취 창과 팝오버가 같은 틱에 정산할 때 패널티가 두 번 붙는다.
+    func markFailed(ids: [UUID], at date: Date, reason: AchievementCloseReason)
+
+    /// 닫은 것을 되돌려 다시 연다. 「되돌리기」가 쓴다.
+    func reopen(ids: [UUID])
+
+    /// 마감을 미룬다. 「이어서 도전」이 쓰며, 닫혀 있었다면 함께 다시 연다.
+    func extendDueDate(id: UUID, to date: Date)
+
     func updateGoal(id: UUID, with edit: AchievementGoalEditDraft)
     func deleteGoal(id: UUID)
 
