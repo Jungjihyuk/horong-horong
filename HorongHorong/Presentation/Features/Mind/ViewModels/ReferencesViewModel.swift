@@ -8,8 +8,8 @@ import Observation
 @MainActor
 @Observable
 final class ReferencesViewModel {
-    private(set) var references: [Reference] = []
-    private(set) var selected: Reference?
+    private(set) var references: [ReferenceItem] = []
+    private(set) var selected: ReferenceItem?
     private(set) var canLoadMore = false
 
     var searchText = "" { didSet { guard searchText != oldValue else { return }; reload() } }
