@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-enum MindSection: String, CaseIterable, Identifiable {
+enum SecondBrainSection: String, CaseIterable, Identifiable {
     case quick
     case diary
     case todo
@@ -56,18 +56,20 @@ enum MindSection: String, CaseIterable, Identifiable {
     }
 }
 
-struct MindView: View {
+typealias MindSection = SecondBrainSection
+
+struct SecondBrainView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dependencies) private var dependencies
     @AppStorage(Constants.AppStorageKey.mindSection)
-    private var sectionRaw: String = MindSection.todo.rawValue
+    private var sectionRaw: String = SecondBrainSection.todo.rawValue
     @AppStorage(Constants.AppStorageKey.popoverTheme)
     private var popoverTheme: String = Constants.defaultPopoverTheme
     @AppStorage(Constants.AppStorageKey.appIcon)
     private var appIconRaw: String = Constants.defaultAppIcon
 
-    private var section: MindSection {
-        MindSection(rawValue: sectionRaw) ?? .todo
+    private var section: SecondBrainSection {
+        SecondBrainSection(rawValue: sectionRaw) ?? .todo
     }
 
     var body: some View {
@@ -106,7 +108,7 @@ struct MindView: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 4)
 
-            ForEach(MindSection.allCases) { item in
+            ForEach(SecondBrainSection.allCases) { item in
                 railItem(item)
             }
             Spacer(minLength: 0)
@@ -118,7 +120,7 @@ struct MindView: View {
         .background(PopoverChrome.surfaceAlt)
     }
 
-    private func railItem(_ item: MindSection) -> some View {
+    private func railItem(_ item: SecondBrainSection) -> some View {
         let isSelected = section == item
         return Button {
             sectionRaw = item.rawValue
