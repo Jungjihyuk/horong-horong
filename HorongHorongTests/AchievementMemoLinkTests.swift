@@ -24,6 +24,7 @@ final class AchievementMemoLinkTests: XCTestCase {
         targetCount: Int = 1,
         linkedMemoIDs: [UUID] = [],
         createdAt: Date = Date(),
+        dueDate: Date? = nil,
         closedAt: Date? = nil
     ) -> AchievementGoalDetail {
         AchievementGoalDetail(
@@ -35,7 +36,7 @@ final class AchievementMemoLinkTests: XCTestCase {
             targetCount: targetCount,
             targetValueText: nil,
             periodText: nil,
-            dueDate: nil,
+            dueDate: dueDate,
             rewardText: "",
             colorHex: "#E87333",
             roleName: "나",
@@ -470,8 +471,8 @@ final class AchievementMemoLinkTests: XCTestCase {
 
     // MARK: - 못 이룬 채 닫힌 목표
 
-    /// 닫힌 목표는 **그 주에서 끝난다.** 안 그러면 못 끝낸 목표가 이번 주로 영원히 이월된다.
-    func testClosedGoalStopsCarryingIntoTheCurrentWeek() {
+    /// 마감일 없는 목표는 정리한 주가 아니라 **만든 주**의 기록으로 남는다.
+    func testClosedGoalWithoutDueDateBelongsToCreatedWeek() {
         let created = Date(timeIntervalSince1970: 1_772_000_000)
         let closed = created.addingTimeInterval(14 * 24 * 60 * 60)
         let now = created.addingTimeInterval(40 * 24 * 60 * 60)
@@ -491,14 +492,53 @@ final class AchievementMemoLinkTests: XCTestCase {
             AchievementDataBuilder.goal(shutGoal!, belongsToWeekStarting: thisWeek, now: now),
             false
         )
-        // 닫힌 그 주에는 그대로 남는다 — 지난 주로 넘겨 보면 보여야 한다.
         XCTAssertEqual(
             AchievementDataBuilder.goal(
                 shutGoal!,
                 belongsToWeekStarting: AchievementDataBuilder.weekStart(for: closed),
                 now: now
             ),
+            false
+        )
+        // 정산을 다음 주 이후에 했더라도 목표를 세웠던 주의 성적으로 귀속된다.
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(
+                shutGoal!,
+                belongsToWeekStarting: AchievementDataBuilder.weekStart(for: created),
+                now: now
+            ),
             true
+        )
+    }
+
+    /// 명시한 마감일이 있으면 실패·접음 시각과 무관하게 **마감일이 속한 주**에서 끝난다.
+    func testClosedGoalWithDueDateBelongsToDeadlineWeek() {
+        let created = Date(timeIntervalSince1970: 1_772_000_000)
+        let dueDate = created.addingTimeInterval(13 * 24 * 60 * 60)
+        let closed = created.addingTimeInterval(22 * 24 * 60 * 60)
+        let detail = goalDetail(
+            title: "주간 기록",
+            createdAt: created,
+            dueDate: dueDate,
+            closedAt: closed
+        )
+        let goal = AchievementDataBuilder.goals(from: [detail], memos: [])[0]
+
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(
+                goal,
+                belongsToWeekStarting: AchievementDataBuilder.weekStart(for: dueDate),
+                now: closed
+            ),
+            true
+        )
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(
+                goal,
+                belongsToWeekStarting: AchievementDataBuilder.weekStart(for: closed),
+                now: closed
+            ),
+            false
         )
     }
 
