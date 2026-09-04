@@ -166,7 +166,9 @@ struct TodoBrowserView: View {
 
             if expanded {
                 if items.isEmpty {
-                    groupPlaceholder("여기로 끌어다 놓으세요")
+                    if bucket != .overdue {
+                        groupPlaceholder("여기로 끌어다 놓으세요")
+                    }
                 } else {
                     ForEach(items) { item in
                         rowOrPendingDelete(item)
@@ -189,12 +191,14 @@ struct TodoBrowserView: View {
                 .stroke(isDropTarget ? PopoverChrome.accent.opacity(0.55) : Color.clear, lineWidth: 1.5)
         )
         .dropDestination(for: String.self) { dropped, _ in
+            guard bucket != .overdue else { return false }
             guard let id = dropped.first else { return false }
             viewModel.move(idString: id, to: bucket)
             collapsedGroups.remove(title)
             dropTargetTitle = nil
             return true
         } isTargeted: { hovering in
+            guard bucket != .overdue else { return }
             if hovering {
                 dropTargetTitle = title
             } else if dropTargetTitle == title {
@@ -250,6 +254,7 @@ struct TodoBrowserView: View {
         let title = "최근 삭제"
         let expanded = !collapsedGroups.contains(title)
         let items = viewModel.recentlyDeleted
+        let isDropTarget = dropTargetTitle == title
         return LazyVStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Button {
@@ -288,9 +293,35 @@ struct TodoBrowserView: View {
                         rowOrPendingDelete(item)
                     }
                 }
+            } else if isDropTarget {
+                Text("여기에 놓기")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.accent)
+                    .padding(.bottom, 6)
             }
         }
         .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isDropTarget ? PopoverChrome.accentSoft.opacity(0.55) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isDropTarget ? PopoverChrome.accent.opacity(0.55) : Color.clear, lineWidth: 1.5)
+        )
+        .dropDestination(for: String.self) { dropped, _ in
+            guard let id = dropped.first else { return false }
+            guard viewModel.moveToRecentlyDeleted(idString: id) else { return false }
+            collapsedGroups.remove(title)
+            dropTargetTitle = nil
+            return true
+        } isTargeted: { hovering in
+            if hovering {
+                dropTargetTitle = title
+            } else if dropTargetTitle == title {
+                dropTargetTitle = nil
+            }
+        }
     }
 
     private func toggleCollapsed(_ title: String, expanded: Bool) {
@@ -357,6 +388,10 @@ struct TodoBrowserView: View {
                 .offset(x: offset)
         }
         .clipped()
+        // **마우스 `DragGesture` 를 달지 않는다.** 여기에 `highPriorityGesture` 로 걸면
+        // 자식(`cardContent`)의 `.draggable` 보다 먼저 이벤트를 가져가 섹션 간 끌어다 놓기가
+        // 아예 시작되지 않는다. 스와이프 삭제는 아래 트랙패드 두 손가락 경로가 맡는다 —
+        // 그쪽은 `scrollWheel` 이벤트라 누르고 끄는 제스처와 겹치지 않는다.
         .background {
             TodoTrackpadSwipeCatcher(
                 onChanged: { applySwipe(item, translation: $0) },
@@ -364,7 +399,6 @@ struct TodoBrowserView: View {
             )
             .allowsHitTesting(false)
         }
-        .highPriorityGesture(swipeGesture(for: item))
     }
 
     private func cardContent(_ item: TodoItem) -> some View {
@@ -940,19 +974,6 @@ struct TodoBrowserView: View {
             get: { item.deadline ?? item.startDate?.addingTimeInterval(3_600) ?? Date() },
             set: { viewModel.setDeadline(item.id, date: $0) }
         )
-    }
-
-    private func swipeGesture(for item: TodoItem) -> some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onChanged { value in
-                let horizontal = value.translation.width
-                guard abs(horizontal) > abs(value.translation.height) else { return }
-                applySwipe(item, translation: horizontal)
-            }
-            .onEnded { value in
-                let horizontal = value.translation.width
-                endSwipe(item, translation: abs(horizontal) > abs(value.translation.height) ? horizontal : 0)
-            }
     }
 
     private func applySwipe(_ item: TodoItem, translation: CGFloat) {

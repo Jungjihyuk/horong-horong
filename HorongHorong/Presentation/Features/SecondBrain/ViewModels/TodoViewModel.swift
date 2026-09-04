@@ -193,11 +193,26 @@ final class TodoViewModel {
 
     /// 끌어다 놓기. 놓인 묶음에 맞게 날짜·완료가 다시 정해진다.
     func move(idString: String, to bucket: TodoBucket) {
+        guard bucket != .overdue else { return }
         guard let id = UUID(uuidString: idString) else { return }
         try? repository.place(id: id, into: bucket, now: todayReferenceDate)
         refresh(id)
         selected = try? repository.todo(id: id)
         loadDrafts()
+    }
+
+    /// 삭제된 묶음으로 끌어다 놓으면 유예 없이 바로 최근 삭제로 보낸다.
+    @discardableResult
+    func moveToRecentlyDeleted(idString: String) -> Bool {
+        guard let id = UUID(uuidString: idString) else { return false }
+        do {
+            try repository.moveToRecentlyDeleted(id: id)
+        } catch {
+            return false
+        }
+        if selected?.id == id { selected = nil }
+        reload()
+        return true
     }
 
     func restore(_ id: UUID) {

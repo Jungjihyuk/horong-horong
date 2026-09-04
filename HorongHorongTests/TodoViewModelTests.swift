@@ -381,6 +381,45 @@ final class TodoViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selected?.id, target.id)
     }
 
+    func testMoveIntoOverdueIsIgnored() {
+        let repository = FakeRepository()
+        let target = item("오늘 할 일", start: day(0))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.move(idString: target.id.uuidString, to: .overdue)
+
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["오늘 할 일"])
+        XCTAssertTrue(viewModel.overdue.isEmpty)
+    }
+
+    func testMoveIntoRecentlyDeletedMovesItemImmediately() {
+        let repository = FakeRepository()
+        let target = item("삭제할 일", start: day(0))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        XCTAssertTrue(viewModel.moveToRecentlyDeleted(idString: target.id.uuidString))
+
+        XCTAssertTrue(viewModel.today.isEmpty)
+        XCTAssertEqual(viewModel.recentlyDeleted.map(\.displayTitle), ["삭제할 일"])
+    }
+
+    func testMoveFromRecentlyDeletedIntoTodayRestoresItem() {
+        let repository = FakeRepository()
+        let target = item("복원할 일", start: day(0), deletedAt: Date())
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.move(idString: target.id.uuidString, to: .today)
+
+        XCTAssertTrue(viewModel.recentlyDeleted.isEmpty)
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["복원할 일"])
+    }
+
     func testMoveIgnoresUnknownIdentifier() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
