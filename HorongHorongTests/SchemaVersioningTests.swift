@@ -92,13 +92,70 @@ final class SchemaVersioningTests: XCTestCase {
         XCTAssertEqual(HorongHorongSchemaV3.models.count, 24)
     }
 
-    /// V3 도입에 따른 마이그레이션 계획 검증.
-    func testMigrationPlanHasThreeVersionsAndStages() {
-        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 3)
-        XCTAssertEqual(HorongHorongMigrationPlan.stages.count, 2)
+    /// V4 도입에 따른 마이그레이션 계획 검증.
+    func testMigrationPlanHasFourVersionsAndStages() {
+        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 4)
+        XCTAssertEqual(HorongHorongMigrationPlan.stages.count, 3)
         XCTAssertEqual(HorongHorongSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
         XCTAssertEqual(HorongHorongSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
         XCTAssertEqual(HorongHorongSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
+    }
+
+    /// 앱이 실제로 여는 스키마는 최신 버전이어야 한다.
+    /// 여기가 어긋나면 새 필드가 저장되지 않는데도 빌드는 통과한다.
+    func testAppSchemaPointsAtLatestVersion() {
+        let names = Set(HorongHorongModelSchema.make().entities.map(\.name))
+        XCTAssertEqual(names, Set(HorongHorongSchemaV4.models.map { String(describing: $0) }))
+    }
+
+    /// **옛 버전은 얼려 둔 모양을 가리켜야 한다.**
+    ///
+    /// V1~V3 이 살아 있는 타입을 참조하면 그 타입에 필드를 더하는 순간 선언된 모든 버전의
+    /// 모양이 함께 바뀌어, 디스크의 저장소가 어느 버전과도 맞지 않게 된다
+    /// (`Cannot use staged migration with an unknown model version`).
+    /// 이 테스트가 그 회귀를 막는다 — 엔티티 이름은 같아야 이어지므로 이름도 함께 확인한다.
+    func testOldVersionsUseFrozenAchievementGoalRecord() {
+        for models in [HorongHorongSchemaV1.models, HorongHorongSchemaV2.models, HorongHorongSchemaV3.models] {
+            XCTAssertTrue(
+                models.contains { $0 == LegacyAchievementSchema.AchievementGoalRecord.self },
+                "옛 버전이 얼려 둔 사본 대신 살아 있는 타입을 가리키고 있다"
+            )
+            XCTAssertFalse(models.contains { $0 == AchievementGoalRecord.self })
+        }
+        XCTAssertTrue(HorongHorongSchemaV4.models.contains { $0 == AchievementGoalRecord.self })
+        XCTAssertEqual(String(describing: LegacyAchievementSchema.AchievementGoalRecord.self), "AchievementGoalRecord")
+    }
+
+    /// V3 저장소를 V4 로 열어 새 필드가 비어 있는 채로 붙는지 확인한다.
+    /// 기존 사용자의 목표가 «닫힌» 상태로 되살아나면 이번 주 목록에서 통째로 사라진다.
+    func testV3StoreMigratesToV4AndKeepsGoalsOpen() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v3-to-v4-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let v3Schema = Schema(versionedSchema: HorongHorongSchemaV3.self)
+        let v3Container = try ModelContainer(
+            for: v3Schema,
+            configurations: [ModelConfiguration(schema: v3Schema, url: url)]
+        )
+        let v3Context = ModelContext(v3Container)
+        let goal = LegacyAchievementSchema.AchievementGoalRecord(title: "이월된 주간 목표")
+        v3Context.insert(goal)
+        try v3Context.save()
+
+        let v4Schema = Schema(versionedSchema: HorongHorongSchemaV4.self)
+        let migrated = try ModelContainer(
+            for: v4Schema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: v4Schema, url: url)]
+        )
+        let records = try ModelContext(migrated).fetch(FetchDescriptor<AchievementGoalRecord>())
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.title, "이월된 주간 목표")
+        XCTAssertNil(records.first?.closedAt)
+        XCTAssertNil(records.first?.closedReason)
     }
 
     /// V1 저장소(Memo)를 V2 스키마(SecondBrainRecord)로 마이그레이션하고 데이터가 무손실 이전되는지 검증한다.

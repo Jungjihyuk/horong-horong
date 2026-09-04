@@ -8,6 +8,11 @@ import Foundation
 enum RewardEntryKind: String, Codable {
     case earn
     case spend
+    /// 마감을 넘겨 실패로 마감한 목표의 차감. `spend` 와 부호는 같지만 «내가 쓴 것» 이 아니다.
+    ///
+    /// 이력 화면의 «받은 것 / 쓴 것» 합계를 갈라 놓으려고 종류를 나눈다 —
+    /// `spend` 로 뭉뚱그리면 보상을 산 적 없는데 «쓴 것» 이 쌓인다.
+    case penalty
 }
 
 /// 원장 한 줄의 계산용 스냅샷. SwiftData 없이 계산·테스트하기 위한 값 타입이다.
@@ -21,6 +26,16 @@ struct RewardEntrySnapshot: Equatable {
         self.kind = kind
         self.sourceGoalID = sourceGoalID
     }
+}
+
+/// 패널티를 매긴 결과. 명목과 실제가 다를 수 있어 셋을 함께 돌려준다.
+struct RewardPenaltyResult: Equatable, Sendable {
+    /// 정책이 정한 차감액.
+    let nominal: Int
+    /// 실제로 깎인 양. 잔액이 모자라면 명목보다 작다.
+    let charged: Int
+    /// 잔액이 모자라 못 깎은 양.
+    let forgiven: Int
 }
 
 /// 보상 항목의 계산용 스냅샷.

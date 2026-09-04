@@ -82,6 +82,57 @@ final class SwiftDataRewardRepository: RewardRepository {
         return .success(revoked)
     }
 
+    // MARK: - 패널티
+
+    func hasPenalized(goalID: UUID) -> Bool {
+        RewardLedger.hasPenalized(goalID: goalID, in: records().map(\.snapshot))
+    }
+
+    @discardableResult
+    func penalize(
+        goalID: UUID,
+        nominalPoints: Int,
+        note: String,
+        at date: Date
+    ) -> RewardPenaltyResult? {
+        guard nominalPoints > 0 else { return nil }
+        let all = records()
+        let snapshots = all.map(\.snapshot)
+        guard !RewardLedger.hasPenalized(goalID: goalID, in: snapshots) else { return nil }
+        // 이 목표로 이미 포인트를 받았으면 깎지 않는다. 주고 또 뺏으면 이중 장부가 된다.
+        guard !RewardLedger.hasClaimed(goalID: goalID, in: snapshots) else { return nil }
+
+        // **잔액은 0 에서 바닥.** 빚을 지고 시작하면 회복이 멀어져 다시 목표를 잡을 맛이 없다.
+        let charged = min(nominalPoints, max(0, RewardLedger.balance(snapshots)))
+        guard charged > 0 else { return nil }
+
+        let forgiven = nominalPoints - charged
+        // 왜 5P 가 아니라 3P 만 깎였는지 나중에 설명할 수 있어야 한다. `note` 는 원본이
+        // 지워져도 남는 이력 문구라 그 사정을 여기에 적는다.
+        let suffix = forgiven > 0 ? " · 명목 \(nominalPoints)P 중 \(charged)P" : ""
+        let entry = RewardLedgerEntry(
+            amount: -charged,
+            kind: .penalty,
+            sourceGoalID: goalID,
+            note: note + suffix
+        )
+        entry.occurredAt = date
+        context.insert(entry)
+        save()
+        return RewardPenaltyResult(nominal: nominalPoints, charged: charged, forgiven: forgiven)
+    }
+
+    func revokePenalty(goalID: UUID) -> Int? {
+        guard let entry = records().first(where: { $0.kind == .penalty && $0.sourceGoalID == goalID }) else {
+            return nil
+        }
+        // `revokeClaim` 과 달리 잔액을 **늘리는** 방향이라 «이미 써 버렸다» 를 따질 필요가 없다.
+        let restored = -entry.amount
+        context.delete(entry)
+        save()
+        return restored
+    }
+
     // MARK: - 사용
 
     func redeem(itemID: UUID, forMonthlyGoal goal: RewardClaimableGoal) -> Result<RewardEntry, RewardRedeemError> {

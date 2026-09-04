@@ -1046,6 +1046,12 @@ enum Constants {
     // MARK: - 보상 포인트
     static let defaultRewardWeeklyGoalPoints = 10
     static let rewardWeeklyGoalPointsRange = 1...100
+    /// 실패로 마감한 주간 목표에서 깎을 비율(%). 적립 포인트에 이 비율을 곱한다.
+    ///
+    /// 목표별로 판돈을 따로 받지 않는 이유는 **목표를 만드는 시점엔 실패를 가정하지 않기 때문**이다.
+    /// 매번 물으면 마찰만 늘고 답은 늘 «패널티 없음» 쪽으로 기운다. 0 이면 패널티를 끈 것이다.
+    static let defaultRewardFailurePenaltyPercent = 50
+    static let rewardFailurePenaltyPercentRange = 0...100
     /// 비전 선택 목록의 행 높이·간격. 드래그 재정렬이 이동 거리를 계산할 때 함께 쓴다.
     static let achievementVisionRowHeight: CGFloat = 34
     static let achievementVisionRowSpacing: CGFloat = 8
@@ -1653,6 +1659,9 @@ enum Constants {
         static let achievementSuggestionOllamaModel = "achievement.suggestionOllamaModel"
         static let achievementDismissedSuggestionKeys = "achievement.dismissedSuggestionKeys"
         static let rewardWeeklyGoalPoints = "reward.weeklyGoalPoints"
+        static let rewardFailurePenaltyPercent = "reward.failurePenaltyPercent"
+        /// 마감 정산이 **처음 켜진 순간**. 그 전에 마감된 목표는 자동으로 닫지 않는다.
+        static let achievementSettlementEpoch = "achievement.settlementEpoch"
         static let achievementJourneyMaxFlagCount = "achievement.journeyMaxFlagCount"
         static let achievementJourneyFlagSelections = "achievement.journeyFlagSelections"
         static let achievementVisionOrder = "achievement.visionOrder"

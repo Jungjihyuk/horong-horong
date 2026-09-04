@@ -34,6 +34,11 @@ struct AchievementEmptyDetailCard: View {
 
 struct AchievementMemoPickerRow: View {
     let memo: AchievementMemoDetail
+    /// 이 할일을 이미 가진 다른 주간 목표의 제목. 없으면 고를 수 있다.
+    ///
+    /// 목록에서 감추지 않고 잠근 채로 보여 준다 — 안 보이면 «왜 목록에 없지» 가 되고,
+    /// 어느 목표에서 빼야 하는지도 알 수 없다.
+    var lockedByGoalTitle: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -44,6 +49,16 @@ struct AchievementMemoPickerRow: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(memo.isCompleted ? PopoverChrome.inkSecondary : PopoverChrome.ink)
                     .lineLimit(1)
+            }
+            if let lockedByGoalTitle {
+                HStack(spacing: 7) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("‘\(lockedByGoalTitle)’ 에 연결됨")
+                        .lineLimit(1)
+                }
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
             }
             let metaText = AchievementDataBuilder.todoMetaText(for: memo)
             if !metaText.isEmpty {

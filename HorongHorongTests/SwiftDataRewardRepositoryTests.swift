@@ -227,4 +227,83 @@ final class SwiftDataRewardRepositoryTests: XCTestCase {
 
         wait(for: [notified], timeout: 1)
     }
+    // MARK: - 실패 마감 패널티
+
+    private func claimableWeekly(_ id: UUID, title: String = "주간 기록") -> RewardClaimableGoal {
+        RewardClaimableGoal(id: id, title: title, emoji: "🎯", cadence: "주간", isComplete: true)
+    }
+
+    func testPenalizeChargesOnceAndLowersBalance() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataRewardRepository(context: container.mainContext)
+        let earned = claimableWeekly(UUID())
+        repository.claim(earned, policy: FixedWeeklyRewardPolicy(pointsPerGoal: 20))
+        let failed = UUID()
+
+        let first = repository.penalize(goalID: failed, nominalPoints: 8, note: "🎯 주간 기록", at: Date())
+        let second = repository.penalize(goalID: failed, nominalPoints: 8, note: "🎯 주간 기록", at: Date())
+
+        XCTAssertEqual(first?.charged, 8)
+        XCTAssertEqual(first?.forgiven, 0)
+        XCTAssertNil(second, "같은 목표를 두 번 깎으면 안 된다")
+        XCTAssertEqual(repository.balance(), 12)
+        XCTAssertTrue(repository.hasPenalized(goalID: failed))
+    }
+
+    /// 잔액은 0 에서 바닥이다. 빚을 지고 시작하면 회복이 멀어진다.
+    func testPenaltyStopsAtZeroBalanceAndRecordsWhatItCouldNotTake() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataRewardRepository(context: container.mainContext)
+        let earned = claimableWeekly(UUID())
+        repository.claim(earned, policy: FixedWeeklyRewardPolicy(pointsPerGoal: 3))
+        let failed = UUID()
+
+        let result = repository.penalize(goalID: failed, nominalPoints: 10, note: "🎯 주간 기록", at: Date())
+
+        XCTAssertEqual(result?.nominal, 10)
+        XCTAssertEqual(result?.charged, 3)
+        XCTAssertEqual(result?.forgiven, 7)
+        XCTAssertEqual(repository.balance(), 0)
+        // 왜 10P 가 아니라 3P 만 깎였는지가 이력에 남아야 한다.
+        let note = repository.entries().first { $0.kind == .penalty }?.note
+        XCTAssertEqual(note?.contains("명목 10P 중 3P"), true)
+    }
+
+    func testPenaltyIsSkippedWhenBalanceIsEmpty() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataRewardRepository(context: container.mainContext)
+
+        let result = repository.penalize(goalID: UUID(), nominalPoints: 5, note: "🎯", at: Date())
+
+        XCTAssertNil(result)
+        XCTAssertEqual(repository.balance(), 0)
+    }
+
+    /// 같은 목표로 포인트를 받은 적이 있으면 깎지 않는다 — 주고 또 뺏으면 이중 장부다.
+    func testGoalThatAlreadyEarnedIsNeverPenalized() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataRewardRepository(context: container.mainContext)
+        let goal = claimableWeekly(UUID())
+        repository.claim(goal, policy: FixedWeeklyRewardPolicy(pointsPerGoal: 20))
+
+        let result = repository.penalize(goalID: goal.id, nominalPoints: 5, note: "🎯", at: Date())
+
+        XCTAssertNil(result)
+        XCTAssertEqual(repository.balance(), 20)
+    }
+
+    func testRevokePenaltyRestoresThePoints() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataRewardRepository(context: container.mainContext)
+        repository.claim(claimableWeekly(UUID()), policy: FixedWeeklyRewardPolicy(pointsPerGoal: 20))
+        let failed = UUID()
+        repository.penalize(goalID: failed, nominalPoints: 8, note: "🎯", at: Date())
+
+        let restored = repository.revokePenalty(goalID: failed)
+
+        XCTAssertEqual(restored, 8)
+        XCTAssertEqual(repository.balance(), 20)
+        XCTAssertFalse(repository.hasPenalized(goalID: failed))
+    }
+
 }

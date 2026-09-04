@@ -39,6 +39,18 @@ final class AchievementGoalRecord {
     var sourceRunID: String?
     /// 추천 카드의 id. 같은 실행에서 나온 여러 제안 중 어느 것이었나.
     var sourceSuggestionID: UUID?
+    /// 이 목표가 **못 이룬 채로 닫힌 순간**. 아직 열려 있으면 `nil`.
+    ///
+    /// `completedAt` 의 짝이다. 달성이 사건이듯 «못 했다고 인정한 것» 도 사건이다 —
+    /// 마감이 지났는지는 지금 계산할 수 있지만, **언제 접었는지는 그 순간에만 알 수 있다.**
+    ///
+    /// 이 값이 찍히면 목표의 표시 수명이 그 주·그 달에서 끝난다. 안 찍으면 못 끝낸 목표가
+    /// 이번 주로 영원히 이월된다.
+    var closedAt: Date?
+    /// 왜 닫혔나(`AchievementCloseReason` 의 rawValue).
+    ///
+    /// 문자열로 두는 이유는 `cadence` 와 같다 — 사유를 늘려도 스키마가 바뀌지 않는다.
+    var closedReasonRaw: String?
 
     init(
         title: String,
@@ -81,6 +93,12 @@ final class AchievementGoalRecord {
 }
 
 extension AchievementGoalRecord {
+    /// 못 이룬 채 닫힌 사유. 알 수 없는 값이 저장돼 있으면 `nil` 로 본다.
+    var closedReason: AchievementCloseReason? {
+        get { closedReasonRaw.flatMap(AchievementCloseReason.init(rawValue:)) }
+        set { closedReasonRaw = newValue?.rawValue }
+    }
+
     var linkedMemoIDs: [UUID] {
         get {
             linkedMemoIDsText

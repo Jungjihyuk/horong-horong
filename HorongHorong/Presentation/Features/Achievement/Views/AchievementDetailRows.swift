@@ -35,6 +35,9 @@ struct AchievementDetailGoalRow: View {
                         if goal.isOverdue {
                             AchievementOverdueBadge(dueDateText: goal.dueDateText)
                         }
+                        if let closedReason = goal.closedReason {
+                            AchievementClosedBadge(reason: closedReason)
+                        }
                     }
                     Text("\(goal.cadence) · \(goal.rule)")
                         .font(.system(size: 12, weight: .medium, design: .rounded))

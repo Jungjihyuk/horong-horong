@@ -937,6 +937,7 @@ struct AchievementGoalComposerSheet: View {
                                 }
 
                                 ForEach(section.memos) { memo in
+                                    let ownerTitle = linkOwners[memo.id]?.title
                                     Toggle(isOn: Binding(
                                         get: { selectedMemoIDs.contains(memo.id) },
                                         set: { isSelected in
@@ -948,9 +949,10 @@ struct AchievementGoalComposerSheet: View {
                                             }
                                         }
                                     )) {
-                                        AchievementMemoPickerRow(memo: memo)
+                                        AchievementMemoPickerRow(memo: memo, lockedByGoalTitle: ownerTitle)
                                     }
                                     .toggleStyle(.checkbox)
+                                    .disabled(ownerTitle != nil)
                                 }
                             }
                         }
@@ -1033,6 +1035,14 @@ struct AchievementGoalComposerSheet: View {
 
     private var linkableMemos: [AchievementMemoDetail] {
         memos.sorted(by: isMemoOrderedBefore)
+    }
+
+    /// 다른 주간 목표가 이미 가진 할일 → 그 목표. 여기 있는 할일은 고를 수 없다.
+    ///
+    /// 한 할일이 두 목표에 묶이면 그 하나를 끝내는 것으로 두 목표가 함께 달성되고,
+    /// 성취 타임라인에도 같은 카드가 두 번 선다.
+    private var linkOwners: [UUID: AchievementGoal] {
+        AchievementMemoLinkPolicy.owners(in: existingGoals)
     }
 
     /// 검색어로 좁힌 할일. 이미 고른 것은 사라지지 않도록 남긴다.
@@ -1654,7 +1664,9 @@ struct AchievementGoalComposerSheet: View {
     }
 
     private var selectedLinkableMemoIDs: Set<UUID> {
-        selectedMemoIDs.intersection(Set(linkableMemos.map(\.id)))
+        selectedMemoIDs
+            .intersection(Set(linkableMemos.map(\.id)))
+            .subtracting(linkOwners.keys)
     }
 
     private func defaultPeriodText(for level: String) -> String {
