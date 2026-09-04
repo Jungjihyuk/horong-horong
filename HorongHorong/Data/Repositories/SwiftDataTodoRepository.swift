@@ -7,6 +7,13 @@ import SwiftData
 /// 다시 건다» 를 기억할 필요가 없게** `touch(_:)` 하나를 통과시킨다.
 @MainActor
 final class SwiftDataTodoRepository: TodoRepository {
+    /// 할일이 바뀌었다. **다른 창이 다시 읽어야 한다.**
+    ///
+    /// 성취 창은 목표에 묶인 할일을 함께 그리는데, 할일은 이 저장소가 고친다.
+    /// 이 알림이 없으면 팝오버에서 할일을 지워도 열려 있는 성취 창은 지운 할일을
+    /// 계속 타임라인에 그린다 — 열었다 닫아야 사라졌다.
+    static let didChangeNotification = Notification.Name("TodoDataDidChange")
+
     private let context: ModelContext
     private let reminders: MemoReminderLinkService
     private let notifications: NotificationManager
@@ -169,6 +176,7 @@ final class SwiftDataTodoRepository: TodoRepository {
         detachReminders(memo)
         context.delete(memo)
         try context.save()
+        Self.postDidChange()
     }
 
     func emptyRecentlyDeleted() throws {
@@ -177,6 +185,7 @@ final class SwiftDataTodoRepository: TodoRepository {
             context.delete(record)
         }
         try context.save()
+        Self.postDidChange()
     }
 
     // MARK: - 술어
@@ -207,6 +216,10 @@ final class SwiftDataTodoRepository: TodoRepository {
             .map(Self.toItem)
     }
 
+    private static func postDidChange() {
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+    }
+
     private func find(_ id: UUID) throws -> Todo? {
         var descriptor = FetchDescriptor<Todo>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
@@ -226,6 +239,7 @@ final class SwiftDataTodoRepository: TodoRepository {
         record.updatedAt = Date()
         rescheduleLocalReminder(for: record)
         try context.save()
+        Self.postDidChange()
         guard syncLinkedReminder, record.isLinkedToRemindersValue else { return }
         let id = record.id
         Task { @MainActor [weak self] in

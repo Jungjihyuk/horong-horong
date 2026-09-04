@@ -478,11 +478,15 @@ struct AchievementDetailWindow: View {
             if let managingGoalRecord {
                 AchievementGoalManagementSheet(
                     record: managingGoalRecord,
-                    linkedMemoCount: managingGoalRecord.linkedMemoIDs.count,
+                    linkedMemoCount: liveLinkedMemoCount(for: managingGoalRecord),
                     memos: linkableMemos(for: managingGoalRecord),
                     childRecords: childRecords(for: managingGoalRecord),
                     availableChildRecords: linkableChildRecords(for: managingGoalRecord),
                     childCadence: childCadence(for: managingGoalRecord.cadence),
+                    linkOwners: AchievementMemoLinkPolicy.owners(
+                        in: goalDetails,
+                        excluding: managingGoalRecord.id
+                    ),
                     onSave: updateGoalRecord,
                     onDelete: deleteGoalRecord,
                     onDetachChild: { detachChildGoal($0, from: managingGoalRecord) }
@@ -507,6 +511,11 @@ struct AchievementDetailWindow: View {
             rewardSnapshots = rewardRepository.entries().map(\.snapshot)
         }
         .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
+            reload()
+        }
+        // 목표에 묶인 할일은 팝오버에서도 지워지고 옮겨진다. 그쪽 변경도 받아야
+        // 이미 지운 할일을 타임라인에 계속 그리지 않는다.
+        .onReceive(NotificationCenter.default.publisher(for: SwiftDataTodoRepository.didChangeNotification)) { _ in
             reload()
         }
         .onAppear {
@@ -2535,6 +2544,15 @@ struct AchievementDetailWindow: View {
 
     /// 이 목표에 묶을 수 있는 할일. 이미 묶인 것은 조건과 무관하게 남긴다 —
     /// 안 그러면 편집 화면에서 기존 연결이 조용히 사라진다.
+    /// 저장된 연결 중 **지금 살아 있는** 할일 수.
+    ///
+    /// 최근 삭제로 보낸 할일의 id 는 목표에 그대로 남아 있어(복구하면 다시 이어져야 하니까)
+    /// 저장된 개수를 그대로 세면 이미 지운 할일까지 «연결된 할일» 로 보인다.
+    private func liveLinkedMemoCount(for record: AchievementGoalDetail) -> Int {
+        let liveIDs = Set(memos.map(\.id))
+        return record.linkedMemoIDs.filter { liveIDs.contains($0) }.count
+    }
+
     private func linkableMemos(for record: AchievementGoalDetail) -> [AchievementMemoDetail] {
         let linkedIDs = Set(record.linkedMemoIDs)
         let linkable = repository.linkableMemos()

@@ -83,10 +83,31 @@ enum AchievementDataBuilder {
                 }
             }
         }
+        // 한 할일은 주간 목표 하나에만 붙는다(`AchievementMemoLinkPolicy`).
+        // 저장할 때 막는 것만으로는 **규칙 이전에 이미 두 목표에 묶인 데이터**가 정리되지 않아
+        // 읽을 때도 같은 규칙으로 소유자를 가린다 — 저장된 값은 건드리지 않는다.
+        // 소유자가 연결을 풀면 그 할일은 다시 자유로워진다.
+        let memoOwners = AchievementMemoLinkPolicy.owners(in: records)
+
+        /// 이 목표가 실제로 그려야 할 연결 목록.
+        ///
+        /// **삭제 상태는 목표가 아니라 할일이 갖는다.** 최근 삭제로 보낸 할일의 id 는 목표에
+        /// 그대로 남아 있고(복구하면 다시 이어져야 하니까), 읽을 때마다 여기서 걸러낸다.
+        /// 저장 시점에 목표를 고쳐 쓰면 복구할 길이 사라진다.
+        func liveLinkedMemoIDs(for record: AchievementGoalDetail) -> [UUID] {
+            let live = record.linkedMemoIDs.filter { memoByID[$0] != nil }
+            // 월간·연간은 할일을 직접 묶지 않고 하위 목표에서 올려 받는다. 소유자 규칙은
+            // 주간끼리만 따진다 — 여기에 걸면 상위 목표의 직접 연결이 통째로 사라진다.
+            guard record.cadence == AchievementMemoLinkPolicy.linkableCadence else { return live }
+            return live.filter { memoOwners[$0]?.id == record.id }
+        }
         func directProgress(for record: AchievementGoalDetail) -> (done: Int, total: Int) {
-            let linkedMemos = record.linkedMemoIDs.compactMap { memoByID[$0] }
+            let linkedMemos = liveLinkedMemoIDs(for: record).compactMap { memoByID[$0] }
             guard !linkedMemos.isEmpty else { return (0, 0) }
-            return (linkedMemos.filter(\.isCompleted).count, max(1, record.targetCount))
+            // 사라진 연결만큼 목표치도 줄인다. 안 줄이면 3개 중 1개를 지운 목표가
+            // 남은 2개를 다 끝내도 2/3 에서 멈춰 영원히 달성되지 않는다.
+            let missing = record.linkedMemoIDs.count - linkedMemos.count
+            return (linkedMemos.filter(\.isCompleted).count, max(1, record.targetCount - missing))
         }
         func progress(for record: AchievementGoalDetail, visited: Set<UUID> = []) -> (done: Int, total: Int) {
             guard !visited.contains(record.id) else {
@@ -103,11 +124,11 @@ enum AchievementDataBuilder {
         }
         func descendantMemoIDs(for record: AchievementGoalDetail, visited: Set<UUID> = []) -> [UUID] {
             guard !visited.contains(record.id) else {
-                return record.linkedMemoIDs
+                return liveLinkedMemoIDs(for: record)
             }
             let nextVisited = visited.union([record.id])
             let childMemoIDs = childRecords(for: record).flatMap { descendantMemoIDs(for: $0, visited: nextVisited) }
-            return Array(Set(record.linkedMemoIDs + childMemoIDs))
+            return Array(Set(liveLinkedMemoIDs(for: record) + childMemoIDs))
         }
         return records.map { record in
             let sourceMemoIDs = descendantMemoIDs(for: record)
@@ -256,10 +277,15 @@ enum AchievementDataBuilder {
                 timeline.items.indices.contains(index) ? (timeline.goal, timeline.items[index]) : nil
             }
             let baseItem = dayItems.first?.1
+            // 같은 할일이 여러 목표에 묶여 있어도 카드는 하나다.
+            // 한 할일은 주간 목표 하나에만 묶이는 게 규칙(`AchievementMemoLinkPolicy`)이지만,
+            // 규칙 이전에 만들어진 데이터가 남아 있어 여기서도 한 번 더 접는다.
+            var seenMemoIDs = Set<UUID>()
             let todos = sortedTodos(
                 dayItems.flatMap { goal, item in
-                    item.todos.map { todo in
-                        AchievementTimelineTodo(
+                    item.todos.compactMap { todo -> AchievementTimelineTodo? in
+                        guard seenMemoIDs.insert(todo.memoID).inserted else { return nil }
+                        return AchievementTimelineTodo(
                             id: UUID(),
                             memoID: todo.memoID,
                             title: "\(goal.emoji) \(todo.title)",

@@ -23,6 +23,8 @@ struct AchievementGoalManagementSheet: View {
     let childRecords: [AchievementGoalDetail]
     let availableChildRecords: [AchievementGoalDetail]
     let childCadence: String?
+    /// 다른 주간 목표가 이미 가진 할일 → 그 목표. 여기 있는 할일은 고를 수 없다.
+    let linkOwners: [UUID: AchievementGoalDetail]
     let onSave: (AchievementGoalDetail, AchievementGoalEditDraft) -> Void
     let onDelete: (AchievementGoalDetail) -> Void
     /// 자식을 부모에서 떼어낸다. 자식 목표 자체를 고치거나 지우는 일은 그 목표의 관리 창이 맡는다.
@@ -45,6 +47,7 @@ struct AchievementGoalManagementSheet: View {
         childRecords: [AchievementGoalDetail] = [],
         availableChildRecords: [AchievementGoalDetail] = [],
         childCadence: String? = nil,
+        linkOwners: [UUID: AchievementGoalDetail] = [:],
         onSave: @escaping (AchievementGoalDetail, AchievementGoalEditDraft) -> Void,
         onDelete: @escaping (AchievementGoalDetail) -> Void,
         onDetachChild: @escaping (AchievementGoalDetail) -> Void = { _ in }
@@ -55,6 +58,7 @@ struct AchievementGoalManagementSheet: View {
         self.childRecords = childRecords
         self.availableChildRecords = availableChildRecords
         self.childCadence = childCadence
+        self.linkOwners = linkOwners
         self.onSave = onSave
         self.onDelete = onDelete
         self.onDetachChild = onDetachChild
@@ -62,7 +66,13 @@ struct AchievementGoalManagementSheet: View {
         _emoji = State(initialValue: record.emoji)
         _rule = State(initialValue: record.rule)
         _rewardText = State(initialValue: record.rewardText)
-        _selectedMemoIDs = State(initialValue: Set(record.linkedMemoIDs))
+        // 저장된 연결에는 **최근 삭제로 보낸 할일** 의 id 가 그대로 남아 있다(복구하면
+        // 다시 이어져야 하니까). 그걸 그대로 켜 두면 이 시트에서 저장하는 순간
+        // 목록에 없는 할일이 되살아난다 — 지금 고를 수 있는 것만 남긴다.
+        let selectableIDs = Set(memos.map(\.id))
+        _selectedMemoIDs = State(
+            initialValue: Set(record.linkedMemoIDs).intersection(selectableIDs).subtracting(linkOwners.keys)
+        )
         _dueDate = State(initialValue: record.dueDate ?? Date())
         _hasDueDate = State(initialValue: record.dueDate != nil)
     }
@@ -360,9 +370,10 @@ struct AchievementGoalManagementSheet: View {
                                     }
                                 }
                             )) {
-                                AchievementMemoPickerRow(memo: memo)
+                                AchievementMemoPickerRow(memo: memo, lockedByGoalTitle: linkOwners[memo.id]?.title)
                             }
                             .toggleStyle(.checkbox)
+                            .disabled(linkOwners[memo.id] != nil)
                         }
                     }
                     .padding(8)

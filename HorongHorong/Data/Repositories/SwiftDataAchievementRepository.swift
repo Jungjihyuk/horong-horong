@@ -51,12 +51,23 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         childGoalIDs: Set<UUID>,
         newChildTitles: [String]
     ) throws -> AchievementGoalDetail {
+        // 남의 할일은 못 가져온다. 화면이 이미 잠가 두지만 창이 둘 열려 있으면 뚫린다.
+        let linkedMemoIDs = AchievementMemoLinkPolicy.sanitized(
+            linkedMemoIDs: draft.linkedMemoIDs,
+            cadence: draft.cadence,
+            goalID: nil,
+            existingGoals: goals()
+        )
         let record = AchievementGoalRecord(
             title: draft.title,
             emoji: draft.emoji,
             cadence: draft.cadence,
             rule: draft.rule,
-            targetCount: draft.targetCount,
+            // 걸러낸 연결 수에 목표치를 맞춘다. 안 맞추면 못 가져온 할일까지 세어
+            // 달성할 수 없는 목표가 된다.
+            targetCount: draft.linkedMemoIDs.isEmpty
+                ? draft.targetCount
+                : max(1, draft.targetCount - (draft.linkedMemoIDs.count - linkedMemoIDs.count)),
             targetValueText: draft.targetValueText,
             periodText: draft.periodText,
             dueDate: draft.dueDate,
@@ -67,7 +78,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
             yearGoal: draft.yearGoal,
             quarterGoal: nil,
             monthGoal: draft.monthGoal,
-            linkedMemoIDs: draft.linkedMemoIDs
+            linkedMemoIDs: linkedMemoIDs
         )
         // 추천에서 온 목표면 출처를 심는다. 직접 만든 목표는 nil 로 남아 둘이 갈린다.
         record.sourceRunID = draft.sourceRunID
@@ -107,7 +118,14 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         record.targetCount = max(1, edit.targetCount)
         record.rewardText = edit.rewardText.trimmingCharacters(in: .whitespacesAndNewlines)
         record.dueDate = edit.dueDate
-        if let linkedMemoIDs = edit.linkedMemoIDs {
+        if let requestedMemoIDs = edit.linkedMemoIDs {
+            // 남의 할일은 못 가져온다. 자기가 이미 묶어 둔 것은 그대로 둔다.
+            let linkedMemoIDs = AchievementMemoLinkPolicy.sanitized(
+                linkedMemoIDs: requestedMemoIDs,
+                cadence: record.cadence,
+                goalID: record.id,
+                existingGoals: goals()
+            )
             record.linkedMemoIDs = linkedMemoIDs
             record.targetCount = max(1, linkedMemoIDs.count)
         }

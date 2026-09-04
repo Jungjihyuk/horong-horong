@@ -74,6 +74,7 @@
 		1B6DC7BDC4E254C5FB8CA1A7 /* ReminderListOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5890C956AEFA324A5A1C51A /* ReminderListOption.swift */; };
 		1BB2EA41DFB005281458F580 /* NoteText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4BACE8D40F6390B21B4EC37 /* NoteText.swift */; };
 		1C1D58FB856F1D7986E43D61 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81DB21EE4A3CD71E450F7170 /* HotKeyManager.swift */; };
+		1C8522D70FA56FB8A1DC6AE6 /* AchievementMemoLinkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C91563AED04E7D8E7FA465D2 /* AchievementMemoLinkPolicy.swift */; };
 		1C92A4119D8DEC84B3B60A92 /* SleepGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11844F5E2014C8C20FA1CBD8 /* SleepGateway.swift */; };
 		1CE931754EB32326BF4FFFF8 /* SecondBrainRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 386FFCB645B3E2B93017ADCA /* SecondBrainRecord.swift */; };
 		1D353F53DFFED724425CD82D /* PomodoroComparisonSegmentScope+Legacy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89225214AF982E1F94B0515 /* PomodoroComparisonSegmentScope+Legacy.swift */; };
@@ -265,6 +266,7 @@
 		6298725479AB6FB34E9889E7 /* DiaryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E3ADB78B1615DFF58A514D4 /* DiaryViewModel.swift */; };
 		62A47F0B30BAD92125458C9A /* TodoBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45C51C7CA163CBB24141CA5 /* TodoBrowserView.swift */; };
 		62C064DF01EDC69E90E7CC38 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A204375A5A49737F46C5548 /* IdlePromptPanel.swift */; };
+		635D662D1873975E51F7CEF7 /* AchievementMemoLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A656B527DD1CAF8A923DCA6 /* AchievementMemoLinkTests.swift */; };
 		63BEB637F6032CF10747A793 /* AchievementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1659D5B0BAB1D2F7F37D6B /* AchievementRepository.swift */; };
 		63EF1CB1C883731A23D4C350 /* AchievementDetailRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EC81BC0350A644911C703B3 /* AchievementDetailRows.swift */; };
 		66AFE5D9649BB57C1F0003E4 /* MemoDurationEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF367E3440D3F1AC973D5A2E /* MemoDurationEstimator.swift */; };
@@ -293,6 +295,7 @@
 		71CCDBC2521458520AE727D9 /* AgentGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBDEFF0BDD389CF5222AF0F /* AgentGateway.swift */; };
 		72146DDBFB727B7036368DF1 /* CompanionGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 542B4AEE41BF97EE2E105170 /* CompanionGuide.swift */; };
 		7223CB4F0F3B32125A6B19EB /* VaultRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DE37A644E619CBF6989C05 /* VaultRepository.swift */; };
+		729C0B1CDD6DB6649B1CBA46 /* AchievementMemoLinkPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C91563AED04E7D8E7FA465D2 /* AchievementMemoLinkPolicy.swift */; };
 		72C575026D841D8B6018429D /* LabViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4D6CA74D4A61AB58B5EC59 /* LabViewModelTests.swift */; };
 		72FCC4FB864DDD7B48131473 /* FocusScoreHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC1C966935FAEE157857CF94 /* FocusScoreHistory.swift */; };
 		732FDB025A030A079F7D8FDE /* StatsSummaryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48DDF4048F2E986563599F8C /* StatsSummaryRepository.swift */; };
@@ -653,6 +656,7 @@
 		06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalSuggestionRegressionTests.swift; sourceTree = "<group>"; };
 		07AD3A611CCA75A8732519AC /* AchievementStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementStores.swift; sourceTree = "<group>"; };
 		09B3B00FE249A950B0A6CBC2 /* AIRunLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRunLog.swift; sourceTree = "<group>"; };
+		0A656B527DD1CAF8A923DCA6 /* AchievementMemoLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementMemoLinkTests.swift; sourceTree = "<group>"; };
 		0A758FA8556F09E5A7941D2B /* RewardRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardRecords.swift; sourceTree = "<group>"; };
 		0B2006B5F5B428A06ED848FB /* SwiftDataPomodoroTaskRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataPomodoroTaskRepositoryTests.swift; sourceTree = "<group>"; };
 		0B659A2F08384CD1B5A0A90F /* AgentPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPrompt.swift; sourceTree = "<group>"; };
@@ -914,6 +918,7 @@
 		C73A230D6EBF0270D9FC6FE3 /* MLXModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXModelPicker.swift; sourceTree = "<group>"; };
 		C848AFFD27FE78B0F32159D0 /* RewardLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardLedgerTests.swift; sourceTree = "<group>"; };
 		C8746146F486876CE7D56A9B /* SwiftDataFocusSessionRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataFocusSessionRepositoryTests.swift; sourceTree = "<group>"; };
+		C91563AED04E7D8E7FA465D2 /* AchievementMemoLinkPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementMemoLinkPolicy.swift; sourceTree = "<group>"; };
 		C99B804780B0C37CC8ED7D44 /* DiaryBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryBrowserView.swift; sourceTree = "<group>"; };
 		CA8273A0DC79CB5BD6051854 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 		CBED7C99B4C2430CB7C96D83 /* AchievementDataBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementDataBuilder.swift; sourceTree = "<group>"; };
@@ -1309,6 +1314,7 @@
 		6852B03C0059F243523EB645 /* Policies */ = {
 			isa = PBXGroup;
 			children = (
+				C91563AED04E7D8E7FA465D2 /* AchievementMemoLinkPolicy.swift */,
 				FC0CEFF68574BF2EE1F7E1B6 /* AchievementMonthlyStats.swift */,
 				0B659A2F08384CD1B5A0A90F /* AgentPrompt.swift */,
 				63B2868D6F72531FB15F27BF /* AgentRootPath.swift */,
@@ -1384,6 +1390,7 @@
 		7D94F9DB0BFCB29F01DFE58B /* HorongHorongTests */ = {
 			isa = PBXGroup;
 			children = (
+				0A656B527DD1CAF8A923DCA6 /* AchievementMemoLinkTests.swift */,
 				B4C4A1FB37DC103E26529930 /* AchievementMonthlyStatsTests.swift */,
 				238D256756151E551641598F /* AgentPlanTests.swift */,
 				4861DFF23A23F7FD51035820 /* AppIconManagerTests.swift */,
@@ -2091,6 +2098,7 @@
 				E79FD141B43B6D41489A6461 /* AchievementGoalSuggestion.swift in Sources */,
 				8F1975F199945A346C15157B /* AchievementGoalSuggestionBuilder.swift in Sources */,
 				7FC941FAFFBCA4EDDFB8BD12 /* AchievementJourneyScene.swift in Sources */,
+				729C0B1CDD6DB6649B1CBA46 /* AchievementMemoLinkPolicy.swift in Sources */,
 				1D3B30368F33CBBAB514BA83 /* AchievementModels.swift in Sources */,
 				7AD04C54D28F1F2242439A93 /* AchievementMonthlyStats.swift in Sources */,
 				5BA08DF9EF5288734CA5BDC8 /* AchievementPersonaVisionComposerSheet.swift in Sources */,
@@ -2369,6 +2377,7 @@
 				18037B6DF435F534B70C2205 /* AchievementGoalSuggestion.swift in Sources */,
 				B31A6BF0CA14A479CA211B81 /* AchievementGoalSuggestionBuilder.swift in Sources */,
 				5C5C7C0099F4F0AC70F47EC0 /* AchievementJourneyScene.swift in Sources */,
+				1C8522D70FA56FB8A1DC6AE6 /* AchievementMemoLinkPolicy.swift in Sources */,
 				DBA70920A053C6B742353AB4 /* AchievementModels.swift in Sources */,
 				241C542771C858A862162456 /* AchievementMonthlyStats.swift in Sources */,
 				8954273B44B7EFCCE393337F /* AchievementPersonaVisionComposerSheet.swift in Sources */,
@@ -2633,6 +2642,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				635D662D1873975E51F7CEF7 /* AchievementMemoLinkTests.swift in Sources */,
 				269BE43F604296811A540E87 /* AchievementMonthlyStatsTests.swift in Sources */,
 				23BA2F33C970C84982BF0B18 /* AgentPlanTests.swift in Sources */,
 				49DB658E7B3AE1D76F06B849 /* AppIconManagerTests.swift in Sources */,

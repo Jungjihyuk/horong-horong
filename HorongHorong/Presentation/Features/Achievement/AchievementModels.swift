@@ -95,6 +95,12 @@ struct AchievementGoal: Identifiable {
     }
 }
 
+/// 목표 하나가 할일을 독점한다는 규칙(`AchievementMemoLinkPolicy`)에 화면 타입도 그대로 넣는다.
+/// 하위 목표에서 올라온 할일까지 포함한 `sourceMemoIDs` 가 이 목표가 «가진» 할일이다.
+extension AchievementGoal: AchievementLinkableGoal {
+    var linkedMemoIDs: [UUID] { sourceMemoIDs }
+}
+
 struct AchievementRole: Identifiable {
     let id: String
     let emoji: String

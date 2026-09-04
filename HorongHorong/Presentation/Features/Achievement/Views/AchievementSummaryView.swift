@@ -36,6 +36,9 @@ struct AchievementSummaryView: View {
         content
             .onAppear { viewModel.reload() }
             // 목표는 성취 창에서 바뀐다. `@Query` 자동 갱신을 대신한다.
+            .onReceive(NotificationCenter.default.publisher(for: SwiftDataTodoRepository.didChangeNotification)) { _ in
+                viewModel.reload()
+            }
             .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
                 viewModel.reload()
             }
