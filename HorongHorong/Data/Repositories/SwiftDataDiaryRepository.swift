@@ -16,7 +16,7 @@ final class SwiftDataDiaryRepository: DiaryRepository {
         guard let range = monthRange(of: date) else { return [] }
         let start = range.start
         let end = range.end
-        let descriptor = FetchDescriptor<DiaryEntry>(
+        let descriptor = FetchDescriptor<Diary>(
             predicate: #Predicate { $0.day >= start && $0.day < end },
             sortBy: [SortDescriptor(\.day, order: .reverse)]
         )
@@ -55,13 +55,13 @@ final class SwiftDataDiaryRepository: DiaryRepository {
     /// **저장 직전에 저장소에 다시 물어본다.** 화면이 들고 있던 값은 방금 만든 항목을
     /// 아직 모를 수 있고, 그 틈에 같은 날짜를 또 만들면 중복이 생긴다.
     /// 이미 생긴 중복은 실행 시 `mergeDuplicateDiaryEntries` 가 정리한다.
-    private func upsert(_ day: Date, _ change: (DiaryEntry) -> Void) throws -> DiaryDay {
+    private func upsert(_ day: Date, _ change: (Diary) -> Void) throws -> DiaryDay {
         let normalized = calendar.startOfDay(for: day)
-        let entry: DiaryEntry
+        let entry: Diary
         if let existing = try find(normalized) {
             entry = existing
         } else {
-            entry = DiaryEntry(day: normalized, calendar: calendar)
+            entry = Diary(day: normalized, calendar: calendar)
             context.insert(entry)
         }
         change(entry)
@@ -70,8 +70,8 @@ final class SwiftDataDiaryRepository: DiaryRepository {
         return Self.toDay(entry)
     }
 
-    private func find(_ day: Date) throws -> DiaryEntry? {
-        var descriptor = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.day == day })
+    private func find(_ day: Date) throws -> Diary? {
+        var descriptor = FetchDescriptor<Diary>(predicate: #Predicate { $0.day == day })
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
@@ -83,7 +83,7 @@ final class SwiftDataDiaryRepository: DiaryRepository {
         return (start, end)
     }
 
-    private static func toDay(_ entry: DiaryEntry) -> DiaryDay {
+    private static func toDay(_ entry: Diary) -> DiaryDay {
         DiaryDay(
             day: entry.day,
             body: entry.body,

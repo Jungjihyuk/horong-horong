@@ -28,7 +28,10 @@ enum MemoSeeder {
     ]
 
     static func count(in context: ModelContext) -> Int {
-        (try? context.fetchCount(FetchDescriptor<SecondBrainRecord>())) ?? 0
+        let todos = (try? context.fetchCount(FetchDescriptor<Todo>())) ?? 0
+        let notes = (try? context.fetchCount(FetchDescriptor<QuickNote>())) ?? 0
+        let references = (try? context.fetchCount(FetchDescriptor<Reference>())) ?? 0
+        return todos + notes + references
     }
 
     /// `count` 건을 넣는다. 저장은 마지막에 한 번만 한다 —
@@ -43,21 +46,32 @@ enum MemoSeeder {
 
         for index in 0..<count {
             let section = weightedSection(&rng)
-            let record = SecondBrainRecord(content: content(index: index, section: section, &rng), section: section)
-
-            // 최근 2년에 흩뿌린다. 정렬·날짜 필터가 실제로 일할 거리를 만든다.
+            let itemContent = content(index: index, section: section, &rng)
             let ageDays = Double(rng.next(upTo: 730))
             let created = now.addingTimeInterval(-ageDays * 86_400)
-            record.createdAt = created
-            record.updatedAt = created
+            let isPinned = rng.next(upTo: 100) < 5
 
-            if section == .todo {
-                applyTodoDates(to: record, now: now, &rng)
+            switch section {
+            case .todo:
+                let todo = Todo(content: itemContent)
+                todo.createdAt = created
+                todo.updatedAt = created
+                todo.isPinned = isPinned
+                applyTodoDates(to: todo, now: now, &rng)
+                context.insert(todo)
+            case .quickNote:
+                let note = QuickNote(content: itemContent)
+                note.createdAt = created
+                note.updatedAt = created
+                note.isPinned = isPinned
+                context.insert(note)
+            case .reference:
+                let reference = Reference(content: itemContent)
+                reference.createdAt = created
+                reference.updatedAt = created
+                reference.isPinned = isPinned
+                context.insert(reference)
             }
-            if rng.next(upTo: 100) < 5 {
-                record.isPinned = true
-            }
-            context.insert(record)
         }
 
         try context.save()
@@ -67,7 +81,9 @@ enum MemoSeeder {
     /// 표식용 필드를 넣으려면 스키마를 바꿔야 하고, 그건 측정과 무관한 변경이기 때문이다.
     static func deleteAll(in context: ModelContext) throws {
         try guardDevelopmentStore()
-        try context.delete(model: SecondBrainRecord.self)
+        try context.delete(model: Todo.self)
+        try context.delete(model: QuickNote.self)
+        try context.delete(model: Reference.self)
         try context.save()
     }
 
@@ -87,7 +103,7 @@ enum MemoSeeder {
         return .quickNote
     }
 
-    private static func applyTodoDates(to record: SecondBrainRecord, now: Date, _ rng: inout SeededGenerator) {
+    private static func applyTodoDates(to record: Todo, now: Date, _ rng: inout SeededGenerator) {
         // -60 ~ +60일. 지남/오늘/예정 버킷이 골고루 차게 한다.
         let offset = Double(rng.next(upTo: 121) - 60)
         let day = now.addingTimeInterval(offset * 86_400)
