@@ -390,6 +390,7 @@
 		997622C0BFB8A18B2822506C /* IdleThresholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E96CF40E86111EFFCB06176 /* IdleThresholdStore.swift */; };
 		9A11C2E566B896E9E91B8E32 /* RewardLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0E2FF746411692D6DAEAF8 /* RewardLedger.swift */; };
 		9A9C4B2A836EC68B1E8E4651 /* NewsPipelineGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96581DEF500470A4B563168C /* NewsPipelineGateway.swift */; };
+		9B770057C70433428224BD7B /* AchievementSettledDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4464E73AE9859F2E4D4EC6EA /* AchievementSettledDetailSheet.swift */; };
 		9B8CD9C9CECE29AEB4B494BC /* SwiftDataStatsSummaryRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6520A2BCA4E932F3AE0A92 /* SwiftDataStatsSummaryRepositoryTests.swift */; };
 		9BC151DE1BA668500A823C61 /* CategoryPairStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA3B95BCE36BC62B9E1B125 /* CategoryPairStore.swift */; };
 		9C4254C7F3EA8136F8C36E01 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D11427730BE431936DEE67 /* TimerManager.swift */; };
@@ -623,6 +624,7 @@
 		F5DD4155BFCDC6D8D9EF43E4 /* QuickMemoPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E760BEC7FF1EB915F050883A /* QuickMemoPanel.swift */; };
 		F5EA1B6DC8BC8E1045CA047F /* NewsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D7DA9289425B9CC2B63868D /* NewsViewModelTests.swift */; };
 		F5F28395AAD670711D944680 /* HubTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B182C9BF9AF1234B540B6C8 /* HubTab.swift */; };
+		F633681B85131C2DA5FC48E7 /* AchievementSettledDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4464E73AE9859F2E4D4EC6EA /* AchievementSettledDetailSheet.swift */; };
 		F6429702CAAD30F67D808D93 /* PomodoroReflectionEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC2FC6A112BCCFE4469E86C7 /* PomodoroReflectionEditSheet.swift */; };
 		F70AD949EB6741813F53D1AE /* GeneralPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 579AA8F3F8753DBC49C03076 /* GeneralPage.swift */; };
 		F70D78CC6A6253423706582E /* AttentionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D668592EC93CE4E661B6033 /* AttentionEvent.swift */; };
@@ -753,6 +755,7 @@
 		42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSchedulerTests.swift; sourceTree = "<group>"; };
 		439229C440303CDD73AECF9F /* CompanionCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCharacter.swift; sourceTree = "<group>"; };
 		43E0FBF35446EAE4AB507F2E /* CompanionChatComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionChatComposer.swift; sourceTree = "<group>"; };
+		4464E73AE9859F2E4D4EC6EA /* AchievementSettledDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementSettledDetailSheet.swift; sourceTree = "<group>"; };
 		44A167CB46D9D11B2826DC9B /* WindowAccessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowAccessor.swift; sourceTree = "<group>"; };
 		44E43AAB7ADB6436A8C4DDE6 /* SwiftDataStatsDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStatsDetailRepository.swift; sourceTree = "<group>"; };
 		44F5C4F4E7BD11BBFBE7749A /* HealthSleepMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSleepMathTests.swift; sourceTree = "<group>"; };
@@ -1103,6 +1106,7 @@
 				8E4AEC201172E7F4F3F2113D /* AchievementJourneyScene.swift */,
 				7BD28D2BA1737B364102CE7F /* AchievementPersonaVisionComposerSheet.swift */,
 				5616DA83E2AD407ED6824202 /* AchievementPickers.swift */,
+				4464E73AE9859F2E4D4EC6EA /* AchievementSettledDetailSheet.swift */,
 				E7085CD3B2AB7090CECFFF5E /* AchievementSettlementBanner.swift */,
 				288C660346F756F24B1522FA /* AchievementSharedComponents.swift */,
 				782E988F4A4E7AED59512FD3 /* AchievementSummaryView.swift */,
@@ -2142,6 +2146,7 @@
 				5BA08DF9EF5288734CA5BDC8 /* AchievementPersonaVisionComposerSheet.swift in Sources */,
 				0B299DDA800CEF3E5DD6A379 /* AchievementPickers.swift in Sources */,
 				63BEB637F6032CF10747A793 /* AchievementRepository.swift in Sources */,
+				9B770057C70433428224BD7B /* AchievementSettledDetailSheet.swift in Sources */,
 				2F07F1853ECE8BD421C289F8 /* AchievementSettlementBanner.swift in Sources */,
 				74240B80A8C71A7214A4108B /* AchievementSettlementEpoch.swift in Sources */,
 				2C9C63B32CB3B764F0870694 /* AchievementSettlementPolicy.swift in Sources */,
@@ -2427,6 +2432,7 @@
 				8954273B44B7EFCCE393337F /* AchievementPersonaVisionComposerSheet.swift in Sources */,
 				3AE7C27A62706518DE95F2D9 /* AchievementPickers.swift in Sources */,
 				1E54F1E7D119A96E8DD02E5E /* AchievementRepository.swift in Sources */,
+				F633681B85131C2DA5FC48E7 /* AchievementSettledDetailSheet.swift in Sources */,
 				FFA8B4D2E6343783223C6C38 /* AchievementSettlementBanner.swift in Sources */,
 				9288D83315BA7268CB4D1A27 /* AchievementSettlementEpoch.swift in Sources */,
 				D34F9C3376B7351C4E9BB357 /* AchievementSettlementPolicy.swift in Sources */,

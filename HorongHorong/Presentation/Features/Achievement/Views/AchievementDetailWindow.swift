@@ -299,6 +299,22 @@ struct AchievementRecordMonthGroup: Identifiable {
     let id: String
     let title: String
     let goals: [AchievementGoal]
+    /// 그 달의 성적. **접힌 상태에서도 달끼리 비교되라고** 헤더에 적는다 —
+    /// 지표 카드는 전체 누적이라 커지기만 할 뿐 아무것도 말해 주지 않는다.
+    let achievedCount: Int
+    let failedCount: Int
+    let abandonedCount: Int
+
+    /// "달성 4 · 실패 3" — 0인 것은 빼서 헤더가 지저분해지지 않게 한다.
+    var scoreText: String {
+        [
+            achievedCount > 0 ? "달성 \(achievedCount)" : nil,
+            failedCount > 0 ? "실패 \(failedCount)" : nil,
+            abandonedCount > 0 ? "접음 \(abandonedCount)" : nil,
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
 }
 
 struct AchievementDetailWindow: View {
@@ -324,6 +340,15 @@ struct AchievementDetailWindow: View {
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
     @AppStorage(Constants.AppStorageKey.rewardFailurePenaltyPercent)
     private var rewardFailurePenaltyPercent: Int = Constants.defaultRewardFailurePenaltyPercent
+    /// 결산에서 보고 있는 연도. `nil` 이면 기록이 있는 **가장 최근 연도**를 본다.
+    @State private var displayedRecordYear: Int?
+    /// 결산에서 펼쳐 둔 달들.
+    ///
+    /// `nil` 은 **아직 사용자가 손대지 않았다**는 뜻이고, 그때는 가장 최근 달만 펼친다.
+    /// 빈 `Set` 으로 두면 마지막 하나를 접는 순간 «손 안 댐» 과 구분되지 않아 도로 펼쳐진다.
+    @State private var expandedRecordMonthIDs: Set<String>?
+    /// 결산에서 들여다보는 중인 끝난 목표.
+    @State private var settledDetailGoal: AchievementGoal?
     /// 방금 실패로 마감해 「이번 주에 다시」를 물어볼 목표.
     @State private var retryCandidate: AchievementGoalDetail?
     /// 이번 새로고침에서 **자동으로** 닫힌 목표들. 되돌릴 기회를 주려고 들고 있는다.
@@ -548,6 +573,15 @@ struct AchievementDetailWindow: View {
                     .frame(width: 360, height: 160)
                 .padding()
             }
+        }
+        .sheet(item: $settledDetailGoal) { goal in
+            AchievementSettledDetailSheet(
+                goal: goal,
+                outcome: settlementOutcome(goal),
+                subtitle: achievementRecordSubtitle(goal),
+                childGoals: settledChildGoals(of: goal),
+                onClose: { settledDetailGoal = nil }
+            )
         }
         .sheet(isPresented: $showPersonaVisionComposer) {
             AchievementPersonaVisionComposerSheet(
@@ -1308,6 +1342,10 @@ struct AchievementDetailWindow: View {
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
                 Spacer()
+                // 시간 이동은 위에 둔다 — 진행 탭의 이전주/다음주와 같은 자리다.
+                // 목록을 읽기 «전에» 무슨 연도인지 알아야 하고, 연도를 바꾸면 목록이
+                // 통째로 갈리므로 시선이 맨 위로 돌아오는 게 맞는 동작이다.
+                recordYearNavigator
             }
 
             HStack(spacing: 10) {
@@ -1336,11 +1374,13 @@ struct AchievementDetailWindow: View {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(settledAchievementGoalGroups) { group in
                             VStack(alignment: .leading, spacing: 9) {
-                                Text(group.title)
-                                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                                    .foregroundStyle(PopoverChrome.inkSecondary)
-                                ForEach(group.goals) { goal in
-                                    achievementRecordRow(goal)
+                                recordMonthHeader(group)
+                                // 접힌 달은 아예 만들지 않는다 — 기록은 줄지 않고 늘기만 해서,
+                                // 다 그려 놓고 숨기면 해가 지날수록 그리는 값이 그대로 는다.
+                                if isRecordMonthExpanded(group) {
+                                    ForEach(group.goals) { goal in
+                                        achievementRecordRow(goal)
+                                    }
                                 }
                             }
                         }
@@ -1351,16 +1391,62 @@ struct AchievementDetailWindow: View {
         }
     }
 
+    /// 이 월간 목표에 묶여 있던 주간 목표들. 주간 목표면 비어 있다.
+    ///
+    /// 부모·자식이 **제목 문자열**로 이어져 있어(`monthGoal`) 조회도 제목으로 한다 —
+    /// `journeyChipChildren` 과 같은 규칙이다.
+    private func settledChildGoals(of goal: AchievementGoal) -> [AchievementGoal] {
+        guard goal.cadence == "월간" else { return [] }
+        return goals
+            .filter { $0.cadence == "주간" && $0.monthGoal == goal.title }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func recordYear(of goal: AchievementGoal) -> Int {
+        Calendar.current.component(.year, from: settlementDate(goal))
+    }
+
+    /// 기록이 하나라도 있는 연도들. 오름차순.
+    ///
+    /// **필터(전체/달성/실패/접음)와 무관하게 전체 기록으로 센다.** 필터에 따라 연도 축이
+    /// 흔들리면 「실패」를 켰다는 이유로 이동 버튼이 사라져 길을 잃는다.
+    private var recordYearsWithData: [Int] {
+        Array(Set(settledAchievementGoals.map(recordYear))).sorted()
+    }
+
+    /// 지금 보고 있는 연도. 기록이 없으면 올해를 본다.
+    private var activeRecordYear: Int {
+        displayedRecordYear
+            ?? recordYearsWithData.last
+            ?? Calendar.current.component(.year, from: Date())
+    }
+
+    /// 그 연도에 끝난 목표들. 지표 카드와 목록이 같은 것을 본다.
+    private var settledGoalsInActiveYear: [AchievementGoal] {
+        settledAchievementGoals.filter { recordYear(of: $0) == activeRecordYear }
+    }
+
+    /// 이동할 수 있는 이웃 연도. **바로 앞뒤가 아니라 기록이 있는 가장 가까운 연도**다 —
+    /// 비어 있는 해를 한 칸씩 지나가게 하면 버튼을 여러 번 눌러야 한다.
+    private var previousRecordYear: Int? {
+        recordYearsWithData.last { $0 < activeRecordYear }
+    }
+
+    private var nextRecordYear: Int? {
+        recordYearsWithData.first { $0 > activeRecordYear }
+    }
+
     private func settledCount(_ outcome: AchievementSettledOutcome) -> Int {
-        settledAchievementGoals.filter { settlementOutcome($0) == outcome }.count
+        settledGoalsInActiveYear.filter { settlementOutcome($0) == outcome }.count
     }
 
     private var settledEmptyMessage: String {
+        let year = "\(String(activeRecordYear))년에는"
         switch selectedRecordScope {
-        case .all: return "아직 끝난 주간 또는 월간 목표가 없습니다."
-        case .achieved: return "아직 달성한 목표가 없습니다."
-        case .failed: return "실패로 마감한 목표가 없습니다."
-        case .abandoned: return "접은 목표가 없습니다."
+        case .all: return "\(year) 끝난 주간 또는 월간 목표가 없습니다."
+        case .achieved: return "\(year) 달성한 목표가 없습니다."
+        case .failed: return "\(year) 실패로 마감한 목표가 없습니다."
+        case .abandoned: return "\(year) 접은 목표가 없습니다."
         }
     }
 
@@ -1376,9 +1462,105 @@ struct AchievementDetailWindow: View {
         return "\(goal.cadence) · \(goal.rule) · \(tail)"
     }
 
+    private var recordYearNavigator: some View {
+        HStack(spacing: 6) {
+            recordYearStepButton(
+                systemImage: "chevron.left",
+                target: previousRecordYear,
+                hint: "이전 기록 연도"
+            )
+            Text("\(String(activeRecordYear))년")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .monospacedDigit()
+                .frame(minWidth: 58)
+            recordYearStepButton(
+                systemImage: "chevron.right",
+                target: nextRecordYear,
+                hint: "다음 기록 연도"
+            )
+        }
+    }
+
+    /// 갈 곳이 없으면 **흐리게 두고 누를 수 없게** 한다. 감추면 버튼이 나타났다 사라져
+    /// 자리가 흔들리고, 살려 두면 눌러도 아무 일이 없어 고장으로 읽힌다.
+    private func recordYearStepButton(systemImage: String, target: Int?, hint: String) -> some View {
+        Button {
+            guard let target else { return }
+            withAnimation(.easeInOut(duration: 0.15)) {
+                displayedRecordYear = target
+                // 연도를 옮기면 그 해에서 다시 «가장 최근 달만 펼침» 으로 시작한다.
+                expandedRecordMonthIDs = nil
+            }
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(target == nil ? PopoverChrome.inkTertiary.opacity(0.4) : PopoverChrome.ink)
+                .frame(width: 26, height: 26)
+                .background(PopoverChrome.card.opacity(target == nil ? 0.4 : 1), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(8), style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(target == nil)
+        .help(target.map { "\(hint) · \(String($0))년" } ?? "더 이상 기록이 없습니다")
+    }
+
+    /// 기본은 «가장 최근 달만 펼침». 사용자가 한 번이라도 접거나 펴면 그 선택을 따른다.
+    private func isRecordMonthExpanded(_ group: AchievementRecordMonthGroup) -> Bool {
+        guard let expandedRecordMonthIDs else {
+            return group.id == settledAchievementGoalGroups.first?.id
+        }
+        return expandedRecordMonthIDs.contains(group.id)
+    }
+
+    private func toggleRecordMonth(_ group: AchievementRecordMonthGroup) {
+        var expanded = expandedRecordMonthIDs
+            ?? Set(settledAchievementGoalGroups.first.map { [$0.id] } ?? [])
+        if expanded.contains(group.id) {
+            expanded.remove(group.id)
+        } else {
+            expanded.insert(group.id)
+        }
+        expandedRecordMonthIDs = expanded
+    }
+
+    private func recordMonthHeader(_ group: AchievementRecordMonthGroup) -> some View {
+        let isExpanded = isRecordMonthExpanded(group)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                toggleRecordMonth(group)
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                Text(group.title)
+                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                Text("\(group.goals.count)")
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    .monospacedDigit()
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(PopoverChrome.card.opacity(0.72), in: Capsule())
+                Spacer(minLength: 8)
+                Text(group.scoreText)
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "접기" : "펼치기")
+    }
+
     private func achievementRecordRow(_ goal: AchievementGoal) -> some View {
         Button {
-            manageGoal(goal)
+            // 끝난 목표는 고칠 대상이 아니라 들여다볼 기록이다. 편집 시트를 열면
+            // 이모지·마감일 입력란과 「삭제」 버튼이 기록을 건드릴 위험만 만든다.
+            settledDetailGoal = goal
         } label: {
             HStack(spacing: 10) {
                 Text(goal.emoji)
@@ -2567,7 +2749,7 @@ struct AchievementDetailWindow: View {
     }
 
     private var visibleSettledAchievementGoals: [AchievementGoal] {
-        settledAchievementGoals
+        settledGoalsInActiveYear
             .filter { goal in
                 switch selectedRecordScope {
                 case .all:
@@ -2605,16 +2787,25 @@ struct AchievementDetailWindow: View {
             return AchievementRecordMonthGroup(
                 id: "\(calendar.component(.year, from: monthStart))-\(calendar.component(.month, from: monthStart))",
                 title: achievementRecordMonthTitle(monthStart),
-                goals: goals
+                goals: goals,
+                achievedCount: goals.filter { settlementOutcome($0) == .achieved }.count,
+                failedCount: goals.filter { settlementOutcome($0) == .failed }.count,
+                abandonedCount: goals.filter { settlementOutcome($0) == .abandoned }.count
             )
         }
     }
 
-    private func achievementRecordMonthTitle(_ date: Date) -> String {
+    /// 목록이 연도로 이미 끊겨 있고 그 연도가 헤더에 크게 적혀 있어 «월» 만 적는다.
+    /// 줄마다 «2026년» 을 되풀이하면 정작 다른 정보인 월이 묻힌다.
+    private static let recordMonthTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "yyyy년 M월"
-        return formatter.string(from: date)
+        formatter.dateFormat = "M월"
+        return formatter
+    }()
+
+    private func achievementRecordMonthTitle(_ date: Date) -> String {
+        Self.recordMonthTitleFormatter.string(from: date)
     }
 
     private func achievementRecordDateText(_ date: Date) -> String {
