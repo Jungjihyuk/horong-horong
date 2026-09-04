@@ -62,6 +62,13 @@ struct AchievementGoal: Identifiable {
     let createdAt: Date
     let dueDate: Date?
     let sourceMemoIDs: [UUID]
+    /// 못 이룬 채 닫힌 순간. 열려 있으면 nil.
+    let closedAt: Date?
+    /// 왜 닫혔나. 배지 문구와 되돌리기 안내가 갈린다.
+    let closedReason: AchievementCloseReason?
+
+    /// 못 이룬 채 닫혔는가. 「기한 지남」 배지 대신 「실패 마감」 배지를 다는 기준이다.
+    var isClosedUnfinished: Bool { closedAt != nil }
 
     var progress: Double {
         guard total > 0 else { return 0 }
@@ -78,6 +85,8 @@ struct AchievementGoal: Identifiable {
 
     /// 마감일을 지정했고, 그 날이 지났는데 아직 끝내지 못한 상태.
     var isOverdue: Bool {
+        // 이미 닫힌 목표는 «기한 지남» 이 아니다 — 답이 나왔으므로 질문이 끝났다.
+        guard closedAt == nil else { return false }
         guard let dueDate, !(total > 0 && done >= total) else { return false }
         return Calendar.current.startOfDay(for: dueDate) < Calendar.current.startOfDay(for: Date())
     }

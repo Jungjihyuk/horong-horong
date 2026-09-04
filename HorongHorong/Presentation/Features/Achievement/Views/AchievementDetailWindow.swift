@@ -30,7 +30,7 @@ struct AchievementDetailScreenshotState {
 enum AchievementDetailTab: String, CaseIterable, Identifiable {
     case progress = "진행"
     case journey = "여정"
-    case records = "달성 기록"
+    case records = "결산"
     case reward = "보상"
 
     var id: String { rawValue }
@@ -259,12 +259,40 @@ enum AchievementWeekGoalFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// 결산 목록을 무엇으로 좁힐지.
+///
+/// 예전에는 주간·월간(단계)으로 갈랐는데, 결산에서 궁금한 것은 «어느 단계였나» 보다
+/// «어떻게 끝났나» 다. 단계는 각 줄에 이미 적혀 있다.
 enum AchievementRecordScope: String, CaseIterable, Identifiable {
     case all = "전체"
-    case weekly = "주간"
-    case monthly = "월간"
+    case achieved = "달성"
+    case failed = "실패"
+    case abandoned = "접음"
 
     var id: String { rawValue }
+}
+
+/// 목표가 끝난 방식. 결산 화면이 색과 문구를 가르는 기준이다.
+enum AchievementSettledOutcome {
+    case achieved
+    case failed
+    case abandoned
+
+    var label: String {
+        switch self {
+        case .achieved: return "달성"
+        case .failed: return "실패"
+        case .abandoned: return "접음"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .achieved: return "checkmark.seal.fill"
+        case .failed: return "flag.slash.fill"
+        case .abandoned: return "archivebox.fill"
+        }
+    }
 }
 
 struct AchievementRecordMonthGroup: Identifiable {
@@ -294,6 +322,12 @@ struct AchievementDetailWindow: View {
     @State private var memoDetails: [AchievementMemoDetail] = []
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+    @AppStorage(Constants.AppStorageKey.rewardFailurePenaltyPercent)
+    private var rewardFailurePenaltyPercent: Int = Constants.defaultRewardFailurePenaltyPercent
+    /// 방금 실패로 마감해 「이번 주에 다시」를 물어볼 목표.
+    @State private var retryCandidate: AchievementGoalDetail?
+    /// 이번 새로고침에서 **자동으로** 닫힌 목표들. 되돌릴 기회를 주려고 들고 있는다.
+    @State private var autoSettledGoals: [AchievementGoalDetail] = []
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
     @AppStorage(Constants.AppStorageKey.achievementTimelineSortOrder)
@@ -346,7 +380,7 @@ struct AchievementDetailWindow: View {
         AchievementDataBuilder.goals(from: goalDetails, memos: memoDetails)
     }
 
-    /// 저장소를 다시 읽고, 이번에 처음 달성된 목표에 도장을 찍는다.
+    /// 저장소를 다시 읽고, 이번에 처음 달성된 목표에 도장을 찍고, 유예가 끝난 목표를 닫는다.
     private func reload() {
         goalDetails = repository.goals()
         memoDetails = repository.memos()
@@ -354,9 +388,27 @@ struct AchievementDetailWindow: View {
             goals: AchievementDataBuilder.goals(from: goalDetails, memos: memoDetails),
             details: goalDetails
         )
-        guard !newlyCompleted.isEmpty else { return }
-        repository.markCompleted(ids: newlyCompleted, at: Date())
+        if !newlyCompleted.isEmpty {
+            repository.markCompleted(ids: newlyCompleted, at: Date())
+            // 방금 이룬 목표가 «유예 끝» 으로 잘못 잡히지 않게 다시 읽는다.
+            goalDetails = repository.goals()
+        }
+
+        let settled = settleOverdueGoals(
+            details: goalDetails,
+            basePoints: rewardWeeklyGoalPoints,
+            penaltyRatio: Double(rewardFailurePenaltyPercent) / 100,
+            settlementEpoch: AchievementSettlementEpoch.resolve(),
+            now: Date()
+        )
+        guard !settled.isEmpty else { return }
+        autoSettledGoals = settled
         goalDetails = repository.goals()
+        memoDetails = repository.memos()
+    }
+
+    private var settleOverdueGoals: SettleOverdueGoalsUseCase {
+        SettleOverdueGoalsUseCase(achievementRepository: repository, rewardRepository: rewardRepository)
     }
 
     private var roles: [AchievementRole] {
@@ -680,6 +732,9 @@ struct AchievementDetailWindow: View {
                 }
 
                 if !visibleWeeklyGoals.isEmpty {
+                    settlementBanner
+                    retryNotice
+                    autoSettledNotice
                     overdueMemosBanner
                     AchievementGoalTimelineView(
                         items: AchievementDataBuilder.timeline(
@@ -726,6 +781,173 @@ struct AchievementDetailWindow: View {
                 }
             }
         }
+    }
+
+    /// 마감이 지났는데 아직 답하지 않은 목표들.
+    ///
+    /// **유예가 끝난 것도 함께 올린다** — 기능을 켜기 전에 마감된 목표는 자동으로 닫지 않으므로
+    /// (`AchievementSettlementEpoch`) 사용자가 직접 정리할 자리가 여기밖에 없다.
+    private var settlementRows: [AchievementSettlementRow] {
+        goalDetails.compactMap { detail in
+            let state = AchievementSettlementPolicy.state(
+                cadence: detail.cadence,
+                dueDate: detail.dueDate,
+                createdAt: detail.createdAt,
+                completedAt: detail.completedAt,
+                closedAt: detail.closedAt,
+                now: Date()
+            )
+            guard let deadline = state.deadline else { return nil }
+            return AchievementSettlementRow(
+                id: detail.id,
+                emoji: detail.emoji,
+                title: AchievementDataBuilder.shortText(detail.title, limit: 24),
+                cadence: detail.cadence,
+                deadlineDay: AchievementSettlementPolicy.deadlineDay(for: deadline),
+                penaltyPoints: AchievementSettlementPolicy.penaltyPoints(
+                    cadence: detail.cadence,
+                    basePoints: rewardWeeklyGoalPoints,
+                    ratio: Double(rewardFailurePenaltyPercent) / 100
+                )
+            )
+        }
+        .sorted { $0.deadlineDay < $1.deadlineDay }
+    }
+
+    @ViewBuilder
+    private var settlementBanner: some View {
+        AchievementSettlementBanner(
+            rows: settlementRows,
+            graceNoticeText: "정하지 않으면 다음 주기가 끝날 때 실패로 마감됩니다.",
+            onFail: { failSettlementRow($0) },
+            onExtend: { extendSettlementRow($0) },
+            onAbandon: { abandonSettlementRow($0) },
+            onAbandonAll: abandonAllSettlementRows
+        )
+    }
+
+    /// 자동으로 닫힌 목표를 알리고 되돌릴 기회를 준다.
+    /// 앱을 안 켠 사이에 벌어진 일이라, 알리지 않으면 포인트가 왜 줄었는지 알 수 없다.
+    @ViewBuilder
+    private var autoSettledNotice: some View {
+        if !autoSettledGoals.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.badge.exclamationmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+                Text(autoSettledNoticeText)
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button("되돌리기") {
+                    revokeAutoSettlement()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.accent)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+        }
+    }
+
+    private var autoSettledNoticeText: String {
+        let titles = autoSettledGoals.prefix(2).map { AchievementDataBuilder.shortText($0.title, limit: 16) }
+        let suffix = autoSettledGoals.count > 2 ? " 외 \(autoSettledGoals.count - 2)개" : ""
+        return "\(titles.joined(separator: ", "))\(suffix)를 유예가 끝나 자동으로 마감했습니다."
+    }
+
+    private func failSettlementRow(_ row: AchievementSettlementRow) {
+        let closed = goalDetails.first { $0.id == row.id }
+        repository.markFailed(ids: [row.id], at: Date(), reason: .failed)
+        if row.penaltyPoints > 0 {
+            rewardRepository.penalize(
+                goalID: row.id,
+                nominalPoints: row.penaltyPoints,
+                note: "\(row.emoji) \(row.title)",
+                at: Date()
+            )
+        }
+        // 「주간 기록」처럼 매 주기 새로 세워야 하는 목표는 여기서 흐름이 끊기면 안 된다.
+        retryCandidate = closed
+        reload()
+    }
+
+    /// 방금 실패로 마감한 목표. 「이번 주에 다시」를 띄울 대상이다.
+    private func retryClosedGoal(_ detail: AchievementGoalDetail) {
+        let draft = AchievementSettlementPolicy.retryDraft(from: detail, now: Date())
+        _ = try? repository.createGoal(draft, childGoalIDs: [], newChildTitles: [])
+        retryCandidate = nil
+        reload()
+    }
+
+    @ViewBuilder
+    private var retryNotice: some View {
+        if let retryCandidate {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.clockwise.circle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accent)
+                Text("«\(AchievementDataBuilder.shortText(retryCandidate.title, limit: 20))» 를 실패로 마감했습니다.")
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Button("이번 주에 다시") {
+                    retryClosedGoal(retryCandidate)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.accent)
+                Button("닫기") {
+                    self.retryCandidate = nil
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PopoverChrome.surfaceAlt.opacity(0.58), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+        }
+    }
+
+    /// 「이어서 도전」 — 마감을 다음 주기 끝으로 밀고 다시 연다.
+    private func extendSettlementRow(_ row: AchievementSettlementRow) {
+        let calendar = Calendar.current
+        let nextDeadline: Date
+        if row.cadence == AchievementSettlementPolicy.monthlyCadence {
+            let monthStart = AchievementMonthlyStats.firstDayOfMonth(for: Date(), calendar: calendar)
+            nextDeadline = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? Date()
+        } else {
+            let weekStart = Constants.mondayWeekStart(for: Date(), calendar: calendar)
+            nextDeadline = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? Date()
+        }
+        // 마감일은 «그 날까지» 라는 뜻이라 경계에서 하루를 되돌려 저장한다.
+        repository.extendDueDate(id: row.id, to: AchievementSettlementPolicy.deadlineDay(for: nextDeadline))
+        reload()
+    }
+
+    private func abandonSettlementRow(_ row: AchievementSettlementRow) {
+        repository.markFailed(ids: [row.id], at: Date(), reason: .abandoned)
+        reload()
+    }
+
+    private func abandonAllSettlementRows() {
+        repository.markFailed(ids: settlementRows.map(\.id), at: Date(), reason: .abandoned)
+        reload()
+    }
+
+    private func revokeAutoSettlement() {
+        let ids = autoSettledGoals.map(\.id)
+        repository.reopen(ids: ids)
+        for id in ids {
+            rewardRepository.revokePenalty(goalID: id)
+        }
+        autoSettledGoals = []
+        reload()
     }
 
     @ViewBuilder
@@ -1078,10 +1300,10 @@ struct AchievementDetailWindow: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("달성 기록")
+                    Text("결산")
                         .font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
-                    Text("완료된 주간 목표와 월간 목표를 한 곳에서 봅니다.")
+                    Text("끝난 목표를 성패와 함께 모아 봅니다.")
                         .font(.system(size: 12.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                 }
@@ -1089,22 +1311,22 @@ struct AchievementDetailWindow: View {
             }
 
             HStack(spacing: 10) {
-                AchievementMetricCard(label: "달성 목표", value: "\(completedAchievementGoals.count)", icon: "checkmark.seal")
-                AchievementMetricCard(label: "주간", value: "\(completedWeeklyGoalCount)", icon: "calendar.badge.clock")
-                AchievementMetricCard(label: "월간", value: "\(completedMonthlyGoalCount)", icon: "calendar")
+                AchievementMetricCard(label: "달성", value: "\(settledCount(.achieved))", icon: "checkmark.seal")
+                AchievementMetricCard(label: "실패", value: "\(settledCount(.failed))", icon: "flag.slash")
+                AchievementMetricCard(label: "접음", value: "\(settledCount(.abandoned))", icon: "archivebox")
             }
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("완료된 목표")
+                    Text("끝난 목표")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
                     Spacer()
                     AchievementSegmentedPicker(selection: $selectedRecordScope, values: AchievementRecordScope.allCases)
                 }
 
-                if visibleCompletedAchievementGoals.isEmpty {
-                    Text("아직 완료된 주간 또는 월간 목표가 없습니다.")
+                if visibleSettledAchievementGoals.isEmpty {
+                    Text(settledEmptyMessage)
                         .font(.system(size: 12.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1112,7 +1334,7 @@ struct AchievementDetailWindow: View {
                         .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(completedAchievementGoalGroups) { group in
+                        ForEach(settledAchievementGoalGroups) { group in
                             VStack(alignment: .leading, spacing: 9) {
                                 Text(group.title)
                                     .font(.system(size: 12.5, weight: .bold, design: .rounded))
@@ -1129,6 +1351,31 @@ struct AchievementDetailWindow: View {
         }
     }
 
+    private func settledCount(_ outcome: AchievementSettledOutcome) -> Int {
+        settledAchievementGoals.filter { settlementOutcome($0) == outcome }.count
+    }
+
+    private var settledEmptyMessage: String {
+        switch selectedRecordScope {
+        case .all: return "아직 끝난 주간 또는 월간 목표가 없습니다."
+        case .achieved: return "아직 달성한 목표가 없습니다."
+        case .failed: return "실패로 마감한 목표가 없습니다."
+        case .abandoned: return "접은 목표가 없습니다."
+        }
+    }
+
+    private func achievementRecordSubtitle(_ goal: AchievementGoal) -> String {
+        let outcome = settlementOutcome(goal)
+        let dateText = achievementRecordDateText(settlementDate(goal))
+        let tail: String
+        switch outcome {
+        case .achieved: tail = "\(dateText) 달성"
+        case .failed: tail = "\(dateText) 실패 마감"
+        case .abandoned: tail = "\(dateText) 접음"
+        }
+        return "\(goal.cadence) · \(goal.rule) · \(tail)"
+    }
+
     private func achievementRecordRow(_ goal: AchievementGoal) -> some View {
         Button {
             manageGoal(goal)
@@ -1141,13 +1388,18 @@ struct AchievementDetailWindow: View {
                         .font(.system(size: 13.5, weight: .bold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
                         .lineLimit(1)
-                    Text("\(goal.cadence) · \(goal.rule) · \(achievementRecordDateText(goal.recordDate)) 달성")
+                    Text(achievementRecordSubtitle(goal))
                         .font(.system(size: 11.5, weight: .medium, design: .rounded))
                         .foregroundStyle(PopoverChrome.inkSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
-                AchievementRewardBadge(reward: goal.reward, color: goal.color)
+                // 달성한 목표만 보상을 받았다. 실패·접음에 보상 배지를 달면 거짓말이 된다.
+                if settlementOutcome(goal) == .achieved {
+                    AchievementRewardBadge(reward: goal.reward, color: goal.color)
+                } else {
+                    AchievementSettledOutcomeBadge(outcome: settlementOutcome(goal))
+                }
             }
             .padding(10)
             .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous))
@@ -2291,44 +2543,64 @@ struct AchievementDetailWindow: View {
         displayedWeek = moved
     }
 
-    private var completedAchievementGoals: [AchievementGoal] {
+    /// 끝난 목표 — 이뤄서 끝났든, 못 이루고 닫혔든.
+    ///
+    /// **성패를 가리지 않는다.** 달성만 모아 두면 잘한 날만 남는 기록이 되고,
+    /// 무엇을 놓쳤는지는 어디에도 남지 않는다.
+    private var settledAchievementGoals: [AchievementGoal] {
         goals.filter { goal in
-            (goal.cadence == "주간" || goal.cadence == "월간") && goal.total > 0 && goal.isComplete
+            guard goal.cadence == "주간" || goal.cadence == "월간" else { return false }
+            if goal.closedAt != nil { return true }
+            return goal.total > 0 && goal.isComplete
         }
     }
 
-    private var visibleCompletedAchievementGoals: [AchievementGoal] {
-        completedAchievementGoals
+    /// 이 목표가 결산에서 어떤 결과로 잡히나.
+    private func settlementOutcome(_ goal: AchievementGoal) -> AchievementSettledOutcome {
+        guard let reason = goal.closedReason else { return .achieved }
+        return reason == .abandoned ? .abandoned : .failed
+    }
+
+    /// 결산 목록에 서는 날짜. 닫힌 목표는 «닫은 날», 이룬 목표는 «이룬 날» 이다.
+    private func settlementDate(_ goal: AchievementGoal) -> Date {
+        goal.closedAt ?? goal.recordDate
+    }
+
+    private var visibleSettledAchievementGoals: [AchievementGoal] {
+        settledAchievementGoals
             .filter { goal in
                 switch selectedRecordScope {
                 case .all:
                     return true
-                case .weekly:
-                    return goal.cadence == "주간"
-                case .monthly:
-                    return goal.cadence == "월간"
+                case .achieved:
+                    return settlementOutcome(goal) == .achieved
+                case .failed:
+                    return settlementOutcome(goal) == .failed
+                case .abandoned:
+                    return settlementOutcome(goal) == .abandoned
                 }
             }
             .sorted { lhs, rhs in
-                if lhs.recordDate == rhs.recordDate {
+                if settlementDate(lhs) == settlementDate(rhs) {
                     return lhs.title < rhs.title
                 }
-                return lhs.recordDate > rhs.recordDate
+                return settlementDate(lhs) > settlementDate(rhs)
             }
     }
 
-    private var completedAchievementGoalGroups: [AchievementRecordMonthGroup] {
+    private var settledAchievementGoalGroups: [AchievementRecordMonthGroup] {
         let calendar = Calendar.current
-        let grouped = Dictionary(grouping: visibleCompletedAchievementGoals) { goal in
-            calendar.dateInterval(of: .month, for: goal.recordDate)?.start ?? calendar.startOfDay(for: goal.recordDate)
+        let grouped = Dictionary(grouping: visibleSettledAchievementGoals) { goal in
+            let date = settlementDate(goal)
+            return calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
         }
 
         return grouped.keys.sorted(by: >).map { monthStart in
             let goals = (grouped[monthStart] ?? []).sorted { lhs, rhs in
-                if lhs.recordDate == rhs.recordDate {
+                if settlementDate(lhs) == settlementDate(rhs) {
                     return lhs.title < rhs.title
                 }
-                return lhs.recordDate > rhs.recordDate
+                return settlementDate(lhs) > settlementDate(rhs)
             }
             return AchievementRecordMonthGroup(
                 id: "\(calendar.component(.year, from: monthStart))-\(calendar.component(.month, from: monthStart))",
@@ -2448,7 +2720,8 @@ struct AchievementDetailWindow: View {
             AchievementMonthlyStats.goalBelongs(
                 toMonthStarting: monthStart,
                 createdAt: goal.createdAt,
-                completedAt: goal.total > 0 && goal.isComplete ? goal.recordDate : nil
+                completedAt: goal.total > 0 && goal.isComplete ? goal.recordDate : nil,
+                closedAt: goal.closedAt
             )
         }
     }

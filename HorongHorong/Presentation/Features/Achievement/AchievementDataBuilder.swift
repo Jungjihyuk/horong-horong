@@ -31,7 +31,10 @@ enum AchievementDataBuilder {
     static func goalWeekSpan(for goal: AchievementGoal, now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
         let start = weekStart(for: goal.createdAt, calendar: calendar)
         let isComplete = goal.total > 0 && goal.done >= goal.total
-        let rawEnd = isComplete ? weekStart(for: goal.recordDate, calendar: calendar) : weekStart(for: now, calendar: calendar)
+        // 목표가 목록에서 사라지는 순간은 **닫힌 순간** 하나로 정한다 — 이루어서 닫혔든
+        // 못 이뤄서 닫혔든 같다. `closedAt` 이 없으면 예전과 완전히 같은 값이 나온다.
+        let closingMoment = goal.closedAt ?? (isComplete ? goal.recordDate : nil)
+        let rawEnd = weekStart(for: closingMoment ?? now, calendar: calendar)
         return (start, max(start, rawEnd))
     }
 
@@ -87,7 +90,10 @@ enum AchievementDataBuilder {
         // 저장할 때 막는 것만으로는 **규칙 이전에 이미 두 목표에 묶인 데이터**가 정리되지 않아
         // 읽을 때도 같은 규칙으로 소유자를 가린다 — 저장된 값은 건드리지 않는다.
         // 소유자가 연결을 풀면 그 할일은 다시 자유로워진다.
-        let memoOwners = AchievementMemoLinkPolicy.owners(in: records)
+        // **닫힌 목표는 소유권 다툼에서 빠진다.** 계속 쥐고 있으면 「이번 주에 다시」로 만든
+        // 목표가 같은 할일을 되찾지 못한다. 닫힌 목표 자신은 저장된 연결을 그대로 보여 준다 —
+        // 지나간 주의 기록이라 나중에 소유자가 바뀐다고 내용이 달라지면 안 된다.
+        let memoOwners = AchievementMemoLinkPolicy.owners(in: records.filter { $0.closedAt == nil })
 
         /// 이 목표가 실제로 그려야 할 연결 목록.
         ///
@@ -99,6 +105,7 @@ enum AchievementDataBuilder {
             // 월간·연간은 할일을 직접 묶지 않고 하위 목표에서 올려 받는다. 소유자 규칙은
             // 주간끼리만 따진다 — 여기에 걸면 상위 목표의 직접 연결이 통째로 사라진다.
             guard record.cadence == AchievementMemoLinkPolicy.linkableCadence else { return live }
+            guard record.closedAt == nil else { return live }
             return live.filter { memoOwners[$0]?.id == record.id }
         }
         func directProgress(for record: AchievementGoalDetail) -> (done: Int, total: Int) {
@@ -175,7 +182,9 @@ enum AchievementDataBuilder {
                 recordDate: recordDate,
                 createdAt: record.createdAt,
                 dueDate: record.dueDate,
-                sourceMemoIDs: sourceMemoIDs
+                sourceMemoIDs: sourceMemoIDs,
+                closedAt: record.closedAt,
+                closedReason: record.closedReason
             )
         }
     }

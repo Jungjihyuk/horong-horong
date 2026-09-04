@@ -20,6 +20,39 @@ final class RewardViewModelTests: XCTestCase {
             RewardLedger.hasRedeemed(goalID: goalID, in: storedEntries.map(\.snapshot))
         }
 
+        func hasPenalized(goalID: UUID) -> Bool {
+            RewardLedger.hasPenalized(goalID: goalID, in: storedEntries.map(\.snapshot))
+        }
+
+        @discardableResult
+        func penalize(goalID: UUID, nominalPoints: Int, note: String, at date: Date) -> RewardPenaltyResult? {
+            guard nominalPoints > 0, !hasPenalized(goalID: goalID), !hasClaimed(goalID: goalID) else { return nil }
+            let charged = min(nominalPoints, max(0, balance()))
+            guard charged > 0 else { return nil }
+            storedEntries.append(
+                RewardEntry(
+                    id: UUID(),
+                    amount: -charged,
+                    kind: .penalty,
+                    sourceGoalID: goalID,
+                    catalogItemID: nil,
+                    note: note,
+                    occurredAt: date
+                )
+            )
+            return RewardPenaltyResult(nominal: nominalPoints, charged: charged, forgiven: nominalPoints - charged)
+        }
+
+        @discardableResult
+        func revokePenalty(goalID: UUID) -> Int? {
+            guard let index = storedEntries.firstIndex(where: { $0.kind == .penalty && $0.sourceGoalID == goalID }) else {
+                return nil
+            }
+            let restored = -storedEntries[index].amount
+            storedEntries.remove(at: index)
+            return restored
+        }
+
         @discardableResult
         func claim(_ goal: RewardClaimableGoal, policy: RewardPointPolicy) -> Int? {
             guard goal.isComplete, !hasClaimed(goalID: goal.id) else { return nil }

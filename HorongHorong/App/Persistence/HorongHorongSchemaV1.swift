@@ -22,7 +22,8 @@ enum HorongHorongSchemaV1: VersionedSchema {
         [
             Memo.self,
             DiaryEntry.self,
-            AchievementGoalRecord.self,
+            // 얼려 둔 옛 모양. 이유는 `LegacyAchievementGoalRecord.swift` 참고.
+            LegacyAchievementSchema.AchievementGoalRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             CategoryBehaviorConditionSet.self,

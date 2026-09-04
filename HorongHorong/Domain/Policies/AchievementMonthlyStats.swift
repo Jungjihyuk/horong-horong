@@ -48,15 +48,20 @@ enum AchievementMonthlyStats {
     /// 목표가 그 달 화면에 보이는지.
     /// 만든 달에서 시작해 완료한 달에 끝나고, 아직 못 끝냈으면 이번 달까지 이어진다.
     /// 주 단위 goalWeekSpan과 같은 규칙이라, 그달에 못 끝낸 목표는 다음 달로 이월된다.
+    /// 못 이룬 채 닫힌 목표(`closedAt`)도 그 달에서 끝난다 — 주 단위와 같은 규칙이다.
+    /// 기본값이 nil 이라 이 인자를 안 넘기던 호출부는 예전과 완전히 같은 값을 받는다.
     static func goalBelongs(
         toMonthStarting monthStart: Date,
         createdAt: Date,
         completedAt: Date?,
+        closedAt: Date? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> Bool {
         let start = firstDayOfMonth(for: createdAt, calendar: calendar)
-        let end = max(start, firstDayOfMonth(for: completedAt ?? now, calendar: calendar))
+        // 목표가 목록에서 사라지는 순간은 «닫힌 순간» 하나다 — 이뤄서든 못 이뤄서든.
+        let closingMoment = closedAt ?? completedAt
+        let end = max(start, firstDayOfMonth(for: closingMoment ?? now, calendar: calendar))
         return monthStart >= start && monthStart <= end
     }
 

@@ -1,21 +1,26 @@
 import Foundation
 import SwiftData
 
-/// 저장소의 두 번째 버전.
+/// 저장소의 네 번째 버전.
 ///
-/// '메모'에서 'Second Brain / 기록'으로의 확장을 위해 `SecondBrainRecord`를 추가했다.
-/// 기존 `Memo` 테이블의 데이터를 읽어 이전하기 위해 `Memo.self`와 `SecondBrainRecord.self`를
-/// 둘 다 등록한다 (Lightweight 마이그레이션 호환).
-enum HorongHorongSchemaV2: VersionedSchema {
-    nonisolated static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+/// 목표에 «못 이룬 채 닫힌 순간»(`closedAt`·`closedReasonRaw`)을 더했다. 마감을 넘긴 목표를
+/// 실패로 마감하고 패널티를 매기려면 그 순간을 저장해야 한다.
+///
+/// V3 과의 차이는 `AchievementGoalRecord` 하나뿐이다 — V3 은 얼려 둔 옛 모양
+/// (`LegacyAchievementSchema.AchievementGoalRecord`)을, 여기서는 살아 있는 타입을 가리킨다.
+enum HorongHorongSchemaV4: VersionedSchema {
+    nonisolated static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
 
     nonisolated static var models: [any PersistentModel.Type] {
         [
+            Todo.self,
+            QuickNote.self,
+            Reference.self,
+            Diary.self,
             SecondBrainRecord.self,
             Memo.self,
             DiaryEntry.self,
-            // 얼려 둔 옛 모양. 이유는 `LegacyAchievementGoalRecord.swift` 참고.
-            LegacyAchievementSchema.AchievementGoalRecord.self,
+            AchievementGoalRecord.self,
             FocusSession.self,
             PomodoroReflection.self,
             CategoryBehaviorConditionSet.self,

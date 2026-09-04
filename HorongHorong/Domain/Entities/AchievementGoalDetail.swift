@@ -26,6 +26,10 @@ struct AchievementGoalDetail: Identifiable, Equatable, Sendable {
     let updatedAt: Date
     /// 달성한 **순간**. 아직이면 `nil`.
     let completedAt: Date?
+    /// 못 이룬 채 **닫힌 순간**. 아직 열려 있으면 `nil`. `completedAt` 과 짝이다.
+    let closedAt: Date?
+    /// 왜 닫혔나. 패널티를 줄지 가른다.
+    let closedReason: AchievementCloseReason?
 }
 
 /// 목표를 새로 만들 때 넘기는 값.

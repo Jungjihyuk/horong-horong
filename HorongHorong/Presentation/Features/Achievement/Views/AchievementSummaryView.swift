@@ -24,9 +24,27 @@ struct AchievementSummaryView: View {
 
     private let textScale: CGFloat = 0.8
 
+    @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
+    private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+    @AppStorage(Constants.AppStorageKey.rewardFailurePenaltyPercent)
+    private var rewardFailurePenaltyPercent: Int = Constants.defaultRewardFailurePenaltyPercent
+
     init(repository: AchievementRepository, rewardRepository: RewardRepository) {
         self.rewardRepository = rewardRepository
-        _viewModel = State(initialValue: AchievementSummaryViewModel(repository: repository))
+        _viewModel = State(
+            initialValue: AchievementSummaryViewModel(
+                repository: repository,
+                rewardRepository: rewardRepository
+            )
+        )
+    }
+
+    /// 정책은 UserDefaults 를 모른다(R9). 화면이 읽어 넘긴다.
+    private func reloadGoals() {
+        viewModel.reload(
+            basePoints: rewardWeeklyGoalPoints,
+            penaltyRatio: Double(rewardFailurePenaltyPercent) / 100
+        )
     }
 
     private var currentWeekStart: Date { viewModel.currentWeekStart }
@@ -34,13 +52,13 @@ struct AchievementSummaryView: View {
 
     var body: some View {
         content
-            .onAppear { viewModel.reload() }
+            .onAppear { reloadGoals() }
             // 목표는 성취 창에서 바뀐다. `@Query` 자동 갱신을 대신한다.
             .onReceive(NotificationCenter.default.publisher(for: SwiftDataTodoRepository.didChangeNotification)) { _ in
-                viewModel.reload()
+                reloadGoals()
             }
             .onReceive(NotificationCenter.default.publisher(for: SwiftDataAchievementRepository.didChangeNotification)) { _ in
-                viewModel.reload()
+                reloadGoals()
             }
     }
 
@@ -185,6 +203,34 @@ final class AchievementDetailLaunchOptions {
     }
 }
 
+/// 못 이룬 채 닫힌 목표의 배지. 「기한 지남」과 자리를 나눠 쓴다 —
+/// 그쪽은 «아직 답하지 않은 질문», 이쪽은 «답이 나온 결과» 라 같이 뜨면 안 된다.
+struct AchievementClosedBadge: View {
+    let reason: AchievementCloseReason
+    var textScale: CGFloat = 1
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: reason == .abandoned ? "archivebox.fill" : "flag.slash.fill")
+                .font(.system(size: 9 * textScale, weight: .bold))
+            Text(label)
+                .font(.system(size: 9.5 * textScale, weight: .bold, design: .rounded))
+        }
+        .foregroundStyle(PopoverChrome.inkTertiary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(PopoverChrome.card.opacity(0.72), in: Capsule())
+    }
+
+    private var label: String {
+        switch reason {
+        case .failed: return "실패 마감"
+        case .expired: return "자동 마감"
+        case .abandoned: return "접음"
+        }
+    }
+}
+
 struct AchievementOverdueBadge: View {
     var dueDateText: String?
     var textScale: CGFloat = 1
@@ -226,6 +272,9 @@ struct AchievementGoalSummaryCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if goal.isOverdue {
                             AchievementOverdueBadge(dueDateText: goal.dueDateText, textScale: textScale)
+                        }
+                        if let closedReason = goal.closedReason {
+                            AchievementClosedBadge(reason: closedReason, textScale: textScale)
                         }
                         if weekCount > 1 {
                             Text("\(weekCount)주째")

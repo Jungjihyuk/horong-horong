@@ -13,7 +13,12 @@ import SwiftData
 /// 3. **실사용 저장소 복사본으로 열어 본다** — 합성 데이터로는 옛 앱이 남긴 파일을 재현할 수 없다
 enum HorongHorongMigrationPlan: SchemaMigrationPlan {
     nonisolated static var schemas: [any VersionedSchema.Type] {
-        [HorongHorongSchemaV1.self, HorongHorongSchemaV2.self, HorongHorongSchemaV3.self]
+        [
+            HorongHorongSchemaV1.self,
+            HorongHorongSchemaV2.self,
+            HorongHorongSchemaV3.self,
+            HorongHorongSchemaV4.self,
+        ]
     }
 
     static let migrateV1toV2 = MigrationStage.lightweight(
@@ -26,7 +31,13 @@ enum HorongHorongMigrationPlan: SchemaMigrationPlan {
         toVersion: HorongHorongSchemaV3.self
     )
 
+    /// 목표에 `closedAt`·`closedReasonRaw` 를 더한다. 둘 다 Optional 이라 추론으로 충분하다.
+    static let migrateV3toV4 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV3.self,
+        toVersion: HorongHorongSchemaV4.self
+    )
+
     nonisolated static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4]
     }
 }

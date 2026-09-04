@@ -23,7 +23,8 @@ final class AchievementMemoLinkTests: XCTestCase {
         cadence: String = "주간",
         targetCount: Int = 1,
         linkedMemoIDs: [UUID] = [],
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        closedAt: Date? = nil
     ) -> AchievementGoalDetail {
         AchievementGoalDetail(
             id: id,
@@ -45,7 +46,9 @@ final class AchievementMemoLinkTests: XCTestCase {
             linkedMemoIDs: linkedMemoIDs,
             createdAt: createdAt,
             updatedAt: createdAt,
-            completedAt: nil
+            completedAt: nil,
+            closedAt: closedAt,
+            closedReason: closedAt == nil ? nil : .failed
         )
     }
 
@@ -368,6 +371,170 @@ final class AchievementMemoLinkTests: XCTestCase {
         let goals = AchievementDataBuilder.goals(from: [monthly, weekly], memos: memos)
 
         XCTAssertEqual(goals.first { $0.id == monthly.id }?.sourceMemoIDs, [memoID])
+    }
+
+    // MARK: - 저장소: 닫기·되돌리기·마감 연장
+
+    func testMarkFailedIsIdempotentAndKeepsTheFirstMoment() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let goal = try repository.createGoal(draft("주간 기록"), childGoalIDs: [], newChildTitles: [])
+        let first = Date(timeIntervalSince1970: 1_000)
+
+        repository.markFailed(ids: [goal.id], at: first, reason: .expired)
+        repository.markFailed(ids: [goal.id], at: Date(timeIntervalSince1970: 9_999), reason: .failed)
+
+        let stored = try XCTUnwrap(repository.goals().first { $0.id == goal.id })
+        XCTAssertEqual(stored.closedAt, first)
+        XCTAssertEqual(stored.closedReason, .expired)
+    }
+
+    func testAlreadyCompletedGoalIsNeverMarkedFailed() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let goal = try repository.createGoal(draft("주간 기록"), childGoalIDs: [], newChildTitles: [])
+        repository.markCompleted(ids: [goal.id], at: Date(timeIntervalSince1970: 500))
+
+        repository.markFailed(ids: [goal.id], at: Date(timeIntervalSince1970: 1_000), reason: .expired)
+
+        XCTAssertNil(repository.goals().first { $0.id == goal.id }?.closedAt)
+    }
+
+    /// 닫힌 목표에 할일을 하나 더 붙여 완료시키면 «실패인데 보상도 받는» 상태가 된다.
+    func testClosedGoalCannotBeStampedCompleted() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let goal = try repository.createGoal(draft("주간 기록"), childGoalIDs: [], newChildTitles: [])
+        repository.markFailed(ids: [goal.id], at: Date(timeIntervalSince1970: 1_000), reason: .expired)
+
+        repository.markCompleted(ids: [goal.id], at: Date(timeIntervalSince1970: 2_000))
+
+        XCTAssertNil(repository.goals().first { $0.id == goal.id }?.completedAt)
+    }
+
+    func testReopenClearsTheClosure() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let goal = try repository.createGoal(draft("주간 기록"), childGoalIDs: [], newChildTitles: [])
+        repository.markFailed(ids: [goal.id], at: Date(timeIntervalSince1970: 1_000), reason: .expired)
+
+        repository.reopen(ids: [goal.id])
+
+        let stored = try XCTUnwrap(repository.goals().first { $0.id == goal.id })
+        XCTAssertNil(stored.closedAt)
+        XCTAssertNil(stored.closedReason)
+    }
+
+    /// 「이어서 도전」은 마감을 미루면서 닫힘도 함께 푼다.
+    func testExtendDueDateReopensAndMovesTheDeadline() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let goal = try repository.createGoal(draft("주간 기록"), childGoalIDs: [], newChildTitles: [])
+        repository.markFailed(ids: [goal.id], at: Date(timeIntervalSince1970: 1_000), reason: .expired)
+        let newDue = Date(timeIntervalSince1970: 5_000)
+
+        repository.extendDueDate(id: goal.id, to: newDue)
+
+        let stored = try XCTUnwrap(repository.goals().first { $0.id == goal.id })
+        XCTAssertEqual(stored.dueDate, newDue)
+        XCTAssertNil(stored.closedAt)
+    }
+
+    /// 닫힌 목표는 소유권을 놓으므로 새 목표가 같은 할일을 가져갈 수 있다.
+    func testNewGoalCanTakeTodosFromAClosedGoal() throws {
+        let container = try container()
+        let context = ModelContext(container)
+        let memo = Todo(content: "데일리 로그")
+        context.insert(memo)
+        let repository = SwiftDataAchievementRepository(context: context)
+        let old = try repository.createGoal(
+            draft("지난 주 주간 기록", linkedMemoIDs: [memo.id]),
+            childGoalIDs: [],
+            newChildTitles: []
+        )
+        repository.markFailed(ids: [old.id], at: Date(timeIntervalSince1970: 1_000), reason: .expired)
+
+        let retry = try repository.createGoal(
+            draft("이번 주 주간 기록", linkedMemoIDs: [memo.id]),
+            childGoalIDs: [],
+            newChildTitles: []
+        )
+
+        XCTAssertEqual(retry.linkedMemoIDs, [memo.id])
+    }
+
+    // MARK: - 못 이룬 채 닫힌 목표
+
+    /// 닫힌 목표는 **그 주에서 끝난다.** 안 그러면 못 끝낸 목표가 이번 주로 영원히 이월된다.
+    func testClosedGoalStopsCarryingIntoTheCurrentWeek() {
+        let created = Date(timeIntervalSince1970: 1_772_000_000)
+        let closed = created.addingTimeInterval(14 * 24 * 60 * 60)
+        let now = created.addingTimeInterval(40 * 24 * 60 * 60)
+        let open = goalDetail(title: "열린 목표", createdAt: created)
+        let shut = goalDetail(title: "닫힌 목표", createdAt: created, closedAt: closed)
+
+        let goals = AchievementDataBuilder.goals(from: [open, shut], memos: [])
+        let thisWeek = AchievementDataBuilder.weekStart(for: now)
+
+        let openGoal = try? XCTUnwrap(goals.first { $0.id == open.id })
+        let shutGoal = try? XCTUnwrap(goals.first { $0.id == shut.id })
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(openGoal!, belongsToWeekStarting: thisWeek, now: now),
+            true
+        )
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(shutGoal!, belongsToWeekStarting: thisWeek, now: now),
+            false
+        )
+        // 닫힌 그 주에는 그대로 남는다 — 지난 주로 넘겨 보면 보여야 한다.
+        XCTAssertEqual(
+            AchievementDataBuilder.goal(
+                shutGoal!,
+                belongsToWeekStarting: AchievementDataBuilder.weekStart(for: closed),
+                now: now
+            ),
+            true
+        )
+    }
+
+    /// `closedAt` 이 없으면 예전과 **완전히 같은** 구간이 나와야 한다.
+    func testOpenGoalSpanIsUnchanged() {
+        let created = Date(timeIntervalSince1970: 1_772_000_000)
+        let now = created.addingTimeInterval(30 * 24 * 60 * 60)
+        let goals = AchievementDataBuilder.goals(from: [goalDetail(title: "열린 목표", createdAt: created)], memos: [])
+
+        let span = AchievementDataBuilder.goalWeekSpan(for: goals[0], now: now)
+
+        XCTAssertEqual(span.start, AchievementDataBuilder.weekStart(for: created))
+        XCTAssertEqual(span.end, AchievementDataBuilder.weekStart(for: now))
+    }
+
+    /// 닫힌 목표가 할일을 계속 쥐고 있으면 「이번 주에 다시」로 만든 목표가 되찾지 못한다.
+    func testClosedGoalReleasesTodoOwnership() {
+        let memoID = UUID()
+        let old = goalDetail(
+            title: "지난 주 주간 기록",
+            linkedMemoIDs: [memoID],
+            createdAt: Date(timeIntervalSince1970: 1_000),
+            closedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let retry = goalDetail(
+            title: "이번 주 주간 기록",
+            linkedMemoIDs: [memoID],
+            createdAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let memos = [memoDetail(id: memoID, content: "데일리 로그")]
+
+        let goals = AchievementDataBuilder.goals(from: [old, retry], memos: memos)
+
+        XCTAssertEqual(goals.first { $0.id == retry.id }?.sourceMemoIDs, [memoID])
+        // 닫힌 목표는 소유권을 놓아도 저장된 연결을 그대로 보여 준다 — 지나간 주의 기록이다.
+        XCTAssertEqual(goals.first { $0.id == old.id }?.sourceMemoIDs, [memoID])
     }
 
     // MARK: - 타임라인 중복

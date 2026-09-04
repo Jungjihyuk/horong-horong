@@ -291,6 +291,8 @@ private struct AchievementPage: View {
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
     private var rewardWeeklyGoalPoints: Int = Constants.defaultRewardWeeklyGoalPoints
+    @AppStorage(Constants.AppStorageKey.rewardFailurePenaltyPercent)
+    private var rewardFailurePenaltyPercent: Int = Constants.defaultRewardFailurePenaltyPercent
     @AppStorage(Constants.AppStorageKey.achievementSuggestionProvider)
     private var suggestionProvider: String = Constants.defaultAchievementSuggestionProvider
     @AppStorage(Constants.AppStorageKey.achievementSuggestionMLXModel)
@@ -463,6 +465,25 @@ private struct AchievementPage: View {
                     )
                     .labelsHidden()
                 }
+                SettingsRow(
+                    "실패 마감 차감 비율",
+                    subtitle: "마감을 넘긴 주간 목표를 실패로 마감할 때 달성 포인트의 이 비율만큼 깎습니다. 0%면 깎지 않습니다. 잔액은 0 아래로 내려가지 않습니다."
+                ) {
+                    Text("\(clampedRewardFailurePenaltyPercent)% · −\(failurePenaltyPoints)P")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .trailing)
+                    Stepper(
+                        "\(clampedRewardFailurePenaltyPercent)%",
+                        value: Binding(
+                            get: { clampedRewardFailurePenaltyPercent },
+                            set: { rewardFailurePenaltyPercent = clamped($0, in: Constants.rewardFailurePenaltyPercentRange) }
+                        ),
+                        in: Constants.rewardFailurePenaltyPercentRange,
+                        step: 5
+                    )
+                    .labelsHidden()
+                }
             }
 
             SettingsGroupCard("적용 방식") {
@@ -484,6 +505,7 @@ private struct AchievementPage: View {
         .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
         .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
+        .onChange(of: rewardFailurePenaltyPercent) { _, _ in normalizeValues() }
         // 공급자를 떠나면 그쪽이 붙잡고 있던 가중치를 내린다. 안 내리면 Ollama 로 한 번 돌린 뒤
         // MLX 로 바꿔도 Ollama 쪽 모델이 그대로 남는다(실측 2026-08-19: 1.9GB, 만료 16시간 뒤).
         .onChange(of: suggestionProvider) { oldValue, newValue in
@@ -604,7 +626,21 @@ private struct AchievementPage: View {
         maxWeeklyGoalsPerMonthlyGoal = clamped(maxWeeklyGoalsPerMonthlyGoal, in: Constants.achievementMaxWeeklyGoalsPerMonthlyGoalRange)
         journeyMaxFlagCount = clampedJourneyMaxFlagCount
         rewardWeeklyGoalPoints = clampedRewardWeeklyGoalPoints
+        rewardFailurePenaltyPercent = clampedRewardFailurePenaltyPercent
         excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)
+    }
+
+    private var clampedRewardFailurePenaltyPercent: Int {
+        clamped(rewardFailurePenaltyPercent, in: Constants.rewardFailurePenaltyPercentRange)
+    }
+
+    /// 지금 설정으로 실패 한 번에 몇 점이 깎이는지. 비율만 보여 주면 체감이 안 온다.
+    private var failurePenaltyPoints: Int {
+        AchievementSettlementPolicy.penaltyPoints(
+            cadence: AchievementSettlementPolicy.weeklyCadence,
+            basePoints: clampedRewardWeeklyGoalPoints,
+            ratio: Double(clampedRewardFailurePenaltyPercent) / 100
+        )
     }
 
     private func clamped(_ value: Int, in range: ClosedRange<Int>) -> Int {

@@ -56,7 +56,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
             linkedMemoIDs: draft.linkedMemoIDs,
             cadence: draft.cadence,
             goalID: nil,
-            existingGoals: goals()
+            existingGoals: openGoals()
         )
         let record = AchievementGoalRecord(
             title: draft.title,
@@ -98,11 +98,55 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         guard !ids.isEmpty else { return }
         var changed = false
         for id in ids {
-            guard let record = findGoal(id), record.completedAt == nil else { continue }
+            // **실패로 닫힌 목표는 달성 도장을 받지 않는다.** 없으면 닫힌 목표에 할일을 하나 더
+            // 붙여 완료시키는 것으로 «실패인데 보상도 받는» 상태가 만들어진다.
+            // 되살리려면 `reopen(ids:)` 을 먼저 거쳐야 한다.
+            guard let record = findGoal(id), record.completedAt == nil, record.closedAt == nil else { continue }
             record.completedAt = date
             changed = true
         }
         guard changed else { return }
+        save()
+    }
+
+    func markFailed(ids: [UUID], at date: Date, reason: AchievementCloseReason) {
+        guard !ids.isEmpty else { return }
+        var changed = false
+        for id in ids {
+            // 이미 닫혔거나 이미 이룬 목표는 건드리지 않는다 — `markCompleted` 와 같은 규약이다.
+            // 이 가드가 멱등성의 마지막 방어선이라, 두 화면이 같은 틱에 정산해도 한 번만 찍힌다.
+            guard let record = findGoal(id), record.closedAt == nil, record.completedAt == nil else { continue }
+            record.closedAt = date
+            record.closedReason = reason
+            record.updatedAt = date
+            changed = true
+        }
+        // 바뀐 게 없으면 알림을 쏘지 않는다. 안 그러면 두 화면이 서로를 깨우는 고리가 생긴다.
+        guard changed else { return }
+        save()
+    }
+
+    func reopen(ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        var changed = false
+        for id in ids {
+            guard let record = findGoal(id), record.closedAt != nil else { continue }
+            record.closedAt = nil
+            record.closedReason = nil
+            record.updatedAt = Date()
+            changed = true
+        }
+        guard changed else { return }
+        save()
+    }
+
+    func extendDueDate(id: UUID, to date: Date) {
+        guard let record = findGoal(id) else { return }
+        record.dueDate = date
+        // 마감을 미루는 것은 «다시 열어 도전한다» 는 뜻이라 닫힘도 함께 푼다.
+        record.closedAt = nil
+        record.closedReason = nil
+        record.updatedAt = Date()
         save()
     }
 
@@ -124,7 +168,7 @@ final class SwiftDataAchievementRepository: AchievementRepository {
                 linkedMemoIDs: requestedMemoIDs,
                 cadence: record.cadence,
                 goalID: record.id,
-                existingGoals: goals()
+                existingGoals: openGoals()
             )
             record.linkedMemoIDs = linkedMemoIDs
             record.targetCount = max(1, linkedMemoIDs.count)
@@ -423,6 +467,12 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
     }
 
+    /// 아직 열려 있는 목표만. 할일 소유권은 **열린 목표끼리만** 다툰다 —
+    /// 닫힌 목표가 계속 쥐고 있으면 「이번 주에 다시」로 만든 목표가 할일을 되찾지 못한다.
+    private func openGoals() -> [AchievementGoalDetail] {
+        goals().filter { $0.closedAt == nil }
+    }
+
     private func goalRecords() -> [AchievementGoalRecord] {
         let descriptor = FetchDescriptor<AchievementGoalRecord>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
@@ -513,7 +563,9 @@ final class SwiftDataAchievementRepository: AchievementRepository {
             linkedMemoIDs: record.linkedMemoIDs,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt,
-            completedAt: record.completedAt
+            completedAt: record.completedAt,
+            closedAt: record.closedAt,
+            closedReason: record.closedReason
         )
     }
 
