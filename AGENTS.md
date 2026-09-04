@@ -449,22 +449,26 @@ MemoViewModel처럼 화면이 불분명한 이름보다 MemoListViewModel, MemoD
 
 ### Entity와 영속 모델
 
-Domain Entity는 가능하면 접미사 없는 비즈니스 이름을 사용한다.
+SwiftData 영속 모델(`@Model`)은 `Record`, `Entry` 같은 인위적인 접미사를 붙이지 않고 **본래의 고유 명사**를 사용한다. 이는 SQLite 테이블명(`ZTODO`, `ZQUICKNOTE`, `ZREFERENCE`, `ZDIARY` 등)을 직관적이고 깔끔하게 유지하기 위함이다.
 
 ~~~text
-Memo
-Achievement
-DateRange
+Todo
+QuickNote
+Reference
+Diary
+FocusSession
+AchievementGoal
 ~~~
 
-신규 SwiftData 영속 타입은 <Name>Record로 이름 짓는다.
+Domain/Presentation 계층에서 전달·렌더링용으로 사용되는 값 타입(Struct)은 영속 모델과의 불필요한 이름 충돌을 피하고 역할이 명확히 드러나는 이름을 사용한다.
 
 ~~~text
-Domain/Entities/Memo.swift
-Data/DataSources/Local/SwiftData/Models/MemoRecord.swift
+TodoItem (또는 TodoSummary)
+DiaryDay
+ReferenceItem
 ~~~
 
-기존 @Model 이름은 이름 정리만을 위해 바꾸지 않는다. SwiftData 타입 이름 변경은 스키마 영향을 확인하고 별도 마이그레이션으로 수행한다. 폴더를 채우기 위해 모든 영속 모델에 대응하는 Domain Entity를 만들지 않는다.
+기존 @Model 이름은 단순 이름 정리만을 위해 일괄 변경하지 않으며, 도메인 분리 및 스키마 마이그레이션 계획과 함께 정석대로 안전하게 전환한다. 폴더를 채우기 위해 모든 영속 모델에 대응하는 억지 Domain Entity를 만들지 않는다.
 
 ### Repository
 

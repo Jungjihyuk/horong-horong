@@ -548,42 +548,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 기존 `Memo` 테이블의 데이터를 신규 `SecondBrainRecord` 테이블로 1:1 복사 이전한다.
+    ///
+    /// DB 파일과 생명주기가 다른 외부 UserDefaults 플래그에 의존해 조기 중단하지 않고,
+    /// 실제 `Memo` 테이블에 데이터가 남아있는지 확인하여 안전하고 멱등(idempotent)하게 이전한다.
     static func migrateMemoToSecondBrainRecords(in context: ModelContext, defaults: UserDefaults = .standard) {
         let migrationKey = "migration.memoToSecondBrain.v1"
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
         do {
             let legacyMemos = try context.fetch(FetchDescriptor<Memo>())
-            if !legacyMemos.isEmpty {
-                for memo in legacyMemos {
-                    let record = SecondBrainRecord(
-                        id: memo.id,
-                        content: memo.content,
-                        icon: memo.icon,
-                        section: memo.resolvedSection,
-                        createdAt: memo.createdAt,
-                        updatedAt: memo.updatedAt,
-                        isPinned: memo.isPinned,
-                        isCompleted: memo.isCompletedValue,
-                        completionStateChangedAt: memo.completionStateChangedAt,
-                        startDate: memo.startDate,
-                        deadline: memo.deadline,
-                        reminderOffsetMinutes: memo.reminderOffsetMinutes,
-                        reminderIdentifier: memo.reminderIdentifier,
-                        reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
-                        isLinkedToReminders: memo.isLinkedToReminders ?? false,
-                        deletedAt: memo.deletedAt
-                    )
-                    record.isArchived = memo.isArchived
-                    context.insert(record)
-                }
-                try context.save()
-
-                for memo in legacyMemos {
-                    context.delete(memo)
-                }
-                try context.save()
+            guard !legacyMemos.isEmpty else {
+                defaults.set(true, forKey: migrationKey)
+                return
             }
+
+            let existingRecords = try context.fetch(FetchDescriptor<SecondBrainRecord>())
+            let existingIDs = Set(existingRecords.map(\.id))
+
+            for memo in legacyMemos {
+                guard !existingIDs.contains(memo.id) else { continue }
+                let record = SecondBrainRecord(
+                    id: memo.id,
+                    content: memo.content,
+                    icon: memo.icon,
+                    section: memo.resolvedSection,
+                    createdAt: memo.createdAt,
+                    updatedAt: memo.updatedAt,
+                    isPinned: memo.isPinned,
+                    isCompleted: memo.isCompletedValue,
+                    completionStateChangedAt: memo.completionStateChangedAt,
+                    startDate: memo.startDate,
+                    deadline: memo.deadline,
+                    reminderOffsetMinutes: memo.reminderOffsetMinutes,
+                    reminderIdentifier: memo.reminderIdentifier,
+                    reminderCalendarIdentifier: memo.reminderCalendarIdentifier,
+                    isLinkedToReminders: memo.isLinkedToReminders ?? false,
+                    deletedAt: memo.deletedAt
+                )
+                record.isArchived = memo.isArchived
+                context.insert(record)
+            }
+            try context.save()
+
+            for memo in legacyMemos {
+                context.delete(memo)
+            }
+            try context.save()
             defaults.set(true, forKey: migrationKey)
         } catch {
             context.rollback()
