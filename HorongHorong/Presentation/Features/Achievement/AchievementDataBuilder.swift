@@ -26,14 +26,20 @@ enum AchievementDataBuilder {
     }
 
     /// 목표가 화면에 노출되는 주 구간.
-    /// 시작은 목표를 만든 주, 끝은 완료한 주(미완료면 이번 주)다.
+    /// 시작은 목표를 만든 주, 끝은 완료한 주(열려 있으면 이번 주)다.
     /// 저장하지 않고 매번 계산하므로, 완료한 목표에 할 일을 다시 연결하면 구간이 자동으로 이번 주까지 다시 열린다.
     static func goalWeekSpan(for goal: AchievementGoal, now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
         let start = weekStart(for: goal.createdAt, calendar: calendar)
         let isComplete = goal.total > 0 && goal.done >= goal.total
-        // 목표가 목록에서 사라지는 순간은 **닫힌 순간** 하나로 정한다 — 이루어서 닫혔든
-        // 못 이뤄서 닫혔든 같다. `closedAt` 이 없으면 예전과 완전히 같은 값이 나온다.
-        let closingMoment = goal.closedAt ?? (isComplete ? goal.recordDate : nil)
+        // 실패·접음은 마감이 지난 뒤 결정할 수 있으므로 버튼을 누른 시각으로 귀속하면
+        // 지난 목표가 정산한 주의 목표처럼 보인다. 명시한 마감일, 없으면 암묵적 마감의
+        // 기준인 생성일로 돌려서 실제 성적이 속한 주에서 끝낸다.
+        let closingMoment: Date?
+        if goal.closedAt != nil {
+            closingMoment = goal.dueDate ?? goal.createdAt
+        } else {
+            closingMoment = isComplete ? goal.recordDate : nil
+        }
         let rawEnd = weekStart(for: closingMoment ?? now, calendar: calendar)
         return (start, max(start, rawEnd))
     }
