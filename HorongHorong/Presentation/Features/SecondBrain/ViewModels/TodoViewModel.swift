@@ -112,10 +112,17 @@ final class TodoViewModel {
 
     // MARK: - 쓰기
 
+    /// 빠른 입력 한 줄을 그대로 제목으로 쓰지 않는다 —
+    /// `[내일|모레] [n분|n시간] 제목` 접두어를 떼어 일정으로 바꾼다.
     func submitComposer() {
-        let title = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-        guard let created = try? repository.add(title: title) else { return }
+        let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let entry = TodoComposerPolicy.parse(text, now: todayReferenceDate)
+        guard let created = try? repository.add(
+            title: entry.title,
+            startDate: entry.startDate,
+            deadline: entry.deadline
+        ) else { return }
         composerText = ""
         reload()
         selected = created

@@ -136,7 +136,7 @@ struct TodoBrowserView: View {
             Image(systemName: "plus")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(PopoverChrome.accent)
-            TextField("할 일 추가 — 오늘로 들어갑니다", text: $viewModel.composerText)
+            TextField("할 일 추가 — 기본 오늘, 예: 내일 30분 회의", text: $viewModel.composerText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 .focused($composerFocused)

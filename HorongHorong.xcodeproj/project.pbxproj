@@ -16,6 +16,7 @@
 		0258A4C5671F108D1F6CC0CF /* RewardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F559D1CDE04F8E32205E320 /* RewardViewModel.swift */; };
 		02766D7095C0CC0D2BD72077 /* TodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AE48BB0B02BE537399784C /* TodoItem.swift */; };
 		0289F382ABF276F77BD078CA /* AppIconManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BB758EEE49CCA072ED8060 /* AppIconManager.swift */; };
+		02C0102CE8A0D6B2AD997D4F /* TodoComposerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 305E707C9DD62A3699F3AFD2 /* TodoComposerPolicy.swift */; };
 		02D26EB68D656C0917A56F01 /* TelemetryConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9EB6CD97C88B5128A447947 /* TelemetryConfig.swift */; };
 		02E79743E2697CD6DCAD9ACE /* FocusSessionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEF616ED78677435847A282 /* FocusSessionRepository.swift */; };
 		03AA808925B0A9389603FB4C /* CompanionUserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF587CD8D4ADFBADE9BE9D6B /* CompanionUserProfile.swift */; };
@@ -413,6 +414,7 @@
 		A2F058AC18381B3B8BCEB806 /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BC3687A22A58D478A1D172 /* SettingsSection.swift */; };
 		A33D30EA45035AF2609B67EE /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439229C440303CDD73AECF9F /* CompanionCharacter.swift */; };
 		A361C496D4A9F3C74AC79D19 /* DiaryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 205F5840A806FED400DD8AB1 /* DiaryEntry.swift */; };
+		A3722E17D2F311431B1EF79D /* TodoComposerPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86CC9F37EB019964EB14909E /* TodoComposerPolicyTests.swift */; };
 		A440A687D1F9208A3E9D3AC5 /* SwiftDataStatsRecordEditorRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F8E24955445578CF289FE27 /* SwiftDataStatsRecordEditorRepositoryTests.swift */; };
 		A45F7D2C6746DEFBA03BBD15 /* companion_chat.md in Resources */ = {isa = PBXBuildFile; fileRef = 4B437AE498E52F90B40CEBC8 /* companion_chat.md */; };
 		A476424332C410801644CBA6 /* QuickNoteBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28B8FA063910A6DF46EB94A5 /* QuickNoteBrowserView.swift */; };
@@ -534,6 +536,7 @@
 		D107C2EAF605F8BC217399F9 /* DiarySleepSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 740E6BCB8D7B1BF0DC18E655 /* DiarySleepSource.swift */; };
 		D1ECCACEAFE5B9DA42FB5605 /* NewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9784147CE39961EE8D9ECAFC /* NewsView.swift */; };
 		D25121CB7E3FF4B36EBA7AC4 /* HealthSleepMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 693FF2A1FCAF34F9CA82F416 /* HealthSleepMath.swift */; };
+		D317325165D021B81B1E8707 /* TodoComposerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 305E707C9DD62A3699F3AFD2 /* TodoComposerPolicy.swift */; };
 		D3468947082322E3F1D9A9EB /* USER_GUIDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 69AE5508FCDD57E1FFDA021C /* USER_GUIDE.md */; };
 		D34F9C3376B7351C4E9BB357 /* AchievementSettlementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D2FCF252F4295F8758C7D4 /* AchievementSettlementPolicy.swift */; };
 		D357B954DB236EB97D053E91 /* CompanionOnboardingPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA961C2FECF48DBE96D543DE /* CompanionOnboardingPresenter.swift */; };
@@ -733,6 +736,7 @@
 		2E3ADB78B1615DFF58A514D4 /* DiaryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViewModel.swift; sourceTree = "<group>"; };
 		2F19084B1B000B3326F2ACCA /* CompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionView.swift; sourceTree = "<group>"; };
 		2FDF3AB6D5ED18654B89886A /* MenuBarPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPopover.swift; sourceTree = "<group>"; };
+		305E707C9DD62A3699F3AFD2 /* TodoComposerPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoComposerPolicy.swift; sourceTree = "<group>"; };
 		30BED56A12CDF86CC7562B91 /* DiaryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryRepository.swift; sourceTree = "<group>"; };
 		30C56B6D3702837C191933D1 /* PomodoroComparisonSegmentScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroComparisonSegmentScope.swift; sourceTree = "<group>"; };
 		30E850EED8034541A5508681 /* CompanionAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAnimation.swift; sourceTree = "<group>"; };
@@ -853,6 +857,7 @@
 		8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStoreLocationTests.swift; sourceTree = "<group>"; };
 		857DB2C26B9DF6D95646D2C7 /* VaultViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultViewModel.swift; sourceTree = "<group>"; };
 		85E5FF28A28819696884B058 /* DefaultAppCategoryRuleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultAppCategoryRuleStore.swift; sourceTree = "<group>"; };
+		86CC9F37EB019964EB14909E /* TodoComposerPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoComposerPolicyTests.swift; sourceTree = "<group>"; };
 		8747AF247C44B814091F60FE /* Diary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diary.swift; sourceTree = "<group>"; };
 		87A4339966724E252B493E17 /* QuickNoteRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteRepository.swift; sourceTree = "<group>"; };
 		89903F84D222C3BC32106FC3 /* CategoryBehaviorConditionSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryBehaviorConditionSet.swift; sourceTree = "<group>"; };
@@ -1365,6 +1370,7 @@
 				30C56B6D3702837C191933D1 /* PomodoroComparisonSegmentScope.swift */,
 				CD0E2FF746411692D6DAEAF8 /* RewardLedger.swift */,
 				C5F9E3C7A061587EAA99838A /* TodoBucket.swift */,
+				305E707C9DD62A3699F3AFD2 /* TodoComposerPolicy.swift */,
 				F3C85158EC8AB52EA83E7430 /* WebsiteCategoryRule.swift */,
 			);
 			path = Policies;
@@ -1477,6 +1483,7 @@
 				BB6520A2BCA4E932F3AE0A92 /* SwiftDataStatsSummaryRepositoryTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
 				80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */,
+				86CC9F37EB019964EB14909E /* TodoComposerPolicyTests.swift */,
 				00D754FE7D4BDE2F31CC9AE7 /* TodoViewModelTests.swift */,
 				64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */,
 				4A427A130A0424FFC34C2B4F /* VaultViewModelTests.swift */,
@@ -2393,6 +2400,7 @@
 				60B9F57FFEFADABC6FD5ED90 /* Todo.swift in Sources */,
 				858439F5D25603D622E24E9D /* TodoBrowserView.swift in Sources */,
 				AB6C158DCC6B994EC63BD080 /* TodoBucket.swift in Sources */,
+				02C0102CE8A0D6B2AD997D4F /* TodoComposerPolicy.swift in Sources */,
 				27002E8E35DF4BAD70008EF9 /* TodoDueChip.swift in Sources */,
 				02766D7095C0CC0D2BD72077 /* TodoItem.swift in Sources */,
 				DAF56E750B6E87033837C1DF /* TodoRepository.swift in Sources */,
@@ -2679,6 +2687,7 @@
 				7F1F0F681E8411C24BA9E852 /* Todo.swift in Sources */,
 				62A47F0B30BAD92125458C9A /* TodoBrowserView.swift in Sources */,
 				AC74AA20D1D54FB1DFF3030C /* TodoBucket.swift in Sources */,
+				D317325165D021B81B1E8707 /* TodoComposerPolicy.swift in Sources */,
 				D5CBB5F893CB8C99D1A4CBF5 /* TodoDueChip.swift in Sources */,
 				2DA1333E6D8DCE3FE44780B1 /* TodoItem.swift in Sources */,
 				B9BF2914E92200D7079AEAC3 /* TodoRepository.swift in Sources */,
@@ -2748,6 +2757,7 @@
 				9B8CD9C9CECE29AEB4B494BC /* SwiftDataStatsSummaryRepositoryTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
 				A63CB4C0FABD711AAA02D602 /* SwiftDataTodoRepositoryTests.swift in Sources */,
+				A3722E17D2F311431B1EF79D /* TodoComposerPolicyTests.swift in Sources */,
 				D37807286F7056A880AA400A /* TodoViewModelTests.swift in Sources */,
 				D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */,
 				551415C3F546C96A452F6179 /* VaultViewModelTests.swift in Sources */,

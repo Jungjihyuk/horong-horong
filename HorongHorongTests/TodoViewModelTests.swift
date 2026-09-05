@@ -38,13 +38,13 @@ final class TodoViewModelTests: XCTestCase {
 
         @discardableResult
         func addTodayTask(content: String, icon: String?) throws -> TodoItem {
-            try add(title: content)
+            try add(title: content, startDate: Date(), deadline: nil)
         }
 
         @discardableResult
-        func add(title: String) throws -> TodoItem {
+        func add(title: String, startDate: Date, deadline: Date?) throws -> TodoItem {
             let made = TodoItem(
-                id: UUID(), content: title, startDate: Date(), deadline: nil,
+                id: UUID(), content: title, startDate: startDate, deadline: deadline,
                 isCompleted: false, completionStateChangedAt: nil,
                 deletedAt: nil, isLinkedToReminders: false,
                 reminderCalendarIdentifier: nil,
@@ -418,6 +418,38 @@ final class TodoViewModelTests: XCTestCase {
 
         XCTAssertTrue(viewModel.recentlyDeleted.isEmpty)
         XCTAssertEqual(viewModel.today.map(\.displayTitle), ["복원할 일"])
+    }
+
+    // MARK: - 빠른 입력
+
+    func testSubmitComposerParsesDayAndDurationPrefixes() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.composerText = "내일 90분 회의"
+        viewModel.submitComposer()
+
+        let created = try! XCTUnwrap(repository.items.first)
+        let expected = TodoComposerPolicy.parse("내일 90분 회의", now: viewModel.todayReferenceDate)
+        XCTAssertEqual(created.displayTitle, "회의")
+        XCTAssertEqual(created.startDate, expected.startDate)
+        XCTAssertEqual(created.deadline, expected.deadline)
+        XCTAssertEqual(created.durationMinutes, 90)
+        XCTAssertEqual(viewModel.upcoming.map(\.displayTitle), ["회의"])
+        XCTAssertEqual(viewModel.composerText, "")
+    }
+
+    func testSubmitComposerWithoutPrefixLandsInToday() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.composerText = "장보기"
+        viewModel.submitComposer()
+
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["장보기"])
+        XCTAssertNil(repository.items.first?.deadline)
     }
 
     func testMoveIgnoresUnknownIdentifier() {
