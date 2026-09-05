@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -753,7 +753,7 @@
 		3D668592EC93CE4E661B6033 /* AttentionEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionEvent.swift; sourceTree = "<group>"; };
 		3E4D6CA74D4A61AB58B5EC59 /* LabViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabViewModelTests.swift; sourceTree = "<group>"; };
 		400C3B60158CC362A271EBE6 /* MindDefaultsMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MindDefaultsMigrationTests.swift; sourceTree = "<group>"; };
-		4039F724B01AC70BC29A5AD6 /* HorongAI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HorongAI; path = HorongAI; sourceTree = SOURCE_ROOT; };
+		4039F724B01AC70BC29A5AD6 /* HorongAI */ = {isa = PBXFileReference; lastKnownFileType = folder; path = HorongAI; sourceTree = SOURCE_ROOT; };
 		41062A6000410C0553319A07 /* HotkeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyStore.swift; sourceTree = "<group>"; };
 		41D6393BBFC01279AC70CC47 /* AchievementSettlementPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementSettlementPolicyTests.swift; sourceTree = "<group>"; };
 		42615CF6FEB451F463F5AD60 /* NewsSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSchedulerTests.swift; sourceTree = "<group>"; };
@@ -798,7 +798,7 @@
 		54E0670E66A4B10A826634C2 /* SettingsSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSidebar.swift; sourceTree = "<group>"; };
 		5574EDAF3DC22899B58AEB8E /* Reference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reference.swift; sourceTree = "<group>"; };
 		5616DA83E2AD407ED6824202 /* AchievementPickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementPickers.swift; sourceTree = "<group>"; };
-		564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorong.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		564D4EC5189ABAFEE6EC2A39 /* 호롱호롱.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "호롱호롱.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5781B69C3CC47679EB30841C /* Info-AppStore.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-AppStore.plist"; sourceTree = "<group>"; };
 		5783D1E0E53C416C7866BD7F /* FocusNudgeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeCatalog.swift; sourceTree = "<group>"; };
 		579AA8F3F8753DBC49C03076 /* GeneralPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPage.swift; sourceTree = "<group>"; };
@@ -879,7 +879,7 @@
 		96F31FF48763DE4142617921 /* RewardRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardRepository.swift; sourceTree = "<group>"; };
 		9729FBE5F58C0CFBC3C72ED4 /* MemoClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoClassifierTests.swift; sourceTree = "<group>"; };
 		9784147CE39961EE8D9ECAFC /* NewsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsView.swift; sourceTree = "<group>"; };
-		97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HorongHorongAppStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		97B2D11878311BFAD0B97EE8 /* 호롱호롱.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "호롱호롱.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		99EB2278FBE95086E6CB05CC /* FocusNudgeTrendCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudgeTrendCard.swift; sourceTree = "<group>"; };
 		9A204375A5A49737F46C5548 /* IdlePromptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdlePromptPanel.swift; sourceTree = "<group>"; };
 		9A66AA92C55D532EF498891E /* AchievementGoalComposerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementGoalComposerSheet.swift; sourceTree = "<group>"; };
@@ -1771,8 +1771,8 @@
 		D6F211BE9251816CECE7319B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */,
-				97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */,
+				564D4EC5189ABAFEE6EC2A39 /* 호롱호롱.app */,
+				97B2D11878311BFAD0B97EE8 /* 호롱호롱.app */,
 				466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */,
 			);
 			name = Products;
@@ -1967,7 +1967,7 @@
 				AAFB5BF68A34538F16C5C758 /* HorongAIMLX */,
 			);
 			productName = HorongHorong;
-			productReference = 564D4EC5189ABAFEE6EC2A39 /* HorongHorong.app */;
+			productReference = 564D4EC5189ABAFEE6EC2A39 /* 호롱호롱.app */;
 			productType = "com.apple.product-type.application";
 		};
 		9E17BC1D729C410B05AED9F6 /* HorongHorongTests */ = {
@@ -2013,7 +2013,7 @@
 				97383582405B793ED6FFDACA /* HorongAIMLX */,
 			);
 			productName = HorongHorongAppStore;
-			productReference = 97B2D11878311BFAD0B97EE8 /* HorongHorongAppStore.app */;
+			productReference = 97B2D11878311BFAD0B97EE8 /* 호롱호롱.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -2048,8 +2048,8 @@
 				A85D3963D82A9533A56D872D /* XCRemoteSwiftPackageReference "swift-huggingface" */,
 				F1B76EFCB8A72CE83250AFE2 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 				BF296E0C9C56D0C249CD5ABB /* XCLocalSwiftPackageReference "HorongAI" */,
+				C65DFE53304BE12C000A6784 /* XCRemoteSwiftPackageReference "Inject" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -2942,6 +2942,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"-Xlinker",
+					"-interposable",
+				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDIRECT_DISTRIBUTION";
 				PRODUCT_BUNDLE_IDENTIFIER = com.horonghorong.app;
 				PRODUCT_NAME = "호롱호롱";
@@ -3105,6 +3109,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 0.9.0;
+			};
+		};
+		C65DFE53304BE12C000A6784 /* XCRemoteSwiftPackageReference "Inject" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/krzysztofzablocki/Inject";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.0;
 			};
 		};
 		F1A21E0872267F4709DFA02E /* XCRemoteSwiftPackageReference "HotKey" */ = {
