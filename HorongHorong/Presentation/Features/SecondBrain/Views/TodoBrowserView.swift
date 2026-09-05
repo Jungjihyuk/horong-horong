@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Inject
 
 private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
     case minutes = 1
@@ -23,6 +24,8 @@ private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
 /// 여기 남은 `@State` 는 저장하지 않는 화면 상태뿐이다 — 접힌 그룹, 끌어다 놓는 중인 위치,
 /// 스와이프 거리처럼 앱을 껐다 켜면 사라져도 되는 것들.
 struct TodoBrowserView: View {
+    @ObserveInjection var inject
+
     static let initiallyCollapsedGroups: Set<String> = [
         TodoBucket.overdue.title,
         TodoBucket.someday.title,
@@ -77,6 +80,7 @@ struct TodoBrowserView: View {
             }
             Button("취소", role: .cancel) {}
         }
+        .enableInjection() 
     }
 
     // MARK: - 목록
