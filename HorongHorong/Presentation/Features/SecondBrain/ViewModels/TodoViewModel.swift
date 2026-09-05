@@ -45,6 +45,12 @@ final class TodoViewModel {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// 빠른 입력창에 적힌 텍스트에서 해석된 일정 요약 (예: "내일 09:30 ~ 10:00").
+    /// 일정이 인식되지 않으면 `nil` 이다.
+    var composerScheduleSummary: String? {
+        TodoComposerPolicy.parse(composerText, now: todayReferenceDate).scheduleSummary
+    }
+
     // MARK: - 읽기
 
     /// 한 번 가져와 **한 번만 순회하며** 다섯 묶음과 연동 수를 함께 만든다.

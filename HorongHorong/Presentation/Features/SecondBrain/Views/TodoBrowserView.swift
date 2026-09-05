@@ -42,6 +42,7 @@ struct TodoBrowserView: View {
     @State private var customDurationAmount = 30
     @State private var customDurationUnit = TodoDurationUnit.minutes
     @FocusState private var composerFocused: Bool
+    @State private var showingComposerHelp = false
     @ObservedObject private var listColors = ReminderListColorStore.shared
 
     init(repository: TodoRepository) {
@@ -132,16 +133,52 @@ struct TodoBrowserView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 8) {
             Image(systemName: "plus")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(PopoverChrome.accent)
-            TextField("할 일 추가 — 기본 오늘, 예: 내일 30분 회의", text: $viewModel.composerText)
+
+            TextField("예: 내일 9:30~10시 회의, 모레 1시간 운동", text: $viewModel.composerText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 .focused($composerFocused)
                 .onSubmit(submit)
+
+            if let summary = viewModel.composerScheduleSummary {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(summary)
+                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(PopoverChrome.accent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(PopoverChrome.accent.opacity(0.12))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(PopoverChrome.accent.opacity(0.32), lineWidth: 1)
+                )
+                .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+
+            Button {
+                showingComposerHelp.toggle()
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("빠른 일정 입력 문법 가이드")
+            .popover(isPresented: $showingComposerHelp, arrowEdge: .bottom) {
+                composerHelpPopover
+            }
         }
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.composerScheduleSummary)
         .padding(.horizontal, 13)
         .frame(height: 44)
         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
@@ -151,6 +188,56 @@ struct TodoBrowserView: View {
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+    }
+
+    private var composerHelpPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(PopoverChrome.accent)
+                Text("빠른 일정 입력 가이드")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+            }
+
+            Text("입력창에 날짜나 시간을 함께 적으면 일정이 자동으로 등록됩니다.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+
+            Divider().overlay(PopoverChrome.divider)
+
+            VStack(alignment: .leading, spacing: 9) {
+                helpRow(category: "날짜", examples: "내일, 모레, 글피, 금요일, 다음주 월요일")
+                helpRow(category: "시간 범위", examples: "9시 30분 ~ 10시, 9:30~10:00, 9시부터 10시까지")
+                helpRow(category: "시작 + 소요", examples: "9시 시작 30분간, 9시 30분간, 오후 2시 1시간")
+                helpRow(category: "소요시간만", examples: "30분간, 1시간 동안, 90분 (기본 9시 시작)")
+                helpRow(category: "시작시각만", examples: "14:00, 오후 3시 (마감 없음)")
+            }
+
+            Divider().overlay(PopoverChrome.divider)
+
+            HStack(spacing: 4) {
+                Image(systemName: "return")
+                    .font(.system(size: 10, weight: .bold))
+                Text("엔터를 누르면 일정은 날짜로 들어가고 제목만 깔끔하게 등록됩니다.")
+                    .font(.system(size: 10.5, weight: .medium))
+            }
+            .foregroundStyle(PopoverChrome.accent)
+        }
+        .padding(14)
+        .frame(width: 320)
+    }
+
+    private func helpRow(category: String, examples: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(category)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(PopoverChrome.accent)
+            Text(examples)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(PopoverChrome.ink)
+        }
     }
 
     private func group(bucket: TodoBucket, items: [TodoItem], hint: String?) -> some View {

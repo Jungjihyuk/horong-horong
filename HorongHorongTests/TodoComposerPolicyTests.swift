@@ -141,4 +141,92 @@ final class TodoComposerPolicyTests: XCTestCase {
         XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
         XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 11, minute: 0))
     }
+
+    // MARK: - 구체적 시간 범위 문법 (9시 30분 ~ 10시, 9시부터 9시 반까지 등)
+
+    func testSpecificTimeRangeTilde() {
+        let entry = parse("내일 9시 30분 ~ 10시 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 10, minute: 0))
+        XCTAssertTrue(entry.hasExplicitSchedule)
+        XCTAssertEqual(entry.scheduleSummary, "내일 09:30 ~ 10:00")
+    }
+
+    func testSpecificTimeRangeColonFormat() {
+        let entry = parse("내일 9:30~10:00 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 10, minute: 0))
+        XCTAssertEqual(entry.scheduleSummary, "내일 09:30 ~ 10:00")
+    }
+
+    func testSpecificTimeRangeHalfHourKeyword() {
+        let entry = parse("내일 9시 반 ~ 10시 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 10, minute: 0))
+    }
+
+    func testSpecificTimeRangeFromUntil() {
+        let entry = parse("내일 9시부터 9시 반까지 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+        XCTAssertEqual(entry.scheduleSummary, "내일 09:00 ~ 09:30")
+    }
+
+    func testSpecificTimeStartAndDuration() {
+        let entry = parse("내일 9시 시작 30분간 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+        XCTAssertEqual(entry.scheduleSummary, "내일 09:00 (30분)")
+    }
+
+    func testSpecificTimeStartAndDurationShort() {
+        let entry = parse("내일 9시 30분간 회의")
+
+        XCTAssertEqual(entry.title, "회의")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 30))
+    }
+
+    func testSpecificTimeStartAndHourDuration() {
+        let entry = parse("내일 오후 2시 1시간 미팅")
+
+        XCTAssertEqual(entry.title, "미팅")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 14, minute: 0))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 15, minute: 0))
+        XCTAssertEqual(entry.scheduleSummary, "내일 14:00 (1시간)")
+    }
+
+    func testSpecificTimeOnly() {
+        let entry = parse("내일 오후 3시 치과")
+
+        XCTAssertEqual(entry.title, "치과")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 15, minute: 0))
+        XCTAssertNil(entry.deadline)
+        XCTAssertEqual(entry.scheduleSummary, "내일 15:00")
+    }
+
+    func testDayOfWeekKeyword() {
+        // now는 2026-09-05 토요일. 일요일은 9월 6일.
+        let entry = parse("일요일 10시 산책")
+
+        XCTAssertEqual(entry.title, "산책")
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 10, minute: 0))
+        XCTAssertEqual(entry.scheduleSummary, "일요일 10:00")
+    }
+
+    func testScheduleSummaryForPlainTitleIsNil() {
+        let entry = parse("장보기")
+        XCTAssertFalse(entry.hasExplicitSchedule)
+        XCTAssertNil(entry.scheduleSummary)
+    }
 }

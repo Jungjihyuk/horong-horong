@@ -452,6 +452,20 @@ final class TodoViewModelTests: XCTestCase {
         XCTAssertNil(repository.items.first?.deadline)
     }
 
+    func testComposerScheduleSummaryReflectsParsing() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+
+        viewModel.composerText = "장보기"
+        XCTAssertNil(viewModel.composerScheduleSummary)
+
+        viewModel.composerText = "내일 9:30~10:00 회의"
+        XCTAssertEqual(viewModel.composerScheduleSummary, "내일 09:30 ~ 10:00")
+
+        viewModel.composerText = "모레 1시간 운동"
+        XCTAssertEqual(viewModel.composerScheduleSummary, "모레 09:00 (1시간)")
+    }
+
     func testMoveIgnoresUnknownIdentifier() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
