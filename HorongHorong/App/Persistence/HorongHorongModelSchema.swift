@@ -6,7 +6,7 @@ import SwiftData
 /// 버전이 올라가면 이 함수가 가리키는 대상만 바꾼다 — 호출부는 손대지 않는다.
 enum HorongHorongModelSchema {
     static func make() -> Schema {
-        Schema(versionedSchema: HorongHorongSchemaV4.self)
+        Schema(versionedSchema: HorongHorongSchemaV8.self)
     }
 
     /// 버전 관리 도입 전 배포본의 저장소도 현재 스키마로 끌어올린다.

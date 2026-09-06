@@ -92,21 +92,25 @@ final class SchemaVersioningTests: XCTestCase {
         XCTAssertEqual(HorongHorongSchemaV3.models.count, 24)
     }
 
-    /// V4 도입에 따른 마이그레이션 계획 검증.
-    func testMigrationPlanHasFourVersionsAndStages() {
-        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 4)
-        XCTAssertEqual(HorongHorongMigrationPlan.stages.count, 3)
+    /// V8 도입에 따른 마이그레이션 계획 검증.
+    func testMigrationPlanHasEightVersionsAndStages() {
+        XCTAssertEqual(HorongHorongMigrationPlan.schemas.count, 8)
+        XCTAssertEqual(HorongHorongMigrationPlan.stages.count, 7)
         XCTAssertEqual(HorongHorongSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
         XCTAssertEqual(HorongHorongSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
         XCTAssertEqual(HorongHorongSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
         XCTAssertEqual(HorongHorongSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV5.versionIdentifier, Schema.Version(5, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV6.versionIdentifier, Schema.Version(6, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV7.versionIdentifier, Schema.Version(7, 0, 0))
+        XCTAssertEqual(HorongHorongSchemaV8.versionIdentifier, Schema.Version(8, 0, 0))
     }
 
     /// 앱이 실제로 여는 스키마는 최신 버전이어야 한다.
     /// 여기가 어긋나면 새 필드가 저장되지 않는데도 빌드는 통과한다.
     func testAppSchemaPointsAtLatestVersion() {
         let names = Set(HorongHorongModelSchema.make().entities.map(\.name))
-        XCTAssertEqual(names, Set(HorongHorongSchemaV4.models.map { String(describing: $0) }))
+        XCTAssertEqual(names, Set(HorongHorongSchemaV8.models.map { String(describing: $0) }))
     }
 
     /// **옛 버전은 얼려 둔 모양을 가리켜야 한다.**
@@ -125,6 +129,201 @@ final class SchemaVersioningTests: XCTestCase {
         }
         XCTAssertTrue(HorongHorongSchemaV4.models.contains { $0 == AchievementGoalRecord.self })
         XCTAssertEqual(String(describing: LegacyAchievementSchema.AchievementGoalRecord.self), "AchievementGoalRecord")
+    }
+
+    /// 일기도 같은 규칙을 따른다.
+    ///
+    /// V5 에서 `Diary` 에 `causeRaw`·`sleepStart`·`sleepEnd` 가 늘었다. V3·V4 가 살아 있는 타입을
+    /// 계속 가리키면 네 버전의 모양이 함께 바뀌어 V4 와 V5 의 checksum 이 같아지고,
+    /// SwiftData 가 `Duplicate version checksums detected` 로 저장소 열기를 거부한다.
+    func testOldVersionsUseFrozenDiary() {
+        for models in [HorongHorongSchemaV3.models, HorongHorongSchemaV4.models] {
+            XCTAssertTrue(
+                models.contains { $0 == LegacyDiarySchema.Diary.self },
+                "옛 버전이 얼려 둔 사본 대신 살아 있는 Diary 를 가리키고 있다"
+            )
+            XCTAssertFalse(models.contains { $0 == Diary.self })
+        }
+        XCTAssertTrue(HorongHorongSchemaV5.models.contains { $0 == Diary.self })
+        XCTAssertEqual(String(describing: LegacyDiarySchema.Diary.self), "Diary")
+    }
+
+    /// 참고 자료도 같은 규칙을 따른다.
+    ///
+    /// V6 에서 `Reference` 에 갈래·제목·주소·색·위젯 상태가 늘었다. V3·V4·V5 가 살아 있는 타입을
+    /// 계속 가리키면 네 버전의 모양이 함께 바뀌어 V5 와 V6 의 checksum 이 같아진다.
+    func testOldVersionsUseFrozenReference() {
+        for models in [HorongHorongSchemaV3.models, HorongHorongSchemaV4.models, HorongHorongSchemaV5.models] {
+            XCTAssertTrue(
+                models.contains { $0 == LegacyReferenceSchema.Reference.self },
+                "옛 버전이 얼려 둔 사본 대신 살아 있는 Reference 를 가리키고 있다"
+            )
+            XCTAssertFalse(models.contains { $0 == Reference.self })
+        }
+        // 살아 있는 타입을 가리키는 것은 **가장 최신 버전 하나뿐**이어야 한다.
+        XCTAssertTrue(HorongHorongSchemaV6.models.contains { $0 == LegacyReferenceV6Schema.Reference.self })
+        XCTAssertTrue(HorongHorongSchemaV7.models.contains { $0 == LegacyReferenceV7Schema.Reference.self })
+        for models in [HorongHorongSchemaV6.models, HorongHorongSchemaV7.models] {
+            XCTAssertFalse(models.contains { $0 == Reference.self })
+        }
+        XCTAssertTrue(HorongHorongSchemaV8.models.contains { $0 == Reference.self })
+        // 엔티티가 이어지려면 사본들의 타입 이름이 모두 같아야 한다.
+        for name in [
+            String(describing: LegacyReferenceSchema.Reference.self),
+            String(describing: LegacyReferenceV6Schema.Reference.self),
+            String(describing: LegacyReferenceV7Schema.Reference.self)
+        ] {
+            XCTAssertEqual(name, "Reference")
+        }
+    }
+
+    /// V7 저장소를 V8 로 열어 위젯 창 기하가 살아 있고 앞뒤 상태는 비어 있는지 확인한다.
+    func testV7StoreMigratesToV8AndKeepsWidgetGeometry() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v7-to-v8-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let v7Schema = Schema(versionedSchema: HorongHorongSchemaV7.self)
+        let v7Container = try ModelContainer(
+            for: v7Schema,
+            configurations: [ModelConfiguration(schema: v7Schema, url: url)]
+        )
+        let v7Context = ModelContext(v7Container)
+        v7Context.insert(LegacyReferenceV7Schema.Reference(
+            content: "", kindRaw: "note", title: "쪽지", isWidget: true,
+            widgetWidth: 320, widgetHeight: 280, widgetCollapsed: true
+        ))
+        try v7Context.save()
+        withExtendedLifetime(v7Container) {}
+
+        let v8Schema = Schema(versionedSchema: HorongHorongSchemaV8.self)
+        let migrated = try ModelContainer(
+            for: v8Schema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: v8Schema, url: url)]
+        )
+        let rows = try ModelContext(migrated).fetch(FetchDescriptor<Reference>())
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.widgetSize, CGSize(width: 320, height: 280))
+        XCTAssertEqual(rows.first?.widgetCollapsed, true)
+        XCTAssertNil(rows.first?.widgetBehind, "앞뒤는 아직 정해지지 않았다 — 맨 앞으로 읽힌다")
+    }
+
+    /// V6 저장소를 V7 로 열어 기존 위젯 상태가 살아 있고 새 창 기하는 비어 있는지 확인한다.
+    func testV6StoreMigratesToV7AndKeepsWidgetState() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v6-to-v7-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let v6Schema = Schema(versionedSchema: HorongHorongSchemaV6.self)
+        let v6Container = try ModelContainer(
+            for: v6Schema,
+            configurations: [ModelConfiguration(schema: v6Schema, url: url)]
+        )
+        let v6Context = ModelContext(v6Container)
+        v6Context.insert(LegacyReferenceV6Schema.Reference(
+            content: "", kindRaw: "note", title: "깃허브 순서", body: "1. status",
+            colorRaw: "blue", isWidget: true, widgetX: 812, widgetY: 344
+        ))
+        try v6Context.save()
+        withExtendedLifetime(v6Container) {}
+
+        let currentSchema = HorongHorongModelSchema.make()
+        let migrated = try ModelContainer(
+            for: currentSchema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: currentSchema, url: url)]
+        )
+        let rows = try ModelContext(migrated).fetch(FetchDescriptor<Reference>())
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.title, "깃허브 순서")
+        XCTAssertEqual(rows.first?.isWidget, true)
+        XCTAssertEqual(rows.first?.widgetPosition, CGPoint(x: 812, y: 344))
+        XCTAssertNil(rows.first?.widgetSize, "크기는 아직 모른다 — 기본 크기로 뜬다")
+        XCTAssertNil(rows.first?.widgetCollapsed)
+    }
+
+    /// V5 저장소를 **현재 스키마(V7)** 까지 끌어올려 기존 참고 자료가 살아 있는지 확인한다.
+    ///
+    /// 중간 버전(V6)으로 여는 것이 아니라 끝까지 가는 이유: V6 은 이제 얼려 둔 사본을 가리키므로
+    /// 그 컨테이너에는 살아 있는 `Reference` 가 없다. 사용자가 실제로 겪는 경로도 «옛 저장소를
+    /// 지금 앱으로 여는 것» 이라 여기가 맞다.
+    func testV5StoreMigratesThroughToTheCurrentSchema() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v5-to-v6-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let v5Schema = Schema(versionedSchema: HorongHorongSchemaV5.self)
+        let v5Container = try ModelContainer(
+            for: v5Schema,
+            configurations: [ModelConfiguration(schema: v5Schema, url: url)]
+        )
+        let v5Context = ModelContext(v5Container)
+        v5Context.insert(LegacyReferenceSchema.Reference(content: "https://arxiv.org/abs/1"))
+        try v5Context.save()
+        withExtendedLifetime(v5Container) {}
+
+        let currentSchema = HorongHorongModelSchema.make()
+        let migrated = try ModelContainer(
+            for: currentSchema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: currentSchema, url: url)]
+        )
+        let context = ModelContext(migrated)
+        let rows = try context.fetch(FetchDescriptor<Reference>())
+
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.content, "https://arxiv.org/abs/1", "원본은 그대로 남는다")
+        XCTAssertNil(rows.first?.kindRaw, "백필 전에는 비어 있다")
+        // 갈래가 저장되기 전에도 화면이 링크와 쪽지를 갈라 볼 수 있어야 한다.
+        XCTAssertEqual(rows.first?.kind, .link)
+
+        // 백필을 돌리면 구조가 채워지고 원본은 보존된다.
+        let defaults = UserDefaults(suiteName: "test-\(UUID().uuidString)")!
+        AppDelegate.backfillReferenceStructure(in: context, defaults: defaults)
+
+        let backfilled = try XCTUnwrap(try context.fetch(FetchDescriptor<Reference>()).first)
+        XCTAssertEqual(backfilled.kindRaw, "link")
+        XCTAssertEqual(backfilled.url, "https://arxiv.org/abs/1")
+        XCTAssertEqual(backfilled.content, "https://arxiv.org/abs/1")
+        XCTAssertEqual(backfilled.isWidget, false)
+    }
+
+    /// V4 저장소를 V5 로 열어 기존 일기가 살아 있고 새 시각 필드는 비어 있는지 확인한다.
+    /// 여기가 깨지면 사용자의 일기가 통째로 사라진다.
+    func testV4StoreMigratesToV5AndKeepsExistingDiaries() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v4-to-v5-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let day = Calendar(identifier: .gregorian).startOfDay(for: Date(timeIntervalSince1970: 1_800_000_000))
+        let v4Schema = Schema(versionedSchema: HorongHorongSchemaV4.self)
+        let v4Container = try ModelContainer(
+            for: v4Schema,
+            configurations: [ModelConfiguration(schema: v4Schema, url: url)]
+        )
+        let v4Context = ModelContext(v4Container)
+        v4Context.insert(LegacyDiarySchema.Diary(day: day, moodRaw: "행복", sleepHours: 7.5, sleepSourceRaw: "manual", body: "옛 일기"))
+        try v4Context.save()
+
+        let v5Schema = Schema(versionedSchema: HorongHorongSchemaV5.self)
+        let migrated = try ModelContainer(
+            for: v5Schema,
+            migrationPlan: HorongHorongMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: v5Schema, url: url)]
+        )
+        let diaries = try ModelContext(migrated).fetch(FetchDescriptor<Diary>())
+
+        XCTAssertEqual(diaries.count, 1)
+        XCTAssertEqual(diaries.first?.body, "옛 일기")
+        XCTAssertEqual(diaries.first?.sleepHours ?? 0, 7.5, accuracy: 0.001)
+        XCTAssertEqual(diaries.first?.mood(.wholeDay), .happy, "슬롯이 없던 옛 기록은 «하루» 칸이 된다")
+        XCTAssertNil(diaries.first?.sleepStart, "옛 기록은 시각을 모른다")
+        XCTAssertNil(diaries.first?.sleepEnd)
+        XCTAssertNil(diaries.first?.cause(.wholeDay))
+        XCTAssertTrue(diaries.first?.moodRecords.count == 1, "칸 하나만 채워진다")
     }
 
     /// V3 저장소를 V4 로 열어 새 필드가 비어 있는 채로 붙는지 확인한다.
@@ -241,6 +440,7 @@ final class SchemaVersioningTests: XCTestCase {
             let diary = DiaryEntry(day: diaryDate)
             diary.body = "오늘의 일기"
             diary.mood = .good
+            diary.cause = .work
 
             v2Context.insert(todo)
             v2Context.insert(note)
@@ -289,7 +489,9 @@ final class SchemaVersioningTests: XCTestCase {
         let migratedDiary = try XCTUnwrap(diaries.first)
         XCTAssertEqual(migratedDiary.day, diaryDate)
         XCTAssertEqual(migratedDiary.body, "오늘의 일기")
-        XCTAssertEqual(migratedDiary.mood, .good)
+        XCTAssertEqual(migratedDiary.mood(.wholeDay), .good)
+        // 예전에는 이관 코드가 `causeRaw` 를 빠뜨려 원인이 조용히 사라졌다.
+        XCTAssertEqual(migratedDiary.cause(.wholeDay), .work, "원인도 함께 이관된다")
 
         // ⑧ 검증: 구 SecondBrainRecord 및 DiaryEntry 테이블은 비워졌는가
         let remainingRecords = try v3Context.fetchCount(FetchDescriptor<SecondBrainRecord>())

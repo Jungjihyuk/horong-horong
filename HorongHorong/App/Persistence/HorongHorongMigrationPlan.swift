@@ -18,6 +18,10 @@ enum HorongHorongMigrationPlan: SchemaMigrationPlan {
             HorongHorongSchemaV2.self,
             HorongHorongSchemaV3.self,
             HorongHorongSchemaV4.self,
+            HorongHorongSchemaV5.self,
+            HorongHorongSchemaV6.self,
+            HorongHorongSchemaV7.self,
+            HorongHorongSchemaV8.self,
         ]
     }
 
@@ -37,7 +41,32 @@ enum HorongHorongMigrationPlan: SchemaMigrationPlan {
         toVersion: HorongHorongSchemaV4.self
     )
 
+    /// 일기 수면에 `sleepStart`·`sleepEnd` 를 더한다. 둘 다 Optional 이라 추론으로 충분하다.
+    static let migrateV4toV5 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV4.self,
+        toVersion: HorongHorongSchemaV5.self
+    )
+
+    /// 참고 자료에 갈래·제목·주소·쪽지 색·위젯 상태를 더한다. 전부 Optional 이라 추론으로 충분하다.
+    static let migrateV5toV6 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV5.self,
+        toVersion: HorongHorongSchemaV6.self
+    )
+
+    /// 쪽지 위젯 창의 크기와 접힘 상태를 더한다. 전부 Optional 이라 추론으로 충분하다.
+    static let migrateV6toV7 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV6.self,
+        toVersion: HorongHorongSchemaV7.self
+    )
+
+    /// 쪽지 위젯의 앞뒤 순서를 더한다. Optional 이라 추론으로 충분하다.
+    static let migrateV7toV8 = MigrationStage.lightweight(
+        fromVersion: HorongHorongSchemaV7.self,
+        toVersion: HorongHorongSchemaV8.self
+    )
+
     nonisolated static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV4]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV4, migrateV4toV5,
+         migrateV5toV6, migrateV6toV7, migrateV7toV8]
     }
 }
