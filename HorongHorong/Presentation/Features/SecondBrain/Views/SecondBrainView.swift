@@ -196,7 +196,7 @@ struct SecondBrainView: View {
             }
         case .diary:
             if let dependencies {
-                DiaryBrowserView(repository: dependencies.diaryRepository, sleep: dependencies.sleepGateway)
+                DiaryBrowserView(repository: dependencies.diaryRepository)
             }
         case .todo:
             if let repository = dependencies?.todoRepository {
