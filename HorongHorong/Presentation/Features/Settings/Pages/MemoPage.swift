@@ -22,6 +22,10 @@ struct MemoPage: View {
     private var remindersImportEnabled = false
     @AppStorage(Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
     private var selectedReminderCalendarIDsValue = ""
+    @AppStorage(Constants.AppStorageKey.todoDefaultDuration)
+    private var defaultTodoDurationMinutes = Constants.defaultTodoDurationMinutes
+
+    private let todoDurationOptions = [15, 30, 45, 60, 90, 120, 180]
 
     private var quickMemoBinding: Binding<HotkeyCombo> {
         Binding(get: { store.quickMemo }, set: { store.quickMemo = $0 })
@@ -78,6 +82,21 @@ struct MemoPage: View {
                     comingSoon: true
                 ) {
                     Toggle("", isOn: $autoClose).labelsHidden()
+                }
+            }
+
+            SettingsGroupCard("Todo 일정") {
+                SettingsRow(
+                    "기본 소요 시간",
+                    subtitle: "Todo에서 날짜를 처음 고르면 현재 시각부터 이 시간만큼 자동으로 마감 시각을 채웁니다."
+                ) {
+                    Picker("기본 소요 시간", selection: $defaultTodoDurationMinutes) {
+                        ForEach(todoDurationOptions, id: \.self) { minutes in
+                            Text(TodoDurationText.title(minutes: minutes)).tag(minutes)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
                 }
             }
 
