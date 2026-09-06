@@ -276,4 +276,14 @@ final class TodoDueChipTests: XCTestCase {
         XCTAssertEqual(TodoDueChip.of(startDate: day(10), deadline: nil, now: now, calendar: calendar)?.label, "9월 11일")
         XCTAssertNil(TodoDueChip.of(startDate: nil, deadline: nil, now: now, calendar: calendar))
     }
+
+    func testScheduledSpanUsesStartDayForTheListTag() {
+        let start = day(0).addingTimeInterval(15 * 60 * 60)
+        let deadline = day(1).addingTimeInterval(16 * 60 * 60)
+
+        XCTAssertEqual(
+            TodoDueChip.of(startDate: start, deadline: deadline, now: now, calendar: calendar)?.label,
+            "오늘"
+        )
+    }
 }
