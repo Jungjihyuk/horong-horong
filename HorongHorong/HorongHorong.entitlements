@@ -6,9 +6,5 @@
 	<false/>
 	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
-	<key>com.apple.developer.healthkit</key>
-	<true/>
-	<key>com.apple.security.personal-information.health</key>
-	<true/>
 </dict>
 </plist>

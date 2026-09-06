@@ -120,7 +120,6 @@ targets:
         product: HorongAI
       - package: HorongAI
         product: HorongAIMLX
-      - sdk: HealthKit.framework
     postCompileScripts:
       - name: Copy News Runner Resources
         script: |
@@ -176,6 +175,8 @@ targets:
         SWIFT_VERSION: "6.0"
     dependencies:
       - package: HotKey
+      - package: Inject
+      - package: Sparkle
       - package: mlx-swift-lm
         product: MLXLLM
       - package: mlx-swift-lm
@@ -190,7 +191,6 @@ targets:
         product: HorongAI
       - package: HorongAI
         product: HorongAIMLX
-      - sdk: HealthKit.framework
     postCompileScripts:
       - name: Copy News Runner Resources
         script: |
