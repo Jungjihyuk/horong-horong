@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Inject
 
 enum SecondBrainSection: String, CaseIterable, Identifiable {
     case quick
@@ -59,6 +60,8 @@ enum SecondBrainSection: String, CaseIterable, Identifiable {
 typealias MindSection = SecondBrainSection
 
 struct SecondBrainView: View {
+    @ObserveInjection var inject
+
     @Environment(AppState.self) private var appState
     @Environment(\.dependencies) private var dependencies
     @AppStorage(Constants.AppStorageKey.mindSection)
@@ -87,6 +90,7 @@ struct SecondBrainView: View {
         .appearanceAccentTint(.popover)
         .id(popoverTheme)
         .animation(.easeInOut(duration: 0.24), value: appState.isRecordRailVisible)
+        .enableInjection() 
     }
 
     private var rail: some View {

@@ -9,6 +9,9 @@ packages:
   HotKey:
     url: https://github.com/soffes/HotKey.git
     from: "0.2.1"
+  Inject:
+    url: https://github.com/krzysztofzablocki/Inject
+    from: "1.6.0"
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.9.0"
@@ -96,8 +99,12 @@ targets:
         OTHER_SWIFT_FLAGS: "$(inherited) -DDIRECT_DISTRIBUTION"
         SWIFT_STRICT_CONCURRENCY: minimal
         SWIFT_VERSION: "6.0"
+      configs:
+        Debug:
+          OTHER_LDFLAGS: "$(inherited) -Xlinker -interposable"
     dependencies:
       - package: HotKey
+      - package: Inject
       - package: Sparkle
       - package: mlx-swift-lm
         product: MLXLLM

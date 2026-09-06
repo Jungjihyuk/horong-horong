@@ -25,9 +25,12 @@ protocol TodoRepository {
     /// 이미 연결해 둔 것을 다시 찾을 수 있어야 하기 때문이다.
     func linkableTodos(matching query: String) throws -> [TodoItem]
 
-    /// 오늘 오전 9시로 시작일을 잡아 추가한다.
+    /// 시작·마감을 정해 추가한다. 빠른 입력이 해석한 «내일/모레·n분» 결과가 그대로 들어온다.
+    ///
+    /// **어느 날 몇 시로 잡을지는 저장소가 정하지 않는다.** 예전에는 여기서 «오늘 오전 9시» 를
+    /// 박았는데, 그건 저장 기술이 아니라 도메인 규칙이라 `TodoComposerPolicy` 로 옮겼다.
     @discardableResult
-    func add(title: String) throws -> TodoItem
+    func add(title: String, startDate: Date, deadline: Date?) throws -> TodoItem
 
     /// **지금 시각**으로 시작하는 할 일을 추가한다. 빠른 기록 창의 «오늘 할 일» 경로다.
     ///

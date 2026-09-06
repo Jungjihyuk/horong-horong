@@ -395,15 +395,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         timerManager = TimerManager(appState: appState)
-        let schema = HorongHorongModelSchema.make()
         do {
             let storeURL = try SwiftDataStoreLocation.storeURL()
-            let config = ModelConfiguration(schema: schema, url: storeURL)
-            modelContainer = try ModelContainer(
-                for: schema,
-                migrationPlan: HorongHorongMigrationPlan.self,
-                configurations: [config]
-            )
+            modelContainer = try HorongHorongModelSchema.makeContainer(storeURL: storeURL)
         } catch {
             fatalError("ModelContainer 생성 실패: \(error.localizedDescription)")
         }

@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import 호롱호롱
 
 /// **화면을 띄우지 않고** 묶기·선택·삭제 흐름을 검사한다.
@@ -7,6 +8,30 @@ import XCTest
 /// 눈으로 봐야 했다. 계층을 나눈 이유 중 하나가 이것이다.
 @MainActor
 final class TodoViewModelTests: XCTestCase {
+    func testLongTitleGrowsVerticallyAtNarrowPanelWidth() {
+        func titleHeight(_ text: String) -> CGFloat {
+            let host = NSHostingView(rootView: TodoTitleField(text: .constant(text))
+                .frame(width: 240)
+                .fixedSize(horizontal: false, vertical: true))
+            host.layoutSubtreeIfNeeded()
+            return host.fittingSize.height
+        }
+
+        let shortHeight = titleHeight("짧은 제목")
+        let longHeight = titleHeight(String(repeating: "가족과 함께 공원에서 자전거 타기 ", count: 6))
+        XCTAssertGreaterThan(shortHeight, 0)
+        XCTAssertGreaterThan(longHeight, shortHeight * 2,
+                             "긴 제목은 가로로 잘리지 않고 패널 폭 안에서 여러 줄로 늘어나야 한다")
+    }
+
+    func testBrowserInitiallyExpandsOnlyTodayAndUpcoming() {
+        let expandedGroups = Set(TodoBucket.allCases.map(\.title))
+            .subtracting(TodoBrowserView.initiallyCollapsedGroups)
+
+        XCTAssertEqual(expandedGroups, ["오늘", "예정"])
+        XCTAssertTrue(TodoBrowserView.initiallyCollapsedGroups.contains("최근 삭제"))
+    }
+
     /// 저장소를 흉내 내는 가짜. SwiftData 도 EventKit 도 알림도 쓰지 않는다.
     private final class FakeRepository: TodoRepository {
         var items: [TodoItem] = []
@@ -30,14 +55,15 @@ final class TodoViewModelTests: XCTestCase {
 
         @discardableResult
         func addTodayTask(content: String, icon: String?) throws -> TodoItem {
-            try add(title: content)
+            try add(title: content, startDate: Date(), deadline: nil)
         }
 
         @discardableResult
-        func add(title: String) throws -> TodoItem {
+        func add(title: String, startDate: Date, deadline: Date?) throws -> TodoItem {
             let made = TodoItem(
-                id: UUID(), content: title, startDate: Date(), deadline: nil,
-                isCompleted: false, deletedAt: nil, isLinkedToReminders: false,
+                id: UUID(), content: title, startDate: startDate, deadline: deadline,
+                isCompleted: false, completionStateChangedAt: nil,
+                deletedAt: nil, isLinkedToReminders: false,
                 reminderCalendarIdentifier: nil,
                 icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
             )
@@ -50,7 +76,12 @@ final class TodoViewModelTests: XCTestCase {
         }
 
         func setCompleted(id: UUID, isCompleted: Bool) throws {
-            replace(id) { $0.with(isCompleted: isCompleted) }
+            replace(id) {
+                $0.with(
+                    isCompleted: isCompleted,
+                    completionStateChangedAt: .some(Date())
+                )
+            }
         }
 
         func setSchedule(id: UUID, startDate: Date?, deadline: Date?) throws {
@@ -136,12 +167,14 @@ final class TodoViewModelTests: XCTestCase {
         start: Date? = nil,
         deadline: Date? = nil,
         completed: Bool = false,
+        completedAt: Date? = nil,
         linked: Bool = false,
         deletedAt: Date? = nil
     ) -> TodoItem {
         TodoItem(
             id: UUID(), content: content, startDate: start, deadline: deadline,
-            isCompleted: completed, deletedAt: deletedAt, isLinkedToReminders: linked,
+            isCompleted: completed, completionStateChangedAt: completedAt,
+            deletedAt: deletedAt, isLinkedToReminders: linked,
             reminderCalendarIdentifier: nil,
             icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
         )
@@ -223,15 +256,21 @@ final class TodoViewModelTests: XCTestCase {
 
     // MARK: - 쓰기
 
-    func testToggleCompletedMovesBucket() {
+    func testToggleCompletedKeepsTodayItemInTodayBucket() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
         let target = try! XCTUnwrap(viewModel.today.first)
 
         viewModel.toggleCompleted(target)
 
-        XCTAssertTrue(viewModel.today.isEmpty)
-        XCTAssertEqual(viewModel.completed.count, 2)
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["오늘 할 일"])
+        XCTAssertEqual(viewModel.today.first?.isCompleted, true)
+        XCTAssertEqual(viewModel.completed.count, 1)
+
+        viewModel.toggleCompleted(try! XCTUnwrap(viewModel.today.first))
+
+        XCTAssertEqual(viewModel.today.first?.isCompleted, false)
+        XCTAssertEqual(viewModel.completed.count, 1)
     }
 
     func testSubmitComposerAddsAndSelects() {
@@ -359,6 +398,91 @@ final class TodoViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.selected?.id, target.id)
     }
 
+    func testMoveIntoOverdueIsIgnored() {
+        let repository = FakeRepository()
+        let target = item("오늘 할 일", start: day(0))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.move(idString: target.id.uuidString, to: .overdue)
+
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["오늘 할 일"])
+        XCTAssertTrue(viewModel.overdue.isEmpty)
+    }
+
+    func testMoveIntoRecentlyDeletedMovesItemImmediately() {
+        let repository = FakeRepository()
+        let target = item("삭제할 일", start: day(0))
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        XCTAssertTrue(viewModel.moveToRecentlyDeleted(idString: target.id.uuidString))
+
+        XCTAssertTrue(viewModel.today.isEmpty)
+        XCTAssertEqual(viewModel.recentlyDeleted.map(\.displayTitle), ["삭제할 일"])
+    }
+
+    func testMoveFromRecentlyDeletedIntoTodayRestoresItem() {
+        let repository = FakeRepository()
+        let target = item("복원할 일", start: day(0), deletedAt: Date())
+        repository.items = [target]
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.move(idString: target.id.uuidString, to: .today)
+
+        XCTAssertTrue(viewModel.recentlyDeleted.isEmpty)
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["복원할 일"])
+    }
+
+    // MARK: - 빠른 입력
+
+    func testSubmitComposerParsesDayAndDurationPrefixes() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.composerText = "내일 90분 회의"
+        viewModel.submitComposer()
+
+        let created = try! XCTUnwrap(repository.items.first)
+        let expected = TodoComposerPolicy.parse("내일 90분 회의", now: viewModel.todayReferenceDate)
+        XCTAssertEqual(created.displayTitle, "회의")
+        XCTAssertEqual(created.startDate, expected.startDate)
+        XCTAssertEqual(created.deadline, expected.deadline)
+        XCTAssertEqual(created.durationMinutes, 90)
+        XCTAssertEqual(viewModel.upcoming.map(\.displayTitle), ["회의"])
+        XCTAssertEqual(viewModel.composerText, "")
+    }
+
+    func testSubmitComposerWithoutPrefixLandsInToday() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+        viewModel.reload()
+
+        viewModel.composerText = "장보기"
+        viewModel.submitComposer()
+
+        XCTAssertEqual(viewModel.today.map(\.displayTitle), ["장보기"])
+        XCTAssertNil(repository.items.first?.deadline)
+    }
+
+    func testComposerScheduleSummaryReflectsParsing() {
+        let repository = FakeRepository()
+        let viewModel = TodoViewModel(repository: repository)
+
+        viewModel.composerText = "장보기"
+        XCTAssertNil(viewModel.composerScheduleSummary)
+
+        viewModel.composerText = "내일 9:30~10:00 회의"
+        XCTAssertEqual(viewModel.composerScheduleSummary, "내일 09:30 ~ 10:00")
+
+        viewModel.composerText = "모레 1시간 운동"
+        XCTAssertEqual(viewModel.composerScheduleSummary, "모레 09:00 (1시간)")
+    }
+
     func testMoveIgnoresUnknownIdentifier() {
         let (viewModel, _) = makeFilled()
         viewModel.reload()
@@ -407,6 +531,100 @@ final class TodoViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.today.count, 1)
         XCTAssertNil(viewModel.pendingDeleteID)
+    }
+
+    /// 유예 시간을 1.5 초에서 2 초로 늘렸다. 실수로 민 것을 알아채고 «취소» 를 누를 시간이
+    /// 모자랐기 때문이다. 예전 값 근처(1.7 초)에서도 아직 살아 있어야 한다.
+    func testPendingDeleteSurvivesPastTheOldGracePeriod() async throws {
+        let (viewModel, _) = makeFilled()
+        viewModel.reload()
+        let target = try XCTUnwrap(viewModel.today.first)
+
+        viewModel.armPendingDelete(target.id)
+        try await Task.sleep(for: .milliseconds(1_700))
+
+        XCTAssertEqual(viewModel.pendingDeleteID, target.id, "2 초가 지나기 전에는 되돌릴 수 있어야 한다")
+        viewModel.cancelPendingDelete()
+        XCTAssertEqual(viewModel.today.count, 1)
+    }
+
+    // MARK: - 시각
+
+    func testChoosingDayForUnscheduledTodoUsesCurrentTimeAndDefaultDuration() throws {
+        let (viewModel, repository) = makeFilled()
+        viewModel.reload()
+        let target = try XCTUnwrap(repository.items.first(where: { $0.content == "날짜 없는 할 일" }))
+        let referenceParts = Calendar.current.dateComponents([.hour, .minute], from: viewModel.todayReferenceDate)
+
+        viewModel.setStartDay(target.id, dayOffset: 0, defaultDurationMinutes: 30)
+
+        let updated = try XCTUnwrap(repository.items.first(where: { $0.id == target.id }))
+        let start = try XCTUnwrap(updated.startDate)
+        let deadline = try XCTUnwrap(updated.deadline)
+        let startParts = Calendar.current.dateComponents([.hour, .minute], from: start)
+        XCTAssertEqual(startParts.hour, referenceParts.hour)
+        XCTAssertEqual(startParts.minute, referenceParts.minute)
+        XCTAssertEqual(deadline.timeIntervalSince(start), 1_800, accuracy: 1)
+    }
+
+    func testEditingDeadlineTimeBeforeStartMovesItToTheNextDay() throws {
+        let (viewModel, repository) = makeFilled()
+        let target = try XCTUnwrap(repository.items.first(where: { $0.content == "오늘 할 일" }))
+        let start = Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date())!
+        repository.items[repository.items.firstIndex(where: { $0.id == target.id })!] = target.with(startDate: .some(start))
+        viewModel.reload()
+
+        viewModel.setDeadlineTime(target.id, hour: 14, minute: 30)
+
+        let updated = try XCTUnwrap(repository.items.first(where: { $0.id == target.id }))
+        let deadline = try XCTUnwrap(updated.deadline)
+        XCTAssertEqual(deadline.timeIntervalSince(start), 23 * 60 * 60 + 30 * 60, accuracy: 1)
+    }
+
+    func testSettingATimeKeepsTheDay() {
+        let (viewModel, _) = makeFilled()
+        viewModel.reload()
+        let target = try! XCTUnwrap(viewModel.today.first)
+        viewModel.setStartDay(target.id, dayOffset: 0)
+
+        viewModel.setStartTime(target.id, hour: 8, minute: 0)
+
+        let start = try! XCTUnwrap(viewModel.visible.first { $0.id == target.id }?.startDate)
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: start)
+        XCTAssertEqual(parts.hour, 8)
+        XCTAssertEqual(parts.minute, 0)
+        XCTAssertTrue(Calendar.current.isDate(start, inSameDayAs: viewModel.todayReferenceDate))
+    }
+
+    /// 이미 시각이 있던 항목을 다른 날로 옮길 때는 그 시각을 지켜야 한다.
+    func testMovingADatedItemKeepsItsTime() {
+        let (viewModel, _) = makeFilled()
+        viewModel.reload()
+        let target = try! XCTUnwrap(viewModel.today.first)
+        viewModel.setStartTime(target.id, hour: 14, minute: 20)
+
+        viewModel.setStartDay(target.id, dayOffset: 3)
+
+        let start = try! XCTUnwrap(viewModel.visible.first { $0.id == target.id }?.startDate)
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: start)
+        XCTAssertEqual(parts.hour, 14)
+        XCTAssertEqual(parts.minute, 20)
+    }
+
+    /// 시작을 옮겨도 이미 정한 소요 시간은 따라간다.
+    func testMovingKeepsTheDuration() {
+        let (viewModel, _) = makeFilled()
+        viewModel.reload()
+        let target = try! XCTUnwrap(viewModel.today.first)
+        viewModel.setStartTime(target.id, hour: 9, minute: 0)
+        viewModel.setDuration(target.id, minutes: 60)
+
+        viewModel.setStartTime(target.id, hour: 14, minute: 0)
+
+        let item = try! XCTUnwrap(viewModel.visible.first { $0.id == target.id })
+        let start = try! XCTUnwrap(item.startDate)
+        let deadline = try! XCTUnwrap(item.deadline)
+        XCTAssertEqual(deadline.timeIntervalSince(start), 3_600, accuracy: 1)
     }
 
     func testRestoreBringsItemBack() {
@@ -514,7 +732,8 @@ private extension TodoItem {
     func withPinned(_ value: Bool) -> TodoItem {
         TodoItem(
             id: id, content: content, startDate: startDate, deadline: deadline,
-            isCompleted: isCompleted, deletedAt: deletedAt,
+            isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
+            deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
             icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt
@@ -524,7 +743,8 @@ private extension TodoItem {
     func withIcon(_ value: String) -> TodoItem {
         TodoItem(
             id: id, content: content, startDate: startDate, deadline: deadline,
-            isCompleted: isCompleted, deletedAt: deletedAt,
+            isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
+            deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier,
             icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt
@@ -536,6 +756,7 @@ private extension TodoItem {
         startDate: Date?? = nil,
         deadline: Date?? = nil,
         isCompleted: Bool? = nil,
+        completionStateChangedAt: Date?? = nil,
         deletedAt: Date?? = nil,
         isLinkedToReminders: Bool? = nil,
         reminderCalendarIdentifier: String?? = nil
@@ -546,6 +767,7 @@ private extension TodoItem {
             startDate: startDate ?? self.startDate,
             deadline: deadline ?? self.deadline,
             isCompleted: isCompleted ?? self.isCompleted,
+            completionStateChangedAt: completionStateChangedAt ?? self.completionStateChangedAt,
             deletedAt: deletedAt ?? self.deletedAt,
             isLinkedToReminders: isLinkedToReminders ?? self.isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier ?? self.reminderCalendarIdentifier,

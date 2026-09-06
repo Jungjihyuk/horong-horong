@@ -48,6 +48,25 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         XCTAssertEqual(saved.deadline, start)
     }
 
+    func testCompletionTimestampCrossesRepositoryBoundary() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = SwiftDataTodoRepository(context: context)
+        let completedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let todo = Todo(
+            content: "완료한 일",
+            isCompleted: true,
+            completionStateChangedAt: completedAt
+        )
+        context.insert(todo)
+        try context.save()
+
+        let saved = try XCTUnwrap(repository.todo(id: todo.id))
+
+        XCTAssertTrue(saved.isCompleted)
+        XCTAssertEqual(saved.completionStateChangedAt, completedAt)
+    }
+
     // MARK: - 빠른 기록의 «오늘 할 일»
 
     /// **지금 시각**으로 시작한다. 기록 창의 추가(오전 9시)와 다른 경로다.

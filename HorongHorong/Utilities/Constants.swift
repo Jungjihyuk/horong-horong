@@ -35,6 +35,11 @@ enum Constants {
 
     // MARK: - 통합 윈도우 크기
     static let hubWindowWidth: CGFloat = 1200
+    /// 할 일 상세 폼의 기본·최소·최대 너비와, 그 옆 목록이 지켜야 할 최소 너비.
+    static let todoDetailPaneDefaultWidth: CGFloat = 300
+    static let todoDetailPaneMinWidth: CGFloat = 240
+    static let todoDetailPaneMaxWidth: CGFloat = 560
+    static let todoListPaneMinWidth: CGFloat = 320
     static let hubWindowHeight: CGFloat = 700
 
 
@@ -92,6 +97,8 @@ enum Constants {
     static let defaultAppearanceDensity = AppearanceDensity.comfortable.rawValue
     static let defaultPopoverTheme = PopoverTheme.warmLantern.rawValue
     static let defaultAppIcon = AppIconStyle.horong.rawValue
+    /// Todo 일정을 처음 만들 때 사용할 기본 소요 시간(분).
+    static let defaultTodoDurationMinutes = 90
 
 
     // MARK: - 메뉴바 표시 형식
@@ -1676,6 +1683,14 @@ enum Constants {
         static let remindersImportSelectedCalendarIDs = "memo.remindersImportSelectedCalendarIDs"
         static let mindVaultPath = "mind.vaultPath"
         static let mindSection = "mind.section"
+        /// 할 일 목록과 상세 폼 사이 너비. 사용자가 손잡이를 끌어 정한다.
+        static let todoDetailPaneWidth = "todo.detailPaneWidth"
+        /// «걸리는 시간» 왼쪽 두 칸에 흘러가는 최근 값. «15,30» 처럼 적는다.
+        static let todoDurationRecent = "todo.durationRecent"
+        /// 오른쪽 두 칸에 박아 둔 값.
+        static let todoDurationPinned = "todo.durationPinned"
+        /// 날짜를 처음 선택했을 때 시작 시각에 더할 기본 소요 시간(분).
+        static let todoDefaultDuration = "todo.defaultDuration"
 
         /// 이관 전 키들. **최근 것부터** 적는다 — `migrateMindDefaults` 가 이 순서로 찾는다.
         ///
