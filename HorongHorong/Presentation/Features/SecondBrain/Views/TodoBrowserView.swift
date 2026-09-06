@@ -17,6 +17,48 @@ private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
     }
 }
 
+/// 목록 머리말에서 글자를 뺀 고정 폭. 목록이 최소한 얼마나 넓어야 하는지 계산하는 데 쓴다.
+///
+/// 여기에 «미리알림에 N개 연동 중» 의 **실제 글자 폭**을 더한 값이 목록의 최소 너비다.
+/// 개수 자릿수와 밀도(글자 크기) 설정에 따라 글자 폭이 달라지므로 상수로 못 박지 않고 재서 쓴다.
+private enum TodoHeaderMetrics {
+    static let horizontalPadding: CGFloat = 18
+    static let titleSearchSpacing: CGFloat = 12
+    static let titleSearchMinimumGap: CGFloat = 8
+    static let searchFieldWidth: CGFloat = 220
+
+    /// `HStack(spacing:)` 은 `Spacer` 양옆에도 적용되므로 간격을 두 번 센다.
+    static let chromeWidth =
+        horizontalPadding * 2
+        + titleSearchSpacing * 2
+        + titleSearchMinimumGap
+        + searchFieldWidth
+
+    static let subtitleFont = Font.system(size: 11.5, weight: .semibold, design: .rounded)
+}
+
+/// 할 일 한 줄(카드)의 치수. 높이를 조정할 때 여기만 만진다.
+enum TodoRowMetrics {
+    static let horizontalPadding: CGFloat = 13
+    static let verticalPadding: CGFloat = 8
+    static let checkboxSize: CGFloat = 14.5
+    /// 제목과 아래 칩 줄 사이.
+    static let contentSpacing: CGFloat = 6
+}
+
+/// 왼쪽으로 미는 삭제 제스처의 치수.
+///
+/// 세 값은 **서로 묶여 있다** — 최대 거리를 줄이면서 삭제 문턱을 그대로 두면
+/// 문턱에 닿지 못해 삭제가 아예 안 된다. 그래서 비율(0.6 · 0.24)로 파생시킨다.
+enum TodoSwipeMetrics {
+    /// 카드가 왼쪽으로 밀릴 수 있는 최대 거리.
+    static let maximumOffset: CGFloat = 72
+    /// 손을 뗐을 때 이만큼 넘게 밀려 있으면 삭제로 친다.
+    static let deleteThreshold = maximumOffset * 0.6
+    /// 빨간 바탕에 휴지통이 드러나기 시작하는 거리.
+    static let trashRevealOffset = maximumOffset * 0.24
+}
+
 /// 할 일 목록과 상세.
 ///
 /// **`@Query`·`ModelContext` 를 쓰지 않는다.** 화면은 ViewModel 이 준 값 타입만 본다.
@@ -45,16 +87,49 @@ struct TodoBrowserView: View {
     @State private var showingComposerHelp = false
     @ObservedObject private var listColors = ReminderListColorStore.shared
 
+    /// 손잡이로 정한 상세 폼 너비. 끄고 켜도 유지된다.
+    @AppStorage(Constants.AppStorageKey.todoDetailPaneWidth)
+    private var storedDetailPaneWidth: Double = Double(Constants.todoDetailPaneDefaultWidth)
+    /// 끄는 동안에만 쓰는 값. 손을 뗄 때 한 번만 저장해 UserDefaults 를 매 프레임 건드리지 않는다.
+    @State private var draggingDetailPaneWidth: CGFloat?
+    @State private var detailPaneWidthAtDragStart: CGFloat?
+    /// «미리알림에 N개 연동 중» 을 한 줄로 폈을 때의 폭. 목록 최소 너비의 근거다.
+    @State private var headerSubtitleWidth: CGFloat = 0
+    /// «7. 6. 월요일 01:37 61일 지남» 이 접히지 않으려면 필요한 폭. 상세 최소 너비의 근거다.
+    @State private var scheduleCardMinimumWidth: CGFloat = 0
+
+    /// 걸리는 시간 네 칸. 왼쪽 둘은 최근에 쓴 값이 흘러가고, 오른쪽 둘은 사용자가 박아 둔다.
+    @AppStorage(Constants.AppStorageKey.todoDurationRecent)
+    private var durationRecentRaw = TodoDurationSlots.encode(TodoDurationSlots.defaultRecent)
+    @AppStorage(Constants.AppStorageKey.todoDurationPinned)
+    private var durationPinnedRaw = TodoDurationSlots.encode(TodoDurationSlots.defaultPinned)
+    @AppStorage(Constants.AppStorageKey.todoDefaultDuration)
+    private var defaultDurationMinutes = Constants.defaultTodoDurationMinutes
+
     init(repository: TodoRepository) {
         _viewModel = State(initialValue: TodoViewModel(repository: repository))
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            listPane
-            Divider().overlay(PopoverChrome.divider)
-            detailPane
-                .frame(width: 300)
+        GeometryReader { proxy in
+            let detailWidth = resolvedDetailPaneWidth(totalWidth: proxy.size.width)
+            HStack(spacing: 0) {
+                listPane
+                PaneResizeHandle(
+                    onDrag: { translation in
+                        let base = detailPaneWidthAtDragStart ?? CGFloat(storedDetailPaneWidth)
+                        detailPaneWidthAtDragStart = base
+                        draggingDetailPaneWidth = base - translation
+                    },
+                    onDragEnd: {
+                        storedDetailPaneWidth = Double(detailWidth)
+                        draggingDetailPaneWidth = nil
+                        detailPaneWidthAtDragStart = nil
+                    }
+                )
+                detailPane
+                    .frame(width: detailWidth)
+            }
         }
         .onAppear {
             viewModel.loadReminderLists()
@@ -62,6 +137,10 @@ struct TodoBrowserView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             viewModel.dayChanged()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pomodoroLinkedTaskDidComplete)) { _ in
+            // 회고 저장은 포모도로 저장소가 직접 Todo를 고치므로, 화면이 들고 있는 스냅샷을 다시 읽는다.
+            viewModel.reload()
         }
         .onDisappear {
             viewModel.flush()
@@ -77,6 +156,48 @@ struct TodoBrowserView: View {
             }
             Button("취소", role: .cancel) {}
         }
+    }
+
+    /// 방금 쓴 길이를 왼쪽 칸에 남긴다. 직접 입력한 «5분» 이 다음에도 한 번에 잡히도록.
+    private func rememberDuration(_ minutes: Int) {
+        let recent = TodoDurationSlots.decode(durationRecentRaw)
+        let pinned = TodoDurationSlots.decode(durationPinnedRaw)
+        durationRecentRaw = TodoDurationSlots.encode(
+            TodoDurationSlots.remembering(minutes, recent: recent, pinned: pinned)
+        )
+    }
+
+    private func pinDuration(_ minutes: Int, pinned shouldPin: Bool) {
+        let recent = TodoDurationSlots.decode(durationRecentRaw)
+        let pinnedValues = TodoDurationSlots.decode(durationPinnedRaw)
+        let next = shouldPin
+            ? TodoDurationSlots.pinning(minutes, recent: recent, pinned: pinnedValues)
+            : TodoDurationSlots.unpinning(minutes, recent: recent, pinned: pinnedValues)
+        durationRecentRaw = TodoDurationSlots.encode(next.recent)
+        durationPinnedRaw = TodoDurationSlots.encode(next.pinned)
+    }
+
+    /// 일정 카드의 날짜 줄이 접히기 직전까지가 상세가 좁아질 수 있는 한계다.
+    /// 카드가 요구하는 폭에 상세 패널 자체의 좌우 여백(16×2)을 더한다.
+    private var detailPaneMinimumWidth: CGFloat {
+        guard scheduleCardMinimumWidth > 0 else { return 0 }
+        return scheduleCardMinimumWidth + 32
+    }
+
+    /// 부제목이 두 줄로 접히기 직전까지가 목록이 좁아질 수 있는 한계다.
+    private var listPaneHeaderMinimumWidth: CGFloat {
+        TodoHeaderMetrics.chromeWidth + headerSubtitleWidth
+    }
+
+    /// 창이 좁아졌거나 저장값이 오래됐을 수 있으므로 그릴 때마다 지금 창 크기로 다시 자른다.
+    private func resolvedDetailPaneWidth(totalWidth: CGFloat) -> CGFloat {
+        PaneWidthPolicy.resolveTrailing(
+            proposed: draggingDetailPaneWidth ?? CGFloat(storedDetailPaneWidth),
+            totalWidth: totalWidth,
+            leadingMinimum: max(Constants.todoListPaneMinWidth, listPaneHeaderMinimumWidth),
+            trailingMinimum: max(Constants.todoDetailPaneMinWidth, detailPaneMinimumWidth),
+            trailingMaximum: Constants.todoDetailPaneMaxWidth
+        )
     }
 
     // MARK: - 목록
@@ -103,16 +224,20 @@ struct TodoBrowserView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 12) {
+        HStack(alignment: .bottom, spacing: TodoHeaderMetrics.titleSearchSpacing) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Todo")
                     .font(.system(size: 19, weight: .heavy, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink)
-                Text("미리알림에 \(viewModel.linkedCount)개 연동 중")
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                Text(headerSubtitle)
+                    .font(TodoHeaderMetrics.subtitleFont)
                     .foregroundStyle(PopoverChrome.inkTertiary)
+                    // 손잡이를 끝까지 당겨도 두 줄로 접히지 않게 한다. 창 자체가 좁아
+                    // 최소 너비마저 못 지키는 상황에서는 접는 대신 말줄임으로 버틴다.
+                    .lineLimit(1)
+                    .background(alignment: .leading) { headerSubtitleRuler }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: TodoHeaderMetrics.titleSearchMinimumGap)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -120,16 +245,37 @@ struct TodoBrowserView: View {
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 12)
-            .frame(width: 220, height: 36)
+            .frame(width: TodoHeaderMetrics.searchFieldWidth, height: 36)
             .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, TodoHeaderMetrics.horizontalPadding)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    private var headerSubtitle: String {
+        "미리알림에 \(viewModel.linkedCount)개 연동 중"
+    }
+
+    /// 보이지 않는 자. 같은 글자를 한 줄로 편 폭을 재서 목록 최소 너비에 쓴다.
+    /// 보이는 쪽은 말줄임이 걸려 있어 스스로는 온전한 폭을 알려 주지 못한다.
+    private var headerSubtitleRuler: some View {
+        Text(headerSubtitle)
+            .font(TodoHeaderMetrics.subtitleFont)
+            .fixedSize(horizontal: true, vertical: false)
+            .hidden()
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onChange(of: proxy.size.width, initial: true) { _, width in
+                            headerSubtitleWidth = width
+                        }
+                }
+            }
     }
 
     private var composer: some View {
@@ -466,7 +612,7 @@ struct TodoBrowserView: View {
                         Image(systemName: "trash")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.white)
-                            .opacity(offset < -28 ? 1 : 0)
+                            .opacity(offset < -TodoSwipeMetrics.trashRevealOffset ? 1 : 0)
                     }
                     .frame(width: -offset)
                     .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -523,13 +669,18 @@ struct TodoBrowserView: View {
                 .padding(.top, 1)
             }
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
+        .padding(.horizontal, TodoRowMetrics.horizontalPadding)
+        .padding(.vertical, TodoRowMetrics.verticalPadding)
         .opacity(item.isCompleted ? 0.5 : 1)
         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        // `stroke` 는 선을 경계선 위에 걸쳐 그려 절반이 카드 밖 배경과 섞인다. 그래서 색이
+        // 어정쩡해 보였다. `strokeBorder` 로 안쪽에만 그려 한 가지 배경 위에 또렷하게 얹는다.
         .overlay(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(viewModel.selected?.id == item.id ? PopoverChrome.accent : Color.clear, lineWidth: 1.5)
+                .strokeBorder(
+                    viewModel.selected?.id == item.id ? PopoverChrome.accent : Color.clear,
+                    lineWidth: 2.25
+                )
         )
         .contentShape(Rectangle())
         .onTapGesture { viewModel.select(item.id) }
@@ -551,11 +702,16 @@ struct TodoBrowserView: View {
         if let item = viewModel.selected {
             VStack(alignment: .leading, spacing: 0) {
                 detailHeader(item)
-                detailEditor
-                Divider().overlay(PopoverChrome.divider)
-                detailFields(item)
-                Spacer(minLength: 0)
-                detailFooter
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        detailEditor
+                        Divider().overlay(PopoverChrome.divider)
+                        detailFields(item)
+                    }
+                }
+            }
+            .onChange(of: item.id) { _, _ in
+                showsCustomDuration = false
             }
             .background(PopoverChrome.surfaceAlt.opacity(0.35))
         } else {
@@ -602,9 +758,7 @@ struct TodoBrowserView: View {
 
     private var detailEditor: some View {
         VStack(alignment: .leading, spacing: 0) {
-            TextField("무엇을 할까요", text: $viewModel.titleDraft)
-                .textFieldStyle(.plain)
-                .font(.system(size: 17, weight: .heavy, design: .rounded))
+            TodoTitleField(text: $viewModel.titleDraft)
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
                 .onChange(of: viewModel.titleDraft) { _, _ in viewModel.draftChanged() }
@@ -612,174 +766,77 @@ struct TodoBrowserView: View {
             TextField("메모", text: $viewModel.noteDraft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5, design: .rounded))
-                .lineLimit(3...8)
+                .lineLimit(1...)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
-                .padding(.bottom, 10)
+                .padding(.bottom, 18)
                 .onChange(of: viewModel.noteDraft) { _, _ in viewModel.draftChanged() }
         }
     }
 
     private func detailFields(_ item: TodoItem) -> some View {
-        VStack(alignment: .leading, spacing: 11) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 9) {
-                    fieldLabel("시작")
-                    if item.startDate != nil {
-                        DatePicker(
-                            "",
-                            selection: startBinding(for: item),
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                        .labelsHidden()
-                        .datePickerStyle(.compact)
-                    } else {
-                        Text("정하지 않음")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
-                    }
-                    Spacer(minLength: 0)
-                }
-                HStack(spacing: 6) {
-                    fieldLabel("")
-                    quickChip("오늘", selected: viewModel.isStartDay(item, dayOffset: 0)) {
-                        viewModel.setStartDay(item.id, dayOffset: 0)
-                    }
-                    quickChip("내일", selected: viewModel.isStartDay(item, dayOffset: 1)) {
-                        viewModel.setStartDay(item.id, dayOffset: 1)
-                    }
-                    quickChip("없음", selected: item.startDate == nil) {
-                        viewModel.clearSchedule(item.id)
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                if let startDate = item.startDate {
-                    HStack(spacing: 6) {
-                        fieldLabel("소요")
-                        durationChip("30분", minutes: 30, item: item)
-                        durationChip("60분", minutes: 60, item: item)
-                        durationChip("2시간", minutes: 120, item: item)
-                        Button {
-                            prepareCustomDuration(item)
-                            showsCustomDuration = true
-                        } label: {
-                            Text("직접")
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(isCustomDuration(item) ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
-                        .padding(.horizontal, 8)
-                        .frame(height: 26)
-                        .background(
-                            isCustomDuration(item) ? PopoverChrome.accent : PopoverChrome.card,
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(isCustomDuration(item) ? Color.clear : PopoverChrome.border, lineWidth: 1.5)
-                        )
-                        .popover(isPresented: $showsCustomDuration) {
-                            customDurationPopover(for: item)
-                        }
-                        Spacer(minLength: 0)
-                    }
-
-                    HStack(spacing: 9) {
-                        fieldLabel("종료")
-                        if item.deadline != nil {
-                            DatePicker(
-                                "",
-                                selection: deadlineBinding(for: item),
-                                in: startDate...Date.distantFuture,
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-
-                            Button {
-                                viewModel.clearDeadline(item.id)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(PopoverChrome.inkTertiary)
-                            }
-                            .buttonStyle(.plain)
-                            .help("종료 시각 지우기")
-                        } else {
-                            Button("종료 시각 지정") {
-                                viewModel.setDuration(item.id, minutes: 60)
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.accent)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-
-            HStack(spacing: 9) {
-                fieldLabel("미리알림")
-                Button {
-                    viewModel.toggleReminder(item)
-                } label: {
-                    Label(item.isLinkedToReminders ? "연동됨" : "연동 안 함", systemImage: "bell")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(item.isLinkedToReminders ? TodoPalette.linkedInk : PopoverChrome.inkSecondary)
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                        .background(
-                            item.isLinkedToReminders ? TodoPalette.linkedFill : PopoverChrome.card,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(item.isLinkedToReminders ? Color.clear : PopoverChrome.border, lineWidth: 1.5)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(item.isRecentlyDeleted)
-            }
-
-            HStack(alignment: .top, spacing: 9) {
-                fieldLabel("목록")
-                VStack(alignment: .leading, spacing: 5) {
-                    if viewModel.reminderLists.isEmpty {
-                        Text("미리알림 목록을 불러오는 중")
-                            .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
-                    } else {
-                        TodoChipFlow(spacing: 6) {
-                            ForEach(viewModel.reminderLists) { list in
-                                listChip(list, item: item)
-                            }
-                        }
-                    }
-                    if !viewModel.reminderStatusMessage.isEmpty {
-                        Text(viewModel.reminderStatusMessage)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
-                    }
-                }
-                .opacity(item.isLinkedToReminders ? 1 : 0.42)
-                .allowsHitTesting(item.isLinkedToReminders)
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            scheduleSection(item)
+            reminderSection(item)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
-    private var detailFooter: some View {
-        HStack(spacing: 8) {
-            footerButton("메모로 확장", systemImage: "arrow.up") {}
-                .disabled(true)
-                .help("문서로 옮기기는 다음에 열립니다")
+    private func sectionHeader(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .bold))
+            Text(title)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 11)
-        .overlay(alignment: .top) {
-            Divider().overlay(PopoverChrome.divider)
-        }
+        .foregroundStyle(PopoverChrome.inkTertiary)
+    }
+
+    private func scheduleSection(_ item: TodoItem) -> some View {
+        TodoScheduleCard(
+            startDate: item.startDate,
+            deadline: item.deadline,
+            today: viewModel.todayReferenceDate,
+            onPickDayOffset: { viewModel.setStartDay(item.id, dayOffset: $0, defaultDurationMinutes: defaultDurationMinutes) },
+            onClear: { viewModel.clearSchedule(item.id) },
+            onPickTime: { viewModel.setStartTime(item.id, hour: $0, minute: $1) },
+            onPickDeadlineTime: { viewModel.setDeadlineTime(item.id, hour: $0, minute: $1) },
+            durationSlots: TodoDurationSlots.slots(
+                recent: TodoDurationSlots.decode(durationRecentRaw),
+                pinned: TodoDurationSlots.decode(durationPinnedRaw)
+            ),
+            onPickDuration: { minutes in
+                viewModel.setDuration(item.id, minutes: minutes)
+                rememberDuration(minutes)
+            },
+            onPinDuration: { pinDuration($0, pinned: true) },
+            onUnpinDuration: { pinDuration($0, pinned: false) },
+            onClearDuration: { viewModel.clearDeadline(item.id) },
+            onCustomDuration: {
+                prepareCustomDuration(item)
+                showsCustomDuration = true
+            },
+            showsCustomDuration: $showsCustomDuration,
+            customDurationContent: { customDurationPopover(for: item) },
+            onMinimumWidthChange: { scheduleCardMinimumWidth = $0 }
+        )
+    }
+
+    private func reminderSection(_ item: TodoItem) -> some View {
+        TodoReminderCard(
+            isLinked: item.isLinkedToReminders,
+            isEditable: !item.isRecentlyDeleted,
+            lists: viewModel.reminderLists,
+            selectedListID: viewModel.reminderList(for: item)?.id,
+            startDate: item.startDate,
+            today: viewModel.todayReferenceDate,
+            statusMessage: viewModel.reminderStatusMessage,
+            swatch: { listColors.swatch(for: $0) },
+            onToggleLink: { viewModel.toggleReminder(item) },
+            onSelectList: { viewModel.setReminderList(item.id, listID: $0) }
+        )
     }
 
     private func fieldLabel(_ text: String) -> some View {
@@ -787,31 +844,6 @@ struct TodoBrowserView: View {
             .font(.system(size: 11, weight: .heavy, design: .rounded))
             .foregroundStyle(PopoverChrome.inkTertiary)
             .frame(width: 50, alignment: .leading)
-    }
-
-    private func quickChip(_ title: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11.5, weight: .bold, design: .rounded))
-                .foregroundStyle(selected ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(
-                    selected ? PopoverChrome.accent : PopoverChrome.card,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(selected ? Color.clear : PopoverChrome.border, lineWidth: 1.5)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func durationChip(_ title: String, minutes: Int, item: TodoItem) -> some View {
-        quickChip(title, selected: item.durationMinutes == minutes) {
-            viewModel.setDuration(item.id, minutes: minutes)
-        }
     }
 
     private func isCustomDuration(_ item: TodoItem) -> Bool {
@@ -876,7 +908,9 @@ struct TodoBrowserView: View {
                 Spacer()
                 Button("적용") {
                     let amount = min(999, max(1, customDurationAmount))
-                    viewModel.setDuration(item.id, minutes: amount * customDurationUnit.rawValue)
+                    let minutes = amount * customDurationUnit.rawValue
+                    viewModel.setDuration(item.id, minutes: minutes)
+                    rememberDuration(minutes)
                     showsCustomDuration = false
                 }
                 .buttonStyle(.borderedProminent)
@@ -888,75 +922,72 @@ struct TodoBrowserView: View {
         .appearanceAccentTint(.popover)
     }
 
-    private func footerButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(PopoverChrome.border, lineWidth: 1.5)
-                )
-        }
-        .buttonStyle(.plain)
-    }
+    private func reminderListMenu(for item: TodoItem) -> some View {
+        let currentList = viewModel.reminderList(for: item) ?? viewModel.reminderLists.first(where: \.isDefault)
+        let swatch = listColors.swatch(for: currentList?.id ?? "")
 
-    private func listChip(_ list: ReminderListOption, item: TodoItem) -> some View {
-        let selected = (item.reminderCalendarIdentifier ?? viewModel.reminderLists.first(where: \.isDefault)?.id) == list.id
-        let swatch = listColors.swatch(for: list.id)
         return HStack(spacing: 6) {
-            Button {
-                colorPickerListID = list.id
-            } label: {
-                Circle()
-                    .fill(swatch.dot)
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(PopoverChrome.ink.opacity(0.18), lineWidth: 0.5))
-                    .overlay {
-                        if colorPickerListID == list.id {
-                            Circle()
-                                .stroke(PopoverChrome.ink, lineWidth: 1.5)
-                                .frame(width: 18, height: 18)
+            Menu {
+                ForEach(viewModel.reminderLists) { list in
+                    Button {
+                        viewModel.setReminderList(item.id, listID: list.id)
+                    } label: {
+                        if list.id == currentList?.id {
+                            Label(list.title, systemImage: "checkmark")
+                        } else {
+                            Text(list.title)
                         }
                     }
-                    .frame(width: 20, height: 20)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .help("목록 색 바꾸기")
-            .popover(isPresented: Binding(
-                get: { colorPickerListID == list.id },
-                set: { if !$0 { colorPickerListID = nil } }
-            )) {
-                listColorPicker(for: list)
-            }
-
-            Button {
-                viewModel.setReminderList(item.id, listID: list.id)
+                }
             } label: {
-                Text(list.title)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(swatch.dot)
+                        .frame(width: 9, height: 9)
+                        .overlay(Circle().stroke(PopoverChrome.ink.opacity(0.18), lineWidth: 0.5))
+                    Text(currentList?.title ?? "목록 선택")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(swatch.ink)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(swatch.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(swatch.dot.opacity(0.35), lineWidth: 1.2)
+                )
             }
-            .buttonStyle(.plain)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            if let list = currentList {
+                Button {
+                    colorPickerListID = list.id
+                } label: {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: 11))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                        .frame(width: 26, height: 26)
+                        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(PopoverChrome.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("목록 테마 색상 변경")
+                .popover(isPresented: Binding(
+                    get: { colorPickerListID == list.id },
+                    set: { if !$0 { colorPickerListID = nil } }
+                )) {
+                    listColorPicker(for: list)
+                }
+            }
         }
-        .font(.system(size: 12, weight: .bold, design: .rounded))
-        .foregroundStyle(selected ? swatch.ink : PopoverChrome.inkSecondary)
-        .padding(.leading, 6)
-        .padding(.trailing, 11)
-        .frame(height: 30)
-        .background(
-            selected ? swatch.wash : PopoverChrome.card,
-            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(selected ? swatch.dot.opacity(0.35) : PopoverChrome.border, lineWidth: 1.5)
-        )
-        .fixedSize()
     }
 
     private func listColorPicker(for list: ReminderListOption) -> some View {
@@ -1046,38 +1077,53 @@ struct TodoBrowserView: View {
         collapsedGroups.remove(item.bucket(now: viewModel.todayReferenceDate).title)
     }
 
-    private func startBinding(for item: TodoItem) -> Binding<Date> {
-        Binding(
-            get: {
-                item.startDate
-                    ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
-            },
-            set: { viewModel.setStartDate(item.id, date: $0) }
-        )
-    }
-
-    private func deadlineBinding(for item: TodoItem) -> Binding<Date> {
-        Binding(
-            get: { item.deadline ?? item.startDate?.addingTimeInterval(3_600) ?? Date() },
-            set: { viewModel.setDeadline(item.id, date: $0) }
-        )
-    }
-
     private func applySwipe(_ item: TodoItem, translation: CGFloat) {
         guard translation < 0 else { return }
         swipingID = item.id
-        swipeOffset = max(translation, -120)
+        swipeOffset = max(translation, -TodoSwipeMetrics.maximumOffset)
     }
 
     private func endSwipe(_ item: TodoItem, translation: CGFloat) {
-        let shouldDelete = translation < -72
-        withAnimation(.easeOut(duration: 0.18)) {
+        let shouldDelete = translation < -TodoSwipeMetrics.deleteThreshold
+        withAnimation(.easeOut(duration: 0.28)) {
             swipeOffset = 0
             swipingID = nil
         }
         if shouldDelete {
             viewModel.armPendingDelete(item.id)
         }
+    }
+}
+
+struct TodoTitleField: View {
+    @Binding var text: String
+
+    var body: some View {
+        TextField("무엇을 할까요", text: Binding(
+            get: { text },
+            // 저장 형식에서 개행은 제목과 메모의 경계이므로 제목 안의 개행은 공백으로 바꾼다.
+            set: { text = $0.components(separatedBy: .newlines).joined(separator: " ") }
+        ), axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 17, weight: .heavy, design: .rounded))
+            // 제목을 축소하거나 가로 스크롤하지 않고 패널 너비에 맞춰 읽을 수 있게 한다.
+            .lineLimit(1...)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel("할 일 제목")
+    }
+}
+
+/// 트랙패드 두 손가락 가로 스크롤을 **손가락이 실제로 움직인 방향**으로 되돌린다.
+///
+/// AppKit 은 «자연스러운 스크롤» 설정에 따라 `scrollingDeltaX` 부호를 이미 뒤집어서 준다.
+/// 스크롤이라면 그대로 쓰면 되지만 스와이프 삭제는 카드가 손가락을 따라와야 하는 **직접 조작**이라
+/// 설정과 무관하게 손가락 방향으로 통일해야 한다. 왼쪽이 음수다.
+enum TodoSwipeDirection {
+    static func fingerTranslation(
+        scrollingDeltaX: CGFloat,
+        isDirectionInvertedFromDevice: Bool
+    ) -> CGFloat {
+        isDirectionInvertedFromDevice ? scrollingDeltaX : -scrollingDeltaX
     }
 }
 
@@ -1088,24 +1134,24 @@ private enum TodoPalette {
     static let linkedFill = Color(red: 0.89, green: 0.94, blue: 0.87)
 }
 
-private struct TodoCheckbox: View {
+struct TodoCheckbox: View {
     let isCompleted: Bool
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .stroke(isCompleted ? Color.clear : Color.black.opacity(0.2), lineWidth: 1.8)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .stroke(isCompleted ? Color.clear : Color.black.opacity(0.2), lineWidth: 1.4)
                 .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(isCompleted ? Color(red: 0.44, green: 0.68, blue: 0.39) : Color.white)
                 )
             if isCompleted {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 8.5, weight: .bold))
                     .foregroundStyle(.white)
             }
         }
-        .frame(width: 21, height: 21)
+        .frame(width: TodoRowMetrics.checkboxSize, height: TodoRowMetrics.checkboxSize)
     }
 }
 
@@ -1113,7 +1159,7 @@ private struct TodoCheckbox: View {
 ///
 /// 체크박스·복원 버튼처럼 동작을 들고 있는 조각은 바깥에 남겼다 —
 /// 클로저를 들이면 `Equatable` 합성이 깨져 매번 다시 그린다.
-private struct TodoCardBody: View, Equatable {
+struct TodoCardBody: View, Equatable {
     let title: String
     let isCompleted: Bool
     let chip: TodoDueChip?
@@ -1122,7 +1168,7 @@ private struct TodoCardBody: View, Equatable {
     let isLinked: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: TodoRowMetrics.contentSpacing) {
             Text(title)
                 .font(.system(size: 13.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink)
@@ -1188,7 +1234,7 @@ private struct TodoCardBody: View, Equatable {
 }
 
 
-private struct TodoChipFlow: Layout {
+struct TodoChipFlow: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -1299,10 +1345,17 @@ private struct TodoTrackpadSwipeCatcher: NSViewRepresentable {
             guard let view, view.window != nil, view.window === event.window else {
                 return event
             }
+            // 제스처를 잡기 전에는 이 행 위에서 시작한 것만 받는다. 일단 잡은 뒤에는 포인터가
+            // 행 밖으로 벗어나도 계속 받아야 «손 뗌»(`.ended`) 을 놓치지 않는다. 그걸 놓치면
+            // 아래 안전망 타이머가 대신 끝내 버려 손을 떼지도 않았는데 삭제가 시작된다.
             let location = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(location) else { return event }
+            if isHorizontal != true, !view.bounds.contains(location) { return event }
 
-            let dx = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 16
+            let rawDX = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 16
+            let dx = TodoSwipeDirection.fingerTranslation(
+                scrollingDeltaX: rawDX,
+                isDirectionInvertedFromDevice: event.isDirectionInvertedFromDevice
+            )
             let dy = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 16
             let isUserPhase = event.phase == .began
                 || event.phase == .changed
@@ -1317,7 +1370,7 @@ private struct TodoTrackpadSwipeCatcher: NSViewRepresentable {
                 return event
             }
 
-            let proposed = min(0, max(translation - dx, -120))
+            let proposed = min(0, max(translation + dx, -TodoSwipeMetrics.maximumOffset))
             if isHorizontal == nil {
                 if abs(dx) > abs(dy), abs(dx) > 0.5, proposed < 0 {
                     isHorizontal = true
@@ -1346,13 +1399,17 @@ private struct TodoTrackpadSwipeCatcher: NSViewRepresentable {
             return nil
         }
 
+        /// 손을 뗐다는 `.ended` 를 못 받았을 때만 쓰는 **안전망**. 손가락을 얹은 채 멈추면
+        /// 트랙패드가 이벤트를 보내지 않으므로, 짧게 잡으면 가만히 있는 것을 손 뗀 것으로 오해한다.
+        private static let idleFinishDelay: TimeInterval = 1.0
+
         private func scheduleFinish() {
             endWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 self?.finish()
             }
             endWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleFinishDelay, execute: work)
         }
 
         private func finish() {

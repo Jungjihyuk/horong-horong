@@ -156,16 +156,41 @@ final class TodoViewModel {
         refresh(id)
     }
 
-    func setStartDay(_ id: UUID, dayOffset: Int) {
+    func setStartDay(_ id: UUID, dayOffset: Int, defaultDurationMinutes: Int = 90) {
         guard let item = try? repository.todo(id: id) else { return }
         let calendar = Calendar.current
         let day = calendar.date(byAdding: .day, value: dayOffset, to: todayReferenceDate) ?? todayReferenceDate
+        // 이미 시각이 있으면 지킨다. 새 일정은 사용자가 날짜를 누른 순간의 시각으로 시작한다 —
+        // 9시 같은 고정값은 오후에 기록할 때 즉시 수정해야 하는 부담을 만든다.
         let time = item.startDate.map { calendar.dateComponents([.hour, .minute], from: $0) }
-            ?? DateComponents(hour: 9, minute: 0)
+            ?? calendar.dateComponents([.hour, .minute], from: todayReferenceDate)
         var components = calendar.dateComponents([.year, .month, .day], from: day)
         components.hour = time.hour
         components.minute = time.minute
-        setStartDate(id, date: calendar.date(from: components) ?? day)
+        let startDate = calendar.date(from: components) ?? day
+        if item.startDate == nil, item.deadline == nil, defaultDurationMinutes > 0 {
+            let deadline = startDate.addingTimeInterval(TimeInterval(defaultDurationMinutes * 60))
+            try? repository.setSchedule(id: id, startDate: startDate, deadline: deadline)
+            refresh(id)
+        } else {
+            setStartDate(id, date: startDate)
+        }
+    }
+
+    /// 날짜는 그대로 두고 시각만 바꾼다. 이미 정한 소요 시간은 `setStartDate` 가 함께 옮긴다.
+    func setStartTime(_ id: UUID, hour: Int, minute: Int) {
+        guard let item = try? repository.todo(id: id), let start = item.startDate else { return }
+        setStartDate(id, date: TodoDayTime.applying(hour: hour, minute: minute, to: start))
+    }
+
+    /// 종료 시각은 시작 시각보다 이르면 다음 날로 해석해 자정을 넘는 일정도 직접 고를 수 있게 한다.
+    func setDeadlineTime(_ id: UUID, hour: Int, minute: Int) {
+        guard let item = try? repository.todo(id: id), let start = item.startDate else { return }
+        var deadline = TodoDayTime.applying(hour: hour, minute: minute, to: start)
+        if deadline < start {
+            deadline = Calendar.current.date(byAdding: .day, value: 1, to: deadline) ?? deadline
+        }
+        setDeadline(id, date: deadline)
     }
 
     func setDuration(_ id: UUID, minutes: Int) {
@@ -244,12 +269,16 @@ final class TodoViewModel {
     // MARK: - 삭제(되돌릴 틈을 준다)
 
     /// 바로 지우지 않고 1.5초 «취소» 를 받는다. 그동안 행이 빨간 막대로 바뀐다.
+    /// «삭제됨 / 취소» 줄이 떠 있는 동안. 이 시간이 지나면 되돌릴 수 없다.
+    /// 실수로 민 것을 눈으로 알아채고 손을 옮겨 누르기까지 걸리는 시간을 기준으로 잡았다.
+    static let pendingDeleteGracePeriod: Duration = .seconds(2)
+
     func armPendingDelete(_ id: UUID) {
         commitPendingDeleteIfNeeded()
         if selected?.id == id { selected = nil; clearDrafts() }
         pendingDeleteID = id
         pendingDeleteTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(1_500))
+            try? await Task.sleep(for: Self.pendingDeleteGracePeriod)
             guard let self, !Task.isCancelled, self.pendingDeleteID == id else { return }
             self.pendingDeleteID = nil
             self.pendingDeleteTask = nil
