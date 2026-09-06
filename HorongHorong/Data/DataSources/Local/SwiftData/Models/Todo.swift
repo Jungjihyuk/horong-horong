@@ -129,9 +129,9 @@ extension Todo {
             startDate: startDate,
             deadline: deadline,
             isCompleted: isCompletedValue,
+            completionStateChangedAt: completionStateChangedAt,
             now: now,
             calendar: calendar
         )
     }
 }
-

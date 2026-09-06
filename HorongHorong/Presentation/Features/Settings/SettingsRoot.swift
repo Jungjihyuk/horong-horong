@@ -260,6 +260,7 @@ struct SettingsRoot: View {
         case .secondBrain:
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportEnabled)
             defaults.removeObject(forKey: Constants.AppStorageKey.remindersImportSelectedCalendarIDs)
+            defaults.removeObject(forKey: Constants.AppStorageKey.todoDefaultDuration)
         case .category:
             defaults.removeObject(forKey: Constants.AppStorageKey.hiddenDefaultCategoryRuleBundleIDs)
             defaults.removeObject(forKey: Constants.AppStorageKey.unmappedAppHandling)

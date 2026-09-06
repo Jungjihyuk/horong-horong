@@ -10,6 +10,7 @@ struct TodoItem: Identifiable, Equatable, Sendable {
     let startDate: Date?
     let deadline: Date?
     let isCompleted: Bool
+    let completionStateChangedAt: Date?
     /// 최근 삭제에 들어간 시각. `nil` 이면 살아 있다.
     let deletedAt: Date?
     let isLinkedToReminders: Bool
@@ -37,7 +38,13 @@ struct TodoItem: Identifiable, Equatable, Sendable {
     }
 
     func bucket(now: Date) -> TodoBucket {
-        TodoBucket.of(startDate: startDate, deadline: deadline, isCompleted: isCompleted, now: now)
+        TodoBucket.of(
+            startDate: startDate,
+            deadline: deadline,
+            isCompleted: isCompleted,
+            completionStateChangedAt: completionStateChangedAt,
+            now: now
+        )
     }
 
     /// 그룹 안 정렬 키. 날짜가 없으면 맨 뒤로 간다.

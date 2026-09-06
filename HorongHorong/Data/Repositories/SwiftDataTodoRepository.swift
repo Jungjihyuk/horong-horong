@@ -53,9 +53,11 @@ final class SwiftDataTodoRepository: TodoRepository {
     // MARK: - 쓰기
 
     @discardableResult
-    func add(title: String) throws -> TodoItem {
+    func add(title: String, startDate: Date, deadline: Date?) throws -> TodoItem {
         let record = Todo(content: title)
-        record.startDate = Self.daytime(Date(), hour: 9)
+        record.startDate = startDate
+        // 마감이 시작보다 앞서면 «지남» 으로 태어난다. `setSchedule` 과 같은 규칙으로 막는다.
+        record.deadline = deadline.map { max(startDate, $0) }
         context.insert(record)
         try touch(record)
         return Self.toItem(record)
@@ -276,10 +278,6 @@ final class SwiftDataTodoRepository: TodoRepository {
         "memo.deadline.\(id.uuidString)"
     }
 
-    private static func daytime(_ day: Date, hour: Int) -> Date {
-        Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
-    }
-
     private static func toItem(_ record: Todo) -> TodoItem {
         TodoItem(
             id: record.id,
@@ -287,6 +285,7 @@ final class SwiftDataTodoRepository: TodoRepository {
             startDate: record.startDate,
             deadline: record.deadline,
             isCompleted: record.isCompletedValue,
+            completionStateChangedAt: record.completionStateChangedAt,
             deletedAt: record.deletedAt,
             isLinkedToReminders: record.isLinkedToRemindersValue,
             reminderCalendarIdentifier: record.reminderCalendarIdentifier,

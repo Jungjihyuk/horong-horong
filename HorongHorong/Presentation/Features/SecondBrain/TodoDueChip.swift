@@ -1,6 +1,6 @@
 import Foundation
 
-/// 마감까지 남은 날을 «3일 지남»·«내일» 같은 **화면 문구**로 만든다.
+/// 시작 날짜를 «3일 지남»·«내일» 같은 **화면 문구**로 만든다.
 ///
 /// `Domain/Policies/` 로 보내지 않은 이유: 결과가 사람이 읽는 한국어 문자열과 색조(tone)라
 /// 표현 계층의 관심사다. 판정 규칙 자체는 `TodoBucket` 이 가진다.
@@ -21,7 +21,9 @@ struct TodoDueChip: Equatable {
         now: Date,
         calendar: Calendar = .current
     ) -> TodoDueChip? {
-        guard let basis = deadline ?? startDate else { return nil }
+        // 목록의 날짜 태그는 일정 카드의 시작 날짜와 같은 기준을 보여 준다.
+        // 시작은 오늘이고 소요 시간이 길어 마감만 내일인 일정도 «오늘»로 읽혀야 한다.
+        guard let basis = startDate ?? deadline else { return nil }
         let days = calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: now),
