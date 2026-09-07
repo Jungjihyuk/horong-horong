@@ -1,5 +1,27 @@
 import SwiftUI
 
+/// 시간축 알약의 길이.
+///
+/// **오래 걸리는 일일수록 길다.** 길이가 곧 시간이라 목록을 훑는 것만으로 «오늘은 긴 일이
+/// 두 개 끼어 있다» 가 보인다. 예전에 줄 높이를 따라가게 했더니 글이 몇 줄이냐로 길이가
+/// 정해져, 같은 상태인 할 일끼리 모양이 달라 보였다 — 길이를 정하는 것은 오직 **걸리는 시간**이다.
+///
+/// 순수 계산이라 화면 없이 검사할 수 있다(AGENTS.md R9).
+enum TodoTimelineCapsule {
+    /// 시간이 없거나 아주 짧은 일. 기호 하나가 들어갈 만큼은 된다.
+    static let minimumHeight: CGFloat = 30
+    /// 이보다 길어지면 한 화면에 몇 개 못 들어간다. 세 시간짜리나 하루짜리나 «길다» 로 충분하다.
+    static let maximumHeight: CGFloat = 64
+    /// 여기서부터는 더 길어지지 않는다.
+    static let saturationMinutes = 180
+
+    static func height(durationMinutes: Int?) -> CGFloat {
+        guard let minutes = durationMinutes, minutes > 0 else { return minimumHeight }
+        let ratio = min(1, Double(minutes) / Double(saturationMinutes))
+        return minimumHeight + (maximumHeight - minimumHeight) * ratio
+    }
+}
+
 /// 시간축 한 줄. 값만 비교해 다른 Todo 변경으로 인한 재렌더링을 막는다(R3).
 ///
 /// **왼쪽 알약이 이 줄의 상태다.** 예전에는 시각·점·동그라미·제목·메뉴가 한 줄에 나란히 놓여
@@ -50,10 +72,11 @@ struct TodoTimelineRow: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
                 metaRow
             }
+            .padding(.vertical, 6)
             Spacer(minLength: 4)
             trailingControls
+                .padding(.vertical, 6)
         }
-        .padding(.vertical, 5)
         .padding(.trailing, 2)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
@@ -68,22 +91,41 @@ struct TodoTimelineRow: View, Equatable {
     /// 새어 나와 그은 자국처럼 보였다. 선을 지우고 알약만 남기니 줄 간격이 곧 시간의 간격으로
     /// 읽힌다 — 지금 어디쯤인지는 «지금» 표시가 이미 알려 준다.
     ///
-    /// **크기는 고정이다.** 줄 높이만큼 늘였더니 미리알림 배지가 한 줄 더 붙은 할 일만
-    /// 알약이 길쭉해져서, 같은 «완료» 인데 위아래 모양이 달라 보였다. 표시가 달라지는 이유는
-    /// 할 일의 **상태** 하나뿐이어야 한다 — 글이 몇 줄인지는 상태가 아니다.
+    /// 알약 길이는 **걸리는 시간**이 정하고(`TodoTimelineCapsule`), 알약과 알약 사이는
+    /// 가느다란 선으로 잇는다. 선이 있으면 떨어져 있는 알약들이 하루라는 한 줄기로 읽힌다.
+    ///
+    /// 선 색은 강조색이 아니라 `divider` 다. 예전에 주황으로 그었더니 알약 밖으로 삐져나온
+    /// 자국처럼 보였다 — 이 선은 «시간이 흐른다» 는 배경이지 읽을거리가 아니다.
     private var rail: some View {
+        ZStack(alignment: .top) {
+            Rectangle()
+                .fill(PopoverChrome.divider)
+                .frame(width: 1.5)
+                .frame(maxHeight: .infinity)
+
+            capsule
+                .padding(.top, 5)
+        }
+        .frame(width: 24)
+    }
+
+    private var capsule: some View {
+        // 뒤로 지나가는 연결선이 비쳐 보이지 않도록 카드 색을 한 겹 깔고 상태 색을 얹는다.
+        // 완료·지남처럼 옅은 색은 반투명이라 바탕이 없으면 선이 알약을 관통한다.
         Capsule(style: .continuous)
-            .fill(capsuleFill)
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(capsuleStroke, lineWidth: 1)
-            )
+            .fill(PopoverChrome.card)
+            .overlay(Capsule(style: .continuous).fill(capsuleFill))
+            .overlay(Capsule(style: .continuous).strokeBorder(capsuleStroke, lineWidth: 1))
             .overlay(
                 Image(systemName: capsuleSymbol)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(capsuleInk)
+                    // 긴 알약에서는 기호가 가운데 떠 있지 않고 위쪽에 붙는다 —
+                    // 시작 시각이 곧 그 자리라 눈이 시간 글과 나란히 간다.
+                    .padding(.top, 8),
+                alignment: .top
             )
-            .frame(width: 24, height: 30)
+            .frame(width: 24, height: TodoTimelineCapsule.height(durationMinutes: item.todo.durationMinutes))
     }
 
     private var capsuleSymbol: String {

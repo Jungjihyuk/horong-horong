@@ -298,10 +298,17 @@ struct MemoListView: View {
     /// 시간축 위에 걸치게 한다 — 옆으로 비켜 있으면 그냥 구분선으로 보인다.
     private var nowMarker: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(PopoverChrome.accent)
-                .frame(width: 7, height: 7)
-                .frame(width: 24)
+            // 점 뒤로 연결선을 그대로 통과시킨다. 여기서 선이 끊기면 하루가 두 토막으로 보인다.
+            ZStack {
+                Rectangle()
+                    .fill(PopoverChrome.divider)
+                    .frame(width: 1.5)
+                    .frame(maxHeight: .infinity)
+                Circle()
+                    .fill(PopoverChrome.accent)
+                    .frame(width: 7, height: 7)
+            }
+            .frame(width: 24)
             Text("지금")
                 .font(.system(size: 8.5, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.accent)

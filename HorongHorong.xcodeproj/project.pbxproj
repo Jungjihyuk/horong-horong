@@ -405,6 +405,7 @@
 		7E22CFBD4020C70B49D88974 /* NewsReportArchiveEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33CDFAE3F3847981C1A9CF1 /* NewsReportArchiveEntry.swift */; };
 		7E3A9EE6437529D1AC4C8D19 /* onboarding.md in Resources */ = {isa = PBXBuildFile; fileRef = 53453D33973DFCC4304BDE46 /* onboarding.md */; };
 		7E4AD7C65566F10A43CA306B /* SwiftDataAppUsageRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA51C9D309C898AF5CE99F0 /* SwiftDataAppUsageRepository.swift */; };
+		7EC3722D9FFE80C48F923041 /* TodoTimelineCapsuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2664FD7F202994DCB7E456CB /* TodoTimelineCapsuleTests.swift */; };
 		7EFEA8495914FF81BFB2C6B1 /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A793B40386850181A1A384 /* DailyTimelineView.swift */; };
 		7F1737F6DF97187FCF6651F8 /* DiaryBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99B804780B0C37CC8ED7D44 /* DiaryBrowserView.swift */; };
 		7F1F0F681E8411C24BA9E852 /* Todo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A46CE96D16BF2EAC24842 /* Todo.swift */; };
@@ -868,6 +869,7 @@
 		24BF28A6F98CE0B18F0A140C /* SwiftDataAchievementRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataAchievementRepository.swift; sourceTree = "<group>"; };
 		2593761C30705FA019608C59 /* QuickMemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickMemoView.swift; sourceTree = "<group>"; };
 		260F528BF972B9B8B1E0DB9A /* FocusScoreMonitoringGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusScoreMonitoringGateway.swift; sourceTree = "<group>"; };
+		2664FD7F202994DCB7E456CB /* TodoTimelineCapsuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoTimelineCapsuleTests.swift; sourceTree = "<group>"; };
 		26BCD3E7883653ABAD249C67 /* NewsSourceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsSourceSheets.swift; sourceTree = "<group>"; };
 		26D11427730BE431936DEE67 /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
 		282D63B0ACE50F9754040791 /* HorongHorongSchemaV3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorongHorongSchemaV3.swift; sourceTree = "<group>"; };
@@ -1751,6 +1753,7 @@
 				36A8DCC5F85ECFD59224C387 /* TodoRowMetricsTests.swift */,
 				85872F690550C9D8D8C53E9A /* TodoScheduleTextTests.swift */,
 				AB72FD2FB541D69FF51599DC /* TodoSwipeDirectionTests.swift */,
+				2664FD7F202994DCB7E456CB /* TodoTimelineCapsuleTests.swift */,
 				00D754FE7D4BDE2F31CC9AE7 /* TodoViewModelTests.swift */,
 				64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */,
 				2C672B23F6B026868BE6E18E /* VaultFileStoreTests.swift */,
@@ -3184,6 +3187,7 @@
 				25636D0D1CFAA8FDAB11CA7F /* TodoRowMetricsTests.swift in Sources */,
 				46FA692281A47EF047E1EDD1 /* TodoScheduleTextTests.swift in Sources */,
 				E1A0182B14FD2AE0E3B407DA /* TodoSwipeDirectionTests.swift in Sources */,
+				7EC3722D9FFE80C48F923041 /* TodoTimelineCapsuleTests.swift in Sources */,
 				D37807286F7056A880AA400A /* TodoViewModelTests.swift in Sources */,
 				D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */,
 				3B56944E469311A0CA969927 /* VaultFileStoreTests.swift in Sources */,
