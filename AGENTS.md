@@ -142,6 +142,28 @@ static func resolve(
 - 규칙 및 정책: `Policy`
 - 인메모리 캐시 소유: `Store`
 
+### R11. 측정한 크기를 상위 상태로 되먹이지 않는다
+`GeometryReader` 로 잰 크기를 상위 `@State` 에 쓰고 **그 값이 다시 측정 대상의 크기를 정하면**
+레이아웃이 수렴하지 못하고 메인 스레드가 100% CPU 로 묶인다. 실제로 앱이 멈췄다
+(2026-09-07 · Todo 일정 카드).
+
+```swift
+// BAD: 잰 값이 한 바퀴 돌아 자기 폭을 다시 정한다
+GeometryReader { proxy in
+    Color.clear.onChange(of: proxy.size.width) { _, w in minimumWidth = w }  // → 상위 @State
+}                                                                            // → 패널 폭 → 재측정
+
+// GOOD: 좁아지면 표현을 바꾼다. 측정 결과가 상태로 새어 나오지 않는다
+ViewThatFits(in: .horizontal) {
+    Text("미리알림에 \(count)개 연동 중")
+    Text("\(count)개 연동")
+}
+```
+
+- 크기 제약이 꼭 필요하면 뷰 트리를 거치지 말고 `NSAttributedString` 으로 Policy 에서 계산한다 (R9 와 동일한 이유로 테스트가 가능해진다).
+- 측정이 불가피하면 히스테리시스(예: 0.5pt 이상 변할 때만 반영)로 진동을 구조적으로 막는다.
+- `body` 최상단의 `GeometryReader` 는 자식에게 크기를 제안해 재배치를 연쇄시킨다. `onGeometryChange` 를 쓴다.
+
 ---
 
 ## 2. 계층 및 의존성 규칙

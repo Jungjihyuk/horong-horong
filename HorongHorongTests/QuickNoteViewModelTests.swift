@@ -12,6 +12,12 @@ final class QuickNoteViewModelTests: XCTestCase {
         var items: [QuickNoteItem] = []
         private(set) var fetchCount = 0
 
+        func notes(createdBetween start: Date, and end: Date) throws -> [QuickNoteItem] {
+            items
+                .filter { $0.createdAt >= start && $0.createdAt < end }
+                .sorted { $0.createdAt < $1.createdAt }
+        }
+
         func notes(matching query: String, limit: Int) throws -> [QuickNoteItem] {
             fetchCount += 1
             let sorted = items.sorted { $0.updatedAt > $1.updatedAt }
@@ -32,7 +38,7 @@ final class QuickNoteViewModelTests: XCTestCase {
         func note(id: UUID) throws -> QuickNoteItem? { items.first { $0.id == id } }
 
         @discardableResult
-        func add(content: String, icon: String?) throws -> QuickNoteItem {
+        func add(content: String) throws -> QuickNoteItem {
             let made = QuickNoteItem(id: UUID(), content: content, isPinned: false, createdAt: Date(), updatedAt: Date())
             items.append(made)
             return made

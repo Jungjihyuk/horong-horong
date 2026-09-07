@@ -35,7 +35,7 @@ final class SwiftDataReminderImportRepository: ReminderImportRepository {
         var imported = 0
 
         for item in items where !item.isCompleted && !existing.contains(item.id) {
-            let record = Todo(content: Self.content(from: item), icon: MemoIcon.defaultIcon)
+            let record = Todo(content: Self.content(from: item))
             let schedule = Self.schedule(for: item, history: history)
             record.startDate = schedule.start
             record.deadline = schedule.deadline

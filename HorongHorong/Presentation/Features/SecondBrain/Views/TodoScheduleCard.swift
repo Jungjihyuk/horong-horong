@@ -22,8 +22,6 @@ struct TodoScheduleCard: View {
     let onCustomDuration: () -> Void
     @Binding var showsCustomDuration: Bool
     let customDurationContent: () -> AnyView
-    /// 날짜 줄이 접히지 않으려면 카드가 최소 몇 pt 여야 하는지 알린다.
-    let onMinimumWidthChange: (CGFloat) -> Void
 
     @State private var showsCalendar = false
     @State private var activeTimePicker: TimePickerTarget?
@@ -44,8 +42,7 @@ struct TodoScheduleCard: View {
         onClearDuration: @escaping () -> Void,
         onCustomDuration: @escaping () -> Void,
         showsCustomDuration: Binding<Bool>,
-        @ViewBuilder customDurationContent: @escaping () -> CustomDurationContent,
-        onMinimumWidthChange: @escaping (CGFloat) -> Void
+        @ViewBuilder customDurationContent: @escaping () -> CustomDurationContent
     ) {
         self.startDate = startDate
         self.deadline = deadline
@@ -62,7 +59,6 @@ struct TodoScheduleCard: View {
         self.onCustomDuration = onCustomDuration
         _showsCustomDuration = showsCustomDuration
         self.customDurationContent = { AnyView(customDurationContent()) }
-        self.onMinimumWidthChange = onMinimumWidthChange
         _displayedMonth = State(initialValue: startDate ?? today)
     }
 
@@ -129,8 +125,6 @@ struct TodoScheduleCard: View {
 
     private static let dateLineSpacing: CGFloat = 7
     private static let clearButtonSize: CGFloat = 22
-    /// 카드 좌우 안쪽 여백(13×2) + 날짜와 × 사이 최소 간극.
-    private static let dateLineChromeWidth: CGFloat = 13 * 2 + 6
 
     private var dateLine: some View {
         HStack(spacing: Self.dateLineSpacing) {
@@ -149,21 +143,20 @@ struct TodoScheduleCard: View {
                 .accessibilityLabel("일정 지우기")
             }
         }
-        .background(alignment: .leading) { dateLineRuler }
     }
 
     @ViewBuilder
     private var dateLineContent: some View {
         if let startDate {
-            Text(TodoScheduleText.fullDay(startDate, now: today, calendar: calendar))
-                .font(.system(size: 15.5, weight: .heavy, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
-                // 패널을 좁혀도 두 줄로 접히지 않는다. 최소 너비가 이 줄을 지켜 주지만,
-                // 창 자체가 좁아 그마저 못 지킬 때는 접는 대신 말줄임으로 버틴다.
-                .lineLimit(1)
-            pill(TodoDayTime.label(startDate, calendar: calendar), strong: true)
-            if let badge = TodoScheduleText.relativeBadge(startDate, now: today, calendar: calendar) {
-                pill(badge, strong: false)
+            // 좁아지면 «배지 → 긴 요일» 순으로 덜어낸다. 시간 알약은 끝까지 남긴다 —
+            // 몇 시인지가 이 카드의 핵심이라 그것부터 버리면 카드가 제 구실을 못 한다.
+            //
+            // 폭을 재서 패널 최소 너비로 되먹이던 예전 방식은 «측정 → 상태 → 폭 → 재측정»
+            // 고리를 만들어 레이아웃이 수렴하지 못했다 (2026-09-07 인시던트).
+            ViewThatFits(in: .horizontal) {
+                dateLineGroup(startDate, short: false, badge: true)
+                dateLineGroup(startDate, short: false, badge: false)
+                dateLineGroup(startDate, short: true, badge: false)
             }
         } else {
             Text("날짜 없음")
@@ -173,23 +166,18 @@ struct TodoScheduleCard: View {
         }
     }
 
-    /// 보이지 않는 자. 날짜 줄을 한 줄로 폈을 때의 너비를 재서 바깥에 알린다.
-    /// 보이는 쪽은 말줄임이 걸려 있어 스스로는 온전한 폭을 알려 주지 못한다.
-    private var dateLineRuler: some View {
+    /// `ViewThatFits` 후보 한 벌. 좁아질수록 요일을 줄이고 배지를 뺀다.
+    private func dateLineGroup(_ date: Date, short: Bool, badge: Bool) -> some View {
         HStack(spacing: Self.dateLineSpacing) {
-            dateLineContent
-            if startDate != nil {
-                Color.clear.frame(width: Self.clearButtonSize, height: 1)
-            }
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .hidden()
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onChange(of: proxy.size.width, initial: true) { _, width in
-                        onMinimumWidthChange(width + Self.dateLineChromeWidth)
-                    }
+            Text(short
+                 ? TodoScheduleText.shortDay(date, now: today, calendar: calendar)
+                 : TodoScheduleText.fullDay(date, now: today, calendar: calendar))
+                .font(.system(size: 15.5, weight: .heavy, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+                .lineLimit(1)
+            pill(TodoDayTime.label(date, calendar: calendar), strong: true)
+            if badge, let text = TodoScheduleText.relativeBadge(date, now: today, calendar: calendar) {
+                pill(text, strong: false)
             }
         }
     }
@@ -225,11 +213,8 @@ struct TodoScheduleCard: View {
         guard let startDate else { return }
         let offset = dayOffset(to: startDate)
         guard (0..<Self.stripDayCount).contains(offset) else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(offset, anchor: .center) }
-        } else {
-            proxy.scrollTo(offset, anchor: .center)
-        }
+        // 배치가 끝난 뒤로 미룬다 — 이유는 `scrollAfterLayout` 주석 참고.
+        proxy.scrollAfterLayout(to: offset, animation: animated ? .easeOut(duration: 0.2) : nil)
     }
 
     private func dayCell(offset: Int, date: Date) -> some View {
@@ -418,10 +403,11 @@ struct TodoScheduleCard: View {
             HStack(spacing: 8) {
                 rowLabel("시간")
                 Spacer(minLength: 0)
+                // 지우기만 남긴다. 직접 입력은 프리셋 줄로 내려갔다 — 하는 일이 같은 것끼리
+                // 모여야 «이것도 소요 시간을 정하는 버튼» 임이 아이콘 해독 없이 읽힌다.
                 if durationMinutes != nil {
                     clearButton("걸리는 시간 지우기", action: onClearDuration)
                 }
-                durationValueChip
             }
 
             HStack(spacing: 6) {
@@ -456,6 +442,7 @@ struct TodoScheduleCard: View {
                 ForEach(durationSlots) { slot in
                     durationChip(slot, start: start)
                 }
+                customDurationChip
             }
 
             if let activeTimePicker {
@@ -504,18 +491,32 @@ struct TodoScheduleCard: View {
         String(format: "%02d:%02d", calendar.component(.hour, from: date), calendar.component(.minute, from: date))
     }
 
-    /// 소요 시간 프리셋 옆의 직접 입력 버튼. 팝오버는 이 버튼을 기준으로 열린다.
-    private var durationValueChip: some View {
+    /// 프리셋에 없는 길이를 넣는 칸. **프리셋과 같은 줄·같은 크기**라 여기서도 소요 시간을
+    /// 정한다는 게 읽힌다. 점선 테두리는 이 카드에서 «아직 값이 없는 입력구»에 쓰는 표시다
+    /// («종료 시각» 자리표시자와 같은 언어).
+    private var customDurationChip: some View {
         Button(action: onCustomDuration) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(PopoverChrome.inkSecondary)
-                .frame(width: 24, height: 24)
-                .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            VStack(spacing: 1) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 11, weight: .bold))
+                Text("직접")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(PopoverChrome.inkSecondary)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(PopoverChrome.border, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2.5]))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("소요 시간 직접 입력")
-        .popover(isPresented: $showsCustomDuration, attachmentAnchor: .rect(.bounds), arrowEdge: .trailing) {
+        .accessibilityLabel("소요 시간 직접 입력")
+        .popover(isPresented: $showsCustomDuration, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             customDurationContent()
         }
     }

@@ -75,12 +75,11 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         let repository = SwiftDataTodoRepository(context: container.mainContext)
         let before = Date()
 
-        let created = try repository.addTodayTask(content: "지금 할 일", icon: "📝")
+        let created = try repository.addTodayTask(content: "지금 할 일")
 
         let startDate = try XCTUnwrap(created.startDate)
         XCTAssertGreaterThanOrEqual(startDate, before)
         XCTAssertLessThanOrEqual(startDate, Date())
-        XCTAssertEqual(created.icon, "📝")
         XCTAssertEqual(created.content, "지금 할 일")
     }
 
@@ -89,7 +88,7 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
         let container = try makeContainer()
         let repository = SwiftDataTodoRepository(context: container.mainContext)
 
-        try repository.addTodayTask(content: "지금 할 일", icon: nil)
+        try repository.addTodayTask(content: "지금 할 일")
 
         XCTAssertEqual(try repository.activeTodos(matching: "").map(\.content), ["지금 할 일"])
     }

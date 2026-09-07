@@ -17,26 +17,6 @@ private enum TodoDurationUnit: Int, CaseIterable, Identifiable {
     }
 }
 
-/// 목록 머리말에서 글자를 뺀 고정 폭. 목록이 최소한 얼마나 넓어야 하는지 계산하는 데 쓴다.
-///
-/// 여기에 «미리알림에 N개 연동 중» 의 **실제 글자 폭**을 더한 값이 목록의 최소 너비다.
-/// 개수 자릿수와 밀도(글자 크기) 설정에 따라 글자 폭이 달라지므로 상수로 못 박지 않고 재서 쓴다.
-private enum TodoHeaderMetrics {
-    static let horizontalPadding: CGFloat = 18
-    static let titleSearchSpacing: CGFloat = 12
-    static let titleSearchMinimumGap: CGFloat = 8
-    static let searchFieldWidth: CGFloat = 220
-
-    /// `HStack(spacing:)` 은 `Spacer` 양옆에도 적용되므로 간격을 두 번 센다.
-    static let chromeWidth =
-        horizontalPadding * 2
-        + titleSearchSpacing * 2
-        + titleSearchMinimumGap
-        + searchFieldWidth
-
-    static let subtitleFont = Font.system(size: 11.5, weight: .semibold, design: .rounded)
-}
-
 /// 할 일 한 줄(카드)의 치수. 높이를 조정할 때 여기만 만진다.
 enum TodoRowMetrics {
     static let horizontalPadding: CGFloat = 13
@@ -93,10 +73,6 @@ struct TodoBrowserView: View {
     /// 끄는 동안에만 쓰는 값. 손을 뗄 때 한 번만 저장해 UserDefaults 를 매 프레임 건드리지 않는다.
     @State private var draggingDetailPaneWidth: CGFloat?
     @State private var detailPaneWidthAtDragStart: CGFloat?
-    /// «미리알림에 N개 연동 중» 을 한 줄로 폈을 때의 폭. 목록 최소 너비의 근거다.
-    @State private var headerSubtitleWidth: CGFloat = 0
-    /// «7. 6. 월요일 01:37 61일 지남» 이 접히지 않으려면 필요한 폭. 상세 최소 너비의 근거다.
-    @State private var scheduleCardMinimumWidth: CGFloat = 0
 
     /// 걸리는 시간 네 칸. 왼쪽 둘은 최근에 쓴 값이 흘러가고, 오른쪽 둘은 사용자가 박아 둔다.
     @AppStorage(Constants.AppStorageKey.todoDurationRecent)
@@ -177,25 +153,17 @@ struct TodoBrowserView: View {
         durationPinnedRaw = TodoDurationSlots.encode(next.pinned)
     }
 
-    /// 일정 카드의 날짜 줄이 접히기 직전까지가 상세가 좁아질 수 있는 한계다.
-    /// 카드가 요구하는 폭에 상세 패널 자체의 좌우 여백(16×2)을 더한다.
-    private var detailPaneMinimumWidth: CGFloat {
-        guard scheduleCardMinimumWidth > 0 else { return 0 }
-        return scheduleCardMinimumWidth + 32
-    }
-
-    /// 부제목이 두 줄로 접히기 직전까지가 목록이 좁아질 수 있는 한계다.
-    private var listPaneHeaderMinimumWidth: CGFloat {
-        TodoHeaderMetrics.chromeWidth + headerSubtitleWidth
-    }
-
     /// 창이 좁아졌거나 저장값이 오래됐을 수 있으므로 그릴 때마다 지금 창 크기로 다시 자른다.
+    ///
+    /// **최소 너비는 상수다.** 예전에는 머리말과 일정 카드의 글자 폭을 `GeometryReader` 로
+    /// 재서 여기에 넣었는데, 그 값이 다시 두 칸의 폭을 정하는 바람에 레이아웃이 수렴하지
+    /// 못하고 앱이 멈췄다. 좁아졌을 때의 표현은 `ViewThatFits` 가 맡는다.
     private func resolvedDetailPaneWidth(totalWidth: CGFloat) -> CGFloat {
         PaneWidthPolicy.resolveTrailing(
             proposed: draggingDetailPaneWidth ?? CGFloat(storedDetailPaneWidth),
             totalWidth: totalWidth,
-            leadingMinimum: max(Constants.todoListPaneMinWidth, listPaneHeaderMinimumWidth),
-            trailingMinimum: max(Constants.todoDetailPaneMinWidth, detailPaneMinimumWidth),
+            leadingMinimum: Constants.todoListPaneMinWidth,
+            trailingMinimum: Constants.todoDetailPaneMinWidth,
             trailingMaximum: Constants.todoDetailPaneMaxWidth
         )
     }
@@ -224,20 +192,28 @@ struct TodoBrowserView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: TodoHeaderMetrics.titleSearchSpacing) {
+        HStack(alignment: .bottom, spacing: BrowserHeaderMetrics.titleSearchSpacing) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Todo")
-                    .font(.system(size: 19, weight: .heavy, design: .rounded))
+                    .font(BrowserHeaderMetrics.titleFont)
                     .foregroundStyle(PopoverChrome.ink)
-                Text(headerSubtitle)
-                    .font(TodoHeaderMetrics.subtitleFont)
-                    .foregroundStyle(PopoverChrome.inkTertiary)
-                    // 손잡이를 끝까지 당겨도 두 줄로 접히지 않게 한다. 창 자체가 좁아
-                    // 최소 너비마저 못 지키는 상황에서는 접는 대신 말줄임으로 버틴다.
+                    // 없으면 좁을 때 «To / do» 로 접힌다. 제목은 접히느니 잘리는 게 낫다.
                     .lineLimit(1)
-                    .background(alignment: .leading) { headerSubtitleRuler }
+                // 좁아지면 접히는 대신 짧은 표현으로 갈아탄다. 폭을 재서 최소 너비로
+                // 되먹이면 «측정 → 상태 → 폭 → 재측정» 고리가 생겨 레이아웃이 수렴하지 않는다.
+                ViewThatFits(in: .horizontal) {
+                    Text("미리알림에 \(viewModel.linkedCount)개 연동 중")
+                    Text("\(viewModel.linkedCount)개 연동 중")
+                    Text("\(viewModel.linkedCount)개 연동")
+                }
+                .font(BrowserHeaderMetrics.subtitleFont)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .lineLimit(1)
             }
-            Spacer(minLength: TodoHeaderMetrics.titleSearchMinimumGap)
+            // 자리를 놓고 다투면 검색창이 먼저 양보한다. 제목·부제가 먼저 뭉개지면
+            // 여기가 무슨 화면인지부터 읽히지 않는다.
+            .layoutPriority(1)
+            Spacer(minLength: BrowserHeaderMetrics.titleSearchMinimumGap)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -245,37 +221,19 @@ struct TodoBrowserView: View {
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 12)
-            .frame(width: TodoHeaderMetrics.searchFieldWidth, height: 36)
+            // 220 고정이면 좁은 칸에서 제목 자리를 통째로 먹는다. 줄어들 수 있게 둔다.
+            .frame(minWidth: BrowserHeaderMetrics.searchFieldMinimumWidth,
+                   maxWidth: BrowserHeaderMetrics.searchFieldWidth,
+                   minHeight: 36, maxHeight: 36)
             .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
         }
-        .padding(.horizontal, TodoHeaderMetrics.horizontalPadding)
+        .padding(.horizontal, BrowserHeaderMetrics.horizontalPadding)
         .padding(.top, 16)
         .padding(.bottom, 12)
-    }
-
-    private var headerSubtitle: String {
-        "미리알림에 \(viewModel.linkedCount)개 연동 중"
-    }
-
-    /// 보이지 않는 자. 같은 글자를 한 줄로 편 폭을 재서 목록 최소 너비에 쓴다.
-    /// 보이는 쪽은 말줄임이 걸려 있어 스스로는 온전한 폭을 알려 주지 못한다.
-    private var headerSubtitleRuler: some View {
-        Text(headerSubtitle)
-            .font(TodoHeaderMetrics.subtitleFont)
-            .fixedSize(horizontal: true, vertical: false)
-            .hidden()
-            .background {
-                GeometryReader { proxy in
-                    Color.clear
-                        .onChange(of: proxy.size.width, initial: true) { _, width in
-                            headerSubtitleWidth = width
-                        }
-                }
-            }
     }
 
     private var composer: some View {
@@ -290,7 +248,7 @@ struct TodoBrowserView: View {
                 .focused($composerFocused)
                 .onSubmit(submit)
 
-            if let summary = viewModel.composerScheduleSummary {
+            if let summary = viewModel.composerScheduleSummary() {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 11, weight: .semibold))
@@ -324,7 +282,7 @@ struct TodoBrowserView: View {
                 composerHelpPopover
             }
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.composerScheduleSummary)
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.composerScheduleSummary())
         .padding(.horizontal, 13)
         .frame(height: 44)
         .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
@@ -819,8 +777,7 @@ struct TodoBrowserView: View {
                 showsCustomDuration = true
             },
             showsCustomDuration: $showsCustomDuration,
-            customDurationContent: { customDurationPopover(for: item) },
-            onMinimumWidthChange: { scheduleCardMinimumWidth = $0 }
+            customDurationContent: { customDurationPopover(for: item) }
         )
     }
 
@@ -865,6 +822,15 @@ struct TodoBrowserView: View {
         }
     }
 
+    /// 직접 입력한 길이를 할 일에 적고 팝오버를 닫는다. 엔터와 «적용» 이 같은 길을 타야
+    /// 둘 중 무엇을 눌렀는지에 따라 결과가 달라지지 않는다.
+    private func applyCustomDuration(for item: TodoItem, amount: Int) {
+        let minutes = min(999, max(1, amount)) * customDurationUnit.rawValue
+        viewModel.setDuration(item.id, minutes: minutes)
+        rememberDuration(minutes)
+        showsCustomDuration = false
+    }
+
     private func customDurationPopover(for item: TodoItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("소요 시간")
@@ -883,7 +849,10 @@ struct TodoBrowserView: View {
                 NumberField(
                     value: $customDurationAmount,
                     range: 1...999,
-                    width: 58
+                    width: 58,
+                    // 엔터가 곧 «적용» 이다. 값만 확정하고 팝오버가 남아 있으면
+                    // 「엔터를 치고 적용을 또 눌러야 하는」 두 번 손이 된다.
+                    onCommit: { applyCustomDuration(for: item, amount: $0) }
                 )
 
                 Picker("", selection: $customDurationUnit) {
@@ -907,11 +876,7 @@ struct TodoBrowserView: View {
             HStack {
                 Spacer()
                 Button("적용") {
-                    let amount = min(999, max(1, customDurationAmount))
-                    let minutes = amount * customDurationUnit.rawValue
-                    viewModel.setDuration(item.id, minutes: minutes)
-                    rememberDuration(minutes)
-                    showsCustomDuration = false
+                    applyCustomDuration(for: item, amount: customDurationAmount)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -1181,7 +1146,7 @@ struct TodoCardBody: View, Equatable {
                     dueChip(chip)
                 }
                 if let list, let swatch {
-                    listBadge(list, swatch: swatch)
+                    ReminderListBadge(title: list.title, swatch: swatch, isLinked: isLinked)
                 }
             }
         }
@@ -1194,24 +1159,6 @@ struct TodoCardBody: View, Equatable {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(Self.chipBackground(chip.tone), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-    }
-
-    private func listBadge(_ list: ReminderListOption, swatch: ReminderListSwatch) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(swatch.dot)
-                .frame(width: 6, height: 6)
-            if isLinked {
-                Image(systemName: "bell")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            Text(list.title)
-        }
-        .font(.system(size: 10.5, weight: .heavy, design: .rounded))
-        .foregroundStyle(swatch.ink)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(swatch.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private static func chipForeground(_ tone: TodoDueChip.Tone) -> Color {

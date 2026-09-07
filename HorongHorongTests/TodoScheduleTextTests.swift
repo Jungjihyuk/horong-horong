@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import 호롱호롱
 
 /// 상세 화면이 날짜를 사람 말로 옮기는 규칙을 못 박는다.
@@ -64,6 +65,33 @@ final class TodoScheduleTextTests: XCTestCase {
     func testDifferentYearShowsTheYear() {
         let text = TodoScheduleText.fullDay(day(1, 3, year: 2027), now: day(8, 31), calendar: calendar)
         XCTAssertTrue(text.contains("2027"), "해가 다르면 연도를 붙여야 헷갈리지 않는다")
+    }
+
+    // MARK: - 좁은 칸용 짧은 날짜
+
+    /// 칸이 좁아도 «무슨 날인지» 는 남아야 한다. 요일만 줄이고 월·일은 지킨다.
+    func testShortDayKeepsMonthAndDay() {
+        let short = TodoScheduleText.shortDay(day(9, 10), now: day(9, 7), calendar: calendar)
+        XCTAssertTrue(short.contains("9"))
+        XCTAssertTrue(short.contains("10"))
+    }
+
+    /// **글자 «수» 로 재면 안 된다.** 한국어는 «목요일» → «(목)» 이라 개수가 같다.
+    /// 좁은 칸에 들어가는지는 그려지는 폭으로만 판정할 수 있다.
+    func testShortDayIsNarrowerThanFullDay() {
+        let full = TodoScheduleText.fullDay(day(9, 10), now: day(9, 7), calendar: calendar)
+        let short = TodoScheduleText.shortDay(day(9, 10), now: day(9, 7), calendar: calendar)
+        XCTAssertNotEqual(short, full)
+        let font = NSFont.systemFont(ofSize: 15.5, weight: .heavy)
+        let width: (String) -> CGFloat = { ($0 as NSString).size(withAttributes: [.font: font]).width }
+        XCTAssertLessThan(width(short), width(full), "짧은 쪽이 더 넓으면 좁은 칸에서 쓸 이유가 없다")
+    }
+
+    func testShortDayFollowsTheSameYearRule() {
+        let sameYear = TodoScheduleText.shortDay(day(8, 31), now: day(8, 1), calendar: calendar)
+        XCTAssertFalse(sameYear.contains("2026"))
+        let otherYear = TodoScheduleText.shortDay(day(1, 3, year: 2027), now: day(8, 31), calendar: calendar)
+        XCTAssertTrue(otherYear.contains("2027"), "해가 다르면 짧은 표현에서도 연도를 지킨다")
     }
 
     // MARK: - 미리알림 안내 문구

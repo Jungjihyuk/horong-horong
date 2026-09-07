@@ -54,7 +54,7 @@ final class TodoViewModelTests: XCTestCase {
         func linkableTodos(matching query: String) throws -> [TodoItem] { filter(items, query) }
 
         @discardableResult
-        func addTodayTask(content: String, icon: String?) throws -> TodoItem {
+        func addTodayTask(content: String) throws -> TodoItem {
             try add(title: content, startDate: Date(), deadline: nil)
         }
 
@@ -64,8 +64,7 @@ final class TodoViewModelTests: XCTestCase {
                 id: UUID(), content: title, startDate: startDate, deadline: deadline,
                 isCompleted: false, completionStateChangedAt: nil,
                 deletedAt: nil, isLinkedToReminders: false,
-                reminderCalendarIdentifier: nil,
-                icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
+                reminderCalendarIdentifier: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
             )
             items.append(made)
             return made
@@ -111,9 +110,6 @@ final class TodoViewModelTests: XCTestCase {
             replace(id) { $0.withPinned(isPinned) }
         }
 
-        func setIcon(id: UUID, icon: String) throws {
-            replace(id) { $0.withIcon(icon) }
-        }
 
         func setReminderList(id: UUID, listID: String) throws {
             replace(id) { $0.with(reminderCalendarIdentifier: .some(listID)) }
@@ -175,8 +171,7 @@ final class TodoViewModelTests: XCTestCase {
             id: UUID(), content: content, startDate: start, deadline: deadline,
             isCompleted: completed, completionStateChangedAt: completedAt,
             deletedAt: deletedAt, isLinkedToReminders: linked,
-            reminderCalendarIdentifier: nil,
-            icon: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
+            reminderCalendarIdentifier: nil, isPinned: false, createdAt: Date(), updatedAt: Date()
         )
     }
 
@@ -444,11 +439,14 @@ final class TodoViewModelTests: XCTestCase {
         let viewModel = TodoViewModel(repository: repository)
         viewModel.reload()
 
+        // 기준 시각을 넣어 검사한다 — 시각을 적지 않은 부분은 «적는 순간»에서 시작하므로
+        // 기준을 고정하지 않으면 분이 넘어가는 순간에 결과가 흔들린다.
+        let now = Date()
         viewModel.composerText = "내일 90분 회의"
-        viewModel.submitComposer()
+        viewModel.submitComposer(now: now)
 
         let created = try! XCTUnwrap(repository.items.first)
-        let expected = TodoComposerPolicy.parse("내일 90분 회의", now: viewModel.todayReferenceDate)
+        let expected = TodoComposerPolicy.parse("내일 90분 회의", now: now)
         XCTAssertEqual(created.displayTitle, "회의")
         XCTAssertEqual(created.startDate, expected.startDate)
         XCTAssertEqual(created.deadline, expected.deadline)
@@ -472,15 +470,17 @@ final class TodoViewModelTests: XCTestCase {
     func testComposerScheduleSummaryReflectsParsing() {
         let repository = FakeRepository()
         let viewModel = TodoViewModel(repository: repository)
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))!
 
         viewModel.composerText = "장보기"
-        XCTAssertNil(viewModel.composerScheduleSummary)
+        XCTAssertNil(viewModel.composerScheduleSummary(now: now))
 
         viewModel.composerText = "내일 9:30~10:00 회의"
-        XCTAssertEqual(viewModel.composerScheduleSummary, "내일 09:30 ~ 10:00")
+        XCTAssertEqual(viewModel.composerScheduleSummary(now: now), "내일 09:30 ~ 10:00")
 
+        // 시각을 적지 않았으므로 **적는 순간**이 뱃지에 그대로 뜬다.
         viewModel.composerText = "모레 1시간 운동"
-        XCTAssertEqual(viewModel.composerScheduleSummary, "모레 09:00 (1시간)")
+        XCTAssertEqual(viewModel.composerScheduleSummary(now: now), "모레 14:37 (1시간)")
     }
 
     func testMoveIgnoresUnknownIdentifier() {
@@ -735,8 +735,7 @@ private extension TodoItem {
             isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
             deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
-            reminderCalendarIdentifier: reminderCalendarIdentifier,
-            icon: icon, isPinned: value, createdAt: createdAt, updatedAt: updatedAt
+            reminderCalendarIdentifier: reminderCalendarIdentifier, isPinned: value, createdAt: createdAt, updatedAt: updatedAt
         )
     }
 
@@ -746,8 +745,7 @@ private extension TodoItem {
             isCompleted: isCompleted, completionStateChangedAt: completionStateChangedAt,
             deletedAt: deletedAt,
             isLinkedToReminders: isLinkedToReminders,
-            reminderCalendarIdentifier: reminderCalendarIdentifier,
-            icon: value, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt
+            reminderCalendarIdentifier: reminderCalendarIdentifier, isPinned: isPinned, createdAt: createdAt, updatedAt: updatedAt
         )
     }
 
@@ -771,7 +769,6 @@ private extension TodoItem {
             deletedAt: deletedAt ?? self.deletedAt,
             isLinkedToReminders: isLinkedToReminders ?? self.isLinkedToReminders,
             reminderCalendarIdentifier: reminderCalendarIdentifier ?? self.reminderCalendarIdentifier,
-            icon: icon,
             isPinned: isPinned,
             createdAt: createdAt,
             updatedAt: updatedAt
