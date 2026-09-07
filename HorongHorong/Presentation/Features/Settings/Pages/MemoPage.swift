@@ -24,6 +24,12 @@ struct MemoPage: View {
     private var selectedReminderCalendarIDsValue = ""
     @AppStorage(Constants.AppStorageKey.todoDefaultDuration)
     private var defaultTodoDurationMinutes = Constants.defaultTodoDurationMinutes
+    @AppStorage(Constants.AppStorageKey.diarySleepAxisStartHour)
+    private var sleepAxisStartHour = DiarySleepAxis.default.startHour
+    @AppStorage(Constants.AppStorageKey.diarySleepAxisEndHour)
+    private var sleepAxisEndHour = DiarySleepAxis.default.endHour
+    @AppStorage(Constants.AppStorageKey.diarySleepAxisTickInterval)
+    private var sleepAxisTickInterval = DiarySleepAxis.default.tickInterval
 
     private let todoDurationOptions = [15, 30, 45, 60, 90, 120, 180]
 
@@ -100,6 +106,8 @@ struct MemoPage: View {
                 }
             }
 
+            diarySleepAxisCard
+
             remindersImportCard
         }
         .onAppear {
@@ -107,6 +115,72 @@ struct MemoPage: View {
                 loadReminderLists(selectDefaultsIfNeeded: false)
             }
         }
+    }
+
+    /// 수면 타임라인의 가로축.
+    ///
+    /// 새벽 4시에 자는 사람에게 «21시 → 12시» 축은 절반이 빈 자리다. 범위와 눈금을 직접 잡게 둔다.
+    private var diarySleepAxisCard: some View {
+        SettingsGroupCard("일기 수면 기록") {
+            SettingsRow(
+                "타임라인 범위",
+                subtitle: "일기에서 취침·기상 시각을 끌어 적는 가로축의 시작과 끝입니다. 시작이 끝보다 늦으면 전날 시각으로 읽습니다. 현재 \(DiarySleepAxisText.summary(sleepAxis))."
+            ) {
+                HStack(spacing: 6) {
+                    Picker("시작", selection: $sleepAxisStartHour) {
+                        ForEach(DiarySleepAxis.selectableHours, id: \.self) { hour in
+                            Text(DiarySleepAxisText.hour(hour)).tag(hour)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 88)
+
+                    Text("→").foregroundStyle(.secondary)
+
+                    Picker("끝", selection: $sleepAxisEndHour) {
+                        ForEach(DiarySleepAxis.selectableHours, id: \.self) { hour in
+                            Text(DiarySleepAxisText.hour(hour)).tag(hour)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 88)
+                }
+            }
+
+            SettingsRow(
+                "눈금 간격",
+                subtitle: "축에 시각을 몇 시간마다 표시할지 정합니다. 좁은 패널에서는 글자가 겹치지 않도록 자동으로 솎아 냅니다."
+            ) {
+                Picker("눈금 간격", selection: $sleepAxisTickInterval) {
+                    ForEach(DiarySleepAxis.selectableTickIntervals, id: \.self) { interval in
+                        Text(DiarySleepAxisText.interval(interval)).tag(interval)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            if sleepAxis != .default {
+                SettingsRow("기본값으로", subtitle: "전날 21시 → 당일 12시, 1시간마다") {
+                    Button("되돌리기") {
+                        sleepAxisStartHour = DiarySleepAxis.default.startHour
+                        sleepAxisEndHour = DiarySleepAxis.default.endHour
+                        sleepAxisTickInterval = DiarySleepAxis.default.tickInterval
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private var sleepAxis: DiarySleepAxis {
+        DiarySleepAxis(
+            startHour: sleepAxisStartHour,
+            endHour: sleepAxisEndHour,
+            tickInterval: sleepAxisTickInterval
+        )
     }
 
     private var remindersImportCard: some View {

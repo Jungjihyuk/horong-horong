@@ -391,6 +391,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var modelContainer: ModelContainer!
     /// 구현체 조립. `modelContainer` 가 만들어진 뒤에 세운다.
     private(set) var dependencies: DependencyContainer!
+    /// 화면 위에 떠 있는 쪽지 창들. `dependencies` 가 세워진 뒤에 만든다.
+    private(set) var stickyNotes: StickyNoteWidgetPresenter!
 
     override init() {
         super.init()
@@ -405,6 +407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modelContainer: modelContainer,
             newsPipelineService: appState.newsPipelineService
         )
+        stickyNotes = StickyNoteWidgetPresenter(repository: dependencies.referenceRepository)
         companionController = CompanionController(
             appState: appState,
             repository: dependencies.companionRepository
@@ -426,10 +429,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.migrateMemoToSecondBrainRecords(in: context)
         Self.migrateSecondBrainToDividedModels(in: context)
         mergeDuplicateDiaryEntries(in: context)
+        Self.backfillReferenceStructure(in: context)
         normalizeMemoFlags(in: context)
         seedDefaultCategoryRules(in: context)
         seedDefaultRewardCatalogItems(in: context)
         repairOrphanedPomodoroRecords(in: context)
+        stickyNotes.restoreAll()
 
         timerManager.setRepositories(
             focusSessions: SwiftDataFocusSessionRepository(context: context),
@@ -669,10 +674,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let existingDiaries = Set((try context.fetch(FetchDescriptor<Diary>())).map(\.id))
                 for entry in diaryEntries {
                     guard !existingDiaries.contains(entry.id) else { continue }
+                    // `causeRaw` 는 예전에 빠뜨려 이관 때마다 조용히 사라지던 값이다.
+                    // 옛 기록에는 슬롯이 없으므로 감정·원인은 «하루(전반)» 칸으로 들어간다.
                     let diary = Diary(
                         id: entry.id,
                         day: entry.day,
                         moodRaw: entry.moodRaw,
+                        causeRaw: entry.causeRaw,
                         sleepHours: entry.sleepHours,
                         sleepSourceRaw: entry.sleepSourceRaw,
                         stress: entry.stress,
@@ -745,6 +753,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// 남길 것은 **본문이 가장 긴 것**이다. 사용자가 실제로 쓴 글을 잃지 않는 것이
     /// 어느 쪽이 «원본»인지 따지는 것보다 중요하다. 길이가 같으면 최근에 고친 쪽을 남긴다.
+    /// 갈래 없이 `content` 한 덩어리로만 남아 있던 참고 자료를 구조로 갈라 준다.
+    ///
+    /// 한 번만 돈다. **`content` 는 건드리지 않는다** — 갈래 판정이 틀렸을 때 되돌릴 근거가
+    /// 그것뿐이고, 이미 채워진 행은 사용자가 고친 값일 수 있어 덮어쓰지 않는다.
+    static func backfillReferenceStructure(in context: ModelContext, defaults: UserDefaults = .standard) {
+        let migrationKey = "migration.referenceStructure.v1"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+
+        do {
+            let rows = try context.fetch(FetchDescriptor<Reference>())
+            for row in rows where row.kindRaw == nil {
+                let isLink = MemoClassifier.looksLikeURL(row.content)
+                row.kindRaw = (isLink ? ReferenceKind.link : .note).rawValue
+                row.title = NoteText.title(of: row.content)
+                row.url = isLink ? MemoClassifier.firstURL(in: row.content)?.absoluteString : nil
+                row.body = isLink ? "" : row.content
+                row.colorRaw = row.colorRaw ?? ReferenceNoteColor.fallback.rawValue
+                row.isWidget = row.isWidget ?? false
+            }
+            try context.save()
+            defaults.set(true, forKey: migrationKey)
+        } catch {
+            context.rollback()
+        }
+    }
+
     private func mergeDuplicateDiaryEntries(in context: ModelContext) {
         do {
             let entries = try context.fetch(FetchDescriptor<Diary>())
@@ -1305,6 +1339,10 @@ struct HorongHorongApp: App {
 
         Window(HubWindowPresenter.windowTitle, id: HubWindowPresenter.windowID) {
             MainHubWindow()
+                .frame(
+                    minWidth: Constants.hubWindowMinWidth,
+                    minHeight: Constants.hubWindowMinHeight
+                )
                 .environment(appDelegate.appState)
                 .environment(\.dependencies, appDelegate.dependencies)
                 .environment(\.appearanceDensity, appearanceDensity)
@@ -1314,6 +1352,9 @@ struct HorongHorongApp: App {
                 .id(onboardingDemoStore.isActive)
         }
         .defaultSize(width: Constants.hubWindowWidth, height: Constants.hubWindowHeight)
+        // 최소 크기를 실제로 지키게 한다. 이게 없으면 `frame(minWidth:)` 는 내용만 자를 뿐
+        // 창은 계속 줄어든다.
+        .windowResizability(.contentMinSize)
 
         Settings {
             SettingsRoot()

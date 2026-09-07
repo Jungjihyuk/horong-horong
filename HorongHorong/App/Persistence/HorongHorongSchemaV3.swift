@@ -18,8 +18,8 @@ enum HorongHorongSchemaV3: VersionedSchema {
         [
             Todo.self,
             QuickNote.self,
-            Reference.self,
-            Diary.self,
+            LegacyReferenceSchema.Reference.self,
+            LegacyDiarySchema.Diary.self,
             SecondBrainRecord.self,
             Memo.self,
             DiaryEntry.self,
