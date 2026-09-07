@@ -1,10 +1,13 @@
 import Foundation
 
-/// «걸리는 시간» 줄에 놓이는 네 칸.
+/// «걸리는 시간» 줄에 놓이는 세 칸. 네 번째 자리는 «직접 입력» 버튼이 쓴다.
 ///
-/// **왼쪽 둘은 최근에 쓴 값이 흘러가고, 오른쪽 둘은 사용자가 박아 둔 값이다.**
-/// 직접 입력한 5분이 다음에도 한 번에 잡히려면 어딘가 남아야 하는데, 네 칸을 모두 흘려보내면
-/// 늘 쓰는 «1시간» 이 밀려나 버린다. 그래서 절반만 흐르게 두고 절반은 고정한다.
+/// **한 칸은 최근에 쓴 값이 흘러가고, 두 칸은 사용자가 박아 둔 값이다.**
+/// 직접 입력한 5분이 다음에도 한 번에 잡히려면 어딘가 남아야 하는데, 모두 흘려보내면
+/// 늘 쓰는 «1시간» 이 밀려나 버린다. 그래서 하나만 흐르게 두고 둘은 고정한다.
+///
+/// **화면에는 길이 오름차순으로 놓는다.** 최근 것을 왼쪽에 두면 같은 칸의 값이 매번 달라져
+/// 손이 위치를 기억하지 못한다. 무엇이 흐르고 무엇이 고정인지는 자물쇠 표시로 구분한다.
 ///
 /// 순수 계산만 한다 — 저장은 화면이 맡는다. 그래야 «다섯 번 쓰면 무엇이 남는가» 를
 /// 저장소 없이 검사할 수 있다.
@@ -16,18 +19,19 @@ enum TodoDurationSlots {
         var id: Int { minutes }
     }
 
-    static let dynamicCount = 2
+    static let dynamicCount = 1
     static let pinnedCount = 2
     static let slotCount = dynamicCount + pinnedCount
 
-    static let defaultRecent = [15, 30]
+    static let defaultRecent = [30]
     static let defaultPinned = [60, 120]
 
-    /// 화면에 그릴 네 칸. 왼쪽 둘이 유동, 오른쪽 둘이 고정이다.
+    /// 화면에 그릴 세 칸. **길이 오름차순**이라 같은 값이 늘 같은 자리에 온다.
     static func slots(recent: [Int], pinned: [Int]) -> [Slot] {
         let clean = normalized(recent: recent, pinned: pinned)
-        return clean.recent.map { Slot(minutes: $0, isPinned: false) }
+        let all = clean.recent.map { Slot(minutes: $0, isPinned: false) }
             + clean.pinned.map { Slot(minutes: $0, isPinned: true) }
+        return all.sorted { $0.minutes < $1.minutes }
     }
 
     /// 방금 쓴 길이를 최근 목록 맨 앞에 올린다. 고정 칸에 이미 있는 값은 흘리지 않는다 —

@@ -21,6 +21,10 @@ protocol ReferenceRepository {
     @discardableResult
     func add(kind: ReferenceKind) throws -> ReferenceItem
 
+    /// 빠른 링크 기록이 빈 행을 남기지 않도록 제목과 주소를 한 번에 저장한다.
+    @discardableResult
+    func addLink(title: String, url: String) throws -> ReferenceItem
+
     /// 바꿀 필드만 담아 한 번에 쓴다.
     @discardableResult
     func update(id: UUID, _ change: ReferenceChange) throws -> ReferenceItem?
@@ -29,4 +33,13 @@ protocol ReferenceRepository {
 
     /// 위젯으로 꺼내 둔 쪽지만. 앱을 켤 때 창을 되살리는 데 쓴다.
     func widgetNotes() throws -> [ReferenceItem]
+}
+
+extension ReferenceRepository {
+    /// 테스트용 저장소의 호환 경로. 실제 저장소는 한 번의 save 로 재정의한다.
+    @discardableResult
+    func addLink(title: String, url: String) throws -> ReferenceItem {
+        let item = try add(kind: .link)
+        return try update(id: item.id, ReferenceChange(title: title, url: url)) ?? item
+    }
 }

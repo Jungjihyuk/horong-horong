@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import 호롱호롱
 
 /// 손잡이로 정한 상세 폼 너비가 창 크기에 따라 어떻게 잘리는지 못 박는다.
@@ -63,9 +64,11 @@ final class PaneWidthPolicyTests: XCTestCase {
 
     // MARK: - 머리말이 접히지 않는 한계
 
-    /// 목록 머리말의 «미리알림에 N개 연동 중» 은 두 줄로 접히면 안 된다.
-    /// 그래서 화면은 «머리말 고정 폭 + 실제 글자 폭» 을 목록 최소 너비로 넘긴다.
-    /// 여기서는 그 값이 최대 너비(560)보다 먼저 걸리는지 확인한다.
+    /// 호출자가 넘긴 최소 너비가 최대 너비(560)보다 먼저 걸리는지 확인한다.
+    ///
+    /// **화면은 더 이상 글자 폭을 재서 넘기지 않는다** — 그 되먹임이 앱을 멈춰 세웠다
+    /// (2026-09-07). 지금은 상수를 넘기고 좁아질 때의 표현은 `ViewThatFits` 가 맡는다.
+    /// 정책 자체는 어떤 최소 너비를 받든 같게 동작해야 하므로 이 검사는 남긴다.
     func testHeaderMinimumWinsOverTrailingMaximum() {
         let headerMinimum: CGFloat = 288 + 105  // 고정 폭 + 잰 글자 폭
         let resolved = PaneWidthPolicy.resolveTrailing(
@@ -79,8 +82,8 @@ final class PaneWidthPolicyTests: XCTestCase {
         XCTAssertLessThan(resolved, trailingMaximum)
     }
 
-    /// 상세 쪽도 마찬가지다 — «7. 6. 월요일 01:37 61일 지남» 이 접히지 않을 만큼은 남겨야 한다.
-    /// 화면은 그 줄을 한 줄로 편 너비를 재서 `trailingMinimum` 으로 넘긴다.
+    /// 상세 쪽도 마찬가지로, 저장된 폭보다 `trailingMinimum` 이 우선한다.
+    /// (위와 같이 화면은 이제 잰 값이 아니라 상수를 넘긴다.)
     func testDetailMinimumWinsOverAUserDraggedWidth() {
         let detailMinimum: CGFloat = 296  // 잰 날짜 줄 + 카드·패널 여백
         let resolved = PaneWidthPolicy.resolveTrailing(
@@ -99,5 +102,50 @@ final class PaneWidthPolicyTests: XCTestCase {
     func testIgnoresNonFiniteInput() {
         XCTAssertEqual(resolve(.nan, totalWidth: 900), trailingMinimum)
         XCTAssertEqual(resolve(300, totalWidth: .nan), 0)
+    }
+
+    // MARK: - 최소 너비가 머리말을 담는가
+
+    /// **「Todo」 가 «To / do» 로 접힌 회귀(2026-09-07)를 막는다.**
+    ///
+    /// 예전에는 머리말 글자 폭을 `GeometryReader` 로 재서 최소 너비에 더했지만, 그 값이 다시
+    /// 두 칸의 폭을 정하는 되먹임 고리라 앱이 멈췄다. 측정을 걷어낸 대신 **상수끼리의 관계**를
+    /// 여기서 못 박는다 — 검색창이 줄어들 수 있어야 이 관계가 성립한다.
+    @MainActor
+    private func headerRequirement(title: String, searchField: CGFloat) -> CGFloat {
+        let titleWidth = (title as NSString)
+            .size(withAttributes: [.font: BrowserHeaderMetrics.titleNSFont])
+            .width
+        return BrowserHeaderMetrics.fixedChromeWidth + titleWidth + searchField
+    }
+
+    @MainActor
+    func testListPaneMinimumWidthFitsTheHeader() {
+        // 머리말을 공유하는 두 화면 모두 검사한다.
+        for (title, minimum) in [("Todo", Constants.todoListPaneMinWidth),
+                                 ("Quick Note", Constants.quickNoteListPaneMinWidth)] {
+            let required = headerRequirement(
+                title: title,
+                searchField: BrowserHeaderMetrics.searchFieldMinimumWidth
+            )
+            XCTAssertGreaterThanOrEqual(
+                minimum, required,
+                "«\(title)» 목록 최소 너비가 머리말보다 좁으면 제목이 두 줄로 접힌다"
+            )
+        }
+    }
+
+    /// 검색창이 고정 폭이면 위 관계가 깨진다. 유연해야 하는 이유를 숫자로 남긴다.
+    @MainActor
+    func testFixedSearchFieldWouldNotFit() {
+        let ifFixed = headerRequirement(
+            title: "Todo",
+            searchField: BrowserHeaderMetrics.searchFieldWidth
+        )
+        XCTAssertGreaterThan(
+            ifFixed,
+            Constants.todoListPaneMinWidth,
+            "이 단언이 깨지면 검색창을 고정 폭으로 되돌려도 안전하다는 뜻이다"
+        )
     }
 }

@@ -760,7 +760,7 @@ final class CompanionMemoStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testSaveKeepsOriginalTextAndSelectedOptions() throws {
+    func testSaveKeepsOriginalTextAndStartDate() throws {
         let schema = Schema([Todo.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
@@ -773,7 +773,6 @@ final class CompanionMemoStoreTests: XCTestCase {
             CompanionMemoSaveRequest(
                 messageID: UUID(),
                 content: original,
-                icon: "💡",
                 isTodayTask: true
             ),
             in: SwiftDataCompanionRepository(context: context),
@@ -782,7 +781,6 @@ final class CompanionMemoStoreTests: XCTestCase {
 
         let memo = try XCTUnwrap(context.fetch(FetchDescriptor<Todo>()).first)
         XCTAssertEqual(memo.content, original)
-        XCTAssertEqual(memo.icon, "💡")
         XCTAssertEqual(memo.startDate, now)
     }
 
@@ -798,7 +796,6 @@ final class CompanionMemoStoreTests: XCTestCase {
             CompanionMemoSaveRequest(
                 messageID: UUID(),
                 content: "일반 메모",
-                icon: MemoIcon.defaultIcon,
                 isTodayTask: false
             ),
             in: SwiftDataCompanionRepository(context: context)
@@ -823,7 +820,6 @@ final class CompanionMemoStoreTests: XCTestCase {
             CompanionMemoSaveRequest(
                 messageID: UUID(),
                 content: "수진이랑 데이트 일정",
-                icon: MemoIcon.defaultIcon,
                 isTodayTask: false,
                 startDate: start,
                 deadline: end
@@ -847,7 +843,6 @@ final class CompanionMemoStoreTests: XCTestCase {
         let request = CompanionMemoSaveRequest(
             messageID: messageID,
             content: "한 번만 저장",
-            icon: MemoIcon.defaultIcon,
             isTodayTask: false
         )
 

@@ -7,7 +7,8 @@ import XCTest
 final class TodoComposerPolicyTests: XCTestCase {
     private let calendar = Calendar(identifier: .gregorian)
 
-    /// 2026-09-05(토) 14:37. 오전 9시가 아닌 시각을 골라 접두어가 시각을 덮어쓰는지 본다.
+    /// 2026-09-05(토) 14:37. **시각을 적지 않으면 여기서 시작한다** — 접두어가 준 시각이
+    /// 이 값을 덮어쓰는지도 같이 본다.
     private var now: Date {
         calendar.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))!
     }
@@ -22,19 +23,29 @@ final class TodoComposerPolicyTests: XCTestCase {
 
     // MARK: - 날짜 접두어
 
-    func testPlainTitleGoesToTodayNineAM() {
+    /// 시각을 적지 않은 할 일은 **적은 순간**에서 시작한다.
+    /// 오전 9시로 고정하던 시절에는 오후에 적자마자 «지남» 묶음으로 들어갔다.
+    func testPlainTitleStartsAtWritingTime() {
         let entry = parse("장보기")
 
         XCTAssertEqual(entry.title, "장보기")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))
         XCTAssertNil(entry.deadline)
+    }
+
+    /// 초는 버린다 — 목록의 시각이 들쭉날쭉해 보이지 않도록.
+    func testDefaultStartDropsSeconds() {
+        let noisy = calendar.date(from: DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37, second: 42))!
+        let entry = TodoComposerPolicy.parse("장보기", now: noisy, calendar: calendar)
+
+        XCTAssertEqual(calendar.component(.second, from: entry.startDate), 0)
     }
 
     func testTomorrowKeywordMovesStartToNextDay() {
         let entry = parse("내일 장보기")
 
         XCTAssertEqual(entry.title, "장보기")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 14, minute: 37))
         XCTAssertNil(entry.deadline)
     }
 
@@ -42,7 +53,7 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("모레 발표 준비")
 
         XCTAssertEqual(entry.title, "발표 준비")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 7, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 7, hour: 14, minute: 37))
     }
 
     /// 월말에 «모레» 를 적으면 달을 넘어야 한다.
@@ -50,7 +61,7 @@ final class TodoComposerPolicyTests: XCTestCase {
         let lastDay = calendar.date(from: DateComponents(year: 2026, month: 9, day: 30, hour: 23, minute: 50))!
         let entry = TodoComposerPolicy.parse("모레 정산", now: lastDay, calendar: calendar)
 
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 10, day: 2, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 10, day: 2, hour: 23, minute: 50))
     }
 
     // MARK: - 소요 시간 접두어
@@ -59,23 +70,23 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("30분 산책")
 
         XCTAssertEqual(entry.title, "산책")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 0))
-        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 30))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 15, minute: 7))
     }
 
     func testHoursOnlyKeepsTodayAndSetsDeadline() {
         let entry = parse("2시간 코딩")
 
         XCTAssertEqual(entry.title, "코딩")
-        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 11, minute: 0))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 16, minute: 37))
     }
 
     func testDayKeywordAndDurationCombine() {
         let entry = parse("내일 90분 회의")
 
         XCTAssertEqual(entry.title, "회의")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
-        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 10, minute: 30))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 14, minute: 37))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 16, minute: 7))
     }
 
     func testDurationBeforeDayKeywordIsNotADayKeyword() {
@@ -83,8 +94,8 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("30분 내일 회의")
 
         XCTAssertEqual(entry.title, "내일 회의")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 0))
-        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 30))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 5, hour: 15, minute: 7))
     }
 
     // MARK: - 접두어로 보지 않는 것들
@@ -93,14 +104,14 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("내일부터 장보기")
 
         XCTAssertEqual(entry.title, "내일부터 장보기")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))
     }
 
     func testKeywordAloneStaysAsTitle() {
         let entry = parse("내일")
 
         XCTAssertEqual(entry.title, "내일")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 5, hour: 14, minute: 37))
     }
 
     /// 「내일 30분」은 떼고 나면 제목이 없다. 날짜만 받고 「30분」은 제목으로 남긴다.
@@ -108,7 +119,7 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("내일 30분")
 
         XCTAssertEqual(entry.title, "30분")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 14, minute: 37))
         XCTAssertNil(entry.deadline)
     }
 
@@ -138,8 +149,8 @@ final class TodoComposerPolicyTests: XCTestCase {
         let entry = parse("내일   2시간   집중")
 
         XCTAssertEqual(entry.title, "집중")
-        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 9, minute: 0))
-        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 11, minute: 0))
+        XCTAssertEqual(parts(entry.startDate), DateComponents(year: 2026, month: 9, day: 6, hour: 14, minute: 37))
+        XCTAssertEqual(parts(entry.deadline!), DateComponents(year: 2026, month: 9, day: 6, hour: 16, minute: 37))
     }
 
     // MARK: - 구체적 시간 범위 문법 (9시 30분 ~ 10시, 9시부터 9시 반까지 등)

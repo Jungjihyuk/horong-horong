@@ -10,6 +10,27 @@ final class SwiftDataFocusSessionRepository: FocusSessionRepository {
         self.context = context
     }
 
+    func sessions(startingBetween start: Date, and end: Date) -> [StatsFocusSession] {
+        let descriptor = FetchDescriptor<FocusSession>(
+            predicate: #Predicate { $0.startedAt >= start && $0.startedAt < end },
+            sortBy: [SortDescriptor(\FocusSession.startedAt, order: .forward)]
+        )
+        return ((try? context.fetch(descriptor)) ?? []).map {
+            StatsFocusSession(
+                id: $0.id,
+                startedAt: $0.startedAt,
+                endedAt: $0.endedAt,
+                category: $0.category,
+                markerColorKey: $0.markerColorKey,
+                taskTitleSnapshot: $0.taskTitleSnapshot,
+                linkedMemoID: $0.linkedMemoID,
+                focusMinutes: $0.focusMinutes,
+                recordedFocusSeconds: $0.recordedFocusSeconds,
+                completed: $0.completed
+            )
+        }
+    }
+
     func startFocus(
         focusMinutes: Int,
         breakMinutes: Int,

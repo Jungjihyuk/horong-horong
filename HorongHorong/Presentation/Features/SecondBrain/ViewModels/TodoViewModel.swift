@@ -47,8 +47,11 @@ final class TodoViewModel {
 
     /// 빠른 입력창에 적힌 텍스트에서 해석된 일정 요약 (예: "내일 09:30 ~ 10:00").
     /// 일정이 인식되지 않으면 `nil` 이다.
-    var composerScheduleSummary: String? {
-        TodoComposerPolicy.parse(composerText, now: todayReferenceDate).scheduleSummary
+    ///
+    /// **`todayReferenceDate` 가 아니라 지금 시각으로 읽는다.** 그 값은 창이 열린 순간에
+    /// 멈춰 있어서, 창을 오래 띄워 둔 채 적으면 뱃지가 몇 시간 전 시각을 보여 준다.
+    func composerScheduleSummary(now: Date = Date()) -> String? {
+        TodoComposerPolicy.parse(composerText, now: now).scheduleSummary
     }
 
     // MARK: - 읽기
@@ -101,11 +104,7 @@ final class TodoViewModel {
     }
 
     func reminderList(for item: TodoItem) -> ReminderListOption? {
-        if let id = item.reminderCalendarIdentifier,
-           let list = reminderLists.first(where: { $0.id == id }) {
-            return list
-        }
-        return item.isLinkedToReminders ? reminderLists.first(where: \.isDefault) : nil
+        ReminderListPolicy.list(for: item, in: reminderLists)
     }
 
     /// 시작 날짜 빠른 선택(«오늘»·«내일»)이 눌린 상태인지.
@@ -120,10 +119,13 @@ final class TodoViewModel {
 
     /// 빠른 입력 한 줄을 그대로 제목으로 쓰지 않는다 —
     /// `[내일|모레] [n분|n시간] 제목` 접두어를 떼어 일정으로 바꾼다.
-    func submitComposer() {
+    ///
+    /// 기준은 **적어 넣는 순간**이다. 시각을 적지 않은 할 일은 지금부터 시작하는데,
+    /// 창이 열릴 때 멈춘 `todayReferenceDate` 를 쓰면 오후에 적은 일이 아침으로 들어간다.
+    func submitComposer(now: Date = Date()) {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let entry = TodoComposerPolicy.parse(text, now: todayReferenceDate)
+        let entry = TodoComposerPolicy.parse(text, now: now)
         guard let created = try? repository.add(
             title: entry.title,
             startDate: entry.startDate,

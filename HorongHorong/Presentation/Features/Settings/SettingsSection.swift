@@ -103,7 +103,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "프리셋 시간 편집",
                     "메뉴바 표시", "라벨 형식", "시간 형식"]
         case .hotkey:
-            return ["퀵 메모 띄우기", "호롱호롱 팝오버 열기", "타이머 시작", "일시정지",
+            return ["퀵 메모 띄우기", "빠른 링크 기록", "빠른 링크 단축키", "References", "링크", "호롱호롱 팝오버 열기", "타이머 시작", "일시정지",
                     "설정 창 열기", "단축키"]
         case .category:
             return ["카테고리", "앱 카테고리", "앱 규칙", "자리 비움 감지 임계값",
@@ -135,7 +135,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
                     "대화 공급자", "AI 대화", "온디바이스", "개인정보", "음성"]
         case .secondBrain:
             return ["기록", "세컨드 브레인", "Second Brain", "메모", "노트",
-                    "퀵 기록 단축키", "퀵 메모 단축키", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
+                    "퀵 기록 단축키", "퀵 메모 단축키", "빠른 링크", "빠른 링크 단축키", "References", "링크", "포커스 잃을 때 자동 저장", "저장 후 자동으로 닫기",
                     "Todo 일정", "기본 소요 시간", "자동 마감 시각",
                     "미리알림 가져오기", "미리알림 앱 연동", "미리 알림", "Reminders", "캘린더"]
         case .data:

@@ -62,14 +62,14 @@ final class QuickMemoPanel {
 
         let contentView = QuickMemoView(
             presentationState: presentationState,
-            onSave: { [weak self] content, icon in
+            onSave: { [weak self] content in
                 do {
                     // 「오늘 할 일」이면 지금 시각으로 시작하는 할 일, 아니면 그냥 기록.
                     // 오늘 계획 알림을 끄는 것도 저장소가 함께 한다.
                     if presentationState.savesAsTodayTask {
-                        try todos.addTodayTask(content: content, icon: icon)
+                        try todos.addTodayTask(content: content)
                     } else {
-                        try quickNotes.add(content: content, icon: icon)
+                        try quickNotes.add(content: content)
                     }
                     self?.close()
                     return true

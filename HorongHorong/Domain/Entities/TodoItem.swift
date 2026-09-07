@@ -16,7 +16,6 @@ struct TodoItem: Identifiable, Equatable, Sendable {
     let isLinkedToReminders: Bool
     let reminderCalendarIdentifier: String?
     /// 팝오버 목록이 쓰는 것들. 상세 화면에는 안 나온다.
-    let icon: String?
     let isPinned: Bool
     let createdAt: Date
     let updatedAt: Date

@@ -73,10 +73,9 @@ final class CompanionController {
         state.onCharacterTap = { [weak self] in self?.toggleChat() }
         state.onCloseChat = { [weak self] in self?.endChat() }
         state.onSendMessage = { [weak self] message in self?.send(message) }
-        state.onSaveMessageAsMemo = { [weak self] messageID, icon, isTodayTask in
+        state.onSaveMessageAsMemo = { [weak self] messageID, isTodayTask in
             self?.saveChatMessageAsMemo(
                 messageID: messageID,
-                icon: icon,
                 isTodayTask: isTodayTask
             )
         }
@@ -871,7 +870,6 @@ final class CompanionController {
             persistMemo(
                 messageID: previousMessage.id,
                 content: previousMessage.text,
-                icon: MemoIcon.defaultIcon,
                 isTodayTask: false
             )
         case .text(let content):
@@ -880,7 +878,6 @@ final class CompanionController {
             persistMemo(
                 messageID: commandMessage.id,
                 content: schedule.title,
-                icon: MemoIcon.defaultIcon,
                 isTodayTask: false,
                 schedule: schedule
             )
@@ -889,7 +886,6 @@ final class CompanionController {
 
     private func saveChatMessageAsMemo(
         messageID: UUID,
-        icon: String,
         isTodayTask: Bool
     ) {
         guard let message = state.chatMessages.first(where: { $0.id == messageID }),
@@ -901,7 +897,6 @@ final class CompanionController {
         persistMemo(
             messageID: message.id,
             content: message.text,
-            icon: icon,
             isTodayTask: isTodayTask
         )
     }
@@ -909,7 +904,6 @@ final class CompanionController {
     private func persistMemo(
         messageID: UUID,
         content: String,
-        icon: String,
         isTodayTask: Bool,
         schedule: CompanionMemoSchedule? = nil
     ) {
@@ -918,8 +912,7 @@ final class CompanionController {
                 CompanionMemoSaveRequest(
                     messageID: messageID,
                     content: content,
-                    icon: icon,
-                    isTodayTask: isTodayTask,
+                            isTodayTask: isTodayTask,
                     startDate: schedule?.startDate,
                     deadline: schedule?.deadline
                 ),

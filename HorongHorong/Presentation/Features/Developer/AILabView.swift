@@ -1437,8 +1437,6 @@ private struct InputItemsDetailSheet: View {
 
     private func memoRow(_ memo: AchievementMemoDetail) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(memo.icon ?? "📝")
-                .font(.title3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(memo.content)
                     .font(.callout)

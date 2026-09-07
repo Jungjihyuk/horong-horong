@@ -346,7 +346,9 @@ struct MenuBarPopover: View {
             if let dependencies {
                 MemoListView(
                     repository: dependencies.todoRepository,
-                    quickNotes: dependencies.quickNoteRepository
+                    quickNotes: dependencies.quickNoteRepository,
+                    diary: dependencies.diaryRepository,
+                    clipboard: dependencies.clipboardGateway
                 )
             }
         case .achievement:

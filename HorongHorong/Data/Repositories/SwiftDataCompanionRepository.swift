@@ -13,11 +13,10 @@ struct SwiftDataCompanionRepository: CompanionRepository {
     @discardableResult
     func createMemo(
         content: String,
-        icon: String,
         startDate: Date?,
         deadline: Date?
     ) throws -> UUID {
-        let record = Todo(content: content, icon: icon)
+        let record = Todo(content: content)
         record.startDate = startDate
         record.deadline = deadline
         context.insert(record)

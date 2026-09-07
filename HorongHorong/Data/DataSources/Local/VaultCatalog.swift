@@ -48,7 +48,15 @@ enum VaultCatalog {
     /// ① 지금 보고 있는 문서와 같은 폴더 ② 경로가 짧은 것(루트에 가까운 것).
     /// ②는 «가장 그럴듯해서»가 아니라 **실행할 때마다 같은 답이 나오게** 하려는 것이다.
     static func resolveWikiLink(_ title: String, from current: URL?, in index: [String: [URL]]) -> URL? {
-        guard let candidates = index[title], !candidates.isEmpty else { return nil }
+        let target = String(title.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)[0]).components(separatedBy: "#")[0].removingPercentEncoding ?? title
+        if target.isEmpty { return current }
+        let key = URL(fileURLWithPath: target).deletingPathExtension().lastPathComponent
+        var candidates = index[target] ?? index[key] ?? []
+        if target.contains("/") {
+            let suffix = target.hasSuffix(".md") ? target : target + ".md"
+            candidates = candidates.filter { $0.path.hasSuffix("/" + suffix) }
+        }
+        guard !candidates.isEmpty else { return nil }
         if candidates.count == 1 { return candidates[0] }
 
         if let current {
@@ -123,6 +131,7 @@ enum VaultCatalog {
     private static func shouldInclude(_ url: URL) -> Bool {
         let name = url.lastPathComponent
         if name.hasPrefix(".") { return false }
+        if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true { return false }
         return name != ".obsidian" && name != ".my-wiki"
     }
 }
@@ -143,7 +152,7 @@ actor VaultScanner {
         let key = "\(kind.title)|\(vault.standardizedFileURL.path)"
         if !forceReload, let cached = cache[key] { return cached }
 
-        let result = VaultCatalog.scan(roots: VaultCatalog.roots(kind: kind, vault: vault))
+        let result = VaultCatalog.scan(roots: [VaultRoot(title: vault.lastPathComponent, url: vault, excludedRelativePaths: [])])
         cache[key] = result
         return result
     }

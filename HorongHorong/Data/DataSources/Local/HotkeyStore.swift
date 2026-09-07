@@ -15,6 +15,12 @@ struct HotkeyCombo: Codable, Equatable {
         modifierRaw: NSEvent.ModifierFlags([.command, .shift]).rawValue
     )
 
+    /// 기본 빠른 링크 단축키: ⌘ + ⇧ + L.
+    static let defaultQuickLink = HotkeyCombo(
+        keyCode: 37,
+        modifierRaw: NSEvent.ModifierFlags([.command, .shift]).rawValue
+    )
+
     /// 기본 메뉴바 팝오버 단축키: ⌃ + ⌥ + Space.
     static let defaultMenuBarPopover = HotkeyCombo(
         keyCode: 49,
@@ -121,6 +127,7 @@ final class HotkeyStore {
     static let shared = HotkeyStore()
 
     private static let quickMemoKey = "hotkey.quickMemo"
+    private static let quickLinkKey = "hotkey.quickLink"
     private static let menuBarPopoverKey = "hotkey.menuBarPopover"
     private static let timerToggleKey = "hotkey.timerToggle"
 
@@ -128,6 +135,13 @@ final class HotkeyStore {
         didSet {
             persist(quickMemo, forKey: Self.quickMemoKey)
             HotKeyManager.shared.reregisterQuickMemo()
+        }
+    }
+
+    var quickLink: HotkeyCombo {
+        didSet {
+            persist(quickLink, forKey: Self.quickLinkKey)
+            HotKeyManager.shared.reregisterQuickLink()
         }
     }
 
@@ -150,6 +164,10 @@ final class HotkeyStore {
             forKey: Self.quickMemoKey,
             defaultValue: .defaultQuickMemo
         )
+        quickLink = Self.storedCombo(
+            forKey: Self.quickLinkKey,
+            defaultValue: .defaultQuickLink
+        )
         menuBarPopover = Self.storedCombo(
             forKey: Self.menuBarPopoverKey,
             defaultValue: .defaultMenuBarPopover
@@ -162,6 +180,10 @@ final class HotkeyStore {
 
     func resetQuickMemoToDefault() {
         quickMemo = .defaultQuickMemo
+    }
+
+    func resetQuickLinkToDefault() {
+        quickLink = .defaultQuickLink
     }
 
     func resetMenuBarPopoverToDefault() {

@@ -6,9 +6,11 @@ final class HotKeyManager {
     static let shared = HotKeyManager()
 
     private var quickMemoHotKey: HotKey?
+    private var quickLinkHotKey: HotKey?
     private var menuBarPopoverHotKey: HotKey?
     private var timerToggleHotKey: HotKey?
     private var quickMemoHandler: (@MainActor () -> Void)?
+    private var quickLinkHandler: (@MainActor () -> Void)?
     private var menuBarPopoverHandler: (@MainActor () -> Void)?
     private var timerToggleHandler: (@MainActor () -> Void)?
 
@@ -16,13 +18,16 @@ final class HotKeyManager {
 
     func setup(
         onQuickMemo: @escaping @MainActor () -> Void,
+        onQuickLink: @escaping @MainActor () -> Void,
         onMenuBarPopover: @escaping @MainActor () -> Void,
         onTimerToggle: @escaping @MainActor () -> Void
     ) {
         quickMemoHandler = onQuickMemo
+        quickLinkHandler = onQuickLink
         menuBarPopoverHandler = onMenuBarPopover
         timerToggleHandler = onTimerToggle
         registerQuickMemo()
+        registerQuickLink()
         registerMenuBarPopover()
         registerTimerToggle()
     }
@@ -30,6 +35,10 @@ final class HotKeyManager {
     /// HotkeyStore.quickMemo 가 바뀌면 호출돼 현재 핸들러를 그대로 유지한 채 키 조합만 갱신한다.
     func reregisterQuickMemo() {
         registerQuickMemo()
+    }
+
+    func reregisterQuickLink() {
+        registerQuickLink()
     }
 
     func reregisterMenuBarPopover() {
@@ -46,6 +55,11 @@ final class HotKeyManager {
             combo: HotkeyStore.shared.quickMemo,
             handler: handler
         )
+    }
+
+    private func registerQuickLink() {
+        guard let handler = quickLinkHandler else { return }
+        quickLinkHotKey = makeHotKey(combo: HotkeyStore.shared.quickLink, handler: handler)
     }
 
     private func registerMenuBarPopover() {

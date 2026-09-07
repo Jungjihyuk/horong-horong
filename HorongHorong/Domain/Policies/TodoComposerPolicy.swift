@@ -7,7 +7,7 @@ import Foundation
 /// - 시간 범위: `9시 30분 ~ 10시`, `9:30~10:00`, `9시 반 ~ 10시`, `9시부터 9시 반까지`
 /// - 시작 시각 + 소요: `9시 시작 30분간`, `9시 30분간`, `오후 2시 1시간`
 /// - 특정 시각만: `9시 30분`, `14:00`, `오후 3시`
-/// - 소요 시간만: `30분간`, `1시간 동안`, `90분` (기본 시작시각 오전 9시)
+/// - 소요 시간만: `30분간`, `1시간 동안`, `90분` (기본 시작시각은 **적은 순간**)
 ///
 /// **`now` 를 주입받는다.** 자정·월말 경계에서 «내일» 이 어디로 가는지 검사할 수 있어야
 /// 하기 때문이다(CLAUDE.md R9).
@@ -19,18 +19,30 @@ enum TodoComposerPolicy {
         let deadline: Date?
         /// 명시적인 날짜/시간 접두어가 입력에서 파싱되었는지 여부.
         let hasExplicitSchedule: Bool
-        /// UI 뱃지 칩에 표시할 요약 문자열 (예: "내일 09:30 ~ 10:00", "내일 09:00 (30분)").
+        /// UI 뱃지 칩에 표시할 요약 문자열 (예: "내일 09:30 ~ 10:00", "내일 14:37 (30분)").
         let scheduleSummary: String?
     }
 
-    /// 접두어가 시각을 정하지 않을 때 하루의 시작 시각 (오전 9시).
-    static let defaultHour = 9
+    /// 접두어가 시각을 정하지 않으면 **적는 순간의 시각**에서 시작한다.
+    ///
+    /// 예전에는 오전 9시로 고정했다. 그런데 오후에 적은 «30분 산책» 이 이미 지나간 아침으로
+    /// 들어가는 바람에, 태어나자마자 «지남» 묶음에 앉는 할 일이 계속 생겼다.
+    /// 초는 버린다 — 09:00 옆에 14:37:42 가 섞이면 목록의 시각이 들쭉날쭉해 보인다.
+    static func defaultStartTime(now: Date, calendar: Calendar) -> (hour: Int, minute: Int) {
+        let parts = calendar.dateComponents([.hour, .minute], from: now)
+        return (parts.hour ?? 0, parts.minute ?? 0)
+    }
+
+    private static func defaultStart(now: Date, calendar: Calendar) -> Date {
+        let time = defaultStartTime(now: now, calendar: calendar)
+        return calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: now) ?? now
+    }
 
     static func parse(_ text: String, now: Date, calendar: Calendar = .current) -> Entry {
         let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else {
-            let defaultStart = calendar.date(bySettingHour: defaultHour, minute: 0, second: 0, of: now) ?? now
-            return Entry(title: "", startDate: defaultStart, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
+            let start = defaultStart(now: now, calendar: calendar)
+            return Entry(title: "", startDate: start, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
         }
 
         var rest = raw
@@ -75,20 +87,21 @@ enum TodoComposerPolicy {
         // 3. 제목 유효성 검사: 접두어를 떼고 남은 텍스트가 있어야 접두어로 인정
         let finalTitle = rest.trimmingCharacters(in: .whitespacesAndNewlines)
         if finalTitle.isEmpty {
-            let defaultStart = calendar.date(bySettingHour: defaultHour, minute: 0, second: 0, of: now) ?? now
-            return Entry(title: raw, startDate: defaultStart, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
+            let start = defaultStart(now: now, calendar: calendar)
+            return Entry(title: raw, startDate: start, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
         }
 
         let hasExplicitSchedule = hasExplicitDay || hasExplicitTime
         guard hasExplicitSchedule else {
-            let defaultStart = calendar.date(bySettingHour: defaultHour, minute: 0, second: 0, of: now) ?? now
-            return Entry(title: finalTitle, startDate: defaultStart, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
+            let start = defaultStart(now: now, calendar: calendar)
+            return Entry(title: finalTitle, startDate: start, deadline: nil, hasExplicitSchedule: false, scheduleSummary: nil)
         }
 
         // 4. 날짜 및 시간 조립
         let baseDay = parsedDayDate ?? now
-        let startHour = parsedStartHour ?? defaultHour
-        let startMinute = parsedStartMinute ?? 0
+        let fallbackTime = defaultStartTime(now: now, calendar: calendar)
+        let startHour = parsedStartHour ?? fallbackTime.hour
+        let startMinute = parsedStartMinute ?? fallbackTime.minute
 
         let start = calendar.date(bySettingHour: startHour, minute: startMinute, second: 0, of: baseDay) ?? baseDay
 
@@ -106,8 +119,8 @@ enum TodoComposerPolicy {
         // 5. scheduleSummary 생성
         let summary = formatScheduleSummary(
             dayLabel: parsedDayLabel ?? (hasExplicitTime ? "오늘" : nil),
-            startHour: parsedStartHour,
-            startMinute: parsedStartMinute,
+            startHour: startHour,
+            startMinute: startMinute,
             endHour: parsedEndHour,
             endMinute: parsedEndMinute,
             durationMinutes: parsedDurationMinutes
@@ -373,10 +386,13 @@ enum TodoComposerPolicy {
         return h
     }
 
+    /// 시작 시각은 조립 단계에서 이미 정해졌으므로(적은 시각이든 접두어가 준 시각이든)
+    /// 여기서는 «비어 있으면 09:00» 같은 두 번째 기본값을 두지 않는다 —
+    /// 뱃지에 적힌 시각과 실제로 저장되는 시각이 어긋나던 자리다.
     private static func formatScheduleSummary(
         dayLabel: String?,
-        startHour: Int?,
-        startMinute: Int?,
+        startHour: Int,
+        startMinute: Int,
         endHour: Int?,
         endMinute: Int?,
         durationMinutes: Int?
@@ -386,25 +402,16 @@ enum TodoComposerPolicy {
             parts.append(day)
         }
 
-        if let sH = startHour {
-            let sM = startMinute ?? 0
-            let startFormatted = String(format: "%02d:%02d", sH, sM)
-
-            if let eH = endHour {
-                let eM = endMinute ?? 0
-                let endFormatted = String(format: "%02d:%02d", eH, eM)
-                parts.append("\(startFormatted) ~ \(endFormatted)")
-            } else if let dur = durationMinutes {
-                let durText = dur >= 60 && dur % 60 == 0 ? "\(dur / 60)시간" : "\(dur)분"
-                parts.append("\(startFormatted) (\(durText))")
-            } else {
-                parts.append(startFormatted)
-            }
+        let startFormatted = String(format: "%02d:%02d", startHour, startMinute)
+        if let eH = endHour {
+            let eM = endMinute ?? 0
+            let endFormatted = String(format: "%02d:%02d", eH, eM)
+            parts.append("\(startFormatted) ~ \(endFormatted)")
         } else if let dur = durationMinutes {
             let durText = dur >= 60 && dur % 60 == 0 ? "\(dur / 60)시간" : "\(dur)분"
-            parts.append("09:00 (\(durText))")
-        } else if dayLabel != nil {
-            parts.append("09:00")
+            parts.append("\(startFormatted) (\(durText))")
+        } else {
+            parts.append(startFormatted)
         }
 
         return parts.joined(separator: " ")

@@ -384,6 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var timerManager: TimerManager!
     private let appTracker = AppTracker()
     private let quickMemoPanel = QuickMemoPanel()
+    private let quickLinkPanel = QuickLinkPanel()
     private var companionController: CompanionController!
     private var screenshotWindow: NSWindow?
     private var notificationObservers: [NSObjectProtocol] = []
@@ -471,6 +472,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.quickMemoPanel.toggle(
                     todos: self.dependencies.todoRepository,
                     quickNotes: self.dependencies.quickNoteRepository
+                )
+            },
+            onQuickLink: { [weak self] in
+                guard let self else { return }
+                self.quickLinkPanel.toggle(
+                    repository: self.dependencies.referenceRepository,
+                    clipboard: self.dependencies.clipboardGateway
                 )
             },
             onMenuBarPopover: {

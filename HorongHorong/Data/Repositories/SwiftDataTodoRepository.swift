@@ -64,8 +64,8 @@ final class SwiftDataTodoRepository: TodoRepository {
     }
 
     @discardableResult
-    func addTodayTask(content: String, icon: String?) throws -> TodoItem {
-        let record = Todo(content: content, icon: icon)
+    func addTodayTask(content: String) throws -> TodoItem {
+        let record = Todo(content: content)
         record.startDate = Date()
         context.insert(record)
         try touch(record)
@@ -122,9 +122,6 @@ final class SwiftDataTodoRepository: TodoRepository {
         try change(id) { $0.isPinned = isPinned }
     }
 
-    func setIcon(id: UUID, icon: String) throws {
-        try change(id) { $0.icon = icon }
-    }
 
     // MARK: - 미리알림
 
@@ -289,7 +286,6 @@ final class SwiftDataTodoRepository: TodoRepository {
             deletedAt: record.deletedAt,
             isLinkedToReminders: record.isLinkedToRemindersValue,
             reminderCalendarIdentifier: record.reminderCalendarIdentifier,
-            icon: record.icon,
             isPinned: record.isPinned,
             createdAt: record.createdAt,
             updatedAt: record.updatedAt

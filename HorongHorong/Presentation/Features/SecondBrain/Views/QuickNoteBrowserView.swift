@@ -8,19 +8,53 @@ struct QuickNoteBrowserView: View {
     @State private var viewModel: QuickNoteViewModel
     @FocusState private var composerFocused: Bool
 
+    @AppStorage(Constants.AppStorageKey.quickNoteEditorPaneWidth)
+    private var storedEditorPaneWidth: Double = Double(Constants.quickNoteEditorPaneDefaultWidth)
+    /// 끌고 있는 동안의 임시 너비. 손을 떼면 `storedEditorPaneWidth` 로 넘어간다.
+    @State private var draggingEditorPaneWidth: CGFloat?
+    @State private var editorPaneWidthAtDragStart: CGFloat?
+
     init(repository: QuickNoteRepository) {
         _viewModel = State(initialValue: QuickNoteViewModel(repository: repository))
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            listPane
-            Divider().overlay(PopoverChrome.divider)
-            editorPane
-                .frame(width: 300)
+        GeometryReader { proxy in
+            let editorWidth = resolvedEditorPaneWidth(totalWidth: proxy.size.width)
+            HStack(spacing: 0) {
+                listPane
+                PaneResizeHandle(
+                    onDrag: { translation in
+                        let base = editorPaneWidthAtDragStart ?? CGFloat(storedEditorPaneWidth)
+                        editorPaneWidthAtDragStart = base
+                        draggingEditorPaneWidth = base - translation
+                    },
+                    onDragEnd: {
+                        storedEditorPaneWidth = Double(editorWidth)
+                        draggingEditorPaneWidth = nil
+                        editorPaneWidthAtDragStart = nil
+                    }
+                )
+                editorPane
+                    .frame(width: editorWidth)
+            }
         }
         .onAppear { viewModel.reload() }
         .onDisappear { viewModel.flush() }
+    }
+
+    /// 창이 좁아졌거나 저장값이 오래됐을 수 있으므로 그릴 때마다 지금 창 크기로 다시 자른다.
+    ///
+    /// **최소 너비는 상수다.** 글자 폭을 재서 여기에 넣으면 그 값이 다시 두 칸의 폭을 정하는
+    /// 되먹임 고리가 생긴다 (R11 · 2026-09-07 인시던트). 좁아졌을 때의 표현은 `ViewThatFits` 가 맡는다.
+    private func resolvedEditorPaneWidth(totalWidth: CGFloat) -> CGFloat {
+        PaneWidthPolicy.resolveTrailing(
+            proposed: draggingEditorPaneWidth ?? CGFloat(storedEditorPaneWidth),
+            totalWidth: totalWidth,
+            leadingMinimum: Constants.quickNoteListPaneMinWidth,
+            trailingMinimum: Constants.quickNoteEditorPaneMinWidth,
+            trailingMaximum: Constants.quickNoteEditorPaneMaxWidth
+        )
     }
 
     // MARK: - 목록
@@ -40,16 +74,28 @@ struct QuickNoteBrowserView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .bottom, spacing: 12) {
+        HStack(alignment: .bottom, spacing: BrowserHeaderMetrics.titleSearchSpacing) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Quick Note")
-                    .font(.system(size: 19, weight: .heavy, design: .rounded))
+                    .font(BrowserHeaderMetrics.titleFont)
                     .foregroundStyle(PopoverChrome.ink)
-                Text("떠오르는 생각을 바로 적어두세요. 정리는 나중에 도와줄게요")
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkTertiary)
+                    // 없으면 좁을 때 «Quick / Note» 로 접힌다. 제목은 접히느니 잘리는 게 낫다.
+                    .lineLimit(1)
+                // 좁아지면 접히는 대신 짧은 표현으로 갈아탄다. 폭을 재서 최소 너비로
+                // 되먹이면 레이아웃이 수렴하지 않는다 (R11).
+                ViewThatFits(in: .horizontal) {
+                    Text("떠오르는 생각을 바로 적어두세요. 정리는 나중에 도와줄게요")
+                    Text("떠오르는 생각을 바로 적어두세요")
+                    Text("바로 적고 나중에 정리해요")
+                }
+                .font(BrowserHeaderMetrics.subtitleFont)
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .lineLimit(1)
             }
-            Spacer(minLength: 8)
+            // 자리를 놓고 다투면 검색창이 먼저 양보한다. 제목·부제가 먼저 뭉개지면
+            // 여기가 무슨 화면인지부터 읽히지 않는다.
+            .layoutPriority(1)
+            Spacer(minLength: BrowserHeaderMetrics.titleSearchMinimumGap)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -57,14 +103,17 @@ struct QuickNoteBrowserView: View {
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 12)
-            .frame(width: 220, height: 36)
+            // 220 고정이면 좁은 칸에서 제목 자리를 통째로 먹는다. 줄어들 수 있게 둔다.
+            .frame(minWidth: BrowserHeaderMetrics.searchFieldMinimumWidth,
+                   maxWidth: BrowserHeaderMetrics.searchFieldWidth,
+                   minHeight: 36, maxHeight: 36)
             .background(PopoverChrome.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, BrowserHeaderMetrics.horizontalPadding)
         .padding(.top, 16)
         .padding(.bottom, 12)
     }
@@ -190,10 +239,15 @@ struct QuickNoteBrowserView: View {
 
     private func editorHeader(_ note: QuickNoteItem) -> some View {
         HStack {
-            Text("\(QuickNoteElapsed.text(note.createdAt)) · 자동 저장됨")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkTertiary)
-            Spacer()
+            // 손잡이로 좁히면 «자동 저장됨» 부터 뗀다. 시각이 남아야 어느 기록인지 안다.
+            ViewThatFits(in: .horizontal) {
+                Text("\(QuickNoteElapsed.text(note.createdAt)) · 자동 저장됨")
+                Text(QuickNoteElapsed.text(note.createdAt))
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(PopoverChrome.inkTertiary)
+            .lineLimit(1)
+            Spacer(minLength: 8)
             Button {
                 viewModel.togglePinned(note.id)
             } label: {
@@ -223,20 +277,11 @@ struct QuickNoteBrowserView: View {
             Text("여기서 자라면 →")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
-            HStack(spacing: 7) {
-                promoteButton("Todo", systemImage: "checkmark") {
-                    viewModel.promoteToTodo(note.id)
-                }
-                promoteButton("Knowledge", systemImage: "arrow.up") {
-                    /* vault 쓰기는 다음 슬라이스 */
-                }
-                .disabled(true)
-                .help("Knowledge로 옮기기는 다음에 열립니다")
-                promoteButton("Works", systemImage: "arrow.up") {
-                    /* vault 쓰기는 다음 슬라이스 */
-                }
-                .disabled(true)
-                .help("Works로 옮기기는 다음에 열립니다")
+            // 좁아지면 아이콘을 뗀다. 이름을 줄이면 «Knowledge» 와 «Works» 를 구분할 수 없고,
+            // 아이콘만 남기면 둘 다 `arrow.up` 이라 더 헷갈린다.
+            ViewThatFits(in: .horizontal) {
+                promoteRow(note, showsIcon: true)
+                promoteRow(note, showsIcon: false)
             }
         }
         .padding(.horizontal, 14)
@@ -246,9 +291,35 @@ struct QuickNoteBrowserView: View {
         }
     }
 
-    private func promoteButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func promoteRow(_ note: QuickNoteItem, showsIcon: Bool) -> some View {
+        HStack(spacing: 7) {
+            promoteButton("Todo", systemImage: showsIcon ? "checkmark" : nil) {
+                viewModel.promoteToTodo(note.id)
+            }
+            promoteButton("Knowledge", systemImage: showsIcon ? "arrow.up" : nil) {
+                /* vault 쓰기는 다음 슬라이스 */
+            }
+            .disabled(true)
+            .help("Knowledge로 옮기기는 다음에 열립니다")
+            promoteButton("Works", systemImage: showsIcon ? "arrow.up" : nil) {
+                /* vault 쓰기는 다음 슬라이스 */
+            }
+            .disabled(true)
+            .help("Works로 옮기기는 다음에 열립니다")
+        }
+    }
+
+    @ViewBuilder
+    private func promoteButton(_ title: String, systemImage: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
+            Group {
+                if let systemImage {
+                    Label(title, systemImage: systemImage)
+                } else {
+                    Text(title)
+                }
+            }
+            .lineLimit(1)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .padding(.horizontal, 10)

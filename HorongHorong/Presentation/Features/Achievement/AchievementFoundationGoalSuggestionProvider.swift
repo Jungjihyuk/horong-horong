@@ -706,13 +706,11 @@ enum AchievementFoundationGoalSuggestionProvider {
 /// 앱 도메인 타입을 패키지 태스크의 입력으로 바꾼다.
 ///
 /// 패키지는 `AchievementMemoSnapshot` 을 알면 안 되므로 경계에서 앱이 변환한다.
-/// 아이콘 기본값처럼 **앱이 정하는 값**도 여기서 채운다.
 extension AchievementMemoSnapshot {
     var taskMemo: WeeklyGoalTask.Memo {
         WeeklyGoalTask.Memo(
             id: id,
             content: content,
-            icon: icon ?? MemoIcon.defaultIcon,
             date: date,
             startDate: startDate,
             deadline: deadline,

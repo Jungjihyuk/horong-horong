@@ -50,7 +50,6 @@ enum AchievementGoalSuggestionBuilder {
             AchievementMemoSnapshot(
                 id: memo.id,
                 content: memo.content,
-                icon: memo.icon,
                 date: memo.date,
                 startDate: memo.startDate,
                 deadline: memo.deadline,
@@ -101,21 +100,6 @@ enum AchievementGoalSuggestionBuilder {
             }
             .prefix(suggestionCount)
             .map { $0 }
-    }
-
-    private static func groupedByIcon(from memos: [AchievementMemoSnapshot], maxMemoCount: Int) -> [AchievementGoalSuggestion] {
-        Dictionary(grouping: memos, by: { $0.icon ?? MemoIcon.defaultIcon })
-            .compactMap { icon, items in
-                guard items.count >= 2 else { return nil }
-                let limited = limitedMemos(items, maxMemoCount: maxMemoCount)
-                return suggestion(
-                    title: weeklyTitle(for: limited),
-                    reason: "같은 아이콘의 할일 \(limited.count)개가 모여 있습니다.",
-                    memos: limited,
-                    emoji: icon,
-                    source: .rule
-                )
-            }
     }
 
     private static func groupedByKeyword(from memos: [AchievementMemoSnapshot], maxMemoCount: Int) -> [AchievementGoalSuggestion] {
