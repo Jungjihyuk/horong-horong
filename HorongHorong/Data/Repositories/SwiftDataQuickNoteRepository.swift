@@ -13,6 +13,14 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
         self.context = context
     }
 
+    func recent(limit: Int) throws -> [QuickNoteItem] {
+        var descriptor = FetchDescriptor<QuickNote>(
+            sortBy: [SortDescriptor(\QuickNote.createdAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = max(0, limit)
+        return try context.fetch(descriptor).map(Self.toNote)
+    }
+
     func notes(matching query: String, limit: Int) throws -> [QuickNoteItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -44,8 +52,8 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
     }
 
     @discardableResult
-    func add(content: String, icon: String? = nil) throws -> QuickNoteItem {
-        let record = QuickNote(content: content, icon: icon)
+    func add(content: String) throws -> QuickNoteItem {
+        let record = QuickNote(content: content)
         context.insert(record)
         try context.save()
         return Self.toNote(record)
@@ -64,7 +72,6 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
         let todo = Todo(
             id: note.id,
             content: note.content,
-            icon: note.icon,
             createdAt: note.createdAt,
             updatedAt: Date(),
             isPinned: note.isPinned,
@@ -89,6 +96,14 @@ final class SwiftDataQuickNoteRepository: QuickNoteRepository {
 
     private static let unpinnedSection = #Predicate<QuickNote> {
         !$0.isPinned
+    }
+
+    func notes(createdBetween start: Date, and end: Date) throws -> [QuickNoteItem] {
+        let descriptor = FetchDescriptor<QuickNote>(
+            predicate: #Predicate { $0.createdAt >= start && $0.createdAt < end },
+            sortBy: [SortDescriptor(\QuickNote.createdAt, order: .forward)]
+        )
+        return try context.fetch(descriptor).map(Self.toNote)
     }
 
     private static let recentFirst = [SortDescriptor(\QuickNote.updatedAt, order: .reverse)]

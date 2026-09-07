@@ -13,8 +13,8 @@ import XCTest
 final class WeeklyGoalTaskTests: XCTestCase {
 
     func testParsesPerMemoGuidanceInsteadOfTreatingItAsAnEmptySuggestion() {
-        let first = WeeklyGoalTask.Memo(id: UUID(), content: "취업 준비", icon: "💼", date: Date())
-        let second = WeeklyGoalTask.Memo(id: UUID(), content: "지원서", icon: "📄", date: Date())
+        let first = WeeklyGoalTask.Memo(id: UUID(), content: "취업 준비", date: Date())
+        let second = WeeklyGoalTask.Memo(id: UUID(), content: "지원서", date: Date())
         let outcome = WeeklyGoalTask.parse(
             """
             {"resultType":"guidance","guidance":[
@@ -38,7 +38,7 @@ final class WeeklyGoalTaskTests: XCTestCase {
 
     func testExpandsOneGuidanceItemAcrossAllMemoIDs() {
         let memos = (1...5).map {
-            WeeklyGoalTask.Memo(id: uuid($0), content: "메모 \($0)", icon: "📝", date: Date())
+            WeeklyGoalTask.Memo(id: uuid($0), content: "메모 \($0)", date: Date())
         }
         let outcome = WeeklyGoalTask.parse(
             """
@@ -60,7 +60,7 @@ final class WeeklyGoalTaskTests: XCTestCase {
     }
 
     func testRunWritesGuidanceToParsedTrace() async {
-        let first = WeeklyGoalTask.Memo(id: uuid(1), content: "취업 준비", icon: "💼", date: Date())
+        let first = WeeklyGoalTask.Memo(id: uuid(1), content: "취업 준비", date: Date())
         let trace = TraceCollector(runId: "weekly-guidance", task: nil, provider: nil, model: nil, attempt: nil)
 
         _ = await WeeklyGoalTask.run(
@@ -101,7 +101,6 @@ final class WeeklyGoalTaskTests: XCTestCase {
         WeeklyGoalTask.Memo(
             id: id,
             content: content,
-            icon: "📝",
             date: Date(timeIntervalSince1970: 1_785_000_000),
             startDate: startDate,
             deadline: deadline,

@@ -42,6 +42,10 @@ protocol FocusSessionRepository {
     /// 완료로 치지 않고 끝만 찍는다(`reset`). 이미 완료된 세션은 건드리지 않는다.
     func abandonFocus(id: UUID, endedAt: Date)
 
+    /// 기간 안에 **시작한** 집중을 이른 것부터. 반환 타입은 통계가 쓰던 값 타입을 그대로 쓴다 —
+    /// 같은 것을 두 이름으로 부르면 화면마다 필드가 갈린다.
+    func sessions(startingBetween start: Date, and end: Date) -> [StatsFocusSession]
+
     /// 이 시각 이후에 시작한 집중이 있는가. 쉬는 시간 뒤 안내를 띄울지 정할 때 쓴다.
     func hasFocusSession(startingAfter date: Date) -> Bool
 

@@ -176,9 +176,11 @@ struct TodoWheelTimePicker: View {
                     .frame(height: 30)
                     .allowsHitTesting(false)
             }
-            .onAppear { proxy.scrollTo(selected, anchor: .center) }
+            // 배치 «도중» 에 스크롤하면 LazyVStack 이 새 항목을 만들고 그게 다시 배치를 불러
+            // 트랜잭션이 중첩된다. 한 턴 뒤로 미룬다.
+            .onAppear { proxy.scrollAfterLayout(to: selected) }
             .onChange(of: selected) { _, value in
-                withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(value, anchor: .center) }
+                proxy.scrollAfterLayout(to: value, animation: .easeOut(duration: 0.12))
             }
         }
     }

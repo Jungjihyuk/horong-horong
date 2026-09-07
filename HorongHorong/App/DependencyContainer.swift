@@ -15,6 +15,8 @@ final class DependencyContainer {
     let todoRepository: TodoRepository
     let diaryRepository: DiaryRepository
     let vaultRepository: VaultRepository
+    let vaultLocationGateway: VaultLocationGateway
+    let clipboardGateway: ClipboardGateway
     let agentGateway: AgentGateway
     let newsRepository: NewsRepository
     let newsPipelineGateway: NewsPipelineGateway
@@ -29,6 +31,8 @@ final class DependencyContainer {
     let statsDetailRepository: StatsDetailRepository
     let appUsageRepository: AppUsageRepository
     let companionRepository: CompanionRepository
+    /// 타이머가 쓰던 것을 컨테이너로 올렸다. 팝오버 타임라인도 오늘 집중을 읽어야 한다.
+    let focusSessionRepository: FocusSessionRepository
 
     init(modelContainer: ModelContainer, newsPipelineService: NewsPipelineService) {
         let context = modelContainer.mainContext
@@ -37,6 +41,8 @@ final class DependencyContainer {
         todoRepository = SwiftDataTodoRepository(context: context)
         diaryRepository = SwiftDataDiaryRepository(context: context)
         vaultRepository = FileSystemVaultRepository()
+        vaultLocationGateway = VaultLocationAdapter()
+        clipboardGateway = PasteboardClipboardAdapter()
         agentGateway = CLIAgentAdapter()
         newsRepository = SwiftDataNewsRepository(context: context)
         newsPipelineGateway = NewsPipelineAdapter(service: newsPipelineService, context: context)
@@ -51,6 +57,7 @@ final class DependencyContainer {
         statsDetailRepository = SwiftDataStatsDetailRepository(context: context)
         appUsageRepository = SwiftDataAppUsageRepository(context: context)
         companionRepository = SwiftDataCompanionRepository(context: context)
+        focusSessionRepository = SwiftDataFocusSessionRepository(context: context)
     }
 }
 

@@ -2,6 +2,23 @@ import XCTest
 @testable import 호롱호롱
 
 final class VaultCatalogTests: XCTestCase {
+    func testScannerUsesSelectedDirectoryWithoutFixedCategoryNames() async throws {
+        let rawRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: rawRoot, withIntermediateDirectories: true)
+        let canonicalPath = (try? rawRoot.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath) ?? rawRoot.path
+        let root = URL(fileURLWithPath: canonicalPath, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "# Root note".write(to: root.appendingPathComponent("Root.md"), atomically: true, encoding: .utf8)
+        let scan = await VaultScanner().scan(kind: .knowledge, vault: root)
+        XCTAssertEqual(scan.roots.first?.url, root)
+        XCTAssertEqual(scan.wikiIndex["Root"], [root.appendingPathComponent("Root.md")])
+    }
+
+    func testWikiLinkResolvesAliasAndHeading() {
+        let note = URL(fileURLWithPath: "/vault/Folder/Note.md")
+        XCTAssertEqual(VaultCatalog.resolveWikiLink("Note#Heading|Label", from: nil, in: ["Note": [note]]), note)
+    }
+
     /// 임시 vault 를 만들고 정리까지 맡는다.
     private func makeVault(_ files: [String], test: (URL) throws -> Void) throws {
         let root = FileManager.default.temporaryDirectory

@@ -44,6 +44,16 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
     }
 
     @discardableResult
+    func addLink(title: String, url: String) throws -> ReferenceItem {
+        let entry = Reference(kindRaw: ReferenceKind.link.rawValue, colorRaw: ReferenceNoteColor.fallback.rawValue)
+        entry.title = title
+        entry.url = url
+        context.insert(entry)
+        try context.save()
+        return Self.toItem(entry)
+    }
+
+    @discardableResult
     func update(id: UUID, _ change: ReferenceChange) throws -> ReferenceItem? {
         guard let entry = try find(id) else { return nil }
         if let title = change.title { entry.title = title }

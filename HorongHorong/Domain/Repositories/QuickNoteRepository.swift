@@ -5,17 +5,26 @@ import Foundation
 /// **경계를 넘는 것은 값 타입뿐이다** — `Memo`(`@Model`)는 이 프로토콜에 등장하지 않는다.
 @MainActor
 protocol QuickNoteRepository {
+    /// 최근에 **만든** 순서로 `limit` 개. 고정·수정 여부는 순서를 바꾸지 않는다.
+    func recent(limit: Int) throws -> [QuickNoteItem]
+
     /// 고정한 것 먼저, 그 다음 최근에 고친 순.
     ///
     /// `limit` 은 **고정하지 않은 쪽에만** 걸린다. 고정한 기록은 몇 건 안 되고 항상 맨 위에
     /// 있어야 하는데, 한 번에 잘라 오면 고정한 것이 51번째에 있을 때 아예 안 보인다.
     func notes(matching query: String, limit: Int) throws -> [QuickNoteItem]
 
+    /// 기간 안에 **만든** 기록을 이른 것부터.
+    ///
+    /// `notes(matching:limit:)` 로는 대신할 수 없다 — 그쪽은 날짜 조건이 없어
+    /// 오늘 쓴 기록이 `limit` 밖으로 밀려날 수 있다.
+    func notes(createdBetween start: Date, and end: Date) throws -> [QuickNoteItem]
+
     /// 목록과 무관하게 한 건만. 고른 항목이 현재 페이지 밖일 수 있어서 필요하다.
     func note(id: UUID) throws -> QuickNoteItem?
 
     @discardableResult
-    func add(content: String, icon: String?) throws -> QuickNoteItem
+    func add(content: String) throws -> QuickNoteItem
 
     func updateContent(id: UUID, content: String) throws
     func setPinned(id: UUID, isPinned: Bool) throws
@@ -28,4 +37,11 @@ protocol QuickNoteRepository {
     func promoteToTodo(id: UUID) throws
 
     func delete(id: UUID) throws
+}
+
+extension QuickNoteRepository {
+    /// 테스트용 저장소와 이전 구현의 호환 경로. 실제 SwiftData 저장소는 생성 시각 정렬로 재정의한다.
+    func recent(limit: Int) throws -> [QuickNoteItem] {
+        Array(try notes(matching: "", limit: limit).sorted { $0.createdAt > $1.createdAt }.prefix(limit))
+    }
 }

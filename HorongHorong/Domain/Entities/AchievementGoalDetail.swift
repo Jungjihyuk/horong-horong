@@ -63,7 +63,6 @@ struct AchievementGoalDraft: Equatable, Sendable {
 struct AchievementMemoDetail: Identifiable, Equatable, Sendable {
     let id: UUID
     let content: String
-    let icon: String?
     let startDate: Date?
     let deadline: Date?
     let updatedAt: Date

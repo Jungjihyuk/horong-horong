@@ -27,6 +27,17 @@ final class SwiftDataReferenceRepositoryTests: XCTestCase {
         XCTAssertEqual(note.color, .yellow, "쪽지는 기본 색을 갖고 태어난다")
     }
 
+    func testAddLinkStoresTitleAndURLTogether() throws {
+        let (repository, _, container) = try makeRepository()
+        defer { withExtendedLifetime(container) {} }
+
+        let link = try repository.addLink(title: "OpenAI", url: "https://openai.com")
+
+        XCTAssertEqual(link.kind, .link)
+        XCTAssertEqual(link.title, "OpenAI")
+        XCTAssertEqual(link.url, "https://openai.com")
+    }
+
     /// 갈래로 거르는 일은 저장소가 한다 — 화면이 거르면 페이징 계산이 틀어진다.
     func testFilteringByKindHappensInTheRepository() throws {
         let (repository, _, container) = try makeRepository()

@@ -12,6 +12,16 @@ enum TodoScheduleText {
         return date.formatted(sameYear ? style : style.year())
     }
 
+    /// 칸이 좁을 때 쓰는 짧은 날짜. 요일만 줄인다 — «9. 10. 목요일» → «9. 10. (목)».
+    ///
+    /// 날짜를 통째로 감추지 않는 이유는, 좁아졌다고 «무슨 날인지» 를 잃으면
+    /// 일정 카드가 제 구실을 못 하기 때문이다.
+    static func shortDay(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        let style = Date.FormatStyle.dateTime.month(.defaultDigits).day().weekday(.abbreviated)
+        return date.formatted(sameYear ? style : style.year())
+    }
+
     /// 날짜 옆 배지. 가까운 날에만 붙고 그 밖에는 붙이지 않는다.
     static func relativeBadge(_ date: Date, now: Date, calendar: Calendar = .current) -> String? {
         switch calendar.dateComponents(

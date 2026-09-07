@@ -175,7 +175,7 @@ final class GoalSuggestionEvalTests: XCTestCase {
 
     private func run(_ goldenCase: GoldenSet.Case, provider: Constants.AchievementSuggestionProviderKind, model: String, variant: ContextVariant, runner: RunLogger, runID: String) async {
         let snapshots = goldenCase.memos.map { memo in
-            AchievementMemoSnapshot(id: GoldenSet.deterministicUUID(for: memo.id), content: memo.content, icon: memo.icon, date: memo.derivedDate(referenceDate: goldenCase.reference), startDate: GoldenSet.date(memo.startDate), deadline: GoldenSet.date(memo.deadline), isCompleted: false)
+            AchievementMemoSnapshot(id: GoldenSet.deterministicUUID(for: memo.id), content: memo.content, date: memo.derivedDate(referenceDate: goldenCase.reference), startDate: GoldenSet.date(memo.startDate), deadline: GoldenSet.date(memo.deadline), isCompleted: false)
         }
         let startedAt = Date()
         let result = await AchievementFoundationGoalSuggestionProvider.suggestions(

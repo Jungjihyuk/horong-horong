@@ -17,11 +17,22 @@ struct FileSystemVaultRepository: VaultRepository {
     }
 
     func document(at url: URL) async -> String? {
-        // 큰 노트를 메인 스레드에서 읽으면 그동안 화면이 멈춘다.
-        await Task.detached(priority: .userInitiated) {
-            try? String(contentsOf: url, encoding: .utf8)
-        }.value
+        try? await VaultFileStore.shared.snapshot(at: url).text
     }
+
+    func snapshot(at url: URL) async throws -> VaultDocument { try await VaultFileStore.shared.snapshot(at: url) }
+    func save(_ text: String, document: VaultDocument, root: URL) async throws -> VaultDocument {
+        try await VaultFileStore.shared.save(text, document: document, root: root)
+    }
+    func create(name: String, directory: Bool, parent: URL, root: URL) async throws -> URL {
+        try await VaultFileStore.shared.create(name: name, directory: directory, parent: parent, root: root)
+    }
+    func delete(at url: URL, root: URL) async throws {
+        try await VaultFileStore.shared.delete(at: url, root: root)
+    }
+    func index(vault: URL) async throws -> [VaultIndexedDocument] { try await VaultFileStore.shared.index(vault: vault) }
+    func resource(path: String, vault: URL) async throws -> Data { try await VaultFileStore.shared.resource(path: path, vault: vault) }
+    func validate(root: URL) async throws { try await VaultFileStore.shared.validate(root: root) }
 
     func resolveWikiLink(_ title: String, from current: URL?, in index: [String: [URL]]) -> URL? {
         VaultCatalog.resolveWikiLink(title, from: current, in: index)

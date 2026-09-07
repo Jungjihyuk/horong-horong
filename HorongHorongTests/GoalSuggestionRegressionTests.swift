@@ -14,7 +14,6 @@ final class GoalSuggestionRegressionTests: XCTestCase {
         AchievementMemoSnapshot(
             id: id,
             content: content,
-            icon: "📝",
             date: Date(timeIntervalSince1970: 1_785_000_000),
             startDate: nil,
             deadline: nil,

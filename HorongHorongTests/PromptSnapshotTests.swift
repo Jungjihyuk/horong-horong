@@ -24,13 +24,11 @@ final class PromptSnapshotTests: XCTestCase {
     private func memo(
         _ shortID: String,
         _ content: String,
-        icon: String,
         completed: Bool = false
     ) -> WeeklyGoalTask.Memo {
         WeeklyGoalTask.Memo(
             id: Self.deterministicUUID(for: shortID),
             content: content,
-            icon: icon,
             date: Self.fixedDate,
             startDate: nil,
             deadline: nil,
@@ -40,9 +38,9 @@ final class PromptSnapshotTests: XCTestCase {
 
     private var sampleMemos: [WeeklyGoalTask.Memo] {
         [
-            memo("m1", "주간 보고서 초안 작성", icon: "doc"),
-            memo("m2", "주간 보고서 검토 요청", icon: "doc"),
-            memo("m3", "러닝 30분", icon: "figure.run", completed: true),
+            memo("m1", "주간 보고서 초안 작성"),
+            memo("m2", "주간 보고서 검토 요청"),
+            memo("m3", "러닝 30분", completed: true),
         ]
     }
 

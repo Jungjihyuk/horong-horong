@@ -16,7 +16,6 @@ final class PomodoroTaskCandidateTests: XCTestCase {
         AchievementMemoDetail(
             id: id,
             content: content,
-            icon: nil,
             startDate: start,
             deadline: deadline,
             updatedAt: Date(),

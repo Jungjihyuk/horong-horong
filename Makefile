@@ -11,6 +11,12 @@ XCODEBUILD_FLAGS = -project HorongHorong.xcodeproj \
 generate:
 	xcodegen generate
 
+vault-editor-build:
+	cd Web/VaultEditor && npm ci --ignore-scripts && npm run build
+
+vault-editor-test:
+	cd Web/VaultEditor && npm test
+
 build: generate
 	xcodebuild $(XCODEBUILD_FLAGS) -scheme HorongHorong -configuration Debug build
 

@@ -233,7 +233,6 @@ struct SettingsRoot: View {
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionMaxTodoCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionMinWeeklyGoalCount)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementMonthlySuggestionCount)
-            defaults.removeObject(forKey: Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementTimelineSortOrder)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementDismissedSuggestionKeys)
             defaults.removeObject(forKey: Constants.AppStorageKey.achievementJourneyMaxFlagCount)
@@ -286,8 +285,6 @@ private struct AchievementPage: View {
     private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
     @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
     private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
-    @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
-    private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementJourneyMaxFlagCount)
     private var journeyMaxFlagCount: Int = Constants.defaultAchievementJourneyMaxFlagCount
     @AppStorage(Constants.AppStorageKey.rewardWeeklyGoalPoints)
@@ -395,37 +392,6 @@ private struct AchievementPage: View {
                 }
             }
 
-            SettingsGroupCard("추천 제외 카테고리") {
-                Text("할일보다 보관 성격이 강한 메모 카테고리는 목표 추천과 수동 연결 목록에서 제외합니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 12)
-
-                ForEach(MemoIcon.options, id: \.self) { icon in
-                    SettingsRow(
-                        "\(icon) \(MemoIcon.label(for: icon))",
-                        subtitle: excludedMemoIcons.contains(icon) ? "목표 연결에서 제외됨" : "목표 연결에 포함됨"
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { excludedMemoIcons.contains(icon) },
-                            set: { isExcluded in
-                                var next = excludedMemoIcons
-                                if isExcluded {
-                                    next.insert(icon)
-                                } else {
-                                    next.remove(icon)
-                                }
-                                excludedMemoIconsRaw = encodeExcludedMemoIcons(next)
-                            }
-                        ))
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                    }
-                }
-            }
-
             SettingsGroupCard("여정") {
                 SettingsRow(
                     "최대 깃발 개수",
@@ -503,7 +469,6 @@ private struct AchievementPage: View {
         .onChange(of: monthlySuggestionLimit) { _, _ in normalizeValues() }
         .onChange(of: minTodosForWeeklySuggestions) { _, _ in normalizeValues() }
         .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in normalizeValues() }
-        .onChange(of: excludedMemoIconsRaw) { _, _ in normalizeValues() }
         .onChange(of: journeyMaxFlagCount) { _, _ in normalizeValues() }
         .onChange(of: rewardWeeklyGoalPoints) { _, _ in normalizeValues() }
         .onChange(of: rewardFailurePenaltyPercent) { _, _ in normalizeValues() }
@@ -607,17 +572,6 @@ private struct AchievementPage: View {
         clamped(rewardWeeklyGoalPoints, in: Constants.rewardWeeklyGoalPointsRange)
     }
 
-    private var excludedMemoIcons: Set<String> {
-        let raw = excludedMemoIconsRaw == Constants.legacyAchievementSuggestionExcludedMemoIconsRaw
-            ? Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
-            : excludedMemoIconsRaw
-        let icons = raw
-            .split(separator: ",")
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { MemoIcon.options.contains($0) }
-        return Set(icons)
-    }
-
     private func normalizeValues() {
         weeklySuggestionLimit = clamped(weeklySuggestionLimit, in: Constants.achievementSuggestionCountRange)
         maxTodosPerWeeklyGoal = clamped(maxTodosPerWeeklyGoal, in: Constants.achievementSuggestionMaxTodoCountRange)
@@ -628,7 +582,6 @@ private struct AchievementPage: View {
         journeyMaxFlagCount = clampedJourneyMaxFlagCount
         rewardWeeklyGoalPoints = clampedRewardWeeklyGoalPoints
         rewardFailurePenaltyPercent = clampedRewardFailurePenaltyPercent
-        excludedMemoIconsRaw = encodeExcludedMemoIcons(excludedMemoIcons)
     }
 
     private var clampedRewardFailurePenaltyPercent: Int {
@@ -648,9 +601,4 @@ private struct AchievementPage: View {
         min(max(value, range.lowerBound), range.upperBound)
     }
 
-    private func encodeExcludedMemoIcons(_ icons: Set<String>) -> String {
-        MemoIcon.options
-            .filter { icons.contains($0) }
-            .joined(separator: ",")
-    }
 }

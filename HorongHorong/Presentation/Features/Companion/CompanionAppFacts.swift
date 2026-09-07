@@ -106,10 +106,6 @@ enum CompanionAppFacts {
                 line: "쓸 수 있는 Agent: " + Constants.availableAgentTypes.joined(separator: ", ")
             ),
             Fact(
-                keywords: ["메모 아이콘", "메모 분류", "아이콘"],
-                line: "메모 아이콘: " + MemoIcon.options.joined(separator: " ")
-            ),
-            Fact(
                 keywords: ["단축키", "퀵 메모", "퀵메모"],
                 line: "기본 퀵 메모 단축키: ⌘⇧N",
                 path: "설정 → 단축키 → 퀵 메모 띄우기"

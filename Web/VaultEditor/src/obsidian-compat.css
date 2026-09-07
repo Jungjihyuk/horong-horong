@@ -1,0 +1,76 @@
+/* MY_BRAIN vault 의 `.obsidian/snippets` 를 여기서 되살리기 위한 호환 레이어.
+   스니펫 원문은 obsidian-snippets.css 에 손대지 않고 옮겨 두었고, 그 파일이 기대하는
+   변수와 «Obsidian 테마가 이미 깔아 둔» 기본 모양을 여기서 채운다. */
+
+:root {
+  /* Obsidian 기본 팔레트. vault 에는 app.css 가 없어 Obsidian 기본값을 옮겼다. */
+  --color-red: #e93147;
+  --color-orange: #ec7500;
+  --color-yellow: #e0ac00;
+  --color-green: #08b94e;
+  --color-cyan: #00bfbc;
+  --color-blue: #086ddd;
+  --color-purple: #7852ee;
+  --color-pink: #d53984;
+  --color-base-30: var(--divider);
+  --color-base-50: var(--muted);
+
+  --font-monospace: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --size-4-3: 12px;
+  --list-marker-color: var(--muted);
+  --list-indent: 1.5em;
+  --indentation-guide-color: var(--divider);
+
+  --table-border-width: 1px;
+
+  --checkbox-size: 16px;
+  --checkbox-color: var(--accent);
+  --checkbox-color-hover: var(--accent);
+  --checkbox-border-color: var(--muted);
+  --checkbox-marker-color: var(--surface);
+}
+
+/* Obsidian 은 테마가 체크박스를 직접 그린다. 스니펫은 그 위에 표식별 아이콘만 얹으므로
+   바탕이 없으면 아무것도 보이지 않는다. */
+input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  margin: 0 6px 0 0;
+  vertical-align: -3px;
+  border: 1px solid var(--checkbox-border-color);
+  border-radius: 3px;
+  background-color: transparent;
+  cursor: default;
+}
+input[type=checkbox]:checked {
+  background-color: var(--checkbox-color);
+  border-color: transparent;
+}
+input[type=checkbox]:checked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--checkbox-marker-color);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 62%;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M20 6 9 17l-5-5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.task-list-item { list-style: none; }
+
+/* 콜아웃 뼈대. 제목/본문 래퍼는 스니펫이 `> .callout-title`, `> .callout-content` 로
+   겨냥하므로 markdown.js 가 같은 구조를 낸다. */
+.callout-title { display: flex; align-items: center; gap: 6px; }
+.callout-icon:empty { display: none; }
+.callout-content > p:empty { display: none; }
+.callout-content > :first-child { margin-top: 0; }
+.callout-content > :last-child { margin-bottom: 0; }
+
+/* 표 스니펫은 셀 테두리를 오른쪽·아래로만 그린다. 바깥 왼쪽·위는 표가 맡는다. */
+table { border: var(--table-border-width) solid var(--divider); border-width: var(--table-border-width) 0 0 var(--table-border-width); }
+
+/* folder 콜아웃은 Obsidian 의 `--list-indent` 로 들여쓰기한다. 우리 목록은 기본 padding 이라 맞춰 준다. */
+.callout[data-callout="folder" i] ul { padding-inline-start: var(--list-indent); }

@@ -74,7 +74,7 @@ final class CompanionPresentationState: ObservableObject {
     /// 뷰 → 컨트롤러 방향의 사용자 조작.
     var onCharacterTap: @MainActor () -> Void = {}
     var onSendMessage: @MainActor (String) -> Void = { _ in }
-    var onSaveMessageAsMemo: @MainActor (UUID, String, Bool) -> Void = { _, _, _ in }
+    var onSaveMessageAsMemo: @MainActor (UUID, Bool) -> Void = { _, _ in }
     var onOpenMemoTab: @MainActor () -> Void = {}
     var onCloseChat: @MainActor () -> Void = {}
     var onDragBegan: @MainActor () -> Void = {}
@@ -461,14 +461,15 @@ private struct CompanionChatPanel: View {
         guard let last = state.chatMessages.last else { return }
         let target = state.isAwaitingReply ? "typing" : last.id.uuidString
         let scroll = {
+            // 배치가 끝난 뒤로 미룬다 — 이유는 `scrollAfterLayout` 주석 참고.
             if state.isAwaitingReply {
-                proxy.scrollTo(target, anchor: .bottom)
+                proxy.scrollAfterLayout(to: target, anchor: .bottom, animation: animated ? .easeOut(duration: 0.15) : nil)
             } else {
-                proxy.scrollTo(last.id, anchor: .bottom)
+                proxy.scrollAfterLayout(to: last.id, anchor: .bottom, animation: animated ? .easeOut(duration: 0.15) : nil)
             }
         }
         if animated {
-            withAnimation(.easeOut(duration: 0.15)) { scroll() }
+            scroll()
         } else {
             scroll()
         }
@@ -478,8 +479,8 @@ private struct CompanionChatPanel: View {
         CompanionChatMessageRow(
             message: message,
             isStreaming: state.streamingMessageID == message.id,
-            onSave: { icon, isTodayTask in
-                state.onSaveMessageAsMemo(message.id, icon, isTodayTask)
+            onSave: { isTodayTask in
+                state.onSaveMessageAsMemo(message.id, isTodayTask)
             },
             onOpenMemoTab: state.onOpenMemoTab
         )
@@ -519,12 +520,11 @@ private struct CompanionChatPanel: View {
 private struct CompanionChatMessageRow: View {
     let message: CompanionChatMessage
     let isStreaming: Bool
-    let onSave: (String, Bool) -> Void
+    let onSave: (Bool) -> Void
     let onOpenMemoTab: () -> Void
 
     @State private var isHovering = false
     @State private var isShowingMemoOptions = false
-    @State private var selectedIcon = MemoIcon.defaultIcon
     @State private var isTodayTask = false
     @State private var hoverDismissTask: Task<Void, Never>?
 
@@ -639,43 +639,13 @@ private struct CompanionChatMessageRow: View {
             Text("메모로 저장")
                 .font(.system(size: 12, weight: .bold))
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(28), spacing: 5), count: 5),
-                spacing: 5
-            ) {
-                ForEach(MemoIcon.options, id: \.self) { icon in
-                    Button {
-                        selectedIcon = icon
-                    } label: {
-                        Text(icon)
-                            .font(.system(size: 16))
-                            .frame(width: 26, height: 26)
-                            .background(
-                                selectedIcon == icon
-                                    ? Color.accentColor.opacity(0.18)
-                                    : Color.primary.opacity(0.05),
-                                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .strokeBorder(
-                                        selectedIcon == icon ? Color.accentColor : .clear,
-                                        lineWidth: 1
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help(MemoIcon.label(for: icon))
-                }
-            }
-
             Toggle("오늘 할 일로 표시", isOn: $isTodayTask)
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .font(.system(size: 11.5))
 
             Button {
-                onSave(selectedIcon, isTodayTask)
+                onSave(isTodayTask)
                 isShowingMemoOptions = false
             } label: {
                 Text("저장")

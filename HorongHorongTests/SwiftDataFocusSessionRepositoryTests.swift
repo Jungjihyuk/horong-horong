@@ -242,4 +242,36 @@ final class SwiftDataFocusSessionRepositoryTests: XCTestCase {
         )
         XCTAssertTrue(repository.hasProductiveActivity(since: base, minimumSeconds: 30))
     }
+
+    // MARK: - 기간 조회
+
+    /// **`#Predicate` 는 컴파일된다고 SwiftData 로 번역되는 게 아니다(R8).**
+    /// 팝오버 타임라인이 이 조회에 기대므로 진짜 컨테이너에서 fetch 를 확인한다.
+    func testSessionsInRangeAreFetchedInOrder() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataFocusSessionRepository(context: container.mainContext)
+        let calendar = Calendar.current
+        let now = Date()
+        let dayStart = calendar.startOfDay(for: now)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+
+        _ = start(repository)
+        _ = start(repository)
+
+        let sessions = repository.sessions(startingBetween: dayStart, and: dayEnd)
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(sessions.map(\.startedAt), sessions.map(\.startedAt).sorted(), "이른 것부터 온다")
+        XCTAssertEqual(sessions.first?.category, "개발")
+    }
+
+    /// 어제·내일 것이 섞이면 «오늘의 흐름» 이 아니게 된다.
+    func testSessionsOutsideRangeAreExcluded() throws {
+        let container = try makeContainer()
+        let repository = SwiftDataFocusSessionRepository(context: container.mainContext)
+        _ = start(repository)
+
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        let dayAfter = Calendar.current.date(byAdding: .day, value: 2, to: Date())!
+        XCTAssertTrue(repository.sessions(startingBetween: tomorrow, and: dayAfter).isEmpty)
+    }
 }

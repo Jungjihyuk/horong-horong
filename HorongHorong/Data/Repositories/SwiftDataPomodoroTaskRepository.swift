@@ -23,7 +23,6 @@ final class SwiftDataPomodoroTaskRepository: PomodoroTaskRepository {
             AchievementMemoDetail(
                 id: $0.id,
                 content: $0.content,
-                icon: $0.icon,
                 startDate: $0.startDate,
                 deadline: $0.deadline,
                 updatedAt: $0.updatedAt,

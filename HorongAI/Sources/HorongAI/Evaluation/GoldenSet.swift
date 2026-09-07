@@ -194,16 +194,12 @@ public enum GoldenSet {
         }
 
         /// 태스크에 넘길 입력.
-        ///
-        /// `defaultIcon` 을 받는 이유는 아이콘 기본값이 **앱이 정하는 값**이기 때문이다.
-        /// 여기서 임의로 정하면 평가가 제품과 다른 프롬프트를 만든다.
-        public func taskMemos(defaultIcon: String) -> [WeeklyGoalTask.Memo] {
+        public func taskMemos() -> [WeeklyGoalTask.Memo] {
             let uuidByShortID = identifiers.uuidByShortID
             return memos.map { memo in
                 WeeklyGoalTask.Memo(
                     id: uuidByShortID[memo.id] ?? GoldenSet.deterministicUUID(for: memo.id),
                     content: memo.content,
-                    icon: memo.icon ?? defaultIcon,
                     date: memo.derivedDate(referenceDate: reference),
                     startDate: GoldenSet.date(memo.startDate),
                     deadline: GoldenSet.date(memo.deadline),

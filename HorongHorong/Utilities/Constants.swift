@@ -40,6 +40,11 @@ enum Constants {
     static let todoDetailPaneMinWidth: CGFloat = 240
     static let todoDetailPaneMaxWidth: CGFloat = 560
     static let todoListPaneMinWidth: CGFloat = 320
+    /// 기록 편집기의 기본·최소·최대 너비와, 그 옆 목록이 지켜야 할 최소 너비.
+    static let quickNoteEditorPaneDefaultWidth: CGFloat = 300
+    static let quickNoteEditorPaneMinWidth: CGFloat = 260
+    static let quickNoteEditorPaneMaxWidth: CGFloat = 560
+    static let quickNoteListPaneMinWidth: CGFloat = 320
     /// 일기 우측 패널(달력 + 인사이트)의 기본·최소·최대 너비와, 그 옆 편집기가 지켜야 할 최소 너비.
     static let diaryPanelDefaultWidth: CGFloat = 300
     static let diaryPanelMinWidth: CGFloat = 260
@@ -1013,9 +1018,6 @@ enum Constants {
     static let defaultAchievementMonthlySuggestionCount = 2
     static let defaultAchievementMinTodosForWeeklySuggestions = 2
     static let defaultAchievementMaxWeeklyGoalsPerMonthlyGoal = 4
-    static let legacyAchievementSuggestionExcludedMemoIconsRaw = "☕️,💡,📜"
-    static let defaultAchievementSuggestionExcludedMemoIcons = ["☕️", "🌱", "📜"]
-    static let defaultAchievementSuggestionExcludedMemoIconsRaw = defaultAchievementSuggestionExcludedMemoIcons.joined(separator: ",")
     static let achievementSuggestionCountRange = 1...8
     static let achievementSuggestionMaxTodoCountRange = 2...12
     static let achievementMonthlySuggestionMinWeeklyGoalCountRange = 2...8
@@ -1668,7 +1670,6 @@ enum Constants {
         static let achievementMonthlySuggestionCount = "achievement.monthlySuggestionCount"
         static let achievementMinTodosForWeeklySuggestions = "achievement.minTodosForWeeklySuggestions"
         static let achievementMaxWeeklyGoalsPerMonthlyGoal = "achievement.maxWeeklyGoalsPerMonthlyGoal"
-        static let achievementSuggestionExcludedMemoIcons = "achievement.suggestionExcludedMemoIcons"
         static let achievementSuggestionProvider = "achievement.suggestionProvider"
         /// 주간·월간을 동시에 돌릴지 하나씩 돌릴지 **강제**하는 숨김 값. 기본은 공급자가 정한다.
         /// `defaults write com.horonghorong.app achievement.executionStrategy -string sequential`
@@ -1696,6 +1697,8 @@ enum Constants {
         static let mindSection = "mind.section"
         /// 할 일 목록과 상세 폼 사이 너비. 사용자가 손잡이를 끌어 정한다.
         static let todoDetailPaneWidth = "todo.detailPaneWidth"
+        /// 기록 목록과 편집기 사이 너비. 사용자가 손잡이를 끌어 정한다.
+        static let quickNoteEditorPaneWidth = "quickNote.editorPaneWidth"
         static let diaryPanelWidth = "diary.panelWidth"
         static let diaryPanelOpen = "diary.panelOpen"
         /// 수면 타임라인 가로축의 범위와 눈금 간격. 자는 시간대는 사람마다 달라 고정할 수 없다.

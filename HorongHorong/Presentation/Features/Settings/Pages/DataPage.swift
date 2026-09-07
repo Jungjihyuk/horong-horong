@@ -6,8 +6,9 @@ struct DataPage: View {
     @State private var autoBackup: Bool = true
     @AppStorage(Constants.AppStorageKey.anonymousTelemetryEnabled)
     private var telemetryEnabled: Bool = false
-    @AppStorage(Constants.AppStorageKey.mindVaultPath)
-    private var vaultPath: String = Constants.defaultMindVaultPath
+    @Environment(\.dependencies) private var dependencies
+    @AppStorage("mind.knowledge.root") private var knowledgeRoot = ""
+    @AppStorage("mind.works.root") private var worksRoot = ""
 
     private var telemetryConfigured: Bool {
         TelemetryClient.shared.isConfigured
@@ -28,13 +29,16 @@ struct DataPage: View {
                     .controlSize(.small)
                 }
                 SettingsRow(
-                    "Second Brain vault",
-                    subtitle: vaultPath
+                    "Knowledge 루트",
+                    subtitle: knowledgeRoot.isEmpty ? "폴더를 선택하세요" : knowledgeRoot
                 ) {
                     Button("폴더 선택") {
-                        chooseVault()
+                        _ = dependencies?.vaultLocationGateway.choose(for: .knowledge)
                     }
                     .controlSize(.small)
+                }
+                SettingsRow("Works 루트", subtitle: worksRoot.isEmpty ? "폴더를 선택하세요" : worksRoot) {
+                    Button("폴더 선택") { _ = dependencies?.vaultLocationGateway.choose(for: .works) }.controlSize(.small)
                 }
             }
 
@@ -94,15 +98,4 @@ struct DataPage: View {
         }
     }
 
-    private func chooseVault() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = URL(fileURLWithPath: vaultPath)
-        panel.prompt = "선택"
-        if panel.runModal() == .OK, let url = panel.url {
-            vaultPath = url.path
-        }
-    }
 }
