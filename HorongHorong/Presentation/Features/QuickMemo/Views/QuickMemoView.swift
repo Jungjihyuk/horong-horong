@@ -4,14 +4,13 @@ import SwiftUI
 struct QuickMemoView: View {
     @Environment(\.appearanceAccentOption) private var accentOption
     @ObservedObject var presentationState: QuickMemoPresentationState
-    var onSave: (String, String) -> Bool
+    var onSave: (String) -> Bool
     var onCancel: () -> Void
 
     @AppStorage(Constants.AppStorageKey.menubarIcon)
     private var menubarIconRaw: String = Constants.defaultMenubarIcon
 
     @State private var memoContent: String = ""
-    @State private var selectedIcon: String = MemoIcon.defaultIcon
     @State private var saveErrorMessage: String?
     @FocusState private var isTextFieldFocused: Bool
 
@@ -54,39 +53,21 @@ struct QuickMemoView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            Menu {
-                ForEach(MemoIcon.options, id: \.self) { icon in
-                    Button {
-                        selectedIcon = icon
-                    } label: {
-                        Text("\(icon) \(MemoIcon.label(for: icon))")
-                    }
-                }
-            } label: {
-                HStack(spacing: 14) {
-                    Text(selectedIcon)
+            HStack(spacing: 14) {
+                    Text("⚡")
                         .font(.system(size: 30))
                         .frame(width: 56, height: 56)
                         .background(Color(red: 1.0, green: 0.80, blue: 0.68), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(savesAsTodayTask ? "오늘 할 일" : MemoIcon.label(for: selectedIcon))
+                        Text(savesAsTodayTask ? "오늘 할 일" : "빠른 기록")
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.58, green: 0.27, blue: 0.08))
-                        HStack(spacing: 4) {
-                            Text(savesAsTodayTask
-                                 ? "\(MemoIcon.label(for: selectedIcon)) · 오늘 시작"
-                                 : "카테고리 바꾸기")
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color(red: 0.58, green: 0.45, blue: 0.34).opacity(0.72))
+                        Text(savesAsTodayTask ? "오늘 시작" : "정리는 나중에")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color(red: 0.58, green: 0.45, blue: 0.34).opacity(0.72))
                     }
-                }
             }
-            .buttonStyle(.plain)
-            .help("카테고리 바꾸기")
 
             Spacer()
 
@@ -204,7 +185,7 @@ struct QuickMemoView: View {
     private func save() {
         guard !memoContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         saveErrorMessage = nil
-        if !onSave(memoContent, selectedIcon) {
+        if !onSave(memoContent) {
             saveErrorMessage = "저장하지 못했어요. 다시 시도해 주세요."
         }
     }

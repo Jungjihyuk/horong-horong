@@ -31,6 +31,10 @@ final class ConstantsDefaultsTests: XCTestCase {
 
     func testGlobalHotkeyDefaultsMatchDisplayedShortcuts() {
         XCTAssertEqual(
+            HotkeyCombo.defaultQuickLink.displayParts,
+            ["⇧", "⌘", "L"]
+        )
+        XCTAssertEqual(
             HotkeyCombo.defaultMenuBarPopover.displayParts,
             ["⌃", "⌥", "Space"]
         )
@@ -1759,7 +1763,6 @@ final class ConstantsDefaultsTests: XCTestCase {
             AchievementMemoDetail(
                 id: UUID(),
                 content: content,
-                icon: nil,
                 startDate: start,
                 deadline: nil,
                 updatedAt: now,
@@ -1811,7 +1814,6 @@ final class ConstantsDefaultsTests: XCTestCase {
         let memo = AchievementMemoDetail(
             id: UUID(),
             content: "\(fullTitle)\n상세 설명",
-            icon: nil,
             startDate: nil,
             deadline: nil,
             updatedAt: Date(),

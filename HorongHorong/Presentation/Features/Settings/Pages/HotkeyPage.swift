@@ -7,6 +7,10 @@ struct HotkeyPage: View {
         Binding(get: { store.quickMemo }, set: { store.quickMemo = $0 })
     }
 
+    private var quickLinkBinding: Binding<HotkeyCombo> {
+        Binding(get: { store.quickLink }, set: { store.quickLink = $0 })
+    }
+
     private var menuBarPopoverBinding: Binding<HotkeyCombo> {
         Binding(
             get: { store.menuBarPopover },
@@ -59,6 +63,21 @@ struct HotkeyPage: View {
                         }
                         .buttonStyle(.borderless)
                         .help("기본값(⌃⌥Space) 으로 되돌리기")
+                    }
+                }
+                SettingsRow(
+                    "빠른 링크 기록",
+                    subtitle: "클립보드의 웹 주소를 References에 저장하는 패널을 엽니다."
+                ) {
+                    HotkeyRecorderField(combo: quickLinkBinding)
+                    if store.quickLink != .defaultQuickLink {
+                        Button {
+                            store.resetQuickLinkToDefault()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward").font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("기본값(⌘⇧L) 으로 되돌리기")
                     }
                 }
                 SettingsRow(
