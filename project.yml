@@ -70,6 +70,10 @@ targets:
         excludes:
           - "**/*.entitlements"
           - "Info-AppStore.plist"
+          - "Resources/VaultEditor"
+      - path: HorongHorong/Resources/VaultEditor
+        type: folder
+        buildPhase: resources
       - path: Assets/companion
         type: folder
         buildPhase: resources
@@ -151,6 +155,10 @@ targets:
           - "**/*.entitlements"
           - "Info.plist"
           - "Services/AppUpdate/**"
+          - "Resources/VaultEditor"
+      - path: HorongHorong/Resources/VaultEditor
+        type: folder
+        buildPhase: resources
       - path: Assets/companion
         type: folder
         buildPhase: resources

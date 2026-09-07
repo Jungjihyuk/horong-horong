@@ -1,9 +1,6 @@
 import Foundation
 
-/// vault(옵시디언 폴더)를 읽는다. 구현은 `Data/Repositories/` 에 있다.
-///
-/// **읽기 전용이다.** 원본은 옵시디언이 관리하고 이 앱은 보여주기만 한다 —
-/// 쓰기를 넣는 순간 두 프로그램이 같은 파일을 두고 다투게 된다.
+/// 원문과 읽었을 때의 버전을 함께 전달하여 외부 앱의 변경을 덮어쓰지 않는다.
 @MainActor
 protocol VaultRepository {
     /// 폴더를 훑어 트리와 위키 링크 색인을 만든다.
@@ -17,4 +14,24 @@ protocol VaultRepository {
 
     /// `[[제목]]` 이 가리키는 문서를 찾는다. 같은 이름이 여럿이면 현재 문서에 가까운 쪽.
     func resolveWikiLink(_ title: String, from current: URL?, in index: [String: [URL]]) -> URL?
+    func snapshot(at url: URL) async throws -> VaultDocument
+    func save(_ text: String, document: VaultDocument, root: URL) async throws -> VaultDocument
+    func create(name: String, directory: Bool, parent: URL, root: URL) async throws -> URL
+    func delete(at url: URL, root: URL) async throws
+    func index(vault: URL) async throws -> [VaultIndexedDocument]
+    func resource(path: String, vault: URL) async throws -> Data
+    func validate(root: URL) async throws
+}
+
+extension VaultRepository {
+    func snapshot(at url: URL) async throws -> VaultDocument {
+        guard let text = await document(at: url) else { throw VaultError.unavailable }
+        return VaultDocument(url: url, text: text, revision: text)
+    }
+    func save(_ text: String, document: VaultDocument, root: URL) async throws -> VaultDocument { throw VaultError.readOnly }
+    func create(name: String, directory: Bool, parent: URL, root: URL) async throws -> URL { throw VaultError.readOnly }
+    func delete(at url: URL, root: URL) async throws { throw VaultError.readOnly }
+    func index(vault: URL) async throws -> [VaultIndexedDocument] { [] }
+    func resource(path: String, vault: URL) async throws -> Data { throw VaultError.unavailable }
+    func validate(root: URL) async throws {}
 }

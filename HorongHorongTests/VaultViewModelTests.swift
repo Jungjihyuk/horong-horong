@@ -25,6 +25,12 @@ final class VaultViewModelTests: XCTestCase {
         func resolveWikiLink(_ title: String, from current: URL?, in index: [String: [URL]]) -> URL? {
             links[title]
         }
+
+        private(set) var deletedURLs: [URL] = []
+        func delete(at url: URL, root: URL) async throws {
+            deletedURLs.append(url)
+            documents.removeValue(forKey: url)
+        }
     }
 
     private func url(_ path: String) -> URL { URL(fileURLWithPath: path) }
@@ -165,5 +171,141 @@ final class VaultViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.selectedURL, current)
         XCTAssertEqual(viewModel.markdown, "현재 본문")
+    }
+
+    // MARK: - 문서 탭
+
+    func testOpeningSecondDocumentKeepsFirstTab() async {
+        let (viewModel, repository) = make()
+        let first = url("/vault/첫.md"), second = url("/vault/둘.md")
+        repository.documents[first] = "첫 본문"
+        repository.documents[second] = "둘 본문"
+
+        await viewModel.open(first)
+        await viewModel.open(second)
+
+        XCTAssertEqual(viewModel.openTabs, [first, second])
+        XCTAssertEqual(viewModel.selectedURL, second)
+        XCTAssertEqual(viewModel.markdown, "둘 본문")
+    }
+
+    func testOpeningSameDocumentTwiceKeepsOneTab() async {
+        let (viewModel, repository) = make()
+        let target = url("/vault/노트.md")
+        repository.documents[target] = "본문"
+
+        await viewModel.open(target)
+        await viewModel.open(target)
+
+        XCTAssertEqual(viewModel.openTabs, [target])
+    }
+
+    /// **이미 보고 있는 탭을 누르면 다시 읽지 않는다.** 다시 읽으면 편집기가
+    /// 재초기화되어 커서와 undo 가 날아간다.
+    func testSelectingActiveTabDoesNotReloadDocument() async {
+        let (viewModel, repository) = make()
+        let target = url("/vault/노트.md")
+        repository.documents[target] = "본문"
+        await viewModel.open(target)
+        let version = viewModel.documentVersion
+
+        await viewModel.select(target)
+
+        XCTAssertEqual(viewModel.documentVersion, version)
+    }
+
+    func testSelectingOtherTabSwitchesDocument() async {
+        let (viewModel, repository) = make()
+        let first = url("/vault/첫.md"), second = url("/vault/둘.md")
+        repository.documents[first] = "첫 본문"
+        repository.documents[second] = "둘 본문"
+        await viewModel.open(first)
+        await viewModel.open(second)
+
+        await viewModel.select(first)
+
+        XCTAssertEqual(viewModel.selectedURL, first)
+        XCTAssertEqual(viewModel.markdown, "첫 본문")
+        XCTAssertEqual(viewModel.openTabs, [first, second])
+    }
+
+    /// 보고 있던 탭을 닫으면 오른쪽 탭으로 옮긴다.
+    func testClosingActiveTabActivatesNextTab() async {
+        let (viewModel, repository) = make()
+        let first = url("/vault/첫.md"), second = url("/vault/둘.md"), third = url("/vault/셋.md")
+        for (target, text) in [(first, "첫 본문"), (second, "둘 본문"), (third, "셋 본문")] {
+            repository.documents[target] = text
+        }
+        await viewModel.open(first)
+        await viewModel.open(second)
+        await viewModel.open(third)
+        await viewModel.select(first)
+
+        await viewModel.close(first)
+
+        XCTAssertEqual(viewModel.openTabs, [second, third])
+        XCTAssertEqual(viewModel.selectedURL, second)
+        XCTAssertEqual(viewModel.markdown, "둘 본문")
+    }
+
+    func testClosingInactiveTabKeepsCurrentDocument() async {
+        let (viewModel, repository) = make()
+        let first = url("/vault/첫.md"), second = url("/vault/둘.md")
+        repository.documents[first] = "첫 본문"
+        repository.documents[second] = "둘 본문"
+        await viewModel.open(first)
+        await viewModel.open(second)
+        let version = viewModel.documentVersion
+
+        await viewModel.close(first)
+
+        XCTAssertEqual(viewModel.openTabs, [second])
+        XCTAssertEqual(viewModel.selectedURL, second)
+        XCTAssertEqual(viewModel.documentVersion, version)
+    }
+
+    func testClosingLastTabClearsDocument() async {
+        let (viewModel, repository) = make()
+        let target = url("/vault/노트.md")
+        repository.documents[target] = "본문"
+        await viewModel.open(target)
+
+        await viewModel.close(target)
+
+        XCTAssertTrue(viewModel.openTabs.isEmpty)
+        XCTAssertNil(viewModel.selectedURL)
+        XCTAssertEqual(viewModel.markdown, "")
+    }
+
+    /// 폴더를 지우면 그 아래 열려 있던 탭도 함께 닫힌다.
+    func testDeleteClosesTabsUnderDeletedPath() async {
+        let (viewModel, repository) = make()
+        let outside = url("/vault/바깥.md"), inside = url("/vault/폴더/안.md")
+        repository.documents[outside] = "바깥 본문"
+        repository.documents[inside] = "안 본문"
+        await viewModel.load(vault: url("/vault"))
+        await viewModel.open(outside)
+        await viewModel.open(inside)
+
+        await viewModel.delete(at: url("/vault/폴더"))
+
+        XCTAssertEqual(viewModel.openTabs, [outside])
+        XCTAssertEqual(viewModel.selectedURL, outside)
+        XCTAssertEqual(viewModel.markdown, "바깥 본문")
+    }
+
+    func testDeleteClearsSelectedDocumentWhenDeleted() async {
+        let (viewModel, repository) = make()
+        let target = url("/vault/노트.md")
+        repository.documents[target] = "본문"
+        await viewModel.load(vault: url("/vault"))
+        await viewModel.open(target)
+        XCTAssertEqual(viewModel.selectedURL, target)
+
+        await viewModel.delete(at: target)
+
+        XCTAssertNil(viewModel.selectedURL)
+        XCTAssertEqual(viewModel.markdown, "")
+        XCTAssertEqual(repository.deletedURLs, [target])
     }
 }

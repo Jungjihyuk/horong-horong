@@ -1,0 +1,4 @@
+node_modules/
+.upstream/
+test-bundle.mjs
+test-bundle.mjs.LEGAL.txt

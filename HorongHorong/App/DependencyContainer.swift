@@ -15,6 +15,7 @@ final class DependencyContainer {
     let todoRepository: TodoRepository
     let diaryRepository: DiaryRepository
     let vaultRepository: VaultRepository
+    let vaultLocationGateway: VaultLocationGateway
     let agentGateway: AgentGateway
     let newsRepository: NewsRepository
     let newsPipelineGateway: NewsPipelineGateway
@@ -37,6 +38,7 @@ final class DependencyContainer {
         todoRepository = SwiftDataTodoRepository(context: context)
         diaryRepository = SwiftDataDiaryRepository(context: context)
         vaultRepository = FileSystemVaultRepository()
+        vaultLocationGateway = VaultLocationAdapter()
         agentGateway = CLIAgentAdapter()
         newsRepository = SwiftDataNewsRepository(context: context)
         newsPipelineGateway = NewsPipelineAdapter(service: newsPipelineService, context: context)
