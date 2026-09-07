@@ -45,8 +45,6 @@ struct AchievementGoalComposerSheet: View {
     private var minTodosForWeeklySuggestions: Int = Constants.defaultAchievementMinTodosForWeeklySuggestions
     @AppStorage(Constants.AppStorageKey.achievementMaxWeeklyGoalsPerMonthlyGoal)
     private var maxWeeklyGoalsPerMonthlyGoal: Int = Constants.defaultAchievementMaxWeeklyGoalsPerMonthlyGoal
-    @AppStorage(Constants.AppStorageKey.achievementSuggestionExcludedMemoIcons)
-    private var excludedMemoIconsRaw: String = Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
     @AppStorage(Constants.AppStorageKey.achievementDismissedSuggestionKeys)
     private var dismissedSuggestionKeysRaw: String = ""
 
@@ -146,9 +144,6 @@ struct AchievementGoalComposerSheet: View {
             reloadSuggestionsAfterSettingsChange()
         }
         .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in
-            reloadSuggestionsAfterSettingsChange()
-        }
-        .onChange(of: excludedMemoIconsRaw) { _, _ in
             reloadSuggestionsAfterSettingsChange()
         }
     }
@@ -923,8 +918,9 @@ struct AchievementGoalComposerSheet: View {
                         ForEach(memoPickerSections) { section in
                             LazyVStack(alignment: .leading, spacing: 6) {
                                 HStack(spacing: 6) {
-                                    Text(section.icon)
-                                        .font(.system(size: 12))
+                                    Image(systemName: section.symbol)
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(PopoverChrome.inkTertiary)
                                     Text(section.label)
                                         .font(.system(size: 11, weight: .bold, design: .rounded))
                                         .foregroundStyle(PopoverChrome.inkTertiary)
@@ -1054,24 +1050,36 @@ struct AchievementGoalComposerSheet: View {
         }
     }
 
+    /// 수동 연결 목록의 묶음.
+    ///
+    /// 예전에는 메모의 이모지 분류로 나눴는데, 그 분류는 팝오버에서만 붙일 수 있어
+    /// 실질적으로 쓰이지 않았다. 지금은 **언제 할 일인지**(오늘·예정·지남…)로 나눈다 —
+    /// 목표에 묶을 할 일을 고를 때 실제로 궁금한 것이 그쪽이다.
     private var memoPickerSections: [AchievementMemoPickerSection] {
-        let iconRanks = Dictionary(uniqueKeysWithValues: MemoIcon.options.enumerated().map { ($0.element, $0.offset) })
-        return Dictionary(grouping: visibleLinkableMemos, by: { $0.icon ?? MemoIcon.defaultIcon })
-            .map { icon, memos in
-                AchievementMemoPickerSection(
-                    icon: icon,
-                    label: MemoIcon.label(for: icon),
-                    memos: memos.sorted(by: isMemoOrderedBefore)
-                )
-            }
-            .sorted { lhs, rhs in
-                let lhsRank = iconRanks[lhs.icon] ?? Int.max
-                let rhsRank = iconRanks[rhs.icon] ?? Int.max
-                if lhsRank != rhsRank {
-                    return lhsRank < rhsRank
-                }
-                return lhs.label.localizedCompare(rhs.label) == .orderedAscending
-            }
+        let now = Date()
+        let order = Dictionary(uniqueKeysWithValues: TodoBucket.allCases.enumerated().map { ($0.element, $0.offset) })
+        return Dictionary(grouping: visibleLinkableMemos) { memo in
+            TodoBucket.of(
+                startDate: memo.startDate,
+                deadline: memo.deadline,
+                isCompleted: memo.isCompleted,
+                completionStateChangedAt: nil,
+                now: now
+            )
+        }
+        .map { bucket, memos in
+            AchievementMemoPickerSection(
+                symbol: bucket.symbol,
+                label: bucket.title,
+                memos: memos.sorted(by: isMemoOrderedBefore)
+            )
+        }
+        .sorted { lhs, rhs in
+            let lhsRank = TodoBucket.allCases.first { $0.title == lhs.label }.flatMap { order[$0] } ?? Int.max
+            let rhsRank = TodoBucket.allCases.first { $0.title == rhs.label }.flatMap { order[$0] } ?? Int.max
+            if lhsRank != rhsRank { return lhsRank < rhsRank }
+            return lhs.label.localizedCompare(rhs.label) == .orderedAscending
+        }
     }
 
     private func memoPickerDate(for memo: AchievementMemoDetail) -> Date? {
@@ -1101,28 +1109,20 @@ struct AchievementGoalComposerSheet: View {
         return lhs.content.localizedCompare(rhs.content) == .orderedAscending
     }
 
-    private var excludedMemoIcons: Set<String> {
-        let raw = excludedMemoIconsRaw == Constants.legacyAchievementSuggestionExcludedMemoIconsRaw
-            ? Constants.defaultAchievementSuggestionExcludedMemoIconsRaw
-            : excludedMemoIconsRaw
-        let icons = raw
-            .split(separator: ",")
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { MemoIcon.options.contains($0) }
-        return Set(icons)
-    }
-
+    /// 추천 후보가 될 수 있는 할 일인가.
+    ///
+    /// 예전에는 이모지 분류(`MemoIcon`)로 걸렀는데, 그 분류는 팝오버에서만 붙일 수 있어
+    /// 실질적으로 쓰이지 않았다. 지금은 **오늘·예정에 잡힌 할 일**을 입력으로 삼는다.
     private func isUsableSuggestionMemo(_ memo: AchievementMemoDetail) -> Bool {
-        let content = memo.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard content.count >= 3 else { return false }
-        let icon = memo.icon ?? MemoIcon.defaultIcon
-        if excludedMemoIcons.contains(icon) {
-            return false
-        }
-        if icon == "🔗", content.localizedCaseInsensitiveContains("http") {
-            return false
-        }
-        return true
+        guard memo.content.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else { return false }
+        let bucket = TodoBucket.of(
+            startDate: memo.startDate,
+            deadline: memo.deadline,
+            isCompleted: memo.isCompleted,
+            completionStateChangedAt: nil,
+            now: Date()
+        )
+        return bucket == .today || bucket == .upcoming
     }
 
     private var weeklyGoalsForMonthlySuggestions: [AchievementGoal] {

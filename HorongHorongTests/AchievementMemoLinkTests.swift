@@ -62,7 +62,6 @@ final class AchievementMemoLinkTests: XCTestCase {
         AchievementMemoDetail(
             id: id,
             content: content,
-            icon: nil,
             startDate: startDate,
             deadline: nil,
             updatedAt: startDate ?? Date(),

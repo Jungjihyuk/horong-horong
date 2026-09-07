@@ -12,7 +12,6 @@ protocol CompanionRepository {
     @discardableResult
     func createMemo(
         content: String,
-        icon: String,
         startDate: Date?,
         deadline: Date?
     ) throws -> UUID

@@ -109,7 +109,6 @@ enum AchievementGoalCadence: String, Sendable {
 struct AchievementMemoSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let content: String
-    let icon: String?
     let date: Date
     let startDate: Date?
     let deadline: Date?

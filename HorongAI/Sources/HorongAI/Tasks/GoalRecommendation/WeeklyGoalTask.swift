@@ -12,11 +12,9 @@ public enum WeeklyGoalTask {
     /// 프롬프트에 실리는 할일 하나.
     ///
     /// 앱의 저장 모델을 그대로 받지 않는 이유는 패키지가 앱 도메인 타입을 알면 안 되기 때문이다.
-    /// 아이콘 기본값처럼 **앱이 정하는 값**은 경계를 넘기 전에 앱이 채워 넣는다.
     public struct Memo: Sendable, Hashable, Identifiable {
         public let id: UUID
         public let content: String
-        public let icon: String
         public let date: Date
         public let startDate: Date?
         public let deadline: Date?
@@ -25,7 +23,6 @@ public enum WeeklyGoalTask {
         public init(
             id: UUID,
             content: String,
-            icon: String,
             date: Date,
             startDate: Date? = nil,
             deadline: Date? = nil,
@@ -33,7 +30,6 @@ public enum WeeklyGoalTask {
         ) {
             self.id = id
             self.content = content
-            self.icon = icon
             self.date = date
             self.startDate = startDate
             self.deadline = deadline

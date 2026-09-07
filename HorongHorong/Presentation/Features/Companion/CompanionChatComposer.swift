@@ -535,7 +535,6 @@ struct CompanionMemoSchedule: Equatable {
 struct CompanionMemoSaveRequest {
     let messageID: UUID
     let content: String
-    let icon: String
     let isTodayTask: Bool
     var startDate: Date?
     var deadline: Date?
@@ -563,7 +562,6 @@ final class CompanionMemoStore {
 
         let memoID = try repository.createMemo(
             content: request.content,
-            icon: request.icon,
             // 말로 정해준 때가 있으면 그 값이 우선이다.
             startDate: request.startDate ?? (request.isTodayTask ? now : nil),
             deadline: request.deadline

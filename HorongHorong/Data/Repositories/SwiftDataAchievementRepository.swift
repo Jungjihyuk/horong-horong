@@ -573,7 +573,6 @@ final class SwiftDataAchievementRepository: AchievementRepository {
         AchievementMemoDetail(
             id: record.id,
             content: record.content,
-            icon: record.icon,
             startDate: record.startDate,
             deadline: record.deadline,
             updatedAt: record.updatedAt,

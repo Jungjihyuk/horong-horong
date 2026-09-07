@@ -58,7 +58,7 @@ final class GoldenSetHarnessTests: XCTestCase {
         let generator = ReplayTextGenerator(response)
 
         let outcome = await WeeklyGoalTask.run(
-            memos: goldenCase.taskMemos(defaultIcon: defaultIcon),
+            memos: goldenCase.taskMemos(),
             suggestionCount: 4,
             maxMemoCount: 5,
             inputLimit: 60,
@@ -176,8 +176,8 @@ final class GoldenSetHarnessTests: XCTestCase {
 
         let outcome = await WeeklyGoalTask.run(
             memos: [
-                WeeklyGoalTask.Memo(id: UUID(), content: "보고서 초안", icon: "📝", date: Date()),
-                WeeklyGoalTask.Memo(id: UUID(), content: "보고서 검토", icon: "📝", date: Date()),
+                WeeklyGoalTask.Memo(id: UUID(), content: "보고서 초안", date: Date()),
+                WeeklyGoalTask.Memo(id: UUID(), content: "보고서 검토", date: Date()),
             ],
             suggestionCount: 3,
             maxMemoCount: 3,
@@ -202,7 +202,7 @@ final class GoldenSetHarnessTests: XCTestCase {
 
         _ = await WeeklyGoalTask.run(
             memos: [
-                WeeklyGoalTask.Memo(id: UUID(), content: "주간 보고서 초안", icon: "📝", date: Date()),
+                WeeklyGoalTask.Memo(id: UUID(), content: "주간 보고서 초안", date: Date()),
             ],
             suggestionCount: 3,
             maxMemoCount: 3,

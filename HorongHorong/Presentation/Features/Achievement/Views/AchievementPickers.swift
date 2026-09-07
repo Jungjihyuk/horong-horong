@@ -43,8 +43,6 @@ struct AchievementMemoPickerRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(memo.icon ?? MemoIcon.defaultIcon)
-                    .font(.system(size: 13))
                 Text(memo.content)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(memo.isCompleted ? PopoverChrome.inkSecondary : PopoverChrome.ink)
@@ -126,9 +124,10 @@ struct AchievementChildGoalPickerRow: View {
 }
 
 struct AchievementMemoPickerSection: Identifiable {
-    let icon: String
+    /// SF Symbol 이름. 예전에는 메모 이모지 분류였으나 지금은 «오늘·예정» 같은 시점 묶음이다.
+    let symbol: String
     let label: String
     let memos: [AchievementMemoDetail]
 
-    var id: String { icon }
+    var id: String { label }
 }
