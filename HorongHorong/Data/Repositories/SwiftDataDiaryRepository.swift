@@ -14,8 +14,10 @@ final class SwiftDataDiaryRepository: DiaryRepository {
 
     func entries(inMonthOf date: Date) throws -> [DiaryDay] {
         guard let range = monthRange(of: date) else { return [] }
-        let start = range.start
-        let end = range.end
+        return try entries(from: range.start, to: range.end)
+    }
+
+    func entries(from start: Date, to end: Date) throws -> [DiaryDay] {
         let descriptor = FetchDescriptor<Diary>(
             predicate: #Predicate { $0.day >= start && $0.day < end },
             sortBy: [SortDescriptor(\.day, order: .reverse)]
@@ -33,8 +35,25 @@ final class SwiftDataDiaryRepository: DiaryRepository {
     }
 
     @discardableResult
-    func setMood(on day: Date, mood: DiaryMood?) throws -> DiaryDay {
-        try upsert(day) { $0.mood = mood }
+    func setMood(on day: Date, slot: DiaryMoodSlot, mood: DiaryMood?) throws -> DiaryDay {
+        try upsert(day) { entry in
+            entry.setMood(mood, in: slot)
+            // 감정을 지우면 그 칸의 나머지도 함께 비운다. 화면이 두 번 나눠 지우게 하면
+            // 그 사이에 «감정 없는 원인» 이 남는 순간이 생긴다.
+            guard mood == nil else { return }
+            entry.setCause(nil, in: slot)
+            entry.setIntensity(nil, in: slot)
+        }
+    }
+
+    @discardableResult
+    func setCause(on day: Date, slot: DiaryMoodSlot, cause: DiaryCause?) throws -> DiaryDay {
+        try upsert(day) { $0.setCause(cause, in: slot) }
+    }
+
+    @discardableResult
+    func setIntensity(on day: Date, slot: DiaryMoodSlot, intensity: Int?) throws -> DiaryDay {
+        try upsert(day) { $0.setIntensity(intensity, in: slot) }
     }
 
     @discardableResult
@@ -43,10 +62,14 @@ final class SwiftDataDiaryRepository: DiaryRepository {
     }
 
     @discardableResult
-    func setSleep(on day: Date, hours: Double, source: DiarySleepSource) throws -> DiaryDay {
+    func setSleep(on day: Date, window: DiarySleepWindow?, source: DiarySleepSource) throws -> DiaryDay {
         try upsert(day) {
-            $0.sleepHours = hours
-            $0.sleepSource = source
+            // 넷은 항상 함께 움직인다. 하나만 남으면 «시각 없는 길이» 나 «길이 없는 시각» 이 생겨
+            // 그래프가 어느 쪽을 믿어야 할지 알 수 없다.
+            $0.sleepHours = window?.hours
+            $0.sleepStart = window?.start
+            $0.sleepEnd = window?.end
+            $0.sleepSource = window == nil ? nil : source
         }
     }
 
@@ -87,10 +110,12 @@ final class SwiftDataDiaryRepository: DiaryRepository {
         DiaryDay(
             day: entry.day,
             body: entry.body,
-            mood: entry.mood,
             stress: entry.stress,
             sleepHours: entry.sleepHours,
-            sleepSource: entry.sleepSource
+            sleepSource: entry.sleepSource,
+            moodRecords: entry.moodRecords,
+            sleepStart: entry.sleepStart,
+            sleepEnd: entry.sleepEnd
         )
     }
 }

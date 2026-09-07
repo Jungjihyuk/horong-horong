@@ -7,8 +7,9 @@ final class DiaryEntry {
     /// 그날의 시작 시각. 하루 한 장.
     var day: Date
     var moodRaw: String?
+    var causeRaw: String?
     var sleepHours: Double?
-    /// healthkit 또는 manual. nil 이면 아직 수면 출처가 없다.
+    /// 과거 healthkit 또는 manual. 기존 healthkit 값은 호환을 위해 읽는다.
     var sleepSourceRaw: String?
     var stress: Int?
     var body: String
@@ -19,6 +20,7 @@ final class DiaryEntry {
         self.id = UUID()
         self.day = calendar.startOfDay(for: day)
         self.moodRaw = nil
+        self.causeRaw = nil
         self.sleepHours = nil
         self.sleepSourceRaw = nil
         self.stress = nil
@@ -30,6 +32,11 @@ final class DiaryEntry {
     var mood: DiaryMood? {
         get { moodRaw.flatMap(DiaryMood.init(rawValue:)) }
         set { moodRaw = newValue?.rawValue }
+    }
+
+    var cause: DiaryCause? {
+        get { causeRaw.flatMap(DiaryCause.init(rawValue:)) }
+        set { causeRaw = newValue?.rawValue }
     }
 
     var sleepSource: DiarySleepSource? {

@@ -14,7 +14,6 @@ final class DependencyContainer {
     let quickNoteRepository: QuickNoteRepository
     let todoRepository: TodoRepository
     let diaryRepository: DiaryRepository
-    let sleepGateway: SleepGateway
     let vaultRepository: VaultRepository
     let agentGateway: AgentGateway
     let newsRepository: NewsRepository
@@ -37,7 +36,6 @@ final class DependencyContainer {
         quickNoteRepository = SwiftDataQuickNoteRepository(context: context)
         todoRepository = SwiftDataTodoRepository(context: context)
         diaryRepository = SwiftDataDiaryRepository(context: context)
-        sleepGateway = HealthSleepGateway()
         vaultRepository = FileSystemVaultRepository()
         agentGateway = CLIAgentAdapter()
         newsRepository = SwiftDataNewsRepository(context: context)

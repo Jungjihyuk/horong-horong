@@ -40,7 +40,18 @@ enum Constants {
     static let todoDetailPaneMinWidth: CGFloat = 240
     static let todoDetailPaneMaxWidth: CGFloat = 560
     static let todoListPaneMinWidth: CGFloat = 320
+    /// 일기 우측 패널(달력 + 인사이트)의 기본·최소·최대 너비와, 그 옆 편집기가 지켜야 할 최소 너비.
+    static let diaryPanelDefaultWidth: CGFloat = 300
+    static let diaryPanelMinWidth: CGFloat = 260
+    static let diaryPanelMaxWidth: CGFloat = 420
+    static let diaryEditorPaneMinWidth: CGFloat = 420
     static let hubWindowHeight: CGFloat = 700
+    /// 통합 창이 줄어들 수 있는 한계.
+    ///
+    /// 레일 64 + 상위 분류 221 + 가장 좁은 본문(References 격자 230 + 상세 300)이 들어갈 만큼은
+    /// 남겨 둔다. 더 줄면 제목과 카드가 접히기 시작한다.
+    static let hubWindowMinWidth: CGFloat = 880
+    static let hubWindowMinHeight: CGFloat = 560
 
 
     enum PopoverTheme: String, CaseIterable, Identifiable {
@@ -1685,6 +1696,12 @@ enum Constants {
         static let mindSection = "mind.section"
         /// 할 일 목록과 상세 폼 사이 너비. 사용자가 손잡이를 끌어 정한다.
         static let todoDetailPaneWidth = "todo.detailPaneWidth"
+        static let diaryPanelWidth = "diary.panelWidth"
+        static let diaryPanelOpen = "diary.panelOpen"
+        /// 수면 타임라인 가로축의 범위와 눈금 간격. 자는 시간대는 사람마다 달라 고정할 수 없다.
+        static let diarySleepAxisStartHour = "diary.sleepAxis.startHour"
+        static let diarySleepAxisEndHour = "diary.sleepAxis.endHour"
+        static let diarySleepAxisTickInterval = "diary.sleepAxis.tickInterval"
         /// «걸리는 시간» 왼쪽 두 칸에 흘러가는 최근 값. «15,30» 처럼 적는다.
         static let todoDurationRecent = "todo.durationRecent"
         /// 오른쪽 두 칸에 박아 둔 값.

@@ -12,10 +12,14 @@ final class ReferencesViewModel {
     private(set) var selected: ReferenceItem?
     private(set) var canLoadMore = false
 
-    var searchText = "" { didSet { guard searchText != oldValue else { return }; reload() } }
-    var newContent = ""
-    /// 편집 중인 본문. **타건은 여기서 끝난다** — 저장은 아래에서 미룬다.
-    var draft = ""
+    var searchText = "" { didSet { guard searchText != oldValue else { return }; resetPaging() } }
+    /// `nil` 이면 «전체». 검색과 같은 방식으로 다시 읽는다.
+    var mode: ReferenceKind? { didSet { guard mode != oldValue else { return }; resetPaging() } }
+
+    /// 편집 중인 값. **타건은 여기서 끝난다** — 저장은 아래에서 미룬다.
+    var titleDraft = ""
+    var urlDraft = ""
+    var bodyDraft = ""
 
     private let repository: ReferenceRepository
     private var limit = ReferencesViewModel.pageSize
@@ -27,31 +31,21 @@ final class ReferencesViewModel {
         self.repository = repository
     }
 
+    /// 목록 부제에 쓰는 값.
+    var widgetCount: Int { references.count { $0.isWidget } }
+
     // MARK: - 읽기
 
-    /// **결정 ① — 갱신은 «쓰기 뒤 명시적 재적재»로 한다.**
-    ///
-    /// `@Query` 는 데이터가 건드려지기만 해도 알아서 다시 가져왔다. 편했지만 결과가
-    /// 그대로일 때도 화면 전체를 다시 그렸다(실측: 20초 타이핑에 body 70회).
-    /// 여기서는 **바뀐 것을 아는 쪽(쓰기 메서드)이 재적재를 부른다.**
-    ///
-    /// 다른 화면의 변경까지 받아야 하면 그때 저장소가 알림을 발행하는 방식을 더한다.
-    /// 참고 자료는 이 화면에서만 바뀌므로 지금은 필요 없다.
     func reload() {
         let requested = limit
-        references = (try? repository.references(matching: searchText, limit: requested + 1)) ?? []
+        references = (try? repository.references(matching: searchText, kind: mode, limit: requested + 1)) ?? []
         canLoadMore = references.count > requested
         if canLoadMore { references.removeLast() }
         syncSelection()
     }
 
-    /// **결정 ② — 페이징은 오프셋 방식(개수 늘리기)으로 한다.**
-    ///
-    /// 커서 방식을 쓰려면 정렬 키가 변하지 않아야 하는데, 이 목록은 «최근에 고친 순» 이라
-    /// **편집할 때마다 항목이 맨 위로 이동한다.** 커서가 가리키던 자리가 사라진다.
-    ///
-    /// 오프셋의 약점(보는 사이에 앞에 끼어들면 한 칸 밀림)은 쓰기 직후 처음부터 다시
-    /// 읽는 것으로 줄인다. 정렬 키가 고정된 목록을 옮길 때는 커서를 다시 검토한다.
+    /// 페이징은 오프셋 방식(개수 늘리기)이다. 커서 방식은 «최근에 고친 순» 정렬이라
+    /// 편집할 때마다 항목이 맨 위로 이동해 못 쓴다.
     func loadMore() {
         guard canLoadMore else { return }
         limit += Self.pageSize
@@ -61,37 +55,56 @@ final class ReferencesViewModel {
     func select(_ id: UUID?) {
         flush()
         selected = id.flatMap { try? repository.reference(id: $0) }
-        draft = selected?.content ?? ""
+        loadDrafts()
+    }
+
+    /// 위젯 창이나 다른 화면이 같은 항목을 고쳤을 때 다시 읽는다.
+    func refreshExternally(id: UUID) {
+        if selected?.id == id {
+            selected = try? repository.reference(id: id)
+            loadDrafts()
+        }
+        reload()
     }
 
     // MARK: - 쓰기
 
-    func add() {
-        let content = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
-        guard let created = try? repository.add(content: content) else { return }
-        newContent = ""
+    func add(kind: ReferenceKind) {
+        flush()
+        guard let created = try? repository.add(kind: kind) else { return }
+        // 새로 만든 것이 걸러져 안 보이면 «추가했는데 아무 일도 안 났다» 가 된다.
+        if mode != nil, mode != kind { mode = kind }
+        searchText = ""
         limit = Self.pageSize
         reload()
         selected = created
-        draft = created.content
+        loadDrafts()
     }
 
     func delete(_ id: UUID) {
-        flush()
+        saveTask?.cancel()
+        saveTask = nil
         try? repository.delete(id: id)
-        if selected?.id == id { selected = nil; draft = "" }
+        if selected?.id == id { selected = nil; loadDrafts() }
         reload()
+    }
+
+    func setColor(_ color: ReferenceNoteColor) {
+        apply(ReferenceChange(color: color))
+    }
+
+    func setWidget(_ isWidget: Bool) {
+        apply(ReferenceChange(isWidget: isWidget))
     }
 
     /// 타건마다 저장하지 않는다. 저장은 400ms 뒤 한 번.
     func draftChanged() {
-        guard let id = selected?.id else { return }
+        guard selected != nil else { return }
         saveTask?.cancel()
-        saveTask = Task { @MainActor in
+        saveTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-            persist(id)
+            self?.persistDrafts()
         }
     }
 
@@ -99,22 +112,44 @@ final class ReferencesViewModel {
     func flush() {
         saveTask?.cancel()
         saveTask = nil
-        if let id = selected?.id { persist(id) }
+        persistDrafts()
     }
 
     // MARK: - 내부
 
-    private func persist(_ id: UUID) {
-        guard draft != selected?.content else { return }
-        try? repository.updateContent(id: id, content: draft)
-        selected = try? repository.reference(id: id)
+    private func resetPaging() {
+        limit = Self.pageSize
         reload()
+    }
+
+    private func loadDrafts() {
+        titleDraft = selected?.title ?? ""
+        urlDraft = selected?.url ?? ""
+        bodyDraft = selected?.body ?? ""
+    }
+
+    private func persistDrafts() {
+        guard let selected else { return }
+        var change = ReferenceChange()
+        if titleDraft != selected.title { change.title = titleDraft }
+        if selected.kind == .link, urlDraft != (selected.url ?? "") { change.url = urlDraft }
+        if selected.kind == .note, bodyDraft != selected.body { change.body = bodyDraft }
+        guard change != ReferenceChange() else { return }
+        apply(change)
+    }
+
+    private func apply(_ change: ReferenceChange) {
+        guard let id = selected?.id else { return }
+        guard let updated = try? repository.update(id: id, change) else { return }
+        selected = updated
+        reload()
+        ReferenceChangeBroadcast.post(id: id)
     }
 
     /// 고른 항목이 사라졌으면(삭제·검색으로 걸러짐) 첫 항목으로 옮긴다.
     private func syncSelection() {
         if let selected, references.contains(where: { $0.id == selected.id }) { return }
         selected = references.first
-        draft = selected?.content ?? ""
+        loadDrafts()
     }
 }

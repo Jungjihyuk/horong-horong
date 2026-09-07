@@ -1,115 +1,125 @@
 import SwiftUI
 
-/// 달력과 그날의 일기.
+/// 일기 화면. 글 쓰는 자리가 화면을 차지하고, 달력과 인사이트는 접었다 펴는 우측 패널에 있다.
 ///
 /// **`@Query`·`ModelContext` 를 쓰지 않는다.** 화면은 ViewModel 이 준 값 타입만 본다.
 struct DiaryBrowserView: View {
     @State private var viewModel: DiaryViewModel
+    @State private var isInsightsPresented = false
+    /// 끄는 동안에만 쓰는 값. 손을 뗄 때 한 번만 저장해 UserDefaults 를 매 프레임 건드리지 않는다.
+    @State private var draggingPanelWidth: CGFloat?
+    @State private var panelWidthAtDragStart: CGFloat?
 
+    @AppStorage(Constants.AppStorageKey.diaryPanelWidth)
+    private var storedPanelWidth: Double = Double(Constants.diaryPanelDefaultWidth)
+    @AppStorage(Constants.AppStorageKey.diaryPanelOpen)
+    private var isPanelOpen = true
+    /// 설정에서 정한 수면 축. 설정 창에서 바꾸면 `@AppStorage` 가 여기까지 바로 흐른다.
+    private let axisStorage = DiarySleepAxisStorage()
+
+    private let repository: DiaryRepository
     private let calendar = Calendar.current
 
-    init(repository: DiaryRepository, sleep: SleepGateway) {
-        _viewModel = State(initialValue: DiaryViewModel(repository: repository, sleep: sleep))
+    init(repository: DiaryRepository) {
+        self.repository = repository
+        _viewModel = State(initialValue: DiaryViewModel(repository: repository))
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            calendarPane
-            Divider().overlay(PopoverChrome.divider)
-            editorPane
-        }
-        .onAppear {
-            viewModel.reload()
-            viewModel.pullSleepIfNeeded()
-        }
-        .onDisappear { viewModel.flush() }
-    }
-
-    // MARK: - 달력
-
-    private var calendarPane: some View {
-        let month = calendar.dateComponents([.year, .month], from: viewModel.visibleMonth)
-        let first = calendar.date(from: month) ?? viewModel.visibleMonth
-        let daysInMonth = calendar.range(of: .day, in: .month, for: first)?.count ?? 30
-        let pad = calendar.component(.weekday, from: first) - 1
-        let cells: [Int?] = Array(repeating: nil, count: pad) + Array(1...daysInMonth)
-        let today = calendar.startOfDay(for: Date())
-
-        return VStack(alignment: .leading, spacing: 12) {
-            monthHeader
-            weekdayHeader
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-                ForEach(Array(cells.enumerated()), id: \.offset) { _, day in
-                    if let day {
-                        let date = calendar.date(byAdding: .day, value: day - 1, to: first)
-                            .map { calendar.startOfDay(for: $0) } ?? today
-                        Button {
-                            viewModel.select(date)
-                        } label: {
-                            DiaryDayCell(
-                                day: day,
-                                emoji: viewModel.entry(on: date)?.mood?.emoji,
-                                isToday: date == today,
-                                isSelected: date == viewModel.selectedDay
-                            )
+        GeometryReader { proxy in
+            let panelWidth = resolvedPanelWidth(totalWidth: proxy.size.width)
+            HStack(spacing: 0) {
+                editorPane
+                if isPanelOpen {
+                    PaneResizeHandle(
+                        onDrag: { translation in
+                            let base = panelWidthAtDragStart ?? CGFloat(storedPanelWidth)
+                            panelWidthAtDragStart = base
+                            draggingPanelWidth = base - translation
+                        },
+                        onDragEnd: {
+                            storedPanelWidth = Double(panelWidth)
+                            draggingPanelWidth = nil
+                            panelWidthAtDragStart = nil
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        Color.clear.frame(minHeight: 42)
-                    }
+                    )
+                    sidePanel
+                        .frame(width: panelWidth)
+                } else {
+                    panelOpenStrip
                 }
             }
-            .padding(.horizontal, 10)
-
-            Button("오늘로") {
-                viewModel.goToToday()
-            }
-            .controlSize(.small)
-            .padding(.horizontal, 16)
-
-            Text("이 달에 \(viewModel.writtenCount)일 기록")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkTertiary)
-                .padding(.horizontal, 16)
-
-            Spacer()
         }
-        .frame(width: 280)
-        .background(PopoverChrome.surfaceAlt)
+        .onAppear {
+            viewModel.sleepAxis = axisStorage.axis
+            viewModel.reload()
+        }
+        .onChange(of: axisStorage.axis) { _, axis in viewModel.sleepAxis = axis }
+        .onDisappear { viewModel.flush() }
+        .sheet(isPresented: $isInsightsPresented) {
+            DiaryInsightsView(
+                repository: repository,
+                referenceDate: viewModel.selectedDay,
+                axis: axisStorage.axis
+            )
+                .frame(minWidth: 760, minHeight: 600)
+        }
     }
 
-    private var monthHeader: some View {
-        HStack {
-            Button { viewModel.shiftMonth(-1) } label: {
-                Image(systemName: "chevron.left")
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Text(DiaryDateText.month(viewModel.visibleMonth))
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
-            Spacer()
-            Button { viewModel.shiftMonth(1) } label: {
-                Image(systemName: "chevron.right")
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(PopoverChrome.inkSecondary)
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
+    /// 창이 좁아졌거나 저장값이 오래됐을 수 있으므로 그릴 때마다 지금 창 크기로 다시 자른다.
+    private func resolvedPanelWidth(totalWidth: CGFloat) -> CGFloat {
+        PaneWidthPolicy.resolveTrailing(
+            proposed: draggingPanelWidth ?? CGFloat(storedPanelWidth),
+            totalWidth: totalWidth,
+            leadingMinimum: Constants.diaryEditorPaneMinWidth,
+            trailingMinimum: Constants.diaryPanelMinWidth,
+            trailingMaximum: Constants.diaryPanelMaxWidth
+        )
     }
 
-    private var weekdayHeader: some View {
-        HStack {
-            ForEach(Array(["일", "월", "화", "수", "목", "금", "토"].enumerated()), id: \.offset) { index, name in
-                Text(name)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(index == 0 ? .red.opacity(0.7) : PopoverChrome.inkTertiary)
-                    .frame(maxWidth: .infinity)
-            }
+    // MARK: - 패널
+
+    private var sidePanel: some View {
+        DiarySidePanel(
+            visibleMonth: viewModel.visibleMonth,
+            selectedDay: viewModel.selectedDay,
+            writtenCount: viewModel.writtenCount,
+            snapshot: viewModel.insightPreview,
+            axis: axisStorage.axis,
+            calendar: calendar,
+            moodEmoji: { viewModel.entry(on: $0)?.representativeMood?.emoji },
+            moodGroups: { viewModel.entry(on: $0)?.recordedGroups ?? [] },
+            onSelectDay: { viewModel.select($0) },
+            onShiftMonth: { viewModel.shiftMonth($0) },
+            onGoToToday: { viewModel.goToToday() },
+            onCollapse: { setPanel(open: false) },
+            onOpenInsights: { isInsightsPresented = true }
+        )
+    }
+
+    /// 패널을 접었을 때 남는 세로 띠. 접고 나서 다시 펴는 길이 없으면 한 번 접은 사람은 갇힌다.
+    private var panelOpenStrip: some View {
+        Button { setPanel(open: true) } label: {
+            Image(systemName: "sidebar.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(PopoverChrome.inkSecondary)
+                .frame(width: 26)
+                .frame(maxHeight: .infinity)
+                .background(PopoverChrome.surfaceAlt)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(PopoverChrome.divider)
+                        .frame(width: 1)
+                }
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 10)
+        .buttonStyle(.plain)
+        .help("달력과 인사이트 열기")
+        .accessibilityLabel("달력과 인사이트 열기")
+    }
+
+    private func setPanel(open: Bool) {
+        withAnimation(.easeOut(duration: 0.2)) { isPanelOpen = open }
     }
 
     // MARK: - 편집기
@@ -117,14 +127,32 @@ struct DiaryBrowserView: View {
     private var editorPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             editorHeader
-            metaRow
+            DiaryMetaRow(
+                day: viewModel.selectedDay,
+                entry: viewModel.selected,
+                axis: axisStorage.axis,
+                calendar: calendar,
+                onSelectMood: { viewModel.setMood($0, in: $1) },
+                onSelectIntensity: { viewModel.setIntensity($0, in: $1) },
+                onSelectCause: { viewModel.setCause($0, in: $1) },
+                onCommitSleep: { viewModel.setSleepWindow(start: $0, end: $1) },
+                onClearSleep: { viewModel.clearSleep() }
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+
             Divider().overlay(PopoverChrome.divider)
 
-            TextEditor(text: $viewModel.bodyDraft)
-                .font(.system(size: 15, design: .rounded))
-                .scrollContentBackground(.hidden)
-                .padding(16)
-                .onChange(of: viewModel.bodyDraft) { _, _ in viewModel.draftChanged() }
+            DiaryNotebookPage {
+                TextEditor(text: $viewModel.bodyDraft)
+                    .font(.system(size: 16, design: .serif))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .scrollContentBackground(.hidden)
+                    .padding(.leading, 40)
+                    .padding(.trailing, 16)
+                    .padding(.vertical, 14)
+                    .onChange(of: viewModel.bodyDraft) { _, _ in viewModel.draftChanged() }
+            }
 
             HStack {
                 Text("\(viewModel.bodyDraft.count)자 · 자동 저장")
@@ -135,6 +163,7 @@ struct DiaryBrowserView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
         }
+        .frame(maxWidth: .infinity)
         .background(PopoverChrome.surface)
     }
 
@@ -142,7 +171,7 @@ struct DiaryBrowserView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(DiaryDateText.day(viewModel.selectedDay))
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 19, weight: .semibold, design: .serif))
                     .foregroundStyle(PopoverChrome.ink)
                 if calendar.isDateInToday(viewModel.selectedDay) {
                     Text("오늘")
@@ -152,8 +181,9 @@ struct DiaryBrowserView: View {
                         .padding(.vertical, 3)
                         .background(PopoverChrome.accent, in: Capsule())
                 }
+                Spacer(minLength: 0)
             }
-            Text(viewModel.selected == nil ? "아직 비어 있어요" : "기록됨")
+            Text(viewModel.selected == nil ? "오늘의 마음을 한 줄 남겨보세요" : "기록됨")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
         }
@@ -161,144 +191,35 @@ struct DiaryBrowserView: View {
         .padding(.top, 18)
         .padding(.bottom, 12)
     }
-
-    private var metaRow: some View {
-        HStack(alignment: .top, spacing: 24) {
-            metaGroup(title: "기분") {
-                HStack(spacing: 6) {
-                    ForEach(DiaryMood.allCases) { mood in
-                        Button {
-                            viewModel.setMood(mood)
-                        } label: {
-                            Text(mood.emoji)
-                                .font(.system(size: 18))
-                                .frame(width: 34, height: 34)
-                                .background(
-                                    viewModel.selected?.mood == mood ? PopoverChrome.accentSoft : PopoverChrome.card,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help(mood.rawValue)
-                    }
-                }
-            }
-            metaGroup(title: "수면") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Stepper(sleepLabel, value: sleepBinding, in: 0...14, step: 0.5)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                    HStack(spacing: 8) {
-                        Text(sleepSourceCaption)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(PopoverChrome.inkTertiary)
-                        if viewModel.isSleepAvailable {
-                            Button(viewModel.isPullingSleep ? "가져오는 중…" : "건강 앱에서 가져오기") {
-                                viewModel.pullSleep(force: true)
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(PopoverChrome.accent)
-                            .disabled(viewModel.isPullingSleep)
-                        }
-                    }
-                }
-            }
-            metaGroup(title: "스트레스") {
-                HStack(spacing: 6) {
-                    ForEach(1...5, id: \.self) { value in
-                        Button {
-                            viewModel.setStress(value)
-                        } label: {
-                            Text("\(value)")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .frame(width: 28, height: 28)
-                                .foregroundStyle(viewModel.selected?.stress == value ? PopoverChrome.accentInk : PopoverChrome.inkSecondary)
-                                .background(
-                                    viewModel.selected?.stress == value ? PopoverChrome.accent : PopoverChrome.card,
-                                    in: Circle()
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-    }
-
-    private func metaGroup<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(PopoverChrome.inkTertiary)
-            content()
-        }
-    }
-
-    private var sleepLabel: String {
-        guard let hours = viewModel.selected?.sleepHours else { return "기록 없음" }
-        return String(format: "%.1f시간", hours)
-    }
-
-    private var sleepSourceCaption: String {
-        switch viewModel.selected?.sleepSource {
-        case .healthKit:
-            return "건강 앱 기록 · 직접 고쳐도 됩니다"
-        case .manual:
-            return "직접 입력함"
-        case nil:
-            return viewModel.isSleepAvailable
-                ? "건강 앱에 없으면 직접 입력하세요"
-                : "이 Mac에서는 건강 앱을 쓸 수 없어 직접 입력하세요"
-        }
-    }
-
-    private var sleepBinding: Binding<Double> {
-        Binding(
-            get: { viewModel.selected?.sleepHours ?? 7 },
-            set: { viewModel.setSleepHours($0) }
-        )
-    }
 }
 
-/// 달력 한 칸. **값만 들고 있어 `Equatable` 이 성립한다.**
-private struct DiaryDayCell: View, Equatable {
-    let day: Int
-    let emoji: String?
-    let isToday: Bool
-    let isSelected: Bool
+private struct DiaryNotebookPage<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text("\(day)")
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium, design: .rounded))
-            Text(emoji ?? " ")
-                .font(.system(size: 11))
-                .frame(height: 14)
+        ZStack(alignment: .topLeading) {
+            PopoverChrome.surface
+            Canvas { context, size in
+                let lineColor = PopoverChrome.divider.opacity(PopoverChrome.isWineLantern ? 0.38 : 0.65)
+                var y: CGFloat = 30
+                while y < size.height {
+                    var path = Path()
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                    context.stroke(path, with: .color(lineColor), lineWidth: 0.6)
+                    y += 30
+                }
+                var margin = Path()
+                margin.move(to: CGPoint(x: 34, y: 0))
+                margin.addLine(to: CGPoint(x: 34, y: size.height))
+                context.stroke(margin, with: .color(PopoverChrome.accent.opacity(0.25)), lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+            content
         }
-        .foregroundStyle(isToday ? PopoverChrome.accent : PopoverChrome.ink)
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? PopoverChrome.accentSoft.opacity(0.7) : .clear)
-        )
-    }
-}
-
-/// body 평가마다 새로 만들면 로케일 데이터 로드가 반복된다.
-@MainActor
-private enum DiaryDateText {
-    static func month(_ date: Date) -> String { monthFormatter.string(from: date) }
-    static func day(_ date: Date) -> String { dayFormatter.string(from: date) }
-
-    private static let monthFormatter = make("yyyy년 M월")
-    private static let dayFormatter = make("yyyy년 M월 d일 EEEE")
-
-    private static func make(_ format: String) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = format
-        return formatter
     }
 }

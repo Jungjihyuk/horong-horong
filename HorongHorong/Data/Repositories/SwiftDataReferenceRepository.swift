@@ -2,10 +2,6 @@ import Foundation
 import SwiftData
 
 /// `ReferenceRepository` 의 SwiftData 구현.
-///
-/// **`@MainActor` 인 이유**: 참고 자료는 화면에 보이는 만큼(50건)만 가져오므로 메인 스레드에서
-/// 끝난다. 백그라운드 `ModelActor` 는 그것으로 부족한 화면(Todo·Stats)에서 도입한다 —
-/// 지금 넣으면 얻는 것 없이 동시성 복잡도만 는다.
 @MainActor
 final class SwiftDataReferenceRepository: ReferenceRepository {
     private let context: ModelContext
@@ -14,51 +10,78 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
         self.context = context
     }
 
-    func references(matching query: String, limit: Int) throws -> [ReferenceItem] {
+    func references(matching query: String, kind: ReferenceKind?, limit: Int) throws -> [ReferenceItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         var descriptor = FetchDescriptor<Reference>(
-            // 화면 정렬과 DB 정렬을 같게 맞춘다. 다르면 앞 50건을 가져온 뒤 다시 정렬하게 되어
-            // 51번째에 있는 항목이 위로 올라오지 못한다.
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
 
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        // 검색어가 없으면 개수를 DB 에서 자른다. 있으면 `localizedCaseInsensitiveContains` 가
+        // SQL 로 번역되지 않아 전량을 가져와 걸러야 한다 — 예전 구현과 같은 절충이다.
+        guard !trimmed.isEmpty || kind != nil else {
             descriptor.fetchLimit = limit
-            return try context.fetch(descriptor).map(Self.toReference)
+            return try context.fetch(descriptor).map(Self.toItem)
         }
 
-        // 검색 중에는 개수를 제한하지 않는다. `localizedCaseInsensitiveContains` 는
-        // SQL 로 번역되지 않아 앱에서 걸러야 하는데, 앞 50건만 가져와 거르면
-        // **51번째부터는 검색해도 안 나온다.**
-        return try context.fetch(descriptor)
-            .filter { $0.content.localizedCaseInsensitiveContains(trimmed) }
+        let rows = try context.fetch(descriptor)
+        return rows
+            .filter { kind == nil || $0.kind == kind }
+            .filter { trimmed.isEmpty || Self.matches($0, query: trimmed) }
             .prefix(limit)
-            .map(Self.toReference)
+            .map(Self.toItem)
     }
 
     func reference(id: UUID) throws -> ReferenceItem? {
-        try find(id).map(Self.toReference)
+        try find(id).map(Self.toItem)
     }
 
     @discardableResult
-    func add(content: String) throws -> ReferenceItem {
-        let record = Reference(content: content)
-        context.insert(record)
+    func add(kind: ReferenceKind) throws -> ReferenceItem {
+        let entry = Reference(kindRaw: kind.rawValue, colorRaw: ReferenceNoteColor.fallback.rawValue)
+        context.insert(entry)
         try context.save()
-        return Self.toReference(record)
+        return Self.toItem(entry)
     }
 
-    func updateContent(id: UUID, content: String) throws {
-        guard let record = try find(id) else { return }
-        record.content = content
-        record.updatedAt = Date()
+    @discardableResult
+    func update(id: UUID, _ change: ReferenceChange) throws -> ReferenceItem? {
+        guard let entry = try find(id) else { return nil }
+        if let title = change.title { entry.title = title }
+        if let url = change.url { entry.url = url }
+        if let body = change.body { entry.body = body }
+        if let color = change.color { entry.colorRaw = color.rawValue }
+        if let isWidget = change.isWidget { entry.isWidget = isWidget }
+        if let position = change.widgetPosition {
+            entry.widgetX = position.x
+            entry.widgetY = position.y
+        }
+        if let size = change.widgetSize {
+            entry.widgetWidth = size.width
+            entry.widgetHeight = size.height
+        }
+        if let collapsed = change.isWidgetCollapsed { entry.widgetCollapsed = collapsed }
+        if let behind = change.isWidgetBehind { entry.widgetBehind = behind }
+        // 창을 옮긴 것만으로 «최근에 고친 항목» 순서가 뒤집히면 목록이 멋대로 재배열된다.
+        if change.isOrderAffecting { entry.updatedAt = Date() }
         try context.save()
+        return Self.toItem(entry)
     }
 
     func delete(id: UUID) throws {
-        guard let record = try find(id) else { return }
-        context.delete(record)
+        guard let entry = try find(id) else { return }
+        context.delete(entry)
         try context.save()
+    }
+
+    func widgetNotes() throws -> [ReferenceItem] {
+        let descriptor = FetchDescriptor<Reference>(
+            predicate: #Predicate { $0.isWidget == true },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        // 갈래는 계산값이라 predicate 로 거를 수 없다. 꺼내 둔 항목만 오므로 양이 적다.
+        return try context.fetch(descriptor)
+            .filter { $0.kind == .note }
+            .map(Self.toItem)
     }
 
     // MARK: - 내부
@@ -69,8 +92,36 @@ final class SwiftDataReferenceRepository: ReferenceRepository {
         return try context.fetch(descriptor).first
     }
 
-    /// `@Model` → 값 타입 변환.
-    private static func toReference(_ record: Reference) -> ReferenceItem {
-        ReferenceItem(id: record.id, content: record.content, updatedAt: record.updatedAt)
+    /// 제목·주소·본문 어디에 걸려도 찾은 것으로 친다. 백필 전 행을 위해 `content` 도 본다.
+    private static func matches(_ entry: Reference, query: String) -> Bool {
+        let haystack = [entry.title, entry.url, entry.body, entry.content]
+            .compactMap { $0 }
+            .joined(separator: "\n")
+        return haystack.localizedCaseInsensitiveContains(query)
+    }
+
+    private static func toItem(_ entry: Reference) -> ReferenceItem {
+        ReferenceItem(
+            id: entry.id,
+            kind: entry.kind,
+            // 백필 전 행은 저장된 제목이 없다. 옛 규칙(첫 줄)으로 읽어 빈 카드를 막는다.
+            title: entry.title ?? NoteText.title(of: entry.content),
+            url: entry.url ?? (entry.kind == .link ? MemoClassifier.firstURL(in: entry.content)?.absoluteString : nil),
+            body: entry.body ?? (entry.kind == .note ? entry.content : ""),
+            color: entry.noteColor,
+            isWidget: entry.isWidget ?? false,
+            widgetPosition: entry.widgetPosition,
+            widgetSize: entry.widgetSize,
+            isWidgetCollapsed: entry.widgetCollapsed ?? false,
+            isWidgetBehind: entry.widgetBehind ?? false,
+            updatedAt: entry.updatedAt
+        )
+    }
+}
+
+private extension ReferenceChange {
+    /// 목록 순서를 바꿔야 하는 변경인가. 창을 옮긴 것은 내용이 바뀐 것이 아니다.
+    var isOrderAffecting: Bool {
+        title != nil || url != nil || body != nil || color != nil
     }
 }
