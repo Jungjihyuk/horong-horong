@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-08
+
 ### 추가
 
 - 메뉴바 팝오버의 «기록» 탭을 Quick Note · Diary · Todo · Knowledge · Works 가운데 하나만 골라 보는 화면으로 바꿨습니다. 세 가지를 한 줄로 쌓아 두고 스크롤하던 것을 분류 선택 줄로 대신합니다. 고른 분류는 허브 창의 좌측 분류와 같은 값을 기억해 「전체 보기」로 그대로 이어집니다.
@@ -309,7 +311,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.0
 [0.2.9]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.9
 [0.2.8]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.8
