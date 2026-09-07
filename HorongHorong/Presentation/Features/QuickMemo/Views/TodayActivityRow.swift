@@ -120,10 +120,6 @@ struct TodoTimelineRow: View, Equatable {
                 Image(systemName: capsuleSymbol)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(capsuleInk)
-                    // 긴 알약에서는 기호가 가운데 떠 있지 않고 위쪽에 붙는다 —
-                    // 시작 시각이 곧 그 자리라 눈이 시간 글과 나란히 간다.
-                    .padding(.top, 8),
-                alignment: .top
             )
             .frame(width: 24, height: TodoTimelineCapsule.height(durationMinutes: item.todo.durationMinutes))
     }
