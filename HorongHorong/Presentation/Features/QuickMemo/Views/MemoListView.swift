@@ -328,7 +328,6 @@ struct MemoListView: View {
         } else {
             TodoTimelineRow(
                 item: item,
-                railIsElapsed: !isUpcoming(item.state),
                 reminderTitle: viewModel.reminderList(for: item.todo)?.title,
                 onToggle: { viewModel.toggleCompleted(item.todo) },
                 onEdit: {
@@ -339,11 +338,6 @@ struct MemoListView: View {
             )
             .equatable()
         }
-    }
-
-    private func isUpcoming(_ state: TodoTimelineItem.State) -> Bool {
-        if case .upcoming = state { return true }
-        return false
     }
 
     private func copy(_ note: QuickNoteItem) {

@@ -7,7 +7,6 @@ import SwiftUI
 /// 다가올 일은 옅게, 끝낸 일은 물러난 회색이라 색만 보고도 오늘의 흐름이 읽힌다.
 struct TodoTimelineRow: View, Equatable {
     let item: TodoTimelineItem
-    let railIsElapsed: Bool
     let reminderTitle: String?
     let onToggle: () -> Void
     let onEdit: () -> Void
@@ -16,7 +15,7 @@ struct TodoTimelineRow: View, Equatable {
     @State private var isHovering = false
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.item == rhs.item && lhs.railIsElapsed == rhs.railIsElapsed && lhs.reminderTitle == rhs.reminderTitle
+        lhs.item == rhs.item && lhs.reminderTitle == rhs.reminderTitle
     }
 
     private static let timeFormatter: DateFormatter = {
@@ -26,9 +25,9 @@ struct TodoTimelineRow: View, Equatable {
         return formatter
     }()
 
-    /// 「지났는데 아직」 은 강조색으로 칠할 수 없다. 이 테마의 강조색이 이미 주황이라
-    /// 다가올 일과 구분이 안 된다. 붉은 기를 조금 더 준 색을 따로 둔다.
-    private static let overdueTint = Color(red: 0.84, green: 0.33, blue: 0.26)
+    /// 「지났는데 아직」 색. 강조색(주황)과는 구분되어야 하지만 경고등처럼 튀어서도 안 된다 —
+    /// 늦었다고 다그치는 화면이 되면 열기가 싫어진다. 크림색 바탕에 어울리는 흐린 테라코타.
+    private static let overdueTint = Color(red: 0.76, green: 0.42, blue: 0.36)
 
     private var isUnscheduled: Bool { item.todo.startDate == nil }
     private var isCompleted: Bool { item.todo.isCompleted }
@@ -63,31 +62,28 @@ struct TodoTimelineRow: View, Equatable {
 
     // MARK: - 왼쪽 시간축
 
-    /// 세로선 위에 알약을 얹는다. 알약이 줄 높이만큼 늘어나 붙어 있는 일정은 한 덩어리로,
-    /// 사이가 뜬 일정은 선만 남아 «비어 있는 시간» 으로 보인다.
+    /// 알약 하나가 곧 시간축이다.
+    ///
+    /// 예전에는 알약 뒤로 세로선을 그어 «축» 을 만들었는데, 알약 위아래로 주황 선이 삐죽
+    /// 새어 나와 그은 자국처럼 보였다. 선을 지우고 알약만 남기니 줄 간격이 곧 시간의 간격으로
+    /// 읽힌다 — 지금 어디쯤인지는 «지금» 표시가 이미 알려 준다.
+    ///
+    /// **크기는 고정이다.** 줄 높이만큼 늘였더니 미리알림 배지가 한 줄 더 붙은 할 일만
+    /// 알약이 길쭉해져서, 같은 «완료» 인데 위아래 모양이 달라 보였다. 표시가 달라지는 이유는
+    /// 할 일의 **상태** 하나뿐이어야 한다 — 글이 몇 줄인지는 상태가 아니다.
     private var rail: some View {
-        ZStack {
-            Rectangle()
-                .fill(railIsElapsed ? PopoverChrome.accent.opacity(0.35) : PopoverChrome.divider)
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-
-            Capsule(style: .continuous)
-                .fill(capsuleFill)
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(capsuleStroke, lineWidth: 1)
-                )
-                .overlay(
-                    Image(systemName: capsuleSymbol)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(capsuleInk)
-                )
-                .frame(width: 24)
-                .frame(maxHeight: .infinity)
-                .padding(.vertical, 1)
-        }
-        .frame(width: 24)
+        Capsule(style: .continuous)
+            .fill(capsuleFill)
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(capsuleStroke, lineWidth: 1)
+            )
+            .overlay(
+                Image(systemName: capsuleSymbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(capsuleInk)
+            )
+            .frame(width: 24, height: 30)
     }
 
     private var capsuleSymbol: String {
@@ -95,7 +91,9 @@ struct TodoTimelineRow: View, Equatable {
         if isUnscheduled { return "tray" }
         switch item.state {
         case .active: return "hourglass"
-        case .elapsed: return "exclamationmark"
+        // 느낌표는 «틀렸다» 고 나무라는 기호다. 모래가 다 내려간 시계가
+        // 「시간이 지났다」 는 말을 그대로 그린다 — 진행 중 기호와도 한 벌이 된다.
+        case .elapsed: return "hourglass.bottomhalf.filled"
         default: return "clock"
         }
     }
@@ -104,8 +102,9 @@ struct TodoTimelineRow: View, Equatable {
         if isCompleted { return PopoverChrome.inkTertiary.opacity(0.14) }
         if isUnscheduled { return PopoverChrome.surfaceAlt }
         switch item.state {
+        // 꽉 찬 색은 «지금 하는 일» 하나만 갖는다. 여러 줄이 동시에 진하면 어디를 봐야 할지 모른다.
         case .active: return PopoverChrome.accent
-        case .elapsed: return Self.overdueTint
+        case .elapsed: return Self.overdueTint.opacity(0.16)
         default: return PopoverChrome.accentSoft
         }
     }
@@ -113,7 +112,8 @@ struct TodoTimelineRow: View, Equatable {
     private var capsuleInk: Color {
         if isCompleted || isUnscheduled { return PopoverChrome.inkTertiary }
         switch item.state {
-        case .active, .elapsed: return .white
+        case .active: return .white
+        case .elapsed: return Self.overdueTint
         default: return PopoverChrome.accent
         }
     }
@@ -122,7 +122,8 @@ struct TodoTimelineRow: View, Equatable {
         if isCompleted { return .clear }
         if isUnscheduled { return PopoverChrome.divider }
         switch item.state {
-        case .active, .elapsed: return .clear
+        case .active: return .clear
+        case .elapsed: return Self.overdueTint.opacity(0.35)
         default: return PopoverChrome.accent.opacity(0.3)
         }
     }
