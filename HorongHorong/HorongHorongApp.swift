@@ -993,6 +993,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return AnyView(
                 AchievementDetailWindow(
                     repository: dependencies.achievementRepository,
+                    todoRepository: dependencies.todoRepository,
                     rewardRepository: dependencies.rewardRepository,
                     initialScreenshotState: mode.initialState
                 )

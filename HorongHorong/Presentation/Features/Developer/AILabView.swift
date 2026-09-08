@@ -32,7 +32,7 @@ struct AILabView: View {
 
         private static func isCompletedModelOutcome(_ outcome: String?) -> Bool {
             switch outcome {
-            case "ok", "guidance", "noSuggestion": true
+            case "ok", "guidance", "refinement", "noSuggestion": true
             default: false
             }
         }

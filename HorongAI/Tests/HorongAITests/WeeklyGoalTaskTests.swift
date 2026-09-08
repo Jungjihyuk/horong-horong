@@ -28,15 +28,12 @@ final class WeeklyGoalTaskTests: XCTestCase {
             maxMemoCount: 3
         )
 
-        guard case .guidance(let guidance) = outcome.result else {
-            return XCTFail("정보 부족 응답이 guidance 결과로 전달되지 않았다")
-        }
         XCTAssertTrue(outcome.drafts.isEmpty)
-        XCTAssertEqual(guidance.map(\.inputID), [first.id, second.id])
-        XCTAssertEqual(guidance[0].missing, ["specific", "measurable"])
+        XCTAssertEqual(outcome.result.refinements.flatMap(\.inputIDs), [first.id, second.id])
+        XCTAssertEqual(outcome.result.refinements[0].missing, [.measurable, .specific])
     }
 
-    func testExpandsOneGuidanceItemAcrossAllMemoIDs() {
+    func testKeepsOneRefinementAcrossAllMemoIDs() {
         let memos = (1...5).map {
             WeeklyGoalTask.Memo(id: uuid($0), content: "메모 \($0)", date: Date())
         }
@@ -52,11 +49,32 @@ final class WeeklyGoalTaskTests: XCTestCase {
             maxMemoCount: 5
         )
 
-        guard case .guidance(let guidance) = outcome.result else {
-            return XCTFail("다중 ID 안내가 guidance 결과로 전달되지 않았다")
+        XCTAssertEqual(outcome.result.refinements.count, 1)
+        XCTAssertEqual(outcome.result.refinements[0].inputIDs, memos.map(\.id))
+        XCTAssertEqual(outcome.result.refinements[0].example, "목표로 삼기 어려운 입력이에요.")
+    }
+
+    func testKeepsSuggestionsAndOnlyUnassignedRefinementsTogether() {
+        let memos = (1...3).map {
+            WeeklyGoalTask.Memo(id: uuid($0), content: "러닝 \($0)", date: Date())
         }
-        XCTAssertEqual(guidance.map(\.inputID), memos.map(\.id))
-        XCTAssertEqual(guidance.map(\.suggestion), Array(repeating: "목표로 삼기 어려운 입력이에요.", count: 5))
+        let outcome = WeeklyGoalTask.parse(
+            """
+            {"suggestions":[
+              {"title":"이번 주 러닝 루틴 이어가기","reason":"반복 행동","items":[1,2]}
+            ],"refinements":[
+              {"items":[2,3],"missing":["time_bound"],"suggestion":"예: 아침 10시에 러닝"}
+            ]}
+            """,
+            memos: memos,
+            allowedIDs: Set(memos.map(\.id)),
+            suggestionCount: 3,
+            maxMemoCount: 3
+        )
+
+        XCTAssertEqual(outcome.result.suggestions.count, 1)
+        XCTAssertEqual(outcome.result.refinements.count, 1)
+        XCTAssertEqual(outcome.result.refinements[0].inputIDs, [memos[2].id])
     }
 
     func testRunWritesGuidanceToParsedTrace() async {
@@ -82,7 +100,7 @@ final class WeeklyGoalTaskTests: XCTestCase {
         let parsed = trace.finish().spans.first { $0.name == .parsed }
         XCTAssertEqual(
             parsed?.text,
-            "- inputID=\(first.id.uuidString) missing=[specific, measurable] suggestion=지원 직무와 공고를 정해보세요."
+            "- inputIDs=[\(first.id.uuidString)] missing=[measurable, specific] example=지원 직무와 공고를 정해보세요."
         )
         XCTAssertEqual(parsed?.facts?["kept"], 1)
     }

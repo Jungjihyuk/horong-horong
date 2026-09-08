@@ -203,34 +203,39 @@ struct AchievementGoalSuggestion: Identifiable, Hashable, Sendable {
     }
 }
 
+struct AchievementGoalRefinement: Identifiable, Hashable, Sendable {
+    let inputIDs: [UUID]
+    let missing: [GoalRefinementDimension]
+    let example: String
+    let cadence: AchievementGoalCadence
+
+    var id: String {
+        cadence.rawValue + "|" + inputIDs.map(\.uuidString).sorted().joined(separator: "|")
+            + "|" + missing.map(\.rawValue).joined(separator: ",") + "|" + example
+    }
+}
+
 /// 화면·실험실·골든셋 실행기가 함께 소비하는 추천 결과.
-///
-/// 빈 배열만 반환하면 `guidance`와 모델 실패가 구분되지 않아, 안내를 규칙 기반 추천으로
-/// 덮어쓰게 된다. 공급자 경계에서 이 타입을 끝까지 유지한다.
+/// 묶음과 구체화 보조는 함께 존재할 수 있고, 실패만 별도 분기한다.
 enum AchievementGoalRecommendationResult: Sendable {
-    case suggestions([AchievementGoalSuggestion])
-    case guidance([GoalRecommendationGuidance])
-    case noSuggestion
-    /// 공급자·전송·파싱 실패. `noSuggestion`과 달리 다음 공급자로 내려갈 수 있다.
+    case success(suggestions: [AchievementGoalSuggestion], refinements: [AchievementGoalRefinement])
     case failure(reason: String?)
 
+    static var noSuggestion: Self { .success(suggestions: [], refinements: []) }
+
     var suggestions: [AchievementGoalSuggestion] {
-        guard case .suggestions(let suggestions) = self else { return [] }
+        guard case .success(let suggestions, _) = self else { return [] }
         return suggestions
     }
 
-    var guidance: [GoalRecommendationGuidance] {
-        guard case .guidance(let guidance) = self else { return [] }
-        return guidance
+    var refinements: [AchievementGoalRefinement] {
+        guard case .success(_, let refinements) = self else { return [] }
+        return refinements
     }
 
     /// 폴백을 멈춰야 하는 유효한 모델 결과인가.
     var hasModelResult: Bool {
-        switch self {
-        case .suggestions(let suggestions): return !suggestions.isEmpty
-        case .guidance(let guidance): return !guidance.isEmpty
-        case .noSuggestion, .failure(_): return false
-        }
+        !suggestions.isEmpty || !refinements.isEmpty
     }
 
     var shouldFallbackToNextProvider: Bool {
@@ -238,13 +243,11 @@ enum AchievementGoalRecommendationResult: Sendable {
         return false
     }
 
-    /// `guidance`와 `noSuggestion`은 모델이 정상적으로 내린 결론이다. 실행 실패처럼
-    /// 기록하면 AI 실험실의 실패율과 골든셋 결과가 왜곡된다.
     var recordedOutcome: String {
         switch self {
-        case .suggestions(let suggestions): return suggestions.isEmpty ? "noSuggestion" : "ok"
-        case .guidance: return "guidance"
-        case .noSuggestion: return "noSuggestion"
+        case .success(let suggestions, let refinements):
+            if !suggestions.isEmpty { return "ok" }
+            return refinements.isEmpty ? "noSuggestion" : "refinement"
         case .failure(let reason):
             if reason == "modelUnavailable" || reason == "serverUnavailable" { return reason! }
             if reason == "noJSON" || reason == "malformed" { return "decodeFailed" }
@@ -265,15 +268,18 @@ enum AchievementGoalRecommendationResult: Sendable {
         source: AchievementGoalSuggestionSource,
         runID: String
     ) -> AchievementGoalRecommendationResult {
-        switch result {
-        case .suggestions(let drafts):
-            return .suggestions(
-                drafts.map { $0.suggestion(cadence: cadence, runID: runID).retagged(as: source) }
-            )
-        case .guidance(let guidance):
-            return .guidance(guidance)
-        case .noSuggestion:
-            return .noSuggestion
-        }
+        .success(
+            suggestions: result.suggestions.map {
+                $0.suggestion(cadence: cadence, runID: runID).retagged(as: source)
+            },
+            refinements: result.refinements.map {
+                AchievementGoalRefinement(
+                    inputIDs: $0.inputIDs,
+                    missing: $0.missing,
+                    example: $0.example,
+                    cadence: cadence
+                )
+            }
+        )
     }
 }

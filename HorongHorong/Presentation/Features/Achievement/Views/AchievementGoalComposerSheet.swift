@@ -28,6 +28,8 @@ struct AchievementGoalComposerSheet: View {
     let memos: [AchievementMemoDetail]
     let existingGoals: [AchievementGoal]
     let onClose: () -> Void
+    let makeRefinementEditor: (AchievementGoalCadence, UUID, String) -> GoalRefinementEditorViewModel?
+    let onRefinementSaved: () -> Void
     /// 저장한 목표, 이어붙일 기존 하위 목표, 함께 새로 만들 하위 목표 제목들.
     /// 저장한 뒤 **만들어진 목표의 id 를 돌려준다.** 추천 채택 기록에 그 id 가 필요하다 —
     /// 예전에는 여기서 레코드를 직접 만들어 id 를 알고 있었다.
@@ -62,7 +64,9 @@ struct AchievementGoalComposerSheet: View {
     @State private var selectedMemoIDs = Set<UUID>()
     @State private var validationMessage: String?
     @State private var suggestions: [AchievementGoalSuggestion] = []
-    @State private var guidance: [GoalRecommendationGuidance] = []
+    @State private var refinements: [AchievementGoalRefinement] = []
+    @State private var refinementEditor: GoalRefinementEditorViewModel?
+    @State private var isRefinementSectionExpanded = false
     @State private var isLoadingSuggestions = false
     @State private var suggestionMessage: String?
     @State private var didLoadSuggestions = false
@@ -145,6 +149,15 @@ struct AchievementGoalComposerSheet: View {
         }
         .onChange(of: maxWeeklyGoalsPerMonthlyGoal) { _, _ in
             reloadSuggestionsAfterSettingsChange()
+        }
+        .sheet(item: $refinementEditor) { editor in
+            GoalRefinementEditorSheet(viewModel: editor) {
+                onRefinementSaved()
+                suggestions = []
+                refinements = []
+                suggestionMessage = "수정 내용을 반영하려면 다시 추천해 주세요."
+                didLoadSuggestions = true
+            }
         }
     }
 
@@ -246,15 +259,6 @@ struct AchievementGoalComposerSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
-            } else if !guidance.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("목표로 묶기 전에 조금만 구체화해 보세요")
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(PopoverChrome.ink)
-                    ForEach(guidance) { item in
-                        guidanceCard(item)
-                    }
-                }
             } else if suggestions.isEmpty {
                 Text("추천할 묶음이 없습니다. 직접 입력에서 할일을 선택해 목표로 만들 수 있습니다.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -268,6 +272,23 @@ struct AchievementGoalComposerSheet: View {
                         suggestionCard(suggestion)
                     }
                 }
+            }
+
+            if !refinements.isEmpty {
+                DisclosureGroup(isExpanded: $isRefinementSectionExpanded) {
+                    VStack(spacing: 8) {
+                        ForEach(refinements) { item in
+                            refinementCard(item)
+                        }
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Text("더 구체화하면 묶을 수 있어요 (\(Set(refinements.flatMap(\.inputIDs)).count)개)")
+                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                }
+                .padding(11)
+                .background(PopoverChrome.surfaceAlt.opacity(0.5), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
             }
 
             Button {
@@ -440,27 +461,60 @@ struct AchievementGoalComposerSheet: View {
         .overlay(RoundedRectangle(cornerRadius: PopoverChrome.radius(11), style: .continuous).stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth))
     }
 
-    private func guidanceCard(_ item: GoalRecommendationGuidance) -> some View {
-        let inputTitle = memos.first(where: { $0.id == item.inputID })?.content
-            ?? existingGoals.first(where: { $0.id == item.inputID })?.title
-            ?? "입력 항목"
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(inputTitle)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
-                .lineLimit(2)
-            if !item.missing.isEmpty {
-                Text("보완할 점: \(item.missing.joined(separator: ", "))")
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkSecondary)
+    private func refinementCard(_ item: AchievementGoalRefinement) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(item.inputIDs, id: \.self) { id in
+                HStack(spacing: 6) {
+                    Image(systemName: item.cadence == .weekly ? "checklist" : "target")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                    Text(refinementInputTitle(id: id, cadence: item.cadence))
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                        .lineLimit(1)
+                    Spacer()
+                    Button("수정") {
+                        refinementEditor = makeRefinementEditor(item.cadence, id, item.example)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.accent)
+                }
             }
-            Text(item.suggestion)
+            if !item.missing.isEmpty {
+                HStack(spacing: 5) {
+                    ForEach(item.missing, id: \.self) { dimension in
+                        Text(refinementDimensionLabel(dimension))
+                            .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(PopoverChrome.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(PopoverChrome.accentSoft.opacity(0.65), in: Capsule())
+                    }
+                }
+            }
+            Text(item.example.hasPrefix("예:") ? item.example : "예: \(item.example)")
                 .font(.system(size: 11.5, weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
         .background(PopoverChrome.surfaceAlt.opacity(0.72), in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous))
+    }
+
+    private func refinementInputTitle(id: UUID, cadence: AchievementGoalCadence) -> String {
+        if cadence == .weekly {
+            return AchievementDataBuilder.shortText(memo(for: id)?.content ?? "할 일", limit: 34)
+        }
+        return AchievementDataBuilder.shortText(goal(for: id)?.title ?? "주간 목표", limit: 34)
+    }
+
+    private func refinementDimensionLabel(_ dimension: GoalRefinementDimension) -> String {
+        switch dimension {
+        case .specific: return "구체성"
+        case .measurable: return "측정 기준"
+        case .timeBound: return "일정"
+        }
     }
 
     private var directInputForm: some View {
@@ -1182,7 +1236,7 @@ struct AchievementGoalComposerSheet: View {
         let canSuggestMonthly = weeklyGoalSnapshots.count >= minWeeklyGoalsForMonthlySuggestions
 
         suggestions = []
-        guidance = []
+        refinements = []
         suggestionMessage = canSuggestMonthly
             ? "할일과 주간 목표의 의미를 분석하고 있습니다."
             : "할일의 의미를 분석하고 있습니다."
@@ -1275,8 +1329,8 @@ struct AchievementGoalComposerSheet: View {
                 )
 
                 // AI 결과가 유효하지 않을 때만 규칙 기반 폴백을 만든다.
-                let weeklyGuidance = weeklyModelValue.guidance
-                let monthlyGuidance = monthlyModelValue.guidance
+                let weeklyRefinements = weeklyModelValue.refinements
+                let monthlyRefinements = monthlyModelValue.refinements
                 let weeklyRuleSuggestions = weeklyModelValue.shouldFallbackToNextProvider && canSuggestWeekly
                     ? AchievementGoalSuggestionBuilder.ruleBasedSuggestions(
                         from: weeklyTodoSnapshots,
@@ -1302,13 +1356,13 @@ struct AchievementGoalComposerSheet: View {
                 // 룰이 대신 만든 경우도 **기록에 남긴다.** 오래도록 안 남겨서, 화면에는 떴는데
                 // AI 실험실에는 없는 상태였다 — «모델이 실패했는데 사용자는 결과를 봤다» 가
                 // 통째로 안 보였다. 채택률을 룰과 모델로 나눠 재려면 이 줄이 있어야 한다.
-                if weeklyModel.suggestions.isEmpty && weeklyGuidance.isEmpty {
+                if weeklyModel.suggestions.isEmpty && weeklyRefinements.isEmpty {
                     AIRunLog.recordRuleFallback(
                         runID: runID, task: "weekly_goal",
                         candidateCount: weeklyTodoSnapshots.count, suggestions: weekly
                     )
                 }
-                if canSuggestMonthly, monthlyModel.suggestions.isEmpty && monthlyGuidance.isEmpty {
+                if canSuggestMonthly, monthlyModel.suggestions.isEmpty && monthlyRefinements.isEmpty {
                     AIRunLog.recordRuleFallback(
                         runID: runID, task: "monthly_goal",
                         candidateCount: weeklyGoalSnapshots.count, suggestions: monthly
@@ -1331,10 +1385,10 @@ struct AchievementGoalComposerSheet: View {
                     )
                 }
                 suggestions = weekly + monthly
-                guidance = weeklyGuidance + monthlyGuidance
+                refinements = weeklyRefinements + monthlyRefinements
                 isLoadingSuggestions = false
-                if !guidance.isEmpty {
-                    suggestionMessage = "지금 입력만으로는 목표를 묶기 어려워, 항목별로 구체화할 방법을 안내합니다."
+                if suggestions.isEmpty && !refinements.isEmpty {
+                    suggestionMessage = "함께 묶을 항목을 찾지 못했습니다. 구체화한 뒤 다시 추천해 보세요."
                 } else if weeklyModel.suggestions.isEmpty && monthlyModel.suggestions.isEmpty {
                     suggestionMessage = finalRuleSuggestionMessage(
                         weeklyCount: weekly.count,
@@ -1344,10 +1398,8 @@ struct AchievementGoalComposerSheet: View {
                         canSuggestMonthly: canSuggestMonthly,
                         monthlyMinWeeklyCount: minWeeklyGoalsForMonthlySuggestions
                     )
-                } else if weeklyModel.suggestions.isEmpty || (canSuggestMonthly && monthlyModel.suggestions.isEmpty) {
-                    // 모델이 못 만들어 **규칙이 대신한** 경우. 예전에는 «만들었습니다» 라고만 해서
-                    // 사용자가 AI 결과를 받은 줄 알았다.
-                    suggestionMessage = "AI가 묶음을 만들지 못해 규칙으로 묶었습니다. 다시 시도하면 달라질 수 있습니다."
+                } else if !refinements.isEmpty {
+                    suggestionMessage = "추천 묶음을 만들었습니다. 남은 항목은 더 구체화할 수 있어요."
                 } else if canSuggestMonthly && monthly.isEmpty {
                     // 월간을 시도했는데 하나도 못 만든 경우. 예전에는 «만들었습니다» 라고만 해서
                     // 사용자가 **월간이 왜 없는지 모른 채** 빈 자리를 봤다.

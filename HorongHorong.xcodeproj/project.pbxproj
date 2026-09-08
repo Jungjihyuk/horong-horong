@@ -46,6 +46,7 @@
 		0A40E8C5148C974C15BEB98D /* CompanionAppFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33F4FAF94DD683EDC727EFEF /* CompanionAppFacts.swift */; };
 		0AF9DC91C0F79EF7E0C83365 /* HorongHorongSchemaV4.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88FE03B07189774EB170F63 /* HorongHorongSchemaV4.swift */; };
 		0B299DDA800CEF3E5DD6A379 /* AchievementPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5616DA83E2AD407ED6824202 /* AchievementPickers.swift */; };
+		0B76E3F54BE32E82A58944DB /* GoalRefinementEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB5F8F1D6584BDD7B8BFFB1 /* GoalRefinementEditorSheet.swift */; };
 		0BE049F74BFEE8143C2E8F3F /* CategoryMappingPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69EB8B3ABFEF781EB11235F0 /* CategoryMappingPage.swift */; };
 		0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */; };
 		0C96E1D2F4C09D8ECD554033 /* SwiftDataStatsRecordEditorRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBAEE317FF480F9B32F3F0BD /* SwiftDataStatsRecordEditorRepository.swift */; };
@@ -129,6 +130,7 @@
 		24E2161AE3CE1FBB481604F8 /* NumberField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5EB70D232672113D249170 /* NumberField.swift */; };
 		24FE76659509ED7DEEF90F1F /* SwiftDataRewardRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF3D08F5640CFE7F8444FF4 /* SwiftDataRewardRepository.swift */; };
 		25636D0D1CFAA8FDAB11CA7F /* TodoRowMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36A8DCC5F85ECFD59224C387 /* TodoRowMetricsTests.swift */; };
+		25A5D1C04455D7A7096EFC5B /* GoalRefinementEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8080C73CE03220AABEC532DF /* GoalRefinementEditorViewModel.swift */; };
 		25B2801E9A813FD9ADB8CFB1 /* TodoDayTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54DD1D22BF1A7DB6E2B19AC7 /* TodoDayTime.swift */; };
 		26441BD7FD49DCB9473B7A74 /* HorongHorongSchemaV5.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1505B1DB8F55966EC78A89D /* HorongHorongSchemaV5.swift */; };
 		2670CDE14F4197DC637FECBE /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 907CA9B68286FA5B35B97AE8 /* FocusSession.swift */; };
@@ -162,6 +164,7 @@
 		2F07F1853ECE8BD421C289F8 /* AchievementSettlementBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7085CD3B2AB7090CECFFF5E /* AchievementSettlementBanner.swift */; };
 		2F337DECCA25BB8275EAC073 /* DefaultAppCategoryRuleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E5FF28A28819696884B058 /* DefaultAppCategoryRuleStore.swift */; };
 		2F9975A03095D6C00BE6B6F0 /* SchemaVersioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC60BDB2A30491E0AED1E7BB /* SchemaVersioningTests.swift */; };
+		2FDDBB63A4B461A564DD503A /* GoalRefinementEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB5F8F1D6584BDD7B8BFFB1 /* GoalRefinementEditorSheet.swift */; };
 		30296C54BE7B60DC86331607 /* MemoClassifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9729FBE5F58C0CFBC3C72ED4 /* MemoClassifierTests.swift */; };
 		307DE88FE132B33AEFF87C17 /* MemoPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9668B707A1912A37048EB8 /* MemoPage.swift */; };
 		314C1FC7EFCE17A9F448EE21 /* SecondBrainSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E728C97DD10A91CD250E144 /* SecondBrainSectionTests.swift */; };
@@ -408,6 +411,7 @@
 		7EC3722D9FFE80C48F923041 /* TodoTimelineCapsuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2664FD7F202994DCB7E456CB /* TodoTimelineCapsuleTests.swift */; };
 		7EFEA8495914FF81BFB2C6B1 /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A793B40386850181A1A384 /* DailyTimelineView.swift */; };
 		7F1737F6DF97187FCF6651F8 /* DiaryBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99B804780B0C37CC8ED7D44 /* DiaryBrowserView.swift */; };
+		7F1ABE718B69CCF6A8B28057 /* GoalRefinementEditorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91ADBCF2BB6FEA94C4B7E45D /* GoalRefinementEditorViewModelTests.swift */; };
 		7F1F0F681E8411C24BA9E852 /* Todo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A46CE96D16BF2EAC24842 /* Todo.swift */; };
 		7F7E9D85F9A0D03766AE8E6F /* DiarySleepTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEC054133A0EE0BA889645A /* DiarySleepTimeline.swift */; };
 		7FC941FAFFBCA4EDDFB8BD12 /* AchievementJourneyScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4AEC201172E7F4F3F2113D /* AchievementJourneyScene.swift */; };
@@ -431,6 +435,7 @@
 		865483D854287D33962120C2 /* TodoDurationSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = A54D9156A59E6ECD2A380019 /* TodoDurationSlots.swift */; };
 		8680E51C2DCA999A3F92E8A7 /* CompanionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F19084B1B000B3326F2ACCA /* CompanionView.swift */; };
 		86D607757141A13466DF3C49 /* VaultBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD3DEA73D193A5FB1964560 /* VaultBrowserView.swift */; };
+		8922F6188827C8A8B0A43ECD /* GoalRefinementEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8080C73CE03220AABEC532DF /* GoalRefinementEditorViewModel.swift */; };
 		8954273B44B7EFCCE393337F /* AchievementPersonaVisionComposerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD28D2BA1737B364102CE7F /* AchievementPersonaVisionComposerSheet.swift */; };
 		89B7AA19000C7C3CE3EE9BBD /* NewsReportArchiveEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33CDFAE3F3847981C1A9CF1 /* NewsReportArchiveEntry.swift */; };
 		89FA7D3852D245A73AC5C02D /* FocusScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE62818D08EA844E089789A /* FocusScore.swift */; };
@@ -1027,6 +1032,7 @@
 		7EC81BC0350A644911C703B3 /* AchievementDetailRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementDetailRows.swift; sourceTree = "<group>"; };
 		7FB49E261801135C4AD1315F /* SwiftDataStatsSummaryRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStatsSummaryRepository.swift; sourceTree = "<group>"; };
 		804C5304A96763BB1EC25A1B /* TimerPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerPage.swift; sourceTree = "<group>"; };
+		8080C73CE03220AABEC532DF /* GoalRefinementEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalRefinementEditorViewModel.swift; sourceTree = "<group>"; };
 		80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTodoRepositoryTests.swift; sourceTree = "<group>"; };
 		810D02EC07F58F4659B1165E /* PomodoroReflection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PomodoroReflection.swift; sourceTree = "<group>"; };
 		81DB21EE4A3CD71E450F7170 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
@@ -1052,6 +1058,7 @@
 		8DD883C99A5B4D35586C7AEA /* TodoDayTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoDayTimeTests.swift; sourceTree = "<group>"; };
 		8E4AEC201172E7F4F3F2113D /* AchievementJourneyScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementJourneyScene.swift; sourceTree = "<group>"; };
 		907CA9B68286FA5B35B97AE8 /* FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSession.swift; sourceTree = "<group>"; };
+		91ADBCF2BB6FEA94C4B7E45D /* GoalRefinementEditorViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalRefinementEditorViewModelTests.swift; sourceTree = "<group>"; };
 		91C9EDF01307801D9ECDDCC3 /* NewsReportIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsReportIndex.swift; sourceTree = "<group>"; };
 		920FED40EEBC004ABBBBFC54 /* TodayTimelinePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayTimelinePolicy.swift; sourceTree = "<group>"; };
 		92158E19DE5458CD24360640 /* TodoRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoRepository.swift; sourceTree = "<group>"; };
@@ -1154,6 +1161,7 @@
 		CD0E2FF746411692D6DAEAF8 /* RewardLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardLedger.swift; sourceTree = "<group>"; };
 		CD9FBFED125A9E0D2AAD5B41 /* MemoClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoClassifier.swift; sourceTree = "<group>"; };
 		CDA58C507B6ECC6BDD37FBC0 /* SwiftDataQuickNoteRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataQuickNoteRepository.swift; sourceTree = "<group>"; };
+		CDB5F8F1D6584BDD7B8BFFB1 /* GoalRefinementEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalRefinementEditorSheet.swift; sourceTree = "<group>"; };
 		CF762AB9D667D5D8762EBAB9 /* StatsSummaryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsSummaryViewModel.swift; sourceTree = "<group>"; };
 		D0611038538D496ECFEA7A15 /* CompanionRegionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionRegionPicker.swift; sourceTree = "<group>"; };
 		D1F22FB5645934CB4A1A7D0F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -1348,6 +1356,7 @@
 				288C660346F756F24B1522FA /* AchievementSharedComponents.swift */,
 				782E988F4A4E7AED59512FD3 /* AchievementSummaryView.swift */,
 				492EE42E6DD542373C2D635F /* AchievementTimelineViews.swift */,
+				CDB5F8F1D6584BDD7B8BFFB1 /* GoalRefinementEditorSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1702,6 +1711,7 @@
 				3B463103E4268494A2CD15B5 /* DiaryViewModelTests.swift */,
 				1BDF8123B9CEEA21DE7E0CC4 /* FocusNudgeEngineTests.swift */,
 				B136EEFAACA04AA87AC7C891 /* FocusScoreTests.swift */,
+				91ADBCF2BB6FEA94C4B7E45D /* GoalRefinementEditorViewModelTests.swift */,
 				C3C9F8C22F114231C1759AB9 /* GoalSuggestionEvalTests.swift */,
 				E8742AADE09A8B57FB424468 /* GoalSuggestionParserTests.swift */,
 				06EB9A08A3C80490DAA0A5F1 /* GoalSuggestionRegressionTests.swift */,
@@ -1802,6 +1812,7 @@
 			isa = PBXGroup;
 			children = (
 				C2A57D740604CEA97DEFBAB5 /* AchievementSummaryViewModel.swift */,
+				8080C73CE03220AABEC532DF /* GoalRefinementEditorViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -2569,6 +2580,8 @@
 				3B57E2995AAA3679E74C15F5 /* FocusTrend.swift in Sources */,
 				4F37D3F0C6F715B6B0CD486E /* FoundationModelsGoalSuggestionProvider.swift in Sources */,
 				F70AD949EB6741813F53D1AE /* GeneralPage.swift in Sources */,
+				2FDDBB63A4B461A564DD503A /* GoalRefinementEditorSheet.swift in Sources */,
+				8922F6188827C8A8B0A43ECD /* GoalRefinementEditorViewModel.swift in Sources */,
 				7DBF5E1A14BD6EE2C8756E7A /* GoldenEvalReport.swift in Sources */,
 				A72845548F3D9F529BCB6898 /* HealthSleepMath.swift in Sources */,
 				44198BC1E53BFB6CDDBFD35C /* HorongHorongApp.swift in Sources */,
@@ -2913,6 +2926,8 @@
 				9D9AD622E488544EF61AE135 /* FocusTrend.swift in Sources */,
 				44ED021FF495DB55BC81A9EB /* FoundationModelsGoalSuggestionProvider.swift in Sources */,
 				DF4369114197693114E416AC /* GeneralPage.swift in Sources */,
+				0B76E3F54BE32E82A58944DB /* GoalRefinementEditorSheet.swift in Sources */,
+				25A5D1C04455D7A7096EFC5B /* GoalRefinementEditorViewModel.swift in Sources */,
 				610280E0B291C37F0C00FD02 /* GoldenEvalReport.swift in Sources */,
 				D25121CB7E3FF4B36EBA7AC4 /* HealthSleepMath.swift in Sources */,
 				46A453BF1EF4944AB3ABC7D7 /* HorongHorongApp.swift in Sources */,
@@ -3136,6 +3151,7 @@
 				F1521AD25B7F94C605A07A08 /* DiaryViewModelTests.swift in Sources */,
 				BAA52319ADE2AD6A2E5CAEEE /* FocusNudgeEngineTests.swift in Sources */,
 				BFD8E08F0C311F79268F7ADD /* FocusScoreTests.swift in Sources */,
+				7F1ABE718B69CCF6A8B28057 /* GoalRefinementEditorViewModelTests.swift in Sources */,
 				81038CFA865086286DADC683 /* GoalSuggestionEvalTests.swift in Sources */,
 				412CB0A8A15592A1BFEFB4A5 /* GoalSuggestionParserTests.swift in Sources */,
 				6BFB097785CBEA0B19A95973 /* GoalSuggestionRegressionTests.swift in Sources */,

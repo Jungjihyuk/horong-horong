@@ -14,13 +14,11 @@ final class GoalPromptTests: XCTestCase {
         WeeklyGoalTask.Memo(
             id: UUID(),
             content: "주간 보고서 초안 작성",
-            icon: "doc",
             date: Date(timeIntervalSince1970: 1_770_000_000)
         ),
         WeeklyGoalTask.Memo(
             id: UUID(),
             content: "주간 보고서 검토 요청",
-            icon: "doc",
             date: Date(timeIntervalSince1970: 1_770_000_000)
         ),
     ]
@@ -69,7 +67,6 @@ final class GoalPromptTests: XCTestCase {
             WeeklyGoalTask.Memo(
                 id: UUID(),
                 content: "할일 본문 \($0)",
-                icon: "📝",
                 date: Date(timeIntervalSince1970: 1_770_000_000)
             )
         }

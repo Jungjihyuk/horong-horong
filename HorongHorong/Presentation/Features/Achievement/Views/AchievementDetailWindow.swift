@@ -331,6 +331,7 @@ struct AchievementDetailWindow: View {
     @State private var rewardSnapshots: [RewardEntrySnapshot] = []
 
     let repository: AchievementRepository
+    let todoRepository: TodoRepository
 
     /// 저장소에서 읽어 둔 값. `@Query` 를 걷어낸 자리다 —
     /// 나타날 때와 「바뀌었다」 알림이 올 때 다시 읽는다.
@@ -384,10 +385,12 @@ struct AchievementDetailWindow: View {
 
     init(
         repository: AchievementRepository,
+        todoRepository: TodoRepository,
         rewardRepository: RewardRepository,
         initialScreenshotState: AchievementDetailScreenshotState? = nil
     ) {
         self.repository = repository
+        self.todoRepository = todoRepository
         self.rewardRepository = rewardRepository
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
            let tab = AchievementDetailTab(screenshotIdentifier: tabIdentifier) {
@@ -525,7 +528,21 @@ struct AchievementDetailWindow: View {
                     AchievementGoalComposerSheet(
                         memos: repository.linkableMemos(),
                         existingGoals: goals,
-                        onClose: closeGoalComposer
+                        onClose: closeGoalComposer,
+                        makeRefinementEditor: { cadence, id, example in
+                            if cadence == .weekly, let todo = try? todoRepository.todo(id: id) {
+                                return GoalRefinementEditorViewModel(
+                                    target: .todo(todo), example: example,
+                                    todoRepository: todoRepository, achievementRepository: repository
+                                )
+                            }
+                            guard let goal = repository.goals().first(where: { $0.id == id }) else { return nil }
+                            return GoalRefinementEditorViewModel(
+                                target: .weeklyGoal(goal), example: example,
+                                todoRepository: todoRepository, achievementRepository: repository
+                            )
+                        },
+                        onRefinementSaved: reload
                     ) { draft, childGoalIDs, newChildTitles in
                         let created = try repository.createGoal(
                             draft,

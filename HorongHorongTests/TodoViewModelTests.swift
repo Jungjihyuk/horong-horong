@@ -74,6 +74,16 @@ final class TodoViewModelTests: XCTestCase {
             replace(id) { $0.with(content: content) }
         }
 
+        func update(id: UUID, with draft: TodoEditDraft) throws {
+            replace(id) {
+                $0.with(
+                    content: draft.content,
+                    startDate: .some(draft.startDate),
+                    deadline: .some(draft.deadline)
+                )
+            }
+        }
+
         func setCompleted(id: UUID, isCompleted: Bool) throws {
             replace(id) {
                 $0.with(
