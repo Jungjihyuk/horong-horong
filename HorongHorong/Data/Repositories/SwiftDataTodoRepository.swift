@@ -77,6 +77,16 @@ final class SwiftDataTodoRepository: TodoRepository {
         try change(id) { $0.content = content }
     }
 
+    func update(id: UUID, with draft: TodoEditDraft) throws {
+        try change(id, syncLinkedReminder: true) { memo in
+            memo.content = draft.content
+            memo.startDate = draft.startDate
+            memo.deadline = draft.deadline.map { end in
+                draft.startDate.map { max($0, end) } ?? end
+            }
+        }
+    }
+
     func setCompleted(id: UUID, isCompleted: Bool) throws {
         try change(id, syncLinkedReminder: true) { memo in
             memo.isCompletedValue = isCompleted

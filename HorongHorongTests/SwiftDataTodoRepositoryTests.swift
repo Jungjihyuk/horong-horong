@@ -92,4 +92,30 @@ final class SwiftDataTodoRepositoryTests: XCTestCase {
 
         XCTAssertEqual(try repository.activeTodos(matching: "").map(\.content), ["지금 할 일"])
     }
+
+    func testUpdateWithDraftPersistsContentAndSchedule() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let repository = SwiftDataTodoRepository(context: context)
+        let memo = Todo(content: "이전 내용")
+        context.insert(memo)
+        try context.save()
+
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let deadline = start.addingTimeInterval(3600)
+        let draft = TodoEditDraft(
+            content: "새로운 제목\n메모 상세",
+            startDate: start,
+            deadline: deadline
+        )
+
+        try repository.update(id: memo.id, with: draft)
+
+        let saved = try XCTUnwrap(repository.todo(id: memo.id))
+        XCTAssertEqual(saved.content, "새로운 제목\n메모 상세")
+        XCTAssertEqual(saved.split.title, "새로운 제목")
+        XCTAssertEqual(saved.split.note, "메모 상세")
+        XCTAssertEqual(saved.startDate, start)
+        XCTAssertEqual(saved.deadline, deadline)
+    }
 }

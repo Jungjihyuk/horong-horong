@@ -36,20 +36,28 @@ final class GoalSuggestionEvalTests: XCTestCase {
             actualGuidance: []
         ), 1)
         XCTAssertEqual(noSuggestionCorrectScore(
-            result: .guidance([]),
+            result: .success(suggestions: [], refinements: []),
             expectedGuidance: expected,
             actualGuidance: expected
         ), 1)
         XCTAssertEqual(noSuggestionCorrectScore(
-            result: .guidance([]),
+            result: .success(suggestions: [], refinements: []),
             expectedGuidance: expected,
             actualGuidance: Set(["m1", "m2", "m3", "m4"])
         ), 0)
         XCTAssertEqual(noSuggestionCorrectScore(
-            result: .suggestions([]),
+            result: .success(suggestions: [stubSuggestion()], refinements: []),
             expectedGuidance: expected,
             actualGuidance: expected
         ), 0)
+    }
+
+    private func stubSuggestion() -> AchievementGoalSuggestion {
+        AchievementGoalSuggestion(
+            title: "테스트 목표", reason: "테스트", memoIDs: [UUID(), UUID()],
+            scheduleText: "이번 주", criterion: "완료", targetValueText: "2개",
+            emoji: "🎯", source: .rule
+        )
     }
 
     func testGenerateGoldenSetResults() async throws {
@@ -204,18 +212,20 @@ final class GoalSuggestionEvalTests: XCTestCase {
         }
         let grouping = PairEvaluator.score(expectedGroups: expectedGroups, predictedGroups: predictedGroups, traps: traps)
         let expectedGuidance = Set(expectedOutcome?.reviewedInputIDs ?? [])
-        let actualGuidance = Set(result.guidance.compactMap { expectedInputIDs[$0.inputID] })
+        let actualGuidance = Set(result.refinements.flatMap(\.inputIDs).compactMap { expectedInputIDs[$0] })
         let expectedReviews = (expectedOutcome?.memoReviews ?? []) + (expectedOutcome?.goalReviews ?? [])
         let expectedMissing = Dictionary(uniqueKeysWithValues: expectedReviews.compactMap { review in
             review.inputID.map { ($0, Set(review.missing)) }
         })
-        let actualMissing = Dictionary(uniqueKeysWithValues: result.guidance.compactMap { item in
-            expectedInputIDs[item.inputID].map { ($0, Set(item.missing)) }
+        let actualMissing = Dictionary(uniqueKeysWithValues: result.refinements.flatMap { item in
+            item.inputIDs.compactMap { id in
+                expectedInputIDs[id].map { ($0, Set(item.missing.map(\.rawValue))) }
+            }
         })
         let expectsNoSuggestion = expectedOutcome?.action == "no_goal_recommendation"
         let output = !result.suggestions.isEmpty
             ? result.suggestions.map { "- \($0.title)" }.joined(separator: "\n")
-            : result.guidance.map { "- \($0.suggestion)" }.joined(separator: "\n")
+            : result.refinements.map { "- \($0.example)" }.joined(separator: "\n")
         var scores: [String: Double] = ["pairF1": grouping.f1, "trapAvoidance": grouping.trapAvoidance, "groupingScore": grouping.groupingScore]
         if !expectedGuidance.isEmpty {
             let guidance = setCounts(expected: expectedGuidance, actual: actualGuidance)
@@ -264,14 +274,9 @@ final class GoalSuggestionEvalTests: XCTestCase {
         expectedGuidance: Set<String>,
         actualGuidance: Set<String>
     ) -> Double {
-        switch result {
-        case .noSuggestion:
-            return 1
-        case .guidance:
-            return !expectedGuidance.isEmpty && actualGuidance == expectedGuidance ? 1 : 0
-        case .suggestions, .failure:
-            return 0
-        }
+        guard case .success(let suggestions, _) = result, suggestions.isEmpty else { return 0 }
+        if actualGuidance.isEmpty { return 1 }
+        return !expectedGuidance.isEmpty && actualGuidance == expectedGuidance ? 1 : 0
     }
 
     private struct SetCounts {

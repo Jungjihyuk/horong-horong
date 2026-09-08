@@ -48,6 +48,7 @@ struct GoalSuggestionPayload: Codable {
     let resultType: ResultType?
     let suggestions: [Item]?
     let guidance: [GuidanceItem]?
+    let refinements: [GuidanceItem]?
 
     enum IDValue: Codable, Sendable {
         case int(Int)
@@ -164,6 +165,10 @@ struct GoalSuggestionPayload: Codable {
             case missing
             case suggestion
         }
+    }
+
+    var refinementItems: [GuidanceItem] {
+        refinements ?? guidance ?? []
     }
 
     var resolvedResultType: ResultType {

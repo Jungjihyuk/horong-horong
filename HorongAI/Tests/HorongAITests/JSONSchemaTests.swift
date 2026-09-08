@@ -61,29 +61,21 @@ final class JSONSchemaTests: XCTestCase {
 
     // MARK: - 실제로 쓰는 두 스키마
 
-    /// `resultType` 은 **반드시 맨 앞**이어야 한다.
-    ///
-    /// 뒤로 밀리면 모델이 (프롬프트 예시대로) 그것부터 쓰는 순간 `suggestions` 가 등 뒤에 놓여
-    /// 배열을 못 쓰고 객체가 닫힌다. 실측(2026-08-25) 골든셋 62건 중 56건이 이렇게
-    /// `{"resultType": "suggestions"}` 14토큰으로 끝났다.
-    func testResultTypeComesFirst() {
+    /// 모델이 묶음을 먼저 작성해야 구체화 보조를 택한 뒤 추천을 생략하지 않는다.
+    func testSuggestionsComeBeforeRefinements() {
         for (name, json) in [
             ("weekly", WeeklyGoalTask.responseSchema.jsonText),
             ("monthly", MonthlyGoalTask.responseSchema.jsonText),
         ] {
-            XCTAssertTrue(json.hasPrefix(#"{"type":"object","properties":{"resultType":"#), "\(name): \(json)")
-            let resultType = json.range(of: #""resultType""#)!.lowerBound
+            XCTAssertTrue(json.hasPrefix(#"{"type":"object","properties":{"suggestions":"#), "\(name): \(json)")
             let suggestions = json.range(of: #""suggestions":{"type":"array""#)!.lowerBound
-            let guidance = json.range(of: #""guidance""#)!.lowerBound
-            XCTAssertLessThan(resultType, suggestions, "\(name): resultType 이 suggestions 보다 앞이어야 한다")
-            XCTAssertLessThan(resultType, guidance, "\(name): resultType 이 guidance 보다 앞이어야 한다")
+            let refinements = json.range(of: #""refinements""#)!.lowerBound
+            XCTAssertLessThan(suggestions, refinements, "\(name): suggestions가 refinements보다 앞이어야 한다")
         }
     }
 
-    /// `resultType` 은 세 값으로 못 박혀야 한다. 자유 문자열이면 갈 곳 없는 추론이 그리로 샌다
-    /// (실측: `"resultType": "guidance, noSuggestion"` → `decodeFailed`).
-    func testResultTypeIsConstrainedToThreeValues() {
-        let expected = #""resultType":{"type":"string","enum":["suggestions","guidance","noSuggestion"]}"#
+    func testRefinementDimensionsAreConstrained() {
+        let expected = #""missing":{"type":"array","items":{"type":"string","enum":["specific","measurable","time_bound"]}}"#
         XCTAssertTrue(WeeklyGoalTask.responseSchema.jsonText.contains(expected))
         XCTAssertTrue(MonthlyGoalTask.responseSchema.jsonText.contains(expected))
     }
@@ -136,7 +128,7 @@ final class JSONSchemaTests: XCTestCase {
         )
         let text = try XCTUnwrap(String(data: body, encoding: .utf8))
         XCTAssertTrue(
-            text.contains(#""format":{"type":"object","properties":{"resultType":"#),
+            text.contains(#""format":{"type":"object","properties":{"suggestions":"#),
             text
         )
         // 붙여 쓴 JSON 이 실제로 유효한지도 확인한다 — 문자열 조작이라 깨지면 조용히 400 이 난다.

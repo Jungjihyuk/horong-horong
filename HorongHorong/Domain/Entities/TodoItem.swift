@@ -60,3 +60,10 @@ struct TodoItem: Identifiable, Equatable, Sendable {
         note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? title : title + "\n" + note
     }
 }
+
+/// 할 일 내용과 일정을 한 번에 바꾼다. 둘을 따로 저장하면 중간 상태가 화면과 미리알림에 노출된다.
+struct TodoEditDraft: Equatable, Sendable {
+    let content: String
+    let startDate: Date?
+    let deadline: Date?
+}
