@@ -19,6 +19,11 @@ struct MainHubWindow: View {
     /// 한 번이라도 연 탭. 창을 닫았다 열면 비워져 다시 활성 탭 하나만 만든다.
     @State private var openedTabs: Set<HubTab> = []
 
+    var initialStatsViewMode: StatsViewMode? = nil
+    var initialStatsContentMode: StatsContentMode? = nil
+    var initialStatsSelectedDate: Date? = nil
+    var initialAchievementScreenshotState: AchievementDetailScreenshotState? = nil
+
     var body: some View {
         HStack(spacing: 0) {
             rail
@@ -39,7 +44,10 @@ struct MainHubWindow: View {
                         todoRepository: dependencies.todoRepository,
                         reflectionRepository: dependencies.reflectionRepository,
                         statsRepository: dependencies.statsRecordRepository,
-                        statsEditorRepository: dependencies.statsRecordEditorRepository
+                        statsEditorRepository: dependencies.statsRecordEditorRepository,
+                        initialViewMode: initialStatsViewMode ?? .daily,
+                        initialContentMode: initialStatsContentMode ?? .period,
+                        initialSelectedDate: initialStatsSelectedDate
                     )
                         .hubTabVisible(appState.hubTab == .stats)
                 }
@@ -47,7 +55,8 @@ struct MainHubWindow: View {
                     AchievementDetailWindow(
                         repository: dependencies.achievementRepository,
                         todoRepository: dependencies.todoRepository,
-                        rewardRepository: dependencies.rewardRepository
+                        rewardRepository: dependencies.rewardRepository,
+                        initialScreenshotState: initialAchievementScreenshotState
                     )
                         .hubTabVisible(appState.hubTab == .achievement)
                 }
