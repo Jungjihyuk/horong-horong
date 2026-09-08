@@ -114,6 +114,8 @@ struct NewsReportArchiveWindow: View {
     private var popoverTheme = Constants.defaultPopoverTheme
 
     @State private var viewModel = NewsArchiveViewModel()
+    @State private var timelineViewModel = NewsTimelineViewModel()
+    @State private var mode: NewsHubMode = .archive
 
     var body: some View {
         let visibleEntries = viewModel.visibleEntries
@@ -123,10 +125,15 @@ struct NewsReportArchiveWindow: View {
             toolbar
             Divider().overlay(PopoverChrome.divider)
 
-            HStack(spacing: 0) {
-                reportList(visibleEntries)
-                Divider().overlay(PopoverChrome.divider)
-                detailPane(selectedEntry)
+            switch mode {
+            case .archive:
+                HStack(spacing: 0) {
+                    reportList(visibleEntries)
+                    Divider().overlay(PopoverChrome.divider)
+                    detailPane(selectedEntry)
+                }
+            case .timeline:
+                NewsTimelinePane(viewModel: timelineViewModel)
             }
         }
         .frame(minWidth: 840, minHeight: 540)
@@ -136,20 +143,24 @@ struct NewsReportArchiveWindow: View {
         .onAppear {
             viewModel.reload(dataBasePath: dataBasePath)
             viewModel.applySelectionRequest(reportID: selection.request.reportID)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         .onChange(of: selection.request) { _, request in
             viewModel.applySelectionRequest(reportID: request.reportID)
         }
         .onChange(of: dataBasePath) { _, _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         // `@Query` 로 색인을 관찰하던 자리. 리포트는 파이프라인이 끝날 때만 늘어난다.
         .onReceive(NotificationCenter.default.publisher(for: .newsPipelineJobFinished)) { _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         // 앱 밖에서 파일을 지우거나 옮겼을 수 있다.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
     }
 
@@ -167,6 +178,15 @@ struct NewsReportArchiveWindow: View {
             }
 
             Spacer(minLength: 16)
+
+            Picker("", selection: $mode) {
+                ForEach(NewsHubMode.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 168)
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
