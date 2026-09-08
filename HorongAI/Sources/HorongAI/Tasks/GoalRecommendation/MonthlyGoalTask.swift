@@ -108,7 +108,7 @@ public enum MonthlyGoalTask {
             parse: WeeklyGoalTask.ParseOutcome.Diagnostics?
         ) {
             self.drafts = drafts
-            self.result = result ?? .suggestions(drafts)
+            self.result = result ?? GoalRecommendationResult(suggestions: drafts)
             self.failure = failure
             self.selectedIDs = selectedIDs
             self.promptCharacters = promptCharacters
@@ -243,27 +243,12 @@ public enum MonthlyGoalTask {
             )
         }
 
-        switch payload.resolvedResultType {
-        case .guidance:
-            let guidance = guidance(from: payload, sourceGoals: sourceGoals, allowedIDs: allowedIDs)
+        if payload.resultType == .noSuggestion {
             return WeeklyGoalTask.ParseOutcome(
-                drafts: [],
-                result: guidance.isEmpty ? .noSuggestion : .guidance(guidance),
-                diagnostics: .decoded(
-                    modelReturned: payload.guidance?.count ?? 0,
-                    kept: guidance.count,
-                    requestedIDs: guidance.count,
-                    badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0
-                )
-            )
-        case .noSuggestion:
-            return WeeklyGoalTask.ParseOutcome(
-                drafts: [], result: .noSuggestion,
+                drafts: [], result: GoalRecommendationResult(),
                 diagnostics: .decoded(modelReturned: 0, kept: 0, requestedIDs: 0,
                                       badID: 0, alreadyUsed: 0, overMaxMemo: 0, tooFewIDs: 0)
             )
-        case .suggestions:
-            break
         }
 
         let goalByID = Dictionary(uniqueKeysWithValues: sourceGoals.map { ($0.id, $0) })
@@ -273,7 +258,8 @@ public enum MonthlyGoalTask {
         var tooFewIDs = 0
         var requestedIDs = 0
         var used = Set<UUID>()
-        let result = (payload.suggestions ?? []).compactMap { item -> GoalSuggestionDraft? in
+        let suggestionItems = payload.resultType == .guidance ? [] : (payload.suggestions ?? [])
+        let result = suggestionItems.compactMap { item -> GoalSuggestionDraft? in
             let rawIDs: [GoalSuggestionPayload.IDValue] = (item.goalIDs ?? item.items ?? item.memoIDs)?.values ?? []
             requestedIDs += rawIDs.count
 
@@ -322,12 +308,19 @@ public enum MonthlyGoalTask {
             )
         }
 
+        let drafts = Array(result.prefix(suggestionCount))
+        let refinements = refinements(
+            from: payload,
+            sourceGoals: sourceGoals,
+            allowedIDs: allowedIDs,
+            excluding: used
+        )
         return WeeklyGoalTask.ParseOutcome(
-            drafts: Array(result.prefix(suggestionCount)),
-            result: result.isEmpty ? .noSuggestion : .suggestions(Array(result.prefix(suggestionCount))),
+            drafts: drafts,
+            result: GoalRecommendationResult(suggestions: drafts, refinements: refinements),
             diagnostics: .decoded(
-                modelReturned: payload.suggestions?.count ?? 0,
-                kept: result.count,
+                modelReturned: (payload.suggestions?.count ?? 0) + payload.refinementItems.count,
+                kept: result.count + refinements.count,
                 requestedIDs: requestedIDs,
                 badID: badID,
                 alreadyUsed: alreadyUsed,
@@ -339,15 +332,17 @@ public enum MonthlyGoalTask {
         )
     }
 
-    private static func guidance(
+    private static func refinements(
         from payload: GoalSuggestionPayload,
         sourceGoals: [Goal],
-        allowedIDs: Set<UUID>
-    ) -> [GoalRecommendationGuidance] {
-        var used = Set<UUID>()
-        return (payload.guidance ?? []).flatMap { item -> [GoalRecommendationGuidance] in
-            let suggestion = item.suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !suggestion.isEmpty else { return [] }
+        allowedIDs: Set<UUID>,
+        excluding usedBySuggestions: Set<UUID>
+    ) -> [GoalRecommendationRefinement] {
+        var used = usedBySuggestions
+        var groups: [(missing: [GoalRefinementDimension], example: String, ids: [UUID])] = []
+        for item in payload.refinementItems {
+            let example = item.suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !example.isEmpty else { continue }
             let rawIDs = (item.goalIDs ?? item.items ?? item.memoIDs)?.values ?? []
             let ids = rawIDs.compactMap { value -> UUID? in
                 switch value {
@@ -357,16 +352,17 @@ public enum MonthlyGoalTask {
                 case .string(let value):
                     return UUID(uuidString: value)
                 }
-            }.filter(allowedIDs.contains)
-            let missing = item.missing.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            return ids.compactMap { id in
-                guard used.insert(id).inserted else { return nil }
-                return GoalRecommendationGuidance(
-                    inputID: id,
-                    missing: missing,
-                    suggestion: suggestion
-                )
+            }.filter { allowedIDs.contains($0) && used.insert($0).inserted }
+            guard !ids.isEmpty else { continue }
+            let missing = item.missing.compactMap(GoalRefinementDimension.init(rawValue:))
+            if let index = groups.firstIndex(where: { $0.missing == missing && $0.example == example }) {
+                groups[index].ids.append(contentsOf: ids)
+            } else {
+                groups.append((missing, example, ids))
             }
+        }
+        return groups.map {
+            GoalRecommendationRefinement(inputIDs: $0.ids, missing: $0.missing, example: $0.example)
         }
     }
 
@@ -375,7 +371,6 @@ public enum MonthlyGoalTask {
     /// 월간은 주간 목표의 **UUID 문자열**로 받는다. 번호가 아니라 문자열인 것이 주간과 다르다.
     public static let responseSchema = JSONSchema.object(
         properties: [
-            .init("resultType", .stringEnum(["suggestions", "guidance", "noSuggestion"])),
             .init("suggestions", .array(of: .object(
                 properties: [
                     .init("title", .string),
@@ -387,16 +382,16 @@ public enum MonthlyGoalTask {
                 ],
                 required: ["goalIDs", "reason", "title"]
             ))),
-            .init("guidance", .array(of: .object(
+            .init("refinements", .array(of: .object(
                 properties: [
                     .init("goalIDs", .array(of: .string)),
-                    .init("missing", .array(of: .string)),
-                    .init("suggestion", .string),
+                    .init("missing", .array(of: .stringEnum(["specific", "measurable", "time_bound"]))),
+                    .init("suggestion", .string)
                 ],
                 required: ["goalIDs", "missing", "suggestion"]
             )))
         ],
-        required: ["resultType"]
+        required: ["suggestions", "refinements"]
     )
 
     private static let promptFallback = """
@@ -406,6 +401,8 @@ public enum MonthlyGoalTask {
     입력에 없는 구체적인 숫자, 회사 수, 횟수, 마감 조건은 만들지 마.
     같은 주간 목표를 여러 월간 후보에 중복해서 넣지 마.
     존재하는 id만 goalIDs에 넣어.
+    suggestions를 먼저 만들고, refinements에는 어떤 추천에도 포함되지 않은 주간 목표만 넣어.
+    같은 예시가 필요한 여러 목표는 goalIDs 하나에 함께 넣어.
 
     JSON 형식:
     {
@@ -417,6 +414,13 @@ public enum MonthlyGoalTask {
           "scheduleText": "이번 달에 주간 목표 3개로 나눠 진행",
           "criterion": "연결한 주간 목표 3개 달성",
           "emoji": "📅"
+        }
+      ],
+      "refinements": [
+        {
+          "goalIDs": ["UUID"],
+          "missing": ["measurable", "time_bound"],
+          "suggestion": "예: 이번 달 말까지 완료 기준을 3개로 정하기"
         }
       ]
     }

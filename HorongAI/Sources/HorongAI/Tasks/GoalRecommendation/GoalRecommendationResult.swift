@@ -29,48 +29,59 @@ public struct GoalRecommendationContext: Sendable, Hashable {
     }
 }
 
-/// 목표로 묶기에는 정보가 부족한 입력 하나에 대한 구체화 안내.
-public struct GoalRecommendationGuidance: Sendable, Hashable, Identifiable {
-    public let inputID: UUID
-    public let missing: [String]
-    public let suggestion: String
-
-    public init(inputID: UUID, missing: [String], suggestion: String) {
-        self.inputID = inputID
-        self.missing = missing
-        self.suggestion = suggestion
-    }
-
-    public var id: UUID { inputID }
+/// 제목만 보고 안전하게 판정할 수 있는 구체화 축.
+public enum GoalRefinementDimension: String, Codable, Sendable, Hashable, CaseIterable {
+    case specific
+    case measurable
+    case timeBound = "time_bound"
 }
 
-/// 한 번의 추천이 화면에 전달할 결과.
+/// 추천 묶음에 들어가지 못한 입력들을 한 번에 설명하는 구체화 보조.
 ///
-/// 일반·맥락 의존 입력은 `.suggestions`, 정보 부족 입력은 `.guidance`, 의미 있는 묶음이
-/// 전혀 없을 때는 `.noSuggestion` 이다. 골든셋의 `datasetType`은 평가용 분류이고,
-/// 제품이 소비하는 분기는 이 결과 타입이다.
-public enum GoalRecommendationResult: Sendable, Hashable {
-    case suggestions([GoalSuggestionDraft])
-    case guidance([GoalRecommendationGuidance])
-    case noSuggestion
+/// 같은 조언을 입력별로 복제하지 않는다. 서로 다른 입력이라는 사실은 UUID 배열로 보존한다.
+public struct GoalRecommendationRefinement: Sendable, Hashable, Identifiable {
+    public let inputIDs: [UUID]
+    public let missing: [GoalRefinementDimension]
+    public let example: String
 
-    public var drafts: [GoalSuggestionDraft] {
-        guard case .suggestions(let drafts) = self else { return [] }
-        return drafts
+    public init(inputIDs: [UUID], missing: [GoalRefinementDimension], example: String) {
+        var seen = Set<UUID>()
+        self.inputIDs = inputIDs.filter { seen.insert($0).inserted }
+        self.missing = Array(Set(missing)).sorted { $0.rawValue < $1.rawValue }
+        self.example = example
     }
+
+    public var id: String {
+        inputIDs.map(\.uuidString).sorted().joined(separator: "|")
+            + "|" + missing.map(\.rawValue).joined(separator: ",")
+            + "|" + example
+    }
+}
+
+/// 한 번의 추천 결과. 묶음과 구체화 보조는 서로 배타적이지 않다.
+public struct GoalRecommendationResult: Sendable, Hashable {
+    public let suggestions: [GoalSuggestionDraft]
+    public let refinements: [GoalRecommendationRefinement]
+
+    public init(
+        suggestions: [GoalSuggestionDraft] = [],
+        refinements: [GoalRecommendationRefinement] = []
+    ) {
+        self.suggestions = suggestions
+        self.refinements = refinements
+    }
+
+    public var drafts: [GoalSuggestionDraft] { suggestions }
+    public var isEmpty: Bool { suggestions.isEmpty && refinements.isEmpty }
 
     /// 파싱 단계 trace에 남길 사람이 읽을 수 있는 표현.
     var traceText: String {
-        switch self {
-        case .suggestions(let drafts):
-            return drafts.map { "- \($0.title)" }.joined(separator: "\n")
-        case .guidance(let guidance):
-            return guidance.map {
-                let missing = $0.missing.joined(separator: ", ")
-                return "- inputID=\($0.inputID.uuidString) missing=[\(missing)] suggestion=\($0.suggestion)"
-            }.joined(separator: "\n")
-        case .noSuggestion:
-            return ""
+        let suggestionLines = suggestions.map { "- suggestion=\($0.title)" }
+        let refinementLines = refinements.map {
+            let ids = $0.inputIDs.map(\.uuidString).joined(separator: ",")
+            let missing = $0.missing.map(\.rawValue).joined(separator: ", ")
+            return "- inputIDs=[\(ids)] missing=[\(missing)] example=\($0.example)"
         }
+        return (suggestionLines + refinementLines).joined(separator: "\n")
     }
 }

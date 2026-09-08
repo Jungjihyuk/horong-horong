@@ -71,7 +71,7 @@ final class MonthlyGoalDiagnosticsTests: XCTestCase {
         let parsed = trace.finish().spans.first { $0.name == .parsed }
         XCTAssertEqual(
             parsed?.text,
-            "- inputID=\(uuid(1).uuidString) missing=[measurable] suggestion=완료 기준을 정해보세요."
+            "- inputIDs=[\(uuid(1).uuidString)] missing=[measurable] example=완료 기준을 정해보세요."
         )
         XCTAssertEqual(parsed?.facts?["kept"], 1)
     }
