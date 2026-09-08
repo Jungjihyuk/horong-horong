@@ -86,6 +86,29 @@ struct AchievementGoalComposerSheet: View {
     private let targetLevels = ["월간", "주간", "역할", "비전"]
     private let colors = ["#E87333", "#2F5BEA", "#7A52D4", "#D94F73", "#2F9E73"]
 
+    init(
+        memos: [AchievementMemoDetail],
+        existingGoals: [AchievementGoal],
+        onClose: @escaping () -> Void,
+        makeRefinementEditor: @escaping (AchievementGoalCadence, UUID, String) -> GoalRefinementEditorViewModel?,
+        onRefinementSaved: @escaping () -> Void,
+        initialInputMode: String = "직접 입력",
+        initialSuggestions: [AchievementGoalSuggestion]? = nil,
+        onSave: @escaping (AchievementGoalDraft, Set<UUID>, [String]) throws -> UUID
+    ) {
+        self.memos = memos
+        self.existingGoals = existingGoals
+        self.onClose = onClose
+        self.makeRefinementEditor = makeRefinementEditor
+        self.onRefinementSaved = onRefinementSaved
+        self.onSave = onSave
+        _selectedInputMode = State(initialValue: initialInputMode)
+        if let initialSuggestions {
+            _suggestions = State(initialValue: initialSuggestions)
+            _didLoadSuggestions = State(initialValue: true)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header

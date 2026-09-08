@@ -151,6 +151,37 @@ final class VaultViewModel {
         openTabs = []
         location = value
         await load(vault: value.root)
+        await openPreferredDocumentIfNeeded()
+    }
+
+    /// 스크린샷 캡처 또는 지정된 환경변수가 있을 때 대표 문서를 자동으로 열고 폴더 트리를 펼친다.
+    private func openPreferredDocumentIfNeeded() async {
+        guard let location else { return }
+        let isScreenshot = ProcessInfo.processInfo.environment["HORONGHORONG_SCREENSHOT_TARGET"] != nil
+            || ProcessInfo.processInfo.arguments.contains("--screenshot-target")
+        let preferredPath: String?
+        switch kind {
+        case .knowledge:
+            preferredPath = ProcessInfo.processInfo.environment["HORONGHORONG_VAULT_KNOWLEDGE_DOCUMENT"]
+                ?? (isScreenshot ? "AI Engineering/LLM/04-실행 스택/01-프레임워크/GGML 계열/GBNF 문법.md" : nil)
+        case .works:
+            preferredPath = ProcessInfo.processInfo.environment["HORONGHORONG_VAULT_WORKS_DOCUMENT"]
+                ?? (isScreenshot ? "하이미디어/강의 계획서/강의 계획서.md" : nil)
+        }
+
+        guard let relPath = preferredPath, !relPath.isEmpty else { return }
+        let targetURL = location.root.appendingPathComponent(relPath)
+        guard FileManager.default.fileExists(atPath: targetURL.path) else { return }
+
+        // 상위 폴더들을 트리에 펼치기
+        var folder = targetURL.deletingLastPathComponent()
+        while folder.path.hasPrefix(location.root.path) {
+            expandedFolders.insert(folder)
+            if folder.path == location.root.path { break }
+            folder = folder.deletingLastPathComponent()
+        }
+
+        await open(targetURL)
     }
 
     func chooseRoot() async {

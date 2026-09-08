@@ -4,18 +4,37 @@ import CoreGraphics
 import Foundation
 import AppKit
 
-private let popoverTabs = ["timer", "memo", "stats", "news", "agent", "achievement"]
+private let popoverTabs = ["timer", "memo", "stats", "news", "lab", "achievement"]
+private let popoverMemoSections = ["todo", "diary", "quick"]
+private let hubMemoSections = ["quick", "diary", "todo", "knowledge", "works", "refs"]
+private let hubStatsModes = ["daily", "weekly", "monthly", "focus"]
+private let hubAchievementModes = ["progress", "journey", "records", "reward", "goal-ai"]
 private let settingsTabs = ["general", "appearance", "timer", "hotkey", "category", "stats", "achievement", "news", "agent", "companion", "memo", "data", "about"]
 private let statsDetailModes = ["daily", "weekly", "monthly"]
 private let statsFocusModes = ["focus-daily", "focus-weekly", "focus-monthly"]
-private let achievementDetailModes = ["progress", "timeline-all", "journey", "records", "reward"]
+private let achievementDetailModes = ["progress", "timeline-all", "journey", "records", "reward", "goal-ai"]
 private let companionModes = ["chat", "schedule"]
 private let popoverThemes: [PopoverThemeOption] = [
     PopoverThemeOption(identifier: "warm-lantern", rawValue: "warmLantern"),
     PopoverThemeOption(identifier: "wine-lantern", rawValue: "wineLantern"),
     PopoverThemeOption(identifier: "game-pixel", rawValue: "gamePixel"),
 ]
-private let allTargets = popoverTabs.map { "popover:\($0)" }
+private let popoverBaseTargets = [
+    "popover:timer",
+    "popover:memo:todo",
+    "popover:memo:diary",
+    "popover:memo:quick",
+    "popover:stats",
+    "popover:news",
+    "popover:lab",
+    "popover:achievement",
+]
+private let hubTargets = hubMemoSections.map { "hub:memo:\($0)" }
+    + ["hub:news"]
+    + hubStatsModes.map { "hub:stats:\($0)" }
+    + hubAchievementModes.map { "hub:achievement:\($0)" }
+private let allTargets = popoverBaseTargets
+    + hubTargets
     + ["settings:general"]
     + statsDetailModes.map { "stats-detail:\($0)" }
     + statsFocusModes.map { "stats-detail:\($0)" }
@@ -58,6 +77,8 @@ private struct CaptureOptions {
     var derivedDataPath = URL(fileURLWithPath: "/private/tmp/horonghorong-screenshot-derived-data")
     var appPath: URL?
     var customDate: String?
+    var storeScope: String?
+    var syncDatabase: Bool = false
     private var baseTargets = allTargets
     private var selectedThemes: [PopoverThemeOption]?
 
@@ -70,6 +91,16 @@ private struct CaptureOptions {
                 outputDirectory = try Self.value(after: argument, at: &index, in: arguments).expandedFileURL
             case "--date":
                 customDate = try Self.value(after: argument, at: &index, in: arguments)
+            case "--store-scope":
+                let scope = try Self.value(after: argument, at: &index, in: arguments).lowercased()
+                guard scope == "production" || scope == "development" else {
+                    throw ScriptError(message: "--store-scope 값은 production 또는 development 이어야 합니다.")
+                }
+                storeScope = scope
+            case "--sync-db":
+                syncDatabase = true
+            case "--no-sync-db":
+                syncDatabase = false
             case "--targets":
                 let rawTargets = try Self.parseList(Self.value(after: argument, at: &index, in: arguments))
                 guard !rawTargets.isEmpty else {
@@ -85,11 +116,29 @@ private struct CaptureOptions {
                 guard !rawTabs.isEmpty else {
                     throw ScriptError(message: "--tabs 값이 비어 있습니다.")
                 }
-                let invalidTabs = rawTabs.filter { !popoverTabs.contains($0) }
+                let validTabs = popoverTabs + ["agent", "todo", "diary", "quick"]
+                let invalidTabs = rawTabs.filter { !validTabs.contains($0) }
                 guard invalidTabs.isEmpty else {
                     throw ScriptError(message: "알 수 없는 탭입니다: \(invalidTabs.joined(separator: ", "))")
                 }
-                baseTargets = rawTabs.map { "popover:\($0)" }
+                baseTargets = rawTabs.flatMap { tab -> [String] in
+                    switch tab {
+                    case "memo":
+                        return ["popover:memo:todo", "popover:memo:diary", "popover:memo:quick"]
+                    case "todo":
+                        return ["popover:memo:todo"]
+                    case "diary":
+                        return ["popover:memo:diary"]
+                    case "quick":
+                        return ["popover:memo:quick"]
+                    case "agent":
+                        return ["popover:lab"]
+                    default:
+                        return ["popover:\(tab)"]
+                    }
+                }
+            case "--hub":
+                baseTargets = hubTargets
             case "--themes":
                 selectedThemes = try Self.parseThemes(Self.value(after: argument, at: &index, in: arguments), optionName: argument)
             case "--timer-themes":
@@ -155,10 +204,11 @@ private struct CaptureOptions {
     }
 
     private static func defaultDate(for target: String) -> String? {
-        if target == "stats-detail:focus-daily" || target == "stats-detail:focus" {
+        let lower = target.lowercased()
+        if lower.contains("focus") {
             return "2026-08-07"
         }
-        if target.hasPrefix("stats-detail") || target == "popover:stats" {
+        if lower.contains("stats") {
             return "2026-08-13"
         }
         return nil
@@ -182,19 +232,55 @@ private struct CaptureOptions {
     }
 
     private static func isValidTarget(_ target: String) -> Bool {
-        let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else {
-            return target == "achievement-detail"
-                || target == "companion"
-                || target == "companion-schedule"
-                || target == "news-report-archive"
-                || target == "news-archive"
-                || target == "stats-detail-focus"
-                || target == "stats-focus"
+        let normalized = target.lowercased()
+        let parts = normalized.split(separator: ":").map(String.init)
+
+        if parts.count == 1 {
+            let single = parts[0]
+            return single == "achievement-detail"
+                || single == "companion"
+                || single == "companion-schedule"
+                || single == "news-report-archive"
+                || single == "news-archive"
+                || single == "stats-detail-focus"
+                || single == "stats-focus"
+                || single.hasPrefix("hub-")
+                || single.hasPrefix("popover-")
         }
+
         switch parts[0] {
         case "popover":
-            return popoverTabs.contains(parts[1])
+            if parts.count == 2 {
+                return popoverTabs.contains(parts[1])
+                    || parts[1] == "agent"
+                    || ["memo-todo", "memo-diary", "memo-quick", "todo", "diary", "quick"].contains(parts[1])
+            }
+            if parts.count == 3 {
+                return parts[1] == "memo" && popoverMemoSections.contains(parts[2])
+            }
+            return false
+        case "hub":
+            if parts.count == 2 {
+                return parts[1] == "news"
+                    || parts[1] == "memo"
+                    || parts[1] == "stats"
+                    || parts[1] == "achievement"
+                    || hubMemoSections.map { "memo-\($0)" }.contains(parts[1])
+                    || hubStatsModes.map { "stats-\($0)" }.contains(parts[1])
+                    || hubAchievementModes.map { "achievement-\($0)" }.contains(parts[1])
+            }
+            if parts.count == 3 {
+                if parts[1] == "memo" {
+                    return hubMemoSections.contains(parts[2]) || parts[2] == "references"
+                }
+                if parts[1] == "stats" {
+                    return hubStatsModes.contains(parts[2]) || statsFocusModes.contains(parts[2])
+                }
+                if parts[1] == "achievement" {
+                    return hubAchievementModes.contains(parts[2]) || achievementDetailModes.contains(parts[2])
+                }
+            }
+            return false
         case "settings":
             return settingsTabs.contains(parts[1])
         case "stats-detail":
@@ -214,16 +300,20 @@ private struct CaptureOptions {
 
     static let help = """
     Usage:
-      swift Scripts/capture-popover-screenshots.swift [options]
+      swift Scripts/app-screenshots.swift [options]
 
     Options:
       --output <dir>        PNG 저장 경로. 기본값: artifacts/Screenshots
-      --date <yyyy-MM-dd>   통계 기준 날짜를 명시적으로 지정합니다. (기본값: stats-detail:focus-daily는 2026-08-07, 그 외 통계는 2026-08-13)
-      --targets <list>      캡처 대상 목록. 기본값: popover 전체 + settings:general + stats-detail 전체 + achievement-detail 전체 상태
-                            예: popover:timer,settings:appearance,stats-detail:weekly,achievement-detail:timeline-all
-      --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,stats,achievement
+      --date <yyyy-MM-dd>   통계 기준 날짜를 명시적으로 지정합니다. (기본값: focus 포함 시 2026-08-07, 그 외 통계는 2026-08-13)
+      --targets <list>      캡처 대상 목록.
+                            예: popover:timer,popover:memo:todo,popover:memo:diary,popover:memo:quick,hub:memo:quick,hub:stats:daily,hub:achievement:goal-ai
+      --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,todo,diary,quick,stats,news,achievement,lab
+      --hub                 통합 허브(전체 보기) 화면 전체(기록 6종, 뉴스, 통계 4종, 성취 5종)를 캡처합니다.
       --themes <list>       현재 캡처 대상 전체를 지정한 팝오버 테마별로 캡처합니다. 예: warm-lantern,wine-lantern,game-pixel 또는 all
       --timer-themes <list> 타이머 탭을 지정한 팝오버 테마별로 캡처합니다. 예: warm-lantern,wine-lantern,game-pixel 또는 all
+      --store-scope <scope> 사용할 SwiftData 저장소 스코프 (production 또는 development)
+      --sync-db             실사용 DB(HorongHorong)를 디버그 DB(HorongHorong-Debug)로 동기화 복사합니다.
+      --no-sync-db          실사용 DB 동기화 복사를 생략합니다. (기본값)
       --skip-build          기존 빌드 산출물을 사용합니다.
       --derived-data <dir>  xcodebuild DerivedData 경로. 기본값: /private/tmp/horonghorong-screenshot-derived-data
       --app <path>          직접 지정한 .app을 캡처합니다. 지정 시 빌드를 생략합니다.
@@ -428,7 +518,27 @@ private func doubleValue(_ value: Any?) -> Double? {
     }
 }
 
-private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?, date: String?) throws -> NSRunningApplication {
+private func syncProductionStoreToDebugStore() {
+    let fileManager = FileManager.default
+    guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+    let prodStoresDir = appSupport.appendingPathComponent("HorongHorong", isDirectory: true).appendingPathComponent("Stores", isDirectory: true)
+    let debugStoresDir = appSupport.appendingPathComponent("HorongHorong-Debug", isDirectory: true).appendingPathComponent("Stores", isDirectory: true)
+    let prodStoreFile = prodStoresDir.appendingPathComponent("default.store")
+    guard fileManager.fileExists(atPath: prodStoreFile.path) else { return }
+
+    try? fileManager.createDirectory(at: debugStoresDir, withIntermediateDirectories: true)
+    let suffixes = ["", "-shm", "-wal"]
+    for suffix in suffixes {
+        let src = URL(fileURLWithPath: prodStoreFile.path + suffix)
+        let dst = URL(fileURLWithPath: debugStoresDir.appendingPathComponent("default.store").path + suffix)
+        if fileManager.fileExists(atPath: src.path) {
+            try? fileManager.removeItem(at: dst)
+            try? fileManager.copyItem(at: src, to: dst)
+        }
+    }
+}
+
+private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?, date: String?, storeScope: String?) throws -> NSRunningApplication {
     let configuration = NSWorkspace.OpenConfiguration()
     var arguments = ["--screenshot-target", target]
     var environment = ["HORONGHORONG_SCREENSHOT_TARGET": target]
@@ -438,6 +548,9 @@ private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?,
     if let date {
         arguments.append(contentsOf: ["--screenshot-date", date])
         environment["HORONGHORONG_SCREENSHOT_DATE"] = date
+    }
+    if let storeScope {
+        environment["HORONGHORONG_STORE_SCOPE"] = storeScope
     }
     configuration.arguments = arguments
     configuration.activates = true
@@ -468,16 +581,28 @@ private func launchApp(appPath: URL, target: String, theme: PopoverThemeOption?,
     return launchedApp
 }
 
-private func capture(request: CaptureRequest, appPath: URL, outputDirectory: URL) throws {
+private func capture(request: CaptureRequest, appPath: URL, outputDirectory: URL, storeScope: String?) throws {
     let title = "HorongHorong Screenshot - \(request.titleIdentifier)"
-    let runningApp = try launchApp(appPath: appPath, target: request.target, theme: request.theme, date: request.date)
+    let runningApp = try launchApp(
+        appPath: appPath,
+        target: request.target,
+        theme: request.theme,
+        date: request.date,
+        storeScope: storeScope
+    )
 
     defer {
         runningApp.terminate()
     }
 
     let windowID = try waitForWindow(title: title, processID: runningApp.processIdentifier)
-    Thread.sleep(forTimeInterval: 0.4)
+    let settleDuration: TimeInterval
+    if request.target.contains("knowledge") || request.target.contains("works") {
+        settleDuration = 4.0
+    } else {
+        settleDuration = 0.5
+    }
+    Thread.sleep(forTimeInterval: settleDuration)
     let outputURL = outputDirectory.appendingPathComponent("\(request.fileIdentifier).png")
     try captureWindow(id: windowID, to: outputURL)
     let themeText = request.theme.map { " [\($0.identifier)]" } ?? ""
@@ -492,6 +617,10 @@ do {
         .appendingPathComponent("Artifacts")
         .appendingPathComponent("Screenshots")
     try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+
+    if options.syncDatabase && (options.storeScope == nil || options.storeScope == "development") {
+        syncProductionStoreToDebugStore()
+    }
 
     if !options.skipBuild {
         try runCommand(
@@ -513,7 +642,7 @@ do {
 
     let appPath = try options.appPath ?? builtAppPath(derivedDataPath: options.derivedDataPath)
     for request in options.requests {
-        try capture(request: request, appPath: appPath, outputDirectory: outputDirectory)
+        try capture(request: request, appPath: appPath, outputDirectory: outputDirectory, storeScope: options.storeScope)
     }
 } catch {
     fputs("error: \(error.localizedDescription)\n", stderr)
