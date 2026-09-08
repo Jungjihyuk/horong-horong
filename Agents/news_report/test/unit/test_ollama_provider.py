@@ -97,3 +97,41 @@ def test_ollama_provider__invalid_json_schema__raises_validation_error():
         provider.generate_json("judge relevance", RelevanceJudgment)
 
     assert any(err["loc"] == ("score",) for err in error.value.errors())
+
+
+# 시나리오 N. think 옵션은 명시했을 때만 payload 에 실린다.
+@pytest.mark.unit
+def test_ollama_provider__think_disabled__sends_think_false():
+    # Given: 추론을 끈 provider.
+    calls = []
+
+    def fake_transport(url, payload, timeout):
+        calls.append(payload)
+        return {"response": "{}"}
+
+    provider = OllamaProvider(model="qwen3:4b", think=False, transport=fake_transport)
+
+    # When: 텍스트를 생성한다.
+    provider.generate_text("프롬프트")
+
+    # Then: think=False 가 전달된다. qwen3 계열은 이걸 안 끄면 사고 토큰을 무한정
+    # 생성해서 structured output 요청이 분 단위로 늘어지거나 빈 응답으로 끝난다.
+    assert calls[0]["think"] is False
+
+
+@pytest.mark.unit
+def test_ollama_provider__think_unset__omits_field_entirely():
+    # Given: think 를 지정하지 않은 provider(기존 동작).
+    calls = []
+
+    def fake_transport(url, payload, timeout):
+        calls.append(payload)
+        return {"response": "{}"}
+
+    provider = OllamaProvider(model="qwen3:14b", transport=fake_transport)
+
+    # When: 텍스트를 생성한다.
+    provider.generate_text("프롬프트")
+
+    # Then: 필드 자체를 안 보낸다 — 기존 파이프라인 동작이 바뀌지 않아야 한다.
+    assert "think" not in calls[0]

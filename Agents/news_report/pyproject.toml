@@ -2,13 +2,15 @@
 name = "horonghorong-news-report"
 version = "0.1.0"
 description = "HorongHorong news curation pipeline"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "youtube-transcript-api>=0.6.3",
     "yt-dlp>=2024.1.1",
     "feedparser>=6.0.0",
     "pytest>=8.4.2",
     "pydantic>=2.13.4",
+    # 과금형 provider 전용. 구독 CLI·ollama 만 쓰면 실제로 임포트되지 않는다(지연 임포트).
+    "anthropic>=0.40",
 ]
 
 [dependency-groups]
