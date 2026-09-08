@@ -31,6 +31,8 @@ private struct ScreenshotCaptureConfiguration {
             return Constants.companionExpandedOverlaySize
         case .newsReportArchive:
             return CGSize(width: 940, height: 660)
+        case .hub:
+            return CGSize(width: Constants.hubWindowWidth, height: Constants.hubWindowHeight)
         }
     }
 
@@ -38,7 +40,7 @@ private struct ScreenshotCaptureConfiguration {
         switch target {
         case .popover, .companion:
             return [.borderless]
-        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive:
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .hub:
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         }
     }
@@ -160,17 +162,27 @@ private enum CompanionScreenshotMode: String {
 }
 
 private enum ScreenshotCaptureTarget {
-    case popover(PopoverTab)
+    case popover(PopoverTab, memoSection: SecondBrainSection? = nil)
     case settings(SettingsTab)
     case statsDetail(StatsViewMode, StatsContentMode = .period, isShorthandFocus: Bool = false)
     case achievementDetail(AchievementDetailScreenshotMode = .progress)
     /// 화면 위에 뜨는 컴패니언.
     case companion(CompanionScreenshotMode = .chat)
     case newsReportArchive
+    case hub(
+        HubTab,
+        memoSection: SecondBrainSection? = nil,
+        statsViewMode: StatsViewMode? = nil,
+        statsContentMode: StatsContentMode? = nil,
+        achievementMode: AchievementDetailScreenshotMode? = nil
+    )
 
     var identifier: String {
         switch self {
-        case .popover(let tab):
+        case .popover(let tab, let memoSection):
+            if tab == .memo, let memoSection {
+                return "popover-memo-\(memoSection.rawValue)"
+            }
             return "popover-\(tab.screenshotIdentifier)"
         case .settings(let tab):
             return "settings-\(tab.screenshotIdentifier)"
@@ -185,90 +197,133 @@ private enum ScreenshotCaptureTarget {
             return mode == .chat ? "companion" : "companion-\(mode.screenshotIdentifier)"
         case .newsReportArchive:
             return "news-report-archive"
+        case .hub(let tab, let memoSection, let statsViewMode, let statsContentMode, let achievementMode):
+            switch tab {
+            case .memo:
+                let section = memoSection ?? .todo
+                return "hub-memo-\(section.rawValue)"
+            case .news:
+                return "hub-news"
+            case .stats:
+                if statsContentMode == .focus {
+                    return "hub-stats-focus"
+                }
+                let mode = statsViewMode ?? .daily
+                return "hub-stats-\(mode.screenshotIdentifier)"
+            case .achievement:
+                let mode = achievementMode ?? .progress
+                return "hub-achievement-\(mode.screenshotIdentifier)"
+            }
         }
     }
 
     init?(identifier: String) {
-        let parts = identifier.lowercased().split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else {
-            if identifier == "achievement-detail" {
+        let normalized = identifier.lowercased()
+        let colonParts = normalized.split(separator: ":").map(String.init)
+
+        if colonParts.count == 1 {
+            let single = colonParts[0]
+            if single == "achievement-detail" {
                 self = .achievementDetail()
                 return
             }
-            if identifier == "companion" {
+            if single == "companion" {
                 self = .companion(.chat)
                 return
             }
-            if identifier == "companion-schedule" {
+            if single == "companion-schedule" {
                 self = .companion(.schedule)
                 return
             }
-            if identifier == "news-report-archive" || identifier == "news-archive" {
+            if single == "news-report-archive" || single == "news-archive" {
                 self = .newsReportArchive
                 return
             }
-            if identifier == "stats-detail-focus" || identifier == "stats-focus" {
+            if single == "stats-detail-focus" || single == "stats-focus" {
                 self = .statsDetail(.daily, .focus, isShorthandFocus: true)
                 return
             }
-            if identifier == "stats-detail-focus-daily" {
+            if single == "stats-detail-focus-daily" {
                 self = .statsDetail(.daily, .focus, isShorthandFocus: false)
                 return
             }
-            if identifier == "stats-detail-focus-weekly" {
+            if single == "stats-detail-focus-weekly" {
                 self = .statsDetail(.weekly, .focus, isShorthandFocus: false)
                 return
             }
-            if identifier == "stats-detail-focus-monthly" {
+            if single == "stats-detail-focus-monthly" {
                 self = .statsDetail(.monthly, .focus, isShorthandFocus: false)
                 return
             }
-            if let tab = PopoverTab(screenshotIdentifier: identifier) {
+            if single.hasPrefix("hub-") {
+                let hubRest = String(single.dropFirst(4))
+                if let target = Self.parseHubTarget(parts: hubRest.split(separator: "-").map(String.init)) {
+                    self = target
+                    return
+                }
+            }
+            if single.hasPrefix("popover-") {
+                let popoverRest = String(single.dropFirst(8))
+                if let target = Self.parsePopoverTarget(parts: popoverRest.split(separator: "-").map(String.init)) {
+                    self = target
+                    return
+                }
+            }
+            if let tab = PopoverTab(screenshotIdentifier: single) {
                 self = .popover(tab)
                 return
             }
             return nil
         }
 
-        switch parts[0] {
+        switch colonParts[0] {
         case "popover":
-            guard let tab = PopoverTab(screenshotIdentifier: parts[1]) else { return nil }
-            self = .popover(tab)
+            let rest = Array(colonParts.dropFirst())
+            guard let target = Self.parsePopoverTarget(parts: rest) else { return nil }
+            self = target
+        case "hub":
+            let rest = Array(colonParts.dropFirst())
+            guard let target = Self.parseHubTarget(parts: rest) else { return nil }
+            self = target
         case "settings":
-            guard let tab = SettingsTab(screenshotIdentifier: parts[1]) else { return nil }
+            guard colonParts.count >= 2, let tab = SettingsTab(screenshotIdentifier: colonParts[1]) else { return nil }
             self = .settings(tab)
         case "stats-detail":
-            if parts[1] == "focus" {
+            guard colonParts.count >= 2 else { return nil }
+            let modeStr = colonParts[1]
+            if modeStr == "focus" {
                 self = .statsDetail(.daily, .focus, isShorthandFocus: true)
                 return
             }
-            if parts[1] == "focus-daily" {
+            if modeStr == "focus-daily" {
                 self = .statsDetail(.daily, .focus, isShorthandFocus: false)
                 return
             }
-            if parts[1] == "focus-weekly" {
+            if modeStr == "focus-weekly" {
                 self = .statsDetail(.weekly, .focus, isShorthandFocus: false)
                 return
             }
-            if parts[1] == "focus-monthly" {
+            if modeStr == "focus-monthly" {
                 self = .statsDetail(.monthly, .focus, isShorthandFocus: false)
                 return
             }
-            guard let mode = StatsViewMode(screenshotIdentifier: parts[1]) else { return nil }
+            guard let mode = StatsViewMode(screenshotIdentifier: modeStr) else { return nil }
             self = .statsDetail(mode, .period, isShorthandFocus: false)
         case "achievement-detail":
-            guard let mode = AchievementDetailScreenshotMode(screenshotIdentifier: parts[1]) else { return nil }
+            guard colonParts.count >= 2, let mode = AchievementDetailScreenshotMode(screenshotIdentifier: colonParts[1]) else { return nil }
             self = .achievementDetail(mode)
         case "companion":
-            if parts[1] == "schedule" {
+            guard colonParts.count >= 2 else { return nil }
+            if colonParts[1] == "schedule" {
                 self = .companion(.schedule)
-            } else if parts[1] == "chat" {
+            } else if colonParts[1] == "chat" {
                 self = .companion(.chat)
             } else {
                 return nil
             }
         case "news":
-            if parts[1] == "report-archive" || parts[1] == "archive" {
+            guard colonParts.count >= 2 else { return nil }
+            if colonParts[1] == "report-archive" || colonParts[1] == "archive" {
                 self = .newsReportArchive
             } else {
                 return nil
@@ -276,6 +331,95 @@ private enum ScreenshotCaptureTarget {
         default:
             return nil
         }
+    }
+
+    private static func parsePopoverTarget(parts: [String]) -> ScreenshotCaptureTarget? {
+        guard !parts.isEmpty else { return nil }
+        if parts.count == 1 {
+            let item = parts[0]
+            if item == "memo-todo" || item == "todo" {
+                return .popover(.memo, memoSection: .todo)
+            }
+            if item == "memo-diary" || item == "diary" {
+                return .popover(.memo, memoSection: .diary)
+            }
+            if item == "memo-quick" || item == "quick" {
+                return .popover(.memo, memoSection: .quick)
+            }
+            if let tab = PopoverTab(screenshotIdentifier: item) {
+                return .popover(tab, memoSection: tab == .memo ? .todo : nil)
+            }
+            return nil
+        }
+        if parts[0] == "memo" {
+            switch parts[1] {
+            case "todo": return .popover(.memo, memoSection: .todo)
+            case "diary": return .popover(.memo, memoSection: .diary)
+            case "quick": return .popover(.memo, memoSection: .quick)
+            default: return .popover(.memo, memoSection: .todo)
+            }
+        }
+        return nil
+    }
+
+    private static func parseHubTarget(parts: [String]) -> ScreenshotCaptureTarget? {
+        guard !parts.isEmpty else { return nil }
+        let main = parts[0]
+        if main == "news" {
+            return .hub(.news)
+        }
+        if main == "memo" {
+            if parts.count >= 2 {
+                let sec = parts[1]
+                if sec == "quick" { return .hub(.memo, memoSection: .quick) }
+                if sec == "diary" { return .hub(.memo, memoSection: .diary) }
+                if sec == "todo" { return .hub(.memo, memoSection: .todo) }
+                if sec == "knowledge" { return .hub(.memo, memoSection: .knowledge) }
+                if sec == "works" { return .hub(.memo, memoSection: .works) }
+                if sec == "refs" || sec == "references" { return .hub(.memo, memoSection: .refs) }
+            }
+            return .hub(.memo, memoSection: .todo)
+        }
+        if main == "memo-quick" { return .hub(.memo, memoSection: .quick) }
+        if main == "memo-diary" { return .hub(.memo, memoSection: .diary) }
+        if main == "memo-todo" { return .hub(.memo, memoSection: .todo) }
+        if main == "memo-knowledge" { return .hub(.memo, memoSection: .knowledge) }
+        if main == "memo-works" { return .hub(.memo, memoSection: .works) }
+        if main == "memo-refs" || main == "memo-references" { return .hub(.memo, memoSection: .refs) }
+
+        if main == "stats" {
+            if parts.count >= 2 {
+                let modeStr = parts[1]
+                if modeStr == "focus" || modeStr == "focus-daily" {
+                    return .hub(.stats, statsViewMode: .daily, statsContentMode: .focus)
+                }
+                if let mode = StatsViewMode(screenshotIdentifier: modeStr) {
+                    return .hub(.stats, statsViewMode: mode, statsContentMode: .period)
+                }
+            }
+            return .hub(.stats, statsViewMode: .daily, statsContentMode: .period)
+        }
+        if main == "stats-daily" { return .hub(.stats, statsViewMode: .daily, statsContentMode: .period) }
+        if main == "stats-weekly" { return .hub(.stats, statsViewMode: .weekly, statsContentMode: .period) }
+        if main == "stats-monthly" { return .hub(.stats, statsViewMode: .monthly, statsContentMode: .period) }
+        if main == "stats-focus" { return .hub(.stats, statsViewMode: .daily, statsContentMode: .focus) }
+
+        if main == "achievement" {
+            if parts.count >= 2 {
+                let modeStr = parts[1]
+                if let mode = AchievementDetailScreenshotMode(screenshotIdentifier: modeStr) {
+                    return .hub(.achievement, achievementMode: mode)
+                }
+            }
+            return .hub(.achievement, achievementMode: .progress)
+        }
+        if main == "achievement-progress" { return .hub(.achievement, achievementMode: .progress) }
+        if main == "achievement-journey" { return .hub(.achievement, achievementMode: .journey) }
+        if main == "achievement-records" { return .hub(.achievement, achievementMode: .records) }
+        if main == "achievement-reward" { return .hub(.achievement, achievementMode: .reward) }
+        if main == "achievement-goal-ai" || main == "achievement-goal" { return .hub(.achievement, achievementMode: .goalAI) }
+
+        return nil
     }
 }
 
@@ -285,6 +429,7 @@ private enum AchievementDetailScreenshotMode: String {
     case journey
     case records
     case reward
+    case goalAI = "goal-ai"
 
     var screenshotIdentifier: String { rawValue }
 
@@ -300,11 +445,23 @@ private enum AchievementDetailScreenshotMode: String {
             return AchievementDetailScreenshotState(tabIdentifier: "records")
         case .reward:
             return AchievementDetailScreenshotState(tabIdentifier: "reward")
+        case .goalAI:
+            return AchievementDetailScreenshotState(
+                tabIdentifier: "progress",
+                showGoalComposer: true,
+                composerInputMode: "AI 추천",
+                mockSuggestions: AchievementDetailScreenshotState.sampleSuggestions
+            )
         }
     }
 
     init?(screenshotIdentifier: String) {
-        self.init(rawValue: screenshotIdentifier.lowercased())
+        let lower = screenshotIdentifier.lowercased()
+        if lower == "goal-ai" || lower == "goal" || lower == "ai" {
+            self = .goalAI
+            return
+        }
+        self.init(rawValue: lower)
     }
 }
 
@@ -332,7 +489,7 @@ private extension PopoverTab {
             self = .stats
         case "news":
             self = .news
-        case "lab":
+        case "lab", "agent":
             self = .lab
         default:
             return nil
@@ -920,7 +1077,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .popover, .companion:
             window.isOpaque = false
             window.backgroundColor = .clear
-        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive:
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .hub:
             window.isOpaque = true
             window.backgroundColor = config.resolvedWindowBackgroundColor
             hostingView.wantsLayer = true
@@ -942,7 +1099,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         referenceDate: Date?
     ) -> AnyView {
         switch target {
-        case .popover(let tab):
+        case .popover(let tab, let memoSection):
+            if let memoSection {
+                var argumentDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+                argumentDomain[Constants.AppStorageKey.mindSection] = memoSection.rawValue
+                UserDefaults.standard.setVolatileDomain(argumentDomain, forName: UserDefaults.argumentDomain)
+            }
             return AnyView(
                 MenuBarPopover(
                     timerManager: timerManager,
@@ -1042,6 +1204,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(width: 940, height: 660)
+            )
+        case .hub(let tab, let memoSection, let statsViewMode, let statsContentMode, let achievementMode):
+            if let memoSection {
+                var argumentDomain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+                argumentDomain[Constants.AppStorageKey.mindSection] = memoSection.rawValue
+                UserDefaults.standard.setVolatileDomain(argumentDomain, forName: UserDefaults.argumentDomain)
+            }
+            appState.hubTab = tab
+            if tab == .memo {
+                appState.isRecordRailVisible = true
+            }
+            return AnyView(
+                MainHubWindow(
+                    initialStatsViewMode: statsViewMode,
+                    initialStatsContentMode: statsContentMode,
+                    initialStatsSelectedDate: referenceDate,
+                    initialAchievementScreenshotState: achievementMode?.initialState
+                )
+                .environment(appState)
+                .environment(\.dependencies, dependencies)
+                .environment(\.appearanceDensity, .compact)
+                .modelContainer(modelContainer)
+                .frame(
+                    width: Constants.hubWindowWidth,
+                    height: Constants.hubWindowHeight
+                )
             )
         }
     }

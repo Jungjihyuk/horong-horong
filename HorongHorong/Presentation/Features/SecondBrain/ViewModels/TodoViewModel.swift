@@ -376,14 +376,21 @@ final class TodoViewModel {
         reload()
     }
 
-    /// 고른 항목이 사라졌으면(삭제·검색으로 걸러짐) 첫 항목으로 옮긴다.
+    /// 고른 항목이 사라졌으면(삭제·검색으로 걸러짐) 자연스러운 기본 항목으로 옮긴다.
+    ///
+    /// 지난(overdue) 항목이 있더라도 사용자가 화면을 열었을 때 보고 싶은 것은
+    /// **오늘의 할 일**이다. 특히 미리알림 연동이 안 된 오늘 항목을 우선하여
+    /// 상세 패널이 깔끔한 상태(미리알림 연동 체크 해제)로 시작하게 한다.
     private func syncSelection() {
         if let selected,
            visible.contains(where: { $0.id == selected.id })
             || recentlyDeleted.contains(where: { $0.id == selected.id }) {
             return
         }
-        selected = visible.first
+        selected = today.first(where: { !$0.isLinkedToReminders })
+            ?? today.first
+            ?? upcoming.first
+            ?? visible.first
         loadDrafts()
     }
 

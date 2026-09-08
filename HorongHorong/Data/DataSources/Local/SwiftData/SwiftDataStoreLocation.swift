@@ -27,10 +27,18 @@ enum SwiftDataStoreLocation {
     private static let storeFileSuffixes = ["", "-shm", "-wal"]
 
     static var currentScope: Scope {
+        if let overrideScope = ProcessInfo.processInfo.environment["HORONGHORONG_STORE_SCOPE"] {
+            if overrideScope.lowercased() == "production" {
+                return .production
+            }
+            if overrideScope.lowercased() == "development" {
+                return .development
+            }
+        }
         #if DEBUG
-        .development
+        return .development
         #else
-        .production
+        return .production
         #endif
     }
 

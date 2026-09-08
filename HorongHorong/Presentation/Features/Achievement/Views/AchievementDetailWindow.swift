@@ -20,11 +20,51 @@ import FoundationModels
 struct AchievementDetailScreenshotState {
     let tabIdentifier: String
     let weekGoalFilterIdentifier: String?
+    let showGoalComposer: Bool
+    let composerInputMode: String?
+    let mockSuggestions: [AchievementGoalSuggestion]?
+    let suppressSettlementBanner: Bool
 
-    init(tabIdentifier: String, weekGoalFilterIdentifier: String? = nil) {
+    init(
+        tabIdentifier: String,
+        weekGoalFilterIdentifier: String? = nil,
+        showGoalComposer: Bool = false,
+        composerInputMode: String? = nil,
+        mockSuggestions: [AchievementGoalSuggestion]? = nil,
+        suppressSettlementBanner: Bool = true
+    ) {
         self.tabIdentifier = tabIdentifier
         self.weekGoalFilterIdentifier = weekGoalFilterIdentifier
+        self.showGoalComposer = showGoalComposer
+        self.composerInputMode = composerInputMode
+        self.mockSuggestions = mockSuggestions
+        self.suppressSettlementBanner = suppressSettlementBanner
     }
+
+    static let sampleSuggestions: [AchievementGoalSuggestion] = [
+        AchievementGoalSuggestion(
+            title: "오전 집중 루틴 및 주요 업무 완료",
+            reason: "오전 시간대 몰입 세션과 핵심 업무 할일들을 묶어 주간 핵심 목표로 달성합니다.",
+            memoIDs: [],
+            scheduleText: "이번 주",
+            criterion: "할일 3개 완료",
+            targetValueText: "3개",
+            emoji: "🚀",
+            cadence: .weekly,
+            source: .foundationModel
+        ),
+        AchievementGoalSuggestion(
+            title: "호롱호롱 프로젝트 기능 완성 및 문서 정리",
+            reason: "주간 단위로 완료한 목표들을 통합하여 이번 달 주요 마일스톤을 완성합니다.",
+            memoIDs: [],
+            scheduleText: "이번 달",
+            criterion: "마일스톤 100% 달성",
+            targetValueText: "100%",
+            emoji: "🏮",
+            cadence: .monthly,
+            source: .foundationModel
+        )
+    ]
 }
 
 enum AchievementDetailTab: String, CaseIterable, Identifiable {
@@ -382,6 +422,7 @@ struct AchievementDetailWindow: View {
     @State private var visionDragTranslation: CGFloat = 0
     @State private var visionDragStartIndex = 0
     @State private var visionDragOrder: [UUID] = []
+    private let initialScreenshotState: AchievementDetailScreenshotState?
 
     init(
         repository: AchievementRepository,
@@ -392,6 +433,7 @@ struct AchievementDetailWindow: View {
         self.repository = repository
         self.todoRepository = todoRepository
         self.rewardRepository = rewardRepository
+        self.initialScreenshotState = initialScreenshotState
         if let tabIdentifier = initialScreenshotState?.tabIdentifier,
            let tab = AchievementDetailTab(screenshotIdentifier: tabIdentifier) {
             _selectedTab = State(initialValue: tab)
@@ -399,6 +441,9 @@ struct AchievementDetailWindow: View {
         if let filterIdentifier = initialScreenshotState?.weekGoalFilterIdentifier,
            let filter = AchievementWeekGoalFilter(screenshotIdentifier: filterIdentifier) {
             _selectedWeekGoalFilter = State(initialValue: filter)
+        }
+        if let initialScreenshotState, initialScreenshotState.showGoalComposer {
+            _showGoalComposer = State(initialValue: true)
         }
     }
 
@@ -542,7 +587,9 @@ struct AchievementDetailWindow: View {
                                 todoRepository: todoRepository, achievementRepository: repository
                             )
                         },
-                        onRefinementSaved: reload
+                        onRefinementSaved: reload,
+                        initialInputMode: initialScreenshotState?.composerInputMode ?? "직접 입력",
+                        initialSuggestions: initialScreenshotState?.mockSuggestions
                     ) { draft, childGoalIDs, newChildTitles in
                         let created = try repository.createGoal(
                             draft,
@@ -867,21 +914,23 @@ struct AchievementDetailWindow: View {
 
     @ViewBuilder
     private var settlementBanner: some View {
-        AchievementSettlementBanner(
-            rows: settlementRows,
-            graceNoticeText: "정하지 않으면 다음 주기가 끝날 때 실패로 마감됩니다.",
-            onFail: { failSettlementRow($0) },
-            onExtend: { extendSettlementRow($0) },
-            onAbandon: { abandonSettlementRow($0) },
-            onAbandonAll: abandonAllSettlementRows
-        )
+        if !(initialScreenshotState?.suppressSettlementBanner ?? false) {
+            AchievementSettlementBanner(
+                rows: settlementRows,
+                graceNoticeText: "정하지 않으면 다음 주기가 끝날 때 실패로 마감됩니다.",
+                onFail: { failSettlementRow($0) },
+                onExtend: { extendSettlementRow($0) },
+                onAbandon: { abandonSettlementRow($0) },
+                onAbandonAll: abandonAllSettlementRows
+            )
+        }
     }
 
     /// 자동으로 닫힌 목표를 알리고 되돌릴 기회를 준다.
     /// 앱을 안 켠 사이에 벌어진 일이라, 알리지 않으면 포인트가 왜 줄었는지 알 수 없다.
     @ViewBuilder
     private var autoSettledNotice: some View {
-        if !autoSettledGoals.isEmpty {
+        if !(initialScreenshotState?.suppressSettlementBanner ?? false), !autoSettledGoals.isEmpty {
             HStack(spacing: 8) {
                 Image(systemName: "clock.badge.exclamationmark")
                     .font(.system(size: 12, weight: .bold))
@@ -936,7 +985,7 @@ struct AchievementDetailWindow: View {
 
     @ViewBuilder
     private var retryNotice: some View {
-        if let retryCandidate {
+        if !(initialScreenshotState?.suppressSettlementBanner ?? false), let retryCandidate {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.clockwise.circle.fill")
                     .font(.system(size: 12, weight: .bold))
@@ -1004,7 +1053,7 @@ struct AchievementDetailWindow: View {
     @ViewBuilder
     private var overdueMemosBanner: some View {
         let overdueMemos = overdueVisibleWeeklyMemos
-        if !overdueMemos.isEmpty {
+        if !(initialScreenshotState?.suppressSettlementBanner ?? false), !overdueMemos.isEmpty {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "calendar.badge.exclamationmark")
