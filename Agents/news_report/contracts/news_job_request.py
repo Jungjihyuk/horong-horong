@@ -7,7 +7,11 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ProviderName = Literal["codex", "claude", "opencode", "antigravity", "hermes", "ollama"]
+ProviderName = Literal[
+    "codex", "claude", "opencode", "antigravity", "hermes", "ollama", "anthropic"
+]
+# "anthropic" 은 유일한 과금형 provider 다. 나머지는 구독 CLI 또는 로컬 모델이라
+# 호출 한 번이 곧 청구가 아니다.
 # Swift NewsSourceStore가 보낼 수 있는 모든 type을 포함해야 한다.
 # 여기 없는 type은 요청 전체가 검증 실패로 중단되므로, connector 미구현 type도
 # 일단 받아서 collector의 is_supported_source 단계에서 건너뛰게 한다.

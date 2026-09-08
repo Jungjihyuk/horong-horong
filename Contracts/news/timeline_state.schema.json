@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "TimelineEvent": {
+      "description": "타임라인의 한 시점에서 일어난 사건 1건.\n\n시점의 단위는 «리포트 날짜» 다. 기사 발행 시각(`published_at`)이 아닌 이유는\n커넥터마다 채우는 형식이 다르고(RFC-822 / ISO-8601) linkedin 은 아예 안 채우기\n때문이다. 리포트 날짜는 파일명에 항상 있고 모호하지 않다.",
+      "properties": {
+        "bullets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Bullets",
+          "type": "array"
+        },
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "importance": {
+          "default": 0,
+          "title": "Importance",
+          "type": "integer"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        },
+        "why_it_matters": {
+          "default": "",
+          "title": "Why It Matters",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "date",
+        "title"
+      ],
+      "title": "TimelineEvent",
+      "type": "object"
+    },
+    "TimelineMonth": {
+      "description": "월 버킷 하나. 재계산 여부를 스스로 판단할 근거를 들고 있다.",
+      "properties": {
+        "axis_events": {
+          "items": {
+            "$ref": "#/$defs/TimelineEvent"
+          },
+          "title": "Axis Events",
+          "type": "array"
+        },
+        "detail_events": {
+          "items": {
+            "$ref": "#/$defs/TimelineEvent"
+          },
+          "title": "Detail Events",
+          "type": "array"
+        },
+        "input_hash": {
+          "title": "Input Hash",
+          "type": "string"
+        },
+        "is_turning_point": {
+          "default": false,
+          "title": "Is Turning Point",
+          "type": "boolean"
+        },
+        "key_terms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Terms",
+          "type": "array"
+        },
+        "month_key": {
+          "title": "Month Key",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": 0,
+          "title": "Prompt Version",
+          "type": "integer"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "synthesized_at": {
+          "default": "",
+          "title": "Synthesized At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "month_key",
+        "input_hash"
+      ],
+      "title": "TimelineMonth",
+      "type": "object"
+    },
+    "TimelineOverview": {
+      "description": "타임라인 전체 머리말. 원본 사건이 아니라 월 요약들만 보고 만든다.",
+      "properties": {
+        "emphasis_keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Emphasis Keywords",
+          "type": "array"
+        },
+        "input_hash": {
+          "default": "",
+          "title": "Input Hash",
+          "type": "string"
+        },
+        "summary": {
+          "default": "",
+          "title": "Summary",
+          "type": "string"
+        },
+        "turning_point_count": {
+          "default": 0,
+          "title": "Turning Point Count",
+          "type": "integer"
+        }
+      },
+      "title": "TimelineOverview",
+      "type": "object"
+    }
+  },
+  "description": "`data/timeline/<category_id>.json` 의 전체 모양. 모든 렌더링의 단일 진실 공급원.",
+  "properties": {
+    "category_id": {
+      "title": "Category Id",
+      "type": "string"
+    },
+    "category_label": {
+      "title": "Category Label",
+      "type": "string"
+    },
+    "date_from": {
+      "default": "",
+      "title": "Date From",
+      "type": "string"
+    },
+    "date_to": {
+      "default": "",
+      "title": "Date To",
+      "type": "string"
+    },
+    "generated_at": {
+      "default": "",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "months": {
+      "items": {
+        "$ref": "#/$defs/TimelineMonth"
+      },
+      "title": "Months",
+      "type": "array"
+    },
+    "overview": {
+      "$ref": "#/$defs/TimelineOverview"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "category_id",
+    "category_label"
+  ],
+  "title": "TimelineState",
+  "type": "object"
+}
