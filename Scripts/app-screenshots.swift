@@ -300,7 +300,7 @@ private struct CaptureOptions {
 
     static let help = """
     Usage:
-      swift Scripts/capture-popover-screenshots.swift [options]
+      swift Scripts/app-screenshots.swift [options]
 
     Options:
       --output <dir>        PNG 저장 경로. 기본값: artifacts/Screenshots
