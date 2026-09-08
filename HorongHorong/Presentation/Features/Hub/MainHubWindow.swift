@@ -46,6 +46,7 @@ struct MainHubWindow: View {
                 if openedTabs.contains(.achievement), let dependencies {
                     AchievementDetailWindow(
                         repository: dependencies.achievementRepository,
+                        todoRepository: dependencies.todoRepository,
                         rewardRepository: dependencies.rewardRepository
                     )
                         .hubTabVisible(appState.hubTab == .achievement)
