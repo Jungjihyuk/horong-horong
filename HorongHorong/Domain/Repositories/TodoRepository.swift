@@ -40,6 +40,7 @@ protocol TodoRepository {
     func addTodayTask(content: String) throws -> TodoItem
 
     func updateContent(id: UUID, content: String) throws
+    func update(id: UUID, with draft: TodoEditDraft) throws
     func setCompleted(id: UUID, isCompleted: Bool) throws
 
     /// 시작과 종료를 한 번에 저장한다. 둘 다 `nil` 이면 «언젠가»로 간다.
