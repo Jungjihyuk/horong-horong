@@ -442,6 +442,7 @@
 		8A461D96B4FC147E995EEF1A /* SwiftDataReminderImportRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3BAF07A3F33699DE814C515 /* SwiftDataReminderImportRepository.swift */; };
 		8A718EB79D259EB912F6C1F8 /* HorongHorongSchemaV7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66964F20744ABF1301FBA09D /* HorongHorongSchemaV7.swift */; };
 		8A7CCE503AA2B5702F6996D3 /* LegacyReferenceV7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3930CB2C0150ED7AFA961788 /* LegacyReferenceV7.swift */; };
+		8A955FB98F402CA794337ABE /* ToastPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE3522DDB03F09DB9CB8A91 /* ToastPanelTests.swift */; };
 		8C1661A095209CB5B3C03344 /* VaultViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857DB2C26B9DF6D95646D2C7 /* VaultViewModel.swift */; };
 		8C6DCBA00F6746B17E16DC5C /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7474DA2A4596CEA9270B221 /* NotificationManager.swift */; };
 		8C826346EDA2908D4B66FAFA /* MemoDurationEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF367E3440D3F1AC973D5A2E /* MemoDurationEstimator.swift */; };
@@ -1051,6 +1052,7 @@
 		8ADEC5D4312E47AA5625F438 /* DiaryDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryDay.swift; sourceTree = "<group>"; };
 		8B078CAD5A86705ED221BE66 /* SwiftDataTodoRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataTodoRepository.swift; sourceTree = "<group>"; };
 		8B45E33A519A9161C85197EF /* LabViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabViewModel.swift; sourceTree = "<group>"; };
+		8CE3522DDB03F09DB9CB8A91 /* ToastPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastPanelTests.swift; sourceTree = "<group>"; };
 		8D16F695151FFEBEF21ADDED /* LanternOilJarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanternOilJarView.swift; sourceTree = "<group>"; };
 		8D3E3F6EB13D712905B0A37A /* StatsAggregateCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsAggregateCache.swift; sourceTree = "<group>"; };
 		8D875C661F5463A854AE0BC6 /* CompanionChatProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionChatProvider.swift; sourceTree = "<group>"; };
@@ -1755,6 +1757,7 @@
 				BB6520A2BCA4E932F3AE0A92 /* SwiftDataStatsSummaryRepositoryTests.swift */,
 				8279E0A05302FEB732DF9F1B /* SwiftDataStoreLocationTests.swift */,
 				80B194682C00B649EF3E3618 /* SwiftDataTodoRepositoryTests.swift */,
+				8CE3522DDB03F09DB9CB8A91 /* ToastPanelTests.swift */,
 				82A3A3442A86FA9070178B2C /* TodayTimelinePolicyTests.swift */,
 				86CC9F37EB019964EB14909E /* TodoComposerPolicyTests.swift */,
 				8DD883C99A5B4D35586C7AEA /* TodoDayTimeTests.swift */,
@@ -3195,6 +3198,7 @@
 				9B8CD9C9CECE29AEB4B494BC /* SwiftDataStatsSummaryRepositoryTests.swift in Sources */,
 				C07D89B4E7FFDC4E467D2CEC /* SwiftDataStoreLocationTests.swift in Sources */,
 				A63CB4C0FABD711AAA02D602 /* SwiftDataTodoRepositoryTests.swift in Sources */,
+				8A955FB98F402CA794337ABE /* ToastPanelTests.swift in Sources */,
 				BCE534850779EE0BE8CD931B /* TodayTimelinePolicyTests.swift in Sources */,
 				A3722E17D2F311431B1EF79D /* TodoComposerPolicyTests.swift in Sources */,
 				3459E8FEAAB42E070732D25A /* TodoDayTimeTests.swift in Sources */,
