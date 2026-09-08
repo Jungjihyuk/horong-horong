@@ -14,17 +14,17 @@ final class ToastPanel {
         var size: NSSize {
             switch self {
             case .standard:
-                return NSSize(width: 320, height: 72)
+                return NSSize(width: 360, height: 76)
             case .timerAlert:
                 return NSSize(width: 384, height: 86.4)
             }
         }
 
+        /// 구형 macOS의 `.hudWindow` 대신 `.borderless`를 사용한다 —
+        /// `.hudWindow`는 2000년대 레거시 HUD 프레임을 강제해 호롱호롱 테마 스타일과 충돌했다.
         var styleMask: NSWindow.StyleMask {
             switch self {
-            case .standard:
-                return [.nonactivatingPanel, .fullSizeContentView, .hudWindow]
-            case .timerAlert:
+            case .standard, .timerAlert:
                 return [.borderless, .nonactivatingPanel]
             }
         }
@@ -184,6 +184,8 @@ struct ToastView: View {
     let style: ToastPanel.Style
     var onDismiss: () -> Void
 
+    @State private var isDismissHovered = false
+
     var body: some View {
         switch style {
         case .standard:
@@ -193,19 +195,34 @@ struct ToastView: View {
         }
     }
 
+    /// 일반 토스트 (실험실 실행 결과, 클립보드 복사, 설정 알림 등)
+    /// 호롱호롱 테마(`PopoverChrome`)의 서피스·보더·폰트를 적용하고,
+    /// 아이콘을 정갈한 배지에 담아 현대적인 플로팅 알림 카드로 표현한다.
     private var standardBody: some View {
         HStack(spacing: 12) {
-            Text(icon)
-                .font(.system(size: 28))
+            if !icon.isEmpty {
+                ZStack {
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                        .fill(PopoverChrome.surfaceAlt)
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                        .stroke(PopoverChrome.divider, lineWidth: PopoverChrome.borderWidth)
+                    Text(icon)
+                        .font(.system(size: 18))
+                }
+                .frame(width: 38, height: 38)
+            }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14, weight: .bold, design: PopoverChrome.isGamePixel ? .monospaced : .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium, design: PopoverChrome.isGamePixel ? .monospaced : .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 4)
@@ -214,21 +231,35 @@ struct ToastView: View {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 20, height: 20)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isDismissHovered ? PopoverChrome.ink : PopoverChrome.inkTertiary)
+                    .frame(width: 22, height: 22)
+                    .background(
+                        Circle()
+                            .fill(isDismissHovered ? PopoverChrome.surfaceAlt : Color.clear)
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { isDismissHovered = $0 }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(width: 320, height: 72)
-        .background(.ultraThickMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(width: 360, height: 76)
+        .background {
+            ZStack {
+                if PopoverChrome.isGamePixel {
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                        .fill(PopoverChrome.pixelShadow)
+                        .offset(x: 3, y: 3)
+                }
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                    .fill(PopoverChrome.surface)
+            }
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(16), style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
         )
     }
 
@@ -241,18 +272,18 @@ struct ToastView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15.6, weight: .bold))
+                    .font(.system(size: 15.6, weight: .bold, design: PopoverChrome.isGamePixel ? .monospaced : .rounded))
                     .foregroundStyle(PopoverChrome.ink)
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.system(size: 14.4, weight: .semibold))
+                    .font(.system(size: 14.4, weight: .semibold, design: PopoverChrome.isGamePixel ? .monospaced : .rounded))
                     .foregroundStyle(PopoverChrome.inkSecondary)
                     .lineLimit(1)
 
                 if let detail {
                     Text(detail)
-                        .font(.system(size: 13.2, weight: .medium))
+                        .font(.system(size: 13.2, weight: .medium, design: PopoverChrome.isGamePixel ? .monospaced : .rounded))
                         .foregroundStyle(PopoverChrome.inkTertiary)
                         .lineLimit(1)
                 }
@@ -265,10 +296,20 @@ struct ToastView: View {
         .padding(.top, 14.4)
         .padding(.bottom, 12)
         .frame(width: 384, height: 86.4, alignment: .topLeading)
-        .background(PopoverChrome.surface, in: RoundedRectangle(cornerRadius: 16.8, style: .continuous))
+        .background {
+            ZStack {
+                if PopoverChrome.isGamePixel {
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(16.8), style: .continuous)
+                        .fill(PopoverChrome.pixelShadow)
+                        .offset(x: 3, y: 3)
+                }
+                RoundedRectangle(cornerRadius: PopoverChrome.radius(16.8), style: .continuous)
+                    .fill(PopoverChrome.surface)
+            }
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 16.8, style: .continuous)
-                .stroke(PopoverChrome.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(16.8), style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
         )
     }
 }
