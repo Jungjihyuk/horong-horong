@@ -43,7 +43,7 @@
 <br>
 
 **호롱호롱**은 macOS 메뉴바에 상주하는 다목적 생산성 앱입니다. <br>
-`포모도로 타이머`, `퀵 메모`, `성취 목표 관리`, `앱 사용 추적`, `뉴스 큐레이션`, `AI Agent 실험`까지 <br>
+`포모도로 타이머`, `기록 허브`, `성취 목표 관리`, `앱 사용 추적`, `뉴스 큐레이션`, `AI Agent 실험`까지 <br>
 흩어져 있던 도구들을 하나의 메뉴바 아이콘으로 모았습니다.
 
 현재 앱은 한국어 UI를 기준으로 개발 중이며, 사용 데이터와 메모, 목표, 통계 캐시는 로컬 SwiftData 저장소에 보관됩니다. 뉴스와 Agent 기능은 사용자가 직접 설치한 CLI 도구를 호출합니다.
@@ -82,19 +82,32 @@
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-timer.png" alt="타이머" width="420" />
+<img src="./Assets/features/popover-timer.png" alt="타이머" width="280" />
 </td>
 </tr>
 
 <tr>
 <td width="45%" valign="middle">
 
-### 📝 퀵 메모
-글로벌 단축키로 어느 앱에서든 플로팅 입력 패널을 즉시 호출합니다. 단축키는 설정 창에서 바꿀 수 있고, 저장된 메모는 메뉴바 메모 탭과 전체 메모 창에서 최신순으로 조회됩니다. 메모에는 아이콘, 날짜, 미리알림 연결 정보를 붙일 수 있고, 완료된 메모는 별도 탭에서 다시 확인할 수 있습니다.
+### 📝 기록 허브
+글로벌 단축키로 어느 앱에서든 퀵 메모와 할 일을 즉시 기록하고, 전체 기록 창에서 **Quick Note · Diary · Todo · Knowledge · Works · References**를 한곳에 관리합니다. 일기는 수면 시간과 하루 여러 시점의 감정을 함께 남겨 달력·감정 타임라인에서 돌아볼 수 있습니다. Knowledge와 Works는 Obsidian 보관함의 마크다운 파일을 폴더 트리로 탐색하고 읽기·편집하며, Todo는 자연어 날짜·시간 입력, 일정 배치, 미리알림 연결을 지원합니다. References에는 링크와 스티키 노트를 모아둘 수 있습니다.
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-memo.png" alt="퀵 메모" width="420" />
+<table>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-quick.png" alt="퀵 메모" width="190" /><br /><sub>Quick Note</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-diary.png" alt="일기와 감정 인사이트" width="190" /><br /><sub>Diary</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-todo.png" alt="할 일과 일정" width="190" /><br /><sub>Todo</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-knowledge.png" alt="지식 문서" width="190" /><br /><sub>Knowledge</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-works.png" alt="업무 문서" width="190" /><br /><sub>Works</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-refs.png" alt="레퍼런스 보관함" width="190" /><br /><sub>References</sub></td>
+</tr>
+</table>
 </td>
 </tr>
 
@@ -102,7 +115,7 @@
 <td width="45%" valign="middle">
 
 ### 📊 앱 사용 시간 통계
-백그라운드에서 활성 앱을 실시간 추적해 카테고리별(업무 / 개발 / 공부 / 조사 / 기록 / 소통 / 엔터 / 기타)로 자동 집계합니다. 메뉴바 요약에서는 오늘/이번 주 사용 시간을 빠르게 확인하고, 상세 보기에서는 일간·주간·월간 차트, 포모도로 요약, 타임라인 버킷, 카테고리별 앱 사용량을 볼 수 있습니다. 일간 기록은 수동 추가·수정·삭제할 수 있고, 휴가 기간은 통계에서 별도로 표시됩니다.
+백그라운드에서 활성 앱을 실시간 추적해 카테고리별(업무 / 개발 / 공부 / 조사 / 기록 / 소통 / 엔터 / 기타)로 자동 집계합니다. 상세 보기에서는 일간·주간·월간 앱 사용량과 포모도로 집중 기록을 각각 분석합니다. 집중 통계는 카테고리별 시간, 요일별 몰입 흐름, 회고 상태를 보여주며 빠진 회고를 바로 작성할 수 있습니다. 일간 기록은 수동 추가·수정·삭제할 수 있고, 휴가 기간은 통계에서 별도로 표시됩니다.
 
 </td>
 <td width="55%" align="center">
@@ -121,14 +134,14 @@
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./Assets/features/stats-detail-weekly.png" alt="주간 통계" width="190" />
+<img src="./Assets/features/stats-detail-weekly-warm.png" alt="주간 앱 사용 통계" width="190" />
 <br />
 <sub>주간</sub>
 </td>
 <td align="center" width="50%">
-<img src="./Assets/features/stats-detail-monthly.png" alt="월간 통계" width="190" />
+<img src="./Assets/features/stats-detail-focus-weekly.png" alt="주간 집중 통계" width="190" />
 <br />
-<sub>월간</sub>
+<sub>집중 통계</sub>
 </td>
 </tr>
 </table>
@@ -139,11 +152,19 @@
 <td width="45%" valign="middle">
 
 ### 📰 뉴스 큐레이션
-YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접하는 채널에서 데이터를 수집해 LLM이 동적 카테고리 분류, 관련도 필터링, 랭킹, 요약, 카테고리별 트렌드 요약을 생성합니다. 뉴스 Provider는 `Codex`, `Claude`, `Antigravity`, `Opencode` 4가지를 지원합니다. 실행 중에는 수집→정규화→중복 제거→분류→랭킹→요약→렌더링 단계를 표시하고, 결과는 마크다운 리포트와 메타데이터로 저장됩니다.
+YouTube 채널/재생목록 · Google News · 요즘IT 등에서 데이터를 수집해 LLM이 분류, 관련도 필터링, 랭킹, 요약을 수행합니다. `Codex`, `Claude`, `Antigravity`, `Opencode`, `Hermes`, `Ollama`를 지원하며 실행 단계와 예상 사용량을 확인할 수 있습니다. 생성된 마크다운 리포트는 검색 가능한 보관함에서 바로 읽거나 Finder·외부 편집기로 열 수 있고, 여러 리포트의 주제를 월간 타임라인으로 종합해 관심사의 흐름과 다음 탐색 주제를 제안합니다.
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-news.png" alt="뉴스" width="420" />
+<table>
+<tr>
+<td align="center" width="40%"><img src="./Assets/features/popover-news.png" alt="뉴스 실행" width="160" /><br /><sub>뉴스 실행</sub></td>
+<td align="center" width="60%"><img src="./Assets/features/news-report-archive.png" alt="뉴스 리포트 보관함" width="240" /><br /><sub>리포트 보관함</sub></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="./Assets/features/news-timeline.png" alt="뉴스 월간 타임라인" width="400" /><br /><sub>월간 타임라인</sub></td>
+</tr>
+</table>
 </td>
 </tr>
 
@@ -155,7 +176,7 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-agent.png" alt="Agent" width="420" />
+<img src="./Assets/features/popover-agent.png" alt="Agent" width="280" />
 </td>
 </tr>
 
@@ -210,21 +231,21 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 <td width="45%" valign="middle">
 
 ### 🎯 성취 목표 관리
-두서없이 쌓인 메모와 할 일을 주간 목표로 묶고, 주간 목표는 다시 월간 목표와 페르소나·비전으로 연결합니다. AI 추천과 직접 입력을 함께 지원하며, 성취 타임라인에서 연결된 할 일을 요일별로 보고 드래그로 날짜를 조정할 수 있습니다. 여정 탭에서는 페르소나, 비전, 월간 목표 깃발을 한 화면에 배치해 목표가 어디로 이어지는지 시각화하고, 달성 기록 탭에서는 완료한 주간·월간 목표를 최신순으로 모아볼 수 있습니다.
+두서없이 쌓인 메모와 할 일을 주간 목표로 묶고, 주간 목표는 다시 월간 목표와 페르소나·비전으로 연결합니다. Apple 온디바이스 모델·MLX·Ollama가 현재 기록을 바탕으로 목표를 추천하고, 적용 전 편집과 직접 입력도 지원합니다. 성취 타임라인에서 연결된 할 일을 요일별로 배치하고, 여정과 달성 기록에서 장기 방향과 완료 이력을 확인할 수 있습니다. 목표를 달성해 모은 포인트는 사용자가 만든 보상으로 교환할 수 있습니다.
 
 </td>
 <td width="55%" align="center">
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./Assets/features/popover-achievement.png" alt="성취 요약" width="190" />
+<img src="./Assets/features/achievement-detail-goal-ai-warm-lantern.png" alt="AI 목표 추천" width="190" />
 <br />
-<sub>성취 요약</sub>
+<sub>AI 목표 추천</sub>
 </td>
 <td align="center" width="50%">
-<img src="./Assets/features/achievement-detail-timeline-all.png" alt="성취 타임라인" width="190" />
+<img src="./Assets/features/achievement-detail-reward-warm-lantern.png" alt="포인트 보상" width="190" />
 <br />
-<sub>성취 타임라인</sub>
+<sub>포인트 보상</sub>
 </td>
 </tr>
 <tr>
@@ -251,9 +272,10 @@ YouTube 채널/재생목록 · Google News · 요즘IT 등 자주 정보를 접�
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/companion-chat.png" alt="루미롱과 대화" width="240" />
-<br />
-<sub>루미롱과 대화</sub>
+<table><tr>
+<td align="center" width="50%"><img src="./Assets/features/companion-chat.png" alt="루미롱과 대화" width="180" /><br /><sub>온디바이스 대화</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/companion-schedule.png" alt="루미롱 일정 브리핑" width="180" /><br /><sub>오늘 일정 브리핑</sub></td>
+</tr></table>
 </td>
 </tr>
 </table>

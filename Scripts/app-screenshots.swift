@@ -43,7 +43,7 @@ private let allTargets = popoverBaseTargets
         .filter { $0 != "progress" }
         .map { "achievement-detail:\($0)" }
     + ["companion", "companion:schedule"]
-    + ["news-report-archive"]
+    + ["news-report-archive", "news-timeline"]
 
 private struct ScriptError: LocalizedError {
     let message: String
@@ -242,6 +242,10 @@ private struct CaptureOptions {
                 || single == "companion-schedule"
                 || single == "news-report-archive"
                 || single == "news-archive"
+                || single == "news-timeline"
+                || single == "timeline"
+                || single == "news-timeline-picker"
+                || single == "timeline-picker"
                 || single == "stats-detail-focus"
                 || single == "stats-focus"
                 || single.hasPrefix("hub-")
@@ -308,7 +312,7 @@ private struct CaptureOptions {
       --output <dir>        PNG 저장 경로. 기본값: artifacts/Screenshots
       --date <yyyy-MM-dd>   통계 기준 날짜를 명시적으로 지정합니다. (기본값: focus 포함 시 2026-08-07, 그 외 통계는 2026-08-13)
       --targets <list>      캡처 대상 목록.
-                            예: popover:timer,popover:memo:todo,popover:memo:diary,popover:memo:quick,hub:memo:quick,hub:stats:daily,hub:achievement:goal-ai
+                            예: popover:timer,hub:memo:quick,hub:stats:daily,news-report-archive,news-timeline
       --tabs <list>         popover 탭만 캡처하는 호환 옵션. 예: timer,memo,todo,diary,quick,stats,news,achievement,lab
       --hub                 통합 허브(전체 보기) 화면 전체(기록 6종, 뉴스, 통계 4종, 성취 5종)를 캡처합니다.
       --themes <list>       현재 캡처 대상 전체를 지정한 팝오버 테마별로 캡처합니다. 예: warm-lantern,wine-lantern,game-pixel 또는 all
