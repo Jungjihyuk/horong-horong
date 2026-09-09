@@ -42,7 +42,7 @@ Like a horong gathers and shelters its light, this app helps hold scattered $\co
 <br>
 
 **HorongHorong** is a multi-purpose productivity app that lives in the macOS menu bar. <br>
-It brings together a `Pomodoro timer`, `app usage tracking`, `quick memos`, `news curation`, and `AI Agent experiments` under one menu bar icon.
+It brings together a `Pomodoro timer`, `record hub`, `achievement goals`, `app usage tracking`, `news curation`, and `AI Agent experiments` under one menu bar icon.
 
 The app is currently developed with a Korean UI. Memos, usage records, statistics caches, and settings are stored locally with SwiftData. News and Agent features call CLI tools installed by the user.
 
@@ -80,19 +80,32 @@ Manage focus and break cycles with presets: 50/5, 100/10, and custom. Choose a f
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-timer.png" alt="Timer" width="420" />
+<img src="./Assets/features/popover-timer.png" alt="Timer" width="280" />
 </td>
 </tr>
 
 <tr>
 <td width="45%" valign="middle">
 
-### 📝 Quick Memo
-Open a floating input panel from anywhere with a global shortcut. The shortcut is configurable in Settings, and saved memos are stored locally and shown in the menu bar memo tab, sorted by newest first.
+### 📝 Record Hub
+Capture a quick note or todo from any app with a global shortcut, then manage **Quick Note, Diary, Todo, Knowledge, Works, and References** from one window. Diary records sleep and multiple moods throughout the day, with calendar and emotion insights. Knowledge and Works browse and edit Markdown files in Obsidian vaults, Todo supports natural-language dates, schedules, and Reminders links, and References collects links and floating sticky notes.
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-memo.png" alt="Quick memo" width="420" />
+<table>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-quick.png" alt="Quick notes" width="190" /><br /><sub>Quick Note</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-diary.png" alt="Diary and mood insights" width="190" /><br /><sub>Diary</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-todo.png" alt="Todos and schedules" width="190" /><br /><sub>Todo</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-knowledge.png" alt="Knowledge documents" width="190" /><br /><sub>Knowledge</sub></td>
+</tr>
+<tr>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-works.png" alt="Work documents" width="190" /><br /><sub>Works</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/hub-memo-refs.png" alt="Reference archive" width="190" /><br /><sub>References</sub></td>
+</tr>
+</table>
 </td>
 </tr>
 
@@ -100,7 +113,7 @@ Open a floating input panel from anywhere with a global shortcut. The shortcut i
 <td width="45%" valign="middle">
 
 ### 📊 App Usage Statistics
-Track the active app in the background and automatically aggregate time by category: Work / Development / Study / Research / Log / Communication / Entertainment / Other. Check today's or this week's usage from the menu bar summary, or open the detail view for daily, weekly, and monthly charts, Pomodoro summaries, timeline buckets, and per-category app breakdowns. Daily records can be added, edited, or deleted manually, and vacation periods are shown separately in statistics.
+Track the active app in the background and automatically aggregate time by category: Work / Development / Study / Research / Log / Communication / Entertainment / Other. Detail views analyze app usage and Pomodoro focus records by day, week, or month. Focus statistics show category totals, day-by-day immersion patterns, and reflection status, with a shortcut to write missing reflections. Daily records can be added, edited, or deleted manually, and vacation periods are shown separately.
 
 </td>
 <td width="55%" align="center">
@@ -119,14 +132,14 @@ Track the active app in the background and automatically aggregate time by categ
 </tr>
 <tr>
 <td align="center" width="50%">
-<img src="./Assets/features/stats-detail-weekly.png" alt="Weekly statistics" width="190" />
+<img src="./Assets/features/stats-detail-weekly-warm.png" alt="Weekly app usage statistics" width="190" />
 <br />
 <sub>Weekly</sub>
 </td>
 <td align="center" width="50%">
-<img src="./Assets/features/stats-detail-monthly.png" alt="Monthly statistics" width="190" />
+<img src="./Assets/features/stats-detail-focus-weekly.png" alt="Weekly focus statistics" width="190" />
 <br />
-<sub>Monthly</sub>
+<sub>Focus</sub>
 </td>
 </tr>
 </table>
@@ -137,11 +150,19 @@ Track the active app in the background and automatically aggregate time by categ
 <td width="45%" valign="middle">
 
 ### 📰 News Curation
-Collect data from channels you frequently use, such as YouTube channels/playlists, Google News, and yozmIT. An LLM builds dynamic categories, filters by relevance, ranks items, summarizes them, and produces category-level trend summaries. News providers support Codex, Claude, Antigravity, and Opencode. While running, the app shows pipeline progress from collection through rendering, and results are saved as Markdown reports with metadata.
+Collect data from YouTube channels/playlists, Google News, yozmIT, and other sources, then let an LLM classify, filter, rank, and summarize it. Codex, Claude, Antigravity, Opencode, Hermes, and Ollama are supported, with pipeline progress and estimated usage shown while running. Read generated Markdown reports in a searchable archive or open them in Finder and external editors. A monthly timeline synthesizes topics across reports, highlights how interests evolved, and suggests what to explore next.
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-news.png" alt="News" width="420" />
+<table>
+<tr>
+<td align="center" width="40%"><img src="./Assets/features/popover-news.png" alt="Run news curation" width="160" /><br /><sub>News run</sub></td>
+<td align="center" width="60%"><img src="./Assets/features/news-report-archive.png" alt="News report archive" width="240" /><br /><sub>Report archive</sub></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><img src="./Assets/features/news-timeline.png" alt="Monthly news timeline" width="400" /><br /><sub>Monthly timeline</sub></td>
+</tr>
+</table>
 </td>
 </tr>
 
@@ -153,7 +174,7 @@ Call Codex / Claude / Antigravity / Opencode / Hermes CLI to generate an N-day e
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/popover-agent.png" alt="Agent" width="420" />
+<img src="./Assets/features/popover-agent.png" alt="Agent" width="280" />
 </td>
 </tr>
 
@@ -177,21 +198,21 @@ Goal suggestions can run on **Apple's on-device model, MLX, or Ollama**. MLX and
 <td width="45%" valign="middle">
 
 ### 🎯 Achievement Goals
-Group scattered memos and todos into weekly goals, then connect those to monthly goals, personas, and a vision. Goals can be drafted by AI suggestions or written by hand. The achievement timeline lays out linked todos by weekday and lets you drag them to another day. The Journey tab places personas, visions, and monthly goal flags on one canvas so you can see where each goal leads, and the Records tab collects completed weekly and monthly goals, newest first.
+Group scattered memos and todos into weekly goals, then connect those to monthly goals, personas, and a vision. Apple's on-device model, MLX, or Ollama can suggest goals from current records; suggestions can be refined before applying, and manual entry is always available. Arrange linked todos by weekday on the achievement timeline, then review long-term direction and completed goals in Journey and Records. Points earned by completing goals can be redeemed for rewards you define yourself.
 
 </td>
 <td width="55%" align="center">
 <table>
 <tr>
 <td align="center" width="50%">
-<img src="./Assets/features/popover-achievement.png" alt="Achievement summary" width="190" />
+<img src="./Assets/features/achievement-detail-goal-ai-warm-lantern.png" alt="AI goal suggestions" width="190" />
 <br />
-<sub>Summary</sub>
+<sub>AI suggestions</sub>
 </td>
 <td align="center" width="50%">
-<img src="./Assets/features/achievement-detail-timeline-all.png" alt="Achievement timeline" width="190" />
+<img src="./Assets/features/achievement-detail-reward-warm-lantern.png" alt="Point rewards" width="190" />
 <br />
-<sub>Timeline</sub>
+<sub>Point rewards</sub>
 </td>
 </tr>
 <tr>
@@ -218,9 +239,10 @@ Talk to the companion wandering across your screen to decide what to work on nex
 
 </td>
 <td width="55%" align="center">
-<img src="./Assets/features/companion-chat.png" alt="Chatting with Lumirong" width="240" />
-<br />
-<sub>Chatting with Lumirong</sub>
+<table><tr>
+<td align="center" width="50%"><img src="./Assets/features/companion-chat.png" alt="Chatting with Lumirong" width="180" /><br /><sub>On-device chat</sub></td>
+<td align="center" width="50%"><img src="./Assets/features/companion-schedule.png" alt="Lumirong schedule briefing" width="180" /><br /><sub>Today's schedule</sub></td>
+</tr></table>
 </td>
 </tr>
 </table>
