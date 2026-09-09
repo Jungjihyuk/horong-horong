@@ -58,12 +58,27 @@ def create_provider(
     if name == "anthropic":
         return create_anthropic_provider(options)
     if name == "antigravity":
+        return create_antigravity_provider(options)
+    if name == "antigravity":
         model = options.model if options and options.model else None
         provider = AntigravityCliProvider(model=model)
         if options and options.timeout:
             provider.timeout = options.timeout
         return provider
     provider = factory()
+    if options and options.timeout:
+        provider.timeout = options.timeout
+    return provider
+
+
+def create_antigravity_provider(
+    options: ProviderOptionsConfig | None,
+) -> AntigravityCliProvider:
+    """agy CLI provider 를 만든다. `--effort` 는 CLI 가 요구하므로 항상 채워진다."""
+    provider = AntigravityCliProvider(
+        model=options.model if options else None,
+        effort=options.effort if options else None,
+    )
     if options and options.timeout:
         provider.timeout = options.timeout
     return provider

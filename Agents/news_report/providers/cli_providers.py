@@ -13,14 +13,30 @@ from providers.usage import RateLimitSnapshot, UsageRecord
 
 
 class AntigravityCliProvider(BaseCliProvider):
-    def __init__(self, model: str | None = None) -> None:
+    """Antigravity(agy) CLI provider.
+
+    **`--effort` 는 생략할 수 없다.** CLI 가 바뀌면서 `--model gemini-3.8-flash` 는
+    reasoning effort 를 함께 요구한다. 빠뜨리면 매 호출이
+    `invalid model selection (... --effort "")` 로 실패해 리포트가 0건으로 끝난다
+    (실제로 2026-09-09 실행이 21건 전부 이렇게 죽었다).
+    """
+
+    # 리포트는 기사마다 수십 회를 부르므로 기본은 낮게 둔다.
+    # 한 달치를 한 번에 종합하는 타임라인은 호출이 1~2회뿐이라
+    # `timeline_runner.py` 가 더 높은 값을 명시해서 넘긴다.
+    DEFAULT_EFFORT = "low"
+
+    def __init__(self, model: str | None = None, effort: str | None = None) -> None:
         super().__init__()
         self.model = model or "gemini-3.8-flash"
+        self.effort = effort or self.DEFAULT_EFFORT
 
     def _build_command(self, prompt: str) -> list[str]:
         cmd = ["agy", "-p", prompt, "--output-format", "json"]
         if self.model:
             cmd.extend(["--model", self.model])
+        if self.effort:
+            cmd.extend(["--effort", self.effort])
         return cmd
 
     def parse_output(self, stdout: str) -> tuple[str, UsageRecord | None]:
