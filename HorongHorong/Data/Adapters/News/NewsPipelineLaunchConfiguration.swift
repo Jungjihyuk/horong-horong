@@ -24,7 +24,7 @@ struct NewsPipelineLaunchConfiguration {
 
         return Self(
             provider: provider,
-            providerOptions: provider == "ollama" ? ollamaOptions(defaults: defaults) : nil,
+            providerOptions: options(for: provider, defaults: defaults),
             runnerPath: Constants.defaultNewsRunnerPath,
             dataBasePath: storedBasePath.isEmpty ? Constants.defaultNewsDataBasePath : storedBasePath,
             interestKeywords: csvList(defaults.string(forKey: Constants.NewsStorageKey.interestKeywords)),
@@ -59,6 +59,25 @@ struct NewsPipelineLaunchConfiguration {
     }
 
     // MARK: - Private
+
+    /// provider 별로 필요한 옵션만 채운다. 필요 없는 provider 는 nil 이다.
+    static func options(
+        for provider: String,
+        defaults: UserDefaults
+    ) -> NewsProviderOptionsPayload? {
+        switch provider {
+        case "ollama":
+            return ollamaOptions(defaults: defaults)
+        case "antigravity":
+            // effort 를 안 보내면 agy CLI 가 호출을 거부한다.
+            return NewsProviderOptionsPayload(
+                effort: defaults.string(forKey: Constants.NewsStorageKey.antigravityEffort)
+                    ?? Constants.defaultNewsAntigravityEffort
+            )
+        default:
+            return nil
+        }
+    }
 
     private static func ollamaOptions(defaults: UserDefaults) -> NewsProviderOptionsPayload {
         let model = defaults.string(forKey: Constants.NewsStorageKey.ollamaModel)?

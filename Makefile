@@ -60,6 +60,27 @@ e2e:
 	cd Agents/news_report && HORONG_RUN_E2E=1 uv run pytest -m e2e test/e2e -q
 e2e-progress:
 	cd Agents/news_report && HORONG_RUN_E2E=1 HORONG_E2E_PROGRESS=1 uv run pytest -m e2e test/e2e -s -q
+
+# Timeline
+# 데이터 폴더는 앱 설정(news.dataBasePath)과 같은 곳을 가리켜야 한다.
+# 기본값은 저장소 안이고, vault 를 쓰면 NEWS_DATA_DIR 로 덮어쓴다.
+#   make timeline-plan NEWS_DATA_DIR="$HOME/Documents/life/MY_BRAIN/2. Study/Reports"
+NEWS_DATA_DIR ?= Agents/news_report
+TIMELINE_CATEGORY ?= 금리/거시경제
+TIMELINE_PROVIDER ?= ollama
+
+# 어느 달을 다시 종합할지와 예상 LLM 호출 수만 본다. 모델을 부르지 않는다.
+timeline-plan:
+	@DIR="$(NEWS_DATA_DIR)"; case "$$DIR" in /*) ;; *) DIR="$(CURDIR)/$$DIR";; esac; \
+	cd Agents/news_report && uv run python3 timeline_runner.py --output-dir "$$DIR" --category "$(TIMELINE_CATEGORY)" --dry-run
+timeline:
+	@DIR="$(NEWS_DATA_DIR)"; case "$$DIR" in /*) ;; *) DIR="$(CURDIR)/$$DIR";; esac; \
+	cd Agents/news_report && uv run python3 timeline_runner.py --output-dir "$$DIR" --category "$(TIMELINE_CATEGORY)" --provider $(TIMELINE_PROVIDER)
+# 봉인을 무시하고 전부 다시 만든다. 프롬프트를 바꿨을 때만 쓴다.
+timeline-rebuild:
+	@DIR="$(NEWS_DATA_DIR)"; case "$$DIR" in /*) ;; *) DIR="$(CURDIR)/$$DIR";; esac; \
+	cd Agents/news_report && uv run python3 timeline_runner.py --output-dir "$$DIR" --category "$(TIMELINE_CATEGORY)" --provider $(TIMELINE_PROVIDER) --rebuild
+
 ollama-test: 
 	cd Agents/news_report && uv run runner.py --request test/fixtures/requests/ollama-all-sources-request.json --result /tmp/Horong/horong-ollama-result.json --log /tmp/Horong/horong-ollama-run.log --debug-log /tmp/Horong/horong-ollama-debug.log --trace-log /tmp/Horong/horong-ollama-trace.jsonl
 codex-test: 

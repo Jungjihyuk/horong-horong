@@ -7,13 +7,13 @@ import XCTest
 /// 다루는 아이템 수에 비례하므로 호출당 단가를 뽑아 되곱한다.
 final class NewsUsageEstimatorTests: XCTestCase {
 
-    // 시나리오 1. 이력이 없으면 초기 추정치를 넓은 범위로 돌려준다.
-    func testEstimate_noHistory_returnsColdStartRange() {
+    // 시나리오 1. 요금제 정책이 없는 미지원 provider는 이력이 없으면 사용률이 비어 있다.
+    func testEstimate_noHistory_unsupportedProvider_returnsColdStartWithoutPercent() {
         // Given: 실행 이력이 전혀 없다.
 
         // When: 아이템 20개 기준으로 추정한다.
         let estimate = NewsUsageEstimator.estimate(
-            provider: "codex",
+            provider: "unsupported_provider",
             plannedItems: 20,
             jobs: []
         )
@@ -24,6 +24,24 @@ final class NewsUsageEstimatorTests: XCTestCase {
         XCTAssertNil(estimate.costRange)
         XCTAssertNil(estimate.primaryPercentRange)
         XCTAssertLessThan(estimate.tokenRange.lowerBound, estimate.tokenRange.upperBound)
+    }
+
+    // 시나리오 1-1. 구독 요금제가 지원되는 provider(claude, codex, antigravity)는 이력이 없어도 5시간 한도 %를 추정한다.
+    func testEstimate_subscriptionProvider_noHistory_calculatesColdStartPercentRange() throws {
+        for provider in ["claude", "codex", "antigravity"] {
+            let estimate = NewsUsageEstimator.estimate(
+                provider: provider,
+                plannedItems: 10,
+                jobs: []
+            )
+
+            XCTAssertEqual(estimate.confidence, .coldStart)
+            XCTAssertEqual(estimate.sampleCount, 0)
+            XCTAssertEqual(estimate.primaryWindowMinutes, 300)
+            let percentRange = try XCTUnwrap(estimate.primaryPercentRange, "provider \(provider)는 퍼센트 범위가 있어야 한다")
+            XCTAssertGreaterThan(percentRange.lowerBound, 0.0)
+            XCTAssertLessThan(percentRange.lowerBound, percentRange.upperBound)
+        }
     }
 
     // 시나리오 2. 설정이 2배가 되면 예상 소모량도 2배가 된다.
@@ -138,6 +156,97 @@ final class NewsUsageEstimatorTests: XCTestCase {
         XCTAssertEqual(estimate.primaryWindowMinutes, 300)
     }
 
+    // 시나리오 7-1. 과거 실행에 primaryPercentDelta가 없던 Claude 실행도 정책을 통해 %를 복원하여 추정한다.
+    func testEstimate_claudeWithoutPercentDelta_recoversPercentFromPolicy() throws {
+        // Given: 과거 실행 3건에 delta가 nil이지만 토큰(15,000)과 비용($0.20)이 있다.
+        let jobs = (0..<3).map { _ in
+            makeRun(
+                provider: "claude",
+                usage: NewsJobUsage(
+                    callCount: 20,
+                    inputTokens: 12_000,
+                    outputTokens: 3_000,
+                    totalCostUSD: 0.20,
+                    plannedItems: 10,
+                    primaryPercentDelta: nil, // 과거 기록은 nil
+                    primaryWindowMinutes: nil
+                )
+            )
+        }
+
+        // When: 추정한다.
+        let estimate = NewsUsageEstimator.estimate(provider: "claude", plannedItems: 10, jobs: jobs)
+
+        // Then: 정책에 따라 약 2.0% ($0.20 / $0.10) 부근의 % 범위가 산출된다.
+        let percentRange = try XCTUnwrap(estimate.primaryPercentRange)
+        XCTAssertTrue(percentRange.contains(2.0), "예상 차감량: \(percentRange)")
+        XCTAssertEqual(estimate.primaryWindowMinutes, 300)
+    }
+
+    // 시나리오 7-2. 과거 실행에 primaryPercentDelta가 0.0으로 찍힌 Codex 실행도 토큰 수로부터 %를 복원한다.
+    func testEstimate_codexZeroPercentDelta_recoversPercentFromTokens() throws {
+        // Given: 과거 실행 3건에 delta가 0.0으로 잘못 기록되었지만 250,000 토큰이 사용되었다.
+        let jobs = (0..<3).map { _ in
+            makeRun(
+                provider: "codex",
+                usage: NewsJobUsage(
+                    callCount: 20,
+                    inputTokens: 200_000,
+                    outputTokens: 50_000,
+                    plannedItems: 10,
+                    primaryPercentDelta: 0.0, // 더미 0.0
+                    primaryWindowMinutes: 300
+                )
+            )
+        }
+
+        // When: 추정한다.
+        let estimate = NewsUsageEstimator.estimate(provider: "codex", plannedItems: 10, jobs: jobs)
+
+        // Then: 250,000 토큰 / 250,000 = 1.0% 부근의 % 범위가 산출된다.
+        let percentRange = try XCTUnwrap(estimate.primaryPercentRange)
+        XCTAssertTrue(percentRange.contains(1.0), "예상 차감량: \(percentRange)")
+        XCTAssertEqual(estimate.primaryWindowMinutes, 300)
+    }
+
+    // 시나리오 7-3. 실제 사용량 기준 Claude가 Codex보다 높은 한도 소모율(%)을 산출한다.
+    func testEstimate_claudeConsumesMoreThanCodex() throws {
+        // Given: Claude ($5.00 비용 소모) vs Codex (50만 토큰 소모)
+        let claudeJobs = (0..<3).map { _ in
+            makeRun(
+                provider: "claude",
+                usage: NewsJobUsage(
+                    callCount: 25,
+                    inputTokens: 10_000,
+                    outputTokens: 5_000,
+                    totalCostUSD: 5.00,
+                    plannedItems: 10
+                )
+            )
+        }
+        let codexJobs = (0..<3).map { _ in
+            makeRun(
+                provider: "codex",
+                usage: NewsJobUsage(
+                    callCount: 25,
+                    inputTokens: 400_000,
+                    outputTokens: 100_000,
+                    plannedItems: 10
+                )
+            )
+        }
+
+        // When: 둘 다 동일한 아이템 수(10개)로 추정한다.
+        let claudeEst = NewsUsageEstimator.estimate(provider: "claude", plannedItems: 10, jobs: claudeJobs)
+        let codexEst = NewsUsageEstimator.estimate(provider: "codex", plannedItems: 10, jobs: codexJobs)
+
+        // Then: Claude($5.00 -> 50%)가 Codex(50만 토큰 -> 2%)보다 훨씬 높은 차감율을 돌려준다.
+        let claudeRange = try XCTUnwrap(claudeEst.primaryPercentRange)
+        let codexRange = try XCTUnwrap(codexEst.primaryPercentRange)
+
+        XCTAssertGreaterThan(claudeRange.lowerBound, codexRange.upperBound, "Claude가 Codex보다 한도 소모가 커야 한다")
+    }
+
     // 시나리오 8. 보정에는 최근 실행만 쓴다.
     func testEstimate_moreHistoryThanWindow_usesOnlyRecentRuns() {
         // Given: 최근 실행 10건은 호출 20회, 그 이전 10건은 호출 200회다.
@@ -156,6 +265,45 @@ final class NewsUsageEstimatorTests: XCTestCase {
             estimate.callRange.contains(20),
             "최근 이력만 반영해야 한다: \(estimate.callRange)"
         )
+    }
+
+    // 시나리오 9. 캐시 토큰(적중/생성)이 있으면 총 토큰 수에 포함하여 추정한다.
+    func testEstimate_withCacheTokens_includesCacheInTotalTokens() {
+        // Given: 인풋 3,000 + 아웃풋 2,000 + 캐시 히트 4,000 + 캐시 라이트 1,000 = 총 10,000 토큰인 실행 3건.
+        let jobs = (0..<3).map { _ in
+            makeRun(
+                provider: "claude",
+                usage: NewsJobUsage(
+                    callCount: 20,
+                    inputTokens: 3_000,
+                    outputTokens: 2_000,
+                    cacheHitTokens: 4_000,
+                    cacheWriteTokens: 1_000,
+                    totalCostUSD: 0.5,
+                    plannedItems: 10
+                )
+            )
+        }
+
+        // When: 같은 설정으로 추정한다.
+        let estimate = NewsUsageEstimator.estimate(provider: "claude", plannedItems: 10, jobs: jobs)
+
+        // Then: 5,000 토큰이 아니라 캐시를 포함한 10,000 토큰 기준으로 보정된다.
+        XCTAssertEqual(estimate.sampleCount, 3)
+        XCTAssertEqual(estimate.confidence, .calibrated)
+        XCTAssertTrue(estimate.tokenRange.contains(10_000), "예상 토큰 범위가 캐시를 포함해야 한다: \(estimate.tokenRange)")
+    }
+
+    // 시나리오 10. NewsJobUsage의 totalTokens는 캐시 적중/생성을 모두 합산한다.
+    func testNewsJobUsage_totalTokens_sumsInputOutputAndCache() {
+        let usage = NewsJobUsage(
+            callCount: 1,
+            inputTokens: 1_000,
+            outputTokens: 200,
+            cacheHitTokens: 300,
+            cacheWriteTokens: 100
+        )
+        XCTAssertEqual(usage.totalTokens, 1_600)
     }
 
     // MARK: - Helpers

@@ -56,6 +56,14 @@ final class NewsViewModel {
         jobs.first { $0.usage != nil }?.usage
     }
 
+    /// 현재 선택된 provider로 실행된 가장 최근 소모량.
+    ///
+    /// 다른 provider(예: Claude)의 고비용 실행 기록이 현재 provider(예: Gemini)의
+    /// 소모량으로 오인되지 않도록 provider별로 필터링한다.
+    func lastReportedUsage(for provider: String) -> NewsJobUsage? {
+        jobs.first { $0.provider == provider && $0.usage != nil }?.usage
+    }
+
     /// 현재 설정으로 실행했을 때의 예상 소모량. ollama 는 무료라 추정하지 않는다.
     func usageEstimate(
         provider: String,

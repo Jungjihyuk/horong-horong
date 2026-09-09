@@ -55,8 +55,10 @@ class UsageRecord:
 
     input_tokens: int = 0
     output_tokens: int = 0
-    cached_input_tokens: int = 0
-    cache_write_input_tokens: int = 0
+    cache_hit_tokens: int = 0
+    cache_write_tokens: int = 0
+    cache_storage_5m_tokens: int = 0
+    cache_storage_1h_tokens: int = 0
     reasoning_output_tokens: int = 0
     total_cost_usd: float | None = None
     # CLI 호출 횟수. 설정이 바뀌어도 재사용할 수 있도록 호출당 단가를 뽑는 데 쓴다.
@@ -79,9 +81,13 @@ class UsageRecord:
             self,
             input_tokens=self.input_tokens + other.input_tokens,
             output_tokens=self.output_tokens + other.output_tokens,
-            cached_input_tokens=self.cached_input_tokens + other.cached_input_tokens,
-            cache_write_input_tokens=(
-                self.cache_write_input_tokens + other.cache_write_input_tokens
+            cache_hit_tokens=self.cache_hit_tokens + other.cache_hit_tokens,
+            cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
+            cache_storage_5m_tokens=(
+                self.cache_storage_5m_tokens + other.cache_storage_5m_tokens
+            ),
+            cache_storage_1h_tokens=(
+                self.cache_storage_1h_tokens + other.cache_storage_1h_tokens
             ),
             reasoning_output_tokens=(
                 self.reasoning_output_tokens + other.reasoning_output_tokens
@@ -104,8 +110,10 @@ class UsageRecord:
         return {
             "inputTokens": self.input_tokens,
             "outputTokens": self.output_tokens,
-            "cachedInputTokens": self.cached_input_tokens,
-            "cacheWriteInputTokens": self.cache_write_input_tokens,
+            "cacheHitTokens": self.cache_hit_tokens,
+            "cacheWriteTokens": self.cache_write_tokens,
+            "cacheStorage5mTokens": self.cache_storage_5m_tokens,
+            "cacheStorage1hTokens": self.cache_storage_1h_tokens,
             "reasoningOutputTokens": self.reasoning_output_tokens,
             "totalCostUSD": self.total_cost_usd,
             "callCount": self.call_count,
@@ -120,8 +128,10 @@ class UsageRecord:
         payload: dict[str, object] = {
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
-            "cached_input_tokens": self.cached_input_tokens,
-            "cache_write_input_tokens": self.cache_write_input_tokens,
+            "cache_hit_tokens": self.cache_hit_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
+            "cache_storage_5m_tokens": self.cache_storage_5m_tokens,
+            "cache_storage_1h_tokens": self.cache_storage_1h_tokens,
             "reasoning_output_tokens": self.reasoning_output_tokens,
             "call_count": self.call_count,
         }

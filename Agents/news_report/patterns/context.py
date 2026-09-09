@@ -20,3 +20,6 @@ class PipelineContext:
     step: Callable[[str], None]
     trace: TraceWriter | None
     started_at: str
+    # 이미 채택했던 URL 을 무시하고 다시 수집한다. 과거 리포트를 다시 만들거나
+    # 기록이 잘못됐을 때만 쓴다(`runner.py --ignore-seen`).
+    ignore_seen: bool = False

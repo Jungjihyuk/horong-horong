@@ -22,7 +22,7 @@ def test_load_request__valid_swift_json__returns_request_model(
     )
 
     # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
 
     # Then: camelCase 입력값이 Python snake_case 필드로 올바르게 매핑된다.
     assert request.job_id == "job-20260527-001"
@@ -73,7 +73,7 @@ def test_load_request__missing_optional_fields__uses_defaults(tmp_path):
     )
 
     # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
 
     # Then: 생략된 선택 필드들은 runner 기본값으로 채워진다.
     assert request.job_id == "job-minimal"
@@ -134,7 +134,7 @@ def test_load_request__swift_source_types__accepted(
     )
 
     # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
 
     # Then: rss/hacker_news source가 요청 검증을 통과한다.
     assert [source.type for source in request.sources] == ["rss", "hacker_news"]
@@ -169,7 +169,7 @@ def test_load_request__youtube_channel_ids_and_playlists__preserved_to_connector
     )
 
     # When: loader로 파싱한 source를 runner와 같은 방식으로 connector config로 dump한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
     config = request.sources[0].model_dump(by_alias=True, exclude_none=True)
 
     # Then: connector가 읽는 camelCase 키가 그대로 보존된다.
@@ -188,7 +188,7 @@ def test_load_request__ollama_provider__returns_request_model(tmp_path):
     )
 
     # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
 
     # Then: ollama provider 값이 요청 계약에서 허용된다.
     assert request.job_id == "job-ollama"
@@ -217,10 +217,70 @@ def test_load_request__ollama_provider_options__returns_provider_options(tmp_pat
     )
 
     # When: loader가 요청 파일을 읽어 Pydantic 모델로 변환한다.
-    request = load_request(str(request_path))
+    request, _ = load_request(str(request_path))
 
     # Then: providerOptions 값이 runner 내부 provider_options로 매핑된다.
     assert request.provider == "ollama"
     assert request.provider_options.model == "qwen3:32b"
     assert request.provider_options.endpoint == "http://localhost:11435"
     assert request.provider_options.timeout == 180.0
+
+
+# 시나리오 N. 모르는 effort 값은 거부하지 않고 기본값으로 강등한다.
+@pytest.mark.unit
+def test_load_request__unknown_effort__demotes_to_default_with_warning(
+    tmp_path, valid_request_payload
+):
+    # Given: providerOptions.effort 에 오타가 들어간 요청.
+    payload = dict(valid_request_payload)
+    payload["provider"] = "antigravity"
+    payload["providerOptions"] = {"effort": "extreme"}
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    # When: 요청을 읽는다.
+    request, warnings = load_request(str(request_path))
+
+    # Then: 수집 전체가 죽는 대신 None 으로 강등되고, 사실은 경고로 남는다.
+    assert request.provider_options.effort is None
+    assert any("extreme" in warning for warning in warnings)
+
+
+@pytest.mark.unit
+def test_load_request__effort_casing__is_normalized(tmp_path, valid_request_payload):
+    # Given: 대문자로 적힌 effort.
+    payload = dict(valid_request_payload)
+    payload["providerOptions"] = {"effort": "HIGH"}
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    # When/Then: 정규화되어 통과하고 경고도 없다.
+    request, warnings = load_request(str(request_path))
+    assert request.provider_options.effort == "high"
+    assert warnings == []
+
+
+@pytest.mark.unit
+def test_load_request__valid_effort__passes_through(tmp_path, valid_request_payload):
+    # Given/When/Then: 정상 값은 그대로.
+    payload = dict(valid_request_payload)
+    payload["providerOptions"] = {"effort": "medium"}
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    request, warnings = load_request(str(request_path))
+    assert request.provider_options.effort == "medium"
+    assert warnings == []
+
+
+# 시나리오 N+1. 모델 이름 오타는 여전히 거부한다.
+@pytest.mark.unit
+def test_load_request__too_short_model__still_raises(tmp_path, valid_request_payload):
+    """모델은 강등하지 않는다 — 조용히 다른 모델이 도는 것이 실패보다 나쁘다."""
+    payload = dict(valid_request_payload)
+    payload["providerOptions"] = {"model": "x"}
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        load_request(str(request_path))

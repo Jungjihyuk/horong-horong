@@ -22,11 +22,17 @@ class OllamaProvider:
         model: str = "qwen3:14b",
         endpoint: str = "http://localhost:11434",
         timeout: float = 120,
+        think: bool | None = None,
         transport: HttpPost | None = None,
     ):
         self.model = model
         self.endpoint = endpoint.rstrip("/")
         self.timeout = timeout
+        # None 이면 `think` 필드를 아예 보내지 않는다 — 기존 동작 그대로다.
+        # False 로 주면 추론(thinking)을 끈다. qwen3 계열은 이걸 안 끄면 사고 토큰을
+        # 무한정 생성해서, structured output 요청 하나가 분 단위로 늘어지거나 빈 응답으로
+        # 끝난다(실측: 끄면 10초, 안 끄면 6분+ 타임아웃).
+        self.think = think
         self._transport = transport or self._post_json
 
     def run(self, prompt: str) -> str:
@@ -70,6 +76,8 @@ class OllamaProvider:
             "prompt": prompt,
             "stream": False,
         }
+        if self.think is not None:
+            payload["think"] = self.think
         ollama_options = self._to_ollama_options(options)
         if ollama_options:
             payload["options"] = ollama_options

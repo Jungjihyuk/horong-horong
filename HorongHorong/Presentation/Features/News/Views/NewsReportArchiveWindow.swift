@@ -107,6 +107,7 @@ enum NewsReportMarkdownParser {
 
 struct NewsReportArchiveWindow: View {
     @Environment(\.appearanceDensity) private var appearanceDensity
+    @Environment(AppState.self) private var appState
     @ObservedObject private var selection = NewsReportArchiveSelection.shared
     @AppStorage(Constants.NewsStorageKey.dataBasePath)
     private var dataBasePath = Constants.defaultNewsDataBasePath
@@ -114,6 +115,19 @@ struct NewsReportArchiveWindow: View {
     private var popoverTheme = Constants.defaultPopoverTheme
 
     @State private var viewModel = NewsArchiveViewModel()
+    @State private var timelineViewModel = NewsTimelineViewModel()
+    /// 타임라인 러너를 띄우는 게이트웨이. 리포트 파이프라인과 완전히 별개 프로세스다.
+    @State private var timelineService = NewsTimelineService()
+    @State private var mode: NewsHubMode
+
+    /// 기본은 보관함. 스크린샷 타깃(`--screenshot-target news-timeline`)처럼
+    /// 특정 모드로 바로 열어야 할 때만 지정한다.
+    private let showsTimelinePicker: Bool
+
+    init(initialMode: NewsHubMode = .archive, showsTimelinePicker: Bool = false) {
+        _mode = State(initialValue: initialMode)
+        self.showsTimelinePicker = showsTimelinePicker
+    }
 
     var body: some View {
         let visibleEntries = viewModel.visibleEntries
@@ -123,10 +137,29 @@ struct NewsReportArchiveWindow: View {
             toolbar
             Divider().overlay(PopoverChrome.divider)
 
-            HStack(spacing: 0) {
-                reportList(visibleEntries)
-                Divider().overlay(PopoverChrome.divider)
-                detailPane(selectedEntry)
+            switch mode {
+            case .archive:
+                HStack(spacing: 0) {
+                    // 좌측 레일의 뉴스 버튼을 다시 누르면 접힌다. 폭을 0으로 줄여
+                    // 본문이 그만큼 넓어진다.
+                    reportList(visibleEntries)
+                        .frame(width: appState.isNewsListVisible ? 250 : 0, alignment: .leading)
+                        .opacity(appState.isNewsListVisible ? 1 : 0)
+                        .clipped()
+                    Divider().overlay(PopoverChrome.divider)
+                        .opacity(appState.isNewsListVisible ? 1 : 0)
+                        .frame(width: appState.isNewsListVisible ? 1 : 0)
+                    detailPane(selectedEntry)
+                }
+                .animation(.easeInOut(duration: 0.24), value: appState.isNewsListVisible)
+            case .timeline:
+                NewsTimelinePane(
+                    viewModel: timelineViewModel,
+                    gateway: timelineService,
+                    dataBasePath: dataBasePath,
+                    initiallyPresentingPicker: showsTimelinePicker,
+                    isCategoryListVisible: appState.isNewsListVisible
+                )
             }
         }
         .frame(minWidth: 840, minHeight: 540)
@@ -136,25 +169,32 @@ struct NewsReportArchiveWindow: View {
         .onAppear {
             viewModel.reload(dataBasePath: dataBasePath)
             viewModel.applySelectionRequest(reportID: selection.request.reportID)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         .onChange(of: selection.request) { _, request in
             viewModel.applySelectionRequest(reportID: request.reportID)
         }
         .onChange(of: dataBasePath) { _, _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         // `@Query` 로 색인을 관찰하던 자리. 리포트는 파이프라인이 끝날 때만 늘어난다.
         .onReceive(NotificationCenter.default.publisher(for: .newsPipelineJobFinished)) { _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
         // 앱 밖에서 파일을 지우거나 옮겼을 수 있다.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             viewModel.reload(dataBasePath: dataBasePath)
+            timelineViewModel.reload(dataBasePath: dataBasePath)
         }
     }
 
     private var toolbar: some View {
         HStack(spacing: 14) {
+            // 이 화면이 무엇을 보여주는지 정하는 컨트롤이라 맨 앞에 둔다.
+            NewsHubModeSwitch(mode: $mode)
+
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -168,6 +208,8 @@ struct NewsReportArchiveWindow: View {
 
             Spacer(minLength: 16)
 
+            // 리포트 본문까지 뒤지는 검색이라 타임라인 모드에서는 의미가 없다.
+            if mode == .archive {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -181,6 +223,7 @@ struct NewsReportArchiveWindow: View {
                 RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
+            }
 
             Button {
                 revealInFinder()

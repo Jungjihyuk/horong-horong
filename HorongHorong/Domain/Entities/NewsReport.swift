@@ -43,6 +43,11 @@ struct NewsJobUsage: Equatable, Sendable {
     let callCount: Int
     let inputTokens: Int?
     let outputTokens: Int?
+    let cacheHitTokens: Int?
+    let cacheWriteTokens: Int?
+    let cacheStorage5mTokens: Int?
+    let cacheStorage1hTokens: Int?
+    let reasoningOutputTokens: Int?
     let totalCostUSD: Double?
     /// 이 실행이 다루기로 한 아이템 수. 설정이 달랐던 과거 실행을 지금 설정으로 환산할 때 쓴다.
     let plannedItems: Int?
@@ -51,4 +56,44 @@ struct NewsJobUsage: Equatable, Sendable {
     let secondaryPercentDelta: Double?
     let secondaryWindowMinutes: Int?
     let planType: String?
+
+    init(
+        callCount: Int,
+        inputTokens: Int? = nil,
+        outputTokens: Int? = nil,
+        cacheHitTokens: Int? = nil,
+        cacheWriteTokens: Int? = nil,
+        cacheStorage5mTokens: Int? = nil,
+        cacheStorage1hTokens: Int? = nil,
+        reasoningOutputTokens: Int? = nil,
+        totalCostUSD: Double? = nil,
+        plannedItems: Int? = nil,
+        primaryPercentDelta: Double? = nil,
+        primaryWindowMinutes: Int? = nil,
+        secondaryPercentDelta: Double? = nil,
+        secondaryWindowMinutes: Int? = nil,
+        planType: String? = nil
+    ) {
+        self.callCount = callCount
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.cacheHitTokens = cacheHitTokens
+        self.cacheWriteTokens = cacheWriteTokens
+        self.cacheStorage5mTokens = cacheStorage5mTokens
+        self.cacheStorage1hTokens = cacheStorage1hTokens
+        self.reasoningOutputTokens = reasoningOutputTokens
+        self.totalCostUSD = totalCostUSD
+        self.plannedItems = plannedItems
+        self.primaryPercentDelta = primaryPercentDelta
+        self.primaryWindowMinutes = primaryWindowMinutes
+        self.secondaryPercentDelta = secondaryPercentDelta
+        self.secondaryWindowMinutes = secondaryWindowMinutes
+        self.planType = planType
+    }
+
+    /// 캐시 적중/생성 토큰을 모두 포함한 실제 처리 토큰 합계.
+    var totalTokens: Int? {
+        guard let input = inputTokens, let output = outputTokens else { return nil }
+        return input + output + (cacheHitTokens ?? 0) + (cacheWriteTokens ?? 0)
+    }
 }

@@ -31,6 +31,11 @@ private struct ScreenshotCaptureConfiguration {
             return Constants.companionExpandedOverlaySize
         case .newsReportArchive:
             return CGSize(width: 940, height: 660)
+        case .newsTimeline:
+            // 가로 축 타임라인이라 월 컬럼 두어 개는 한 화면에 들어와야 한다.
+            return CGSize(width: 1840, height: 980)
+        case .newsTimelinePicker:
+            return CGSize(width: 1100, height: 760)
         case .hub:
             return CGSize(width: Constants.hubWindowWidth, height: Constants.hubWindowHeight)
         }
@@ -40,7 +45,7 @@ private struct ScreenshotCaptureConfiguration {
         switch target {
         case .popover, .companion:
             return [.borderless]
-        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .hub:
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .newsTimeline, .newsTimelinePicker, .hub:
             return [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         }
     }
@@ -169,6 +174,8 @@ private enum ScreenshotCaptureTarget {
     /// 화면 위에 뜨는 컴패니언.
     case companion(CompanionScreenshotMode = .chat)
     case newsReportArchive
+    case newsTimeline
+    case newsTimelinePicker
     case hub(
         HubTab,
         memoSection: SecondBrainSection? = nil,
@@ -197,6 +204,10 @@ private enum ScreenshotCaptureTarget {
             return mode == .chat ? "companion" : "companion-\(mode.screenshotIdentifier)"
         case .newsReportArchive:
             return "news-report-archive"
+        case .newsTimeline:
+            return "news-timeline"
+        case .newsTimelinePicker:
+            return "news-timeline-picker"
         case .hub(let tab, let memoSection, let statsViewMode, let statsContentMode, let achievementMode):
             switch tab {
             case .memo:
@@ -237,6 +248,14 @@ private enum ScreenshotCaptureTarget {
             }
             if single == "news-report-archive" || single == "news-archive" {
                 self = .newsReportArchive
+                return
+            }
+            if single == "news-timeline" || single == "timeline" {
+                self = .newsTimeline
+                return
+            }
+            if single == "news-timeline-picker" || single == "timeline-picker" {
+                self = .newsTimelinePicker
                 return
             }
             if single == "stats-detail-focus" || single == "stats-focus" {
@@ -325,6 +344,10 @@ private enum ScreenshotCaptureTarget {
             guard colonParts.count >= 2 else { return nil }
             if colonParts[1] == "report-archive" || colonParts[1] == "archive" {
                 self = .newsReportArchive
+            } else if colonParts[1] == "timeline" {
+                self = .newsTimeline
+            } else if colonParts[1] == "timeline-picker" {
+                self = .newsTimelinePicker
             } else {
                 return nil
             }
@@ -1077,7 +1100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .popover, .companion:
             window.isOpaque = false
             window.backgroundColor = .clear
-        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .hub:
+        case .settings, .statsDetail, .achievementDetail(_), .newsReportArchive, .newsTimeline, .newsTimelinePicker, .hub:
             window.isOpaque = true
             window.backgroundColor = config.resolvedWindowBackgroundColor
             hostingView.wantsLayer = true
@@ -1204,6 +1227,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(appState)
                     .modelContainer(modelContainer)
                     .frame(width: 940, height: 660)
+            )
+        case .newsTimeline:
+            return AnyView(
+                NewsReportArchiveWindow(initialMode: .timeline)
+                    .environment(appState)
+                    .modelContainer(modelContainer)
+                    .frame(width: 1840, height: 980)
+            )
+        case .newsTimelinePicker:
+            return AnyView(
+                NewsReportArchiveWindow(initialMode: .timeline, showsTimelinePicker: true)
+                    .environment(appState)
+                    .modelContainer(modelContainer)
+                    .frame(width: 1100, height: 760)
             )
         case .hub(let tab, let memoSection, let statsViewMode, let statsContentMode, let achievementMode):
             if let memoSection {

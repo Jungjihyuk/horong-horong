@@ -293,6 +293,8 @@ private struct CaptureOptions {
             return companionModes.contains(parts[1])
         case "news":
             return parts[1] == "report-archive" || parts[1] == "archive"
+                || parts[1] == "timeline"
+                || parts[1] == "timeline-picker"
         default:
             return false
         }

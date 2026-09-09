@@ -20,6 +20,11 @@ final class NewsJob {
     // 호출당 단가를 뽑아 다음 실행을 예측하는 데 쓰이므로 usageCallCount가 함께 필요하다.
     var usageInputTokens: Int?
     var usageOutputTokens: Int?
+    var usageCacheHitTokens: Int?
+    var usageCacheWriteTokens: Int?
+    var usageCacheStorage5mTokens: Int?
+    var usageCacheStorage1hTokens: Int?
+    var usageReasoningOutputTokens: Int?
     var usageTotalCostUSD: Double?
     var usageCallCount: Int?
 

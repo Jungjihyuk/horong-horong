@@ -50,6 +50,8 @@ struct NewsProviderOptionsPayload: Codable {
     var model: String?
     var endpoint: String?
     var timeout: Double?
+    /// antigravity 전용 reasoning effort(low|medium|high).
+    var effort: String?
 }
 
 struct OllamaTagsResponse: Decodable {
@@ -120,15 +122,19 @@ struct NewsRateLimitSnapshot: Codable {
 struct NewsJobUsageDTO: Codable {
     var inputTokens: Int
     var outputTokens: Int
-    var cachedInputTokens: Int
-    var cacheWriteInputTokens: Int
+    var cacheHitTokens: Int
+    var cacheWriteTokens: Int
+    var cacheStorage5mTokens: Int
+    var cacheStorage1hTokens: Int
     var reasoningOutputTokens: Int
     var totalCostUSD: Double?
     var callCount: Int
     var rateLimitsFirst: [NewsRateLimitSnapshot]
     var rateLimits: [NewsRateLimitSnapshot]
 
-    var totalTokens: Int { inputTokens + outputTokens }
+    var totalTokens: Int {
+        inputTokens + outputTokens + cacheHitTokens + cacheWriteTokens
+    }
 
     /// 이번 실행으로 차감된 요금제 사용률(%).
     ///
@@ -725,6 +731,11 @@ final class NewsPipelineService: @unchecked Sendable {
         guard let usage else { return }
         job.usageInputTokens = usage.inputTokens
         job.usageOutputTokens = usage.outputTokens
+        job.usageCacheHitTokens = usage.cacheHitTokens
+        job.usageCacheWriteTokens = usage.cacheWriteTokens
+        job.usageCacheStorage5mTokens = usage.cacheStorage5mTokens
+        job.usageCacheStorage1hTokens = usage.cacheStorage1hTokens
+        job.usageReasoningOutputTokens = usage.reasoningOutputTokens
         job.usageTotalCostUSD = usage.totalCostUSD
         job.usageCallCount = usage.callCount
         job.usagePrimaryPercentDelta = usage.usedPercentDelta(scope: "primary")

@@ -12,6 +12,7 @@ from exporters.artifact_exporter import build_artifacts_dict, write_artifacts
 from exporters.meta_exporter import build_artifact_report_meta, write_meta
 from exporters.report_exporter import write_report
 from ontology import load_or_build_for_output_dir
+from storage.seen_urls import filter_unseen, load_seen_urls, record_seen
 from patterns.context import PipelineContext
 from patterns.research import (
     ResearchContext,
@@ -56,20 +57,12 @@ class NewsReportV1Pipeline:
             )
 
         step("preflight")
-        log("Running provider pre-flight check...")
-        try:
-            # claude/agy는 /usage, codex는 /status 명령어로 RateLimitError 발생 여부를 미리 확인한다.
-            preflight_cmd = "/status" if request.provider == "codex" else "/usage"
-            usage_output = structured_provider.run(preflight_cmd)
-            usage_lower = usage_output.lower()
-            # 로컬 명령어의 출력문을 분석하여 claude의 '100% used' 또는 agy의 'Remaining 0%' 상태인지 검사한다.
-            if "100% used" in usage_lower or re.search(r"remaining\s+0(?:\.0+)?%", usage_lower):
-                raise RateLimitError(f"사용량 한도 초과 감지: {usage_output[:200]}")
-        except RateLimitError:
-            raise
-        except Exception as e:
-            # RateLimitError 이외의 에러(ex: /usage 미지원 등)는 수집 단계로 넘어가기 위해 무시한다.
-            log(f"Pre-flight check failed (ignored): {e}")
+        # preflight 는 `/usage` 를 «프롬프트로» 보내 한도를 확인한다. 과금형 provider
+        # 에게는 그게 쓰레기 응답 하나를 그대로 청구하는 요청이므로 건너뛴다.
+        if not getattr(structured_provider, "supports_slash_preflight", True):
+            log("Pre-flight check skipped (metered provider).")
+        else:
+            self._preflight(structured_provider, request, log)
 
         step("collect")
         collect_result = collect_sources(sources, max_items, log, trace=trace)
@@ -78,6 +71,23 @@ class NewsReportV1Pipeline:
         warnings = collect_result.warnings
 
         log(f"Total collected: {len(all_items)} items")
+
+        # 이미 리포트에 실렸던 기사는 다시 다루지 않는다. 실측(130회 실행)에서
+        # 채택분의 60%가 재수집분이었다. 걸러야 LLM 비용도 그만큼 준다.
+        seen_store = load_seen_urls(output_dir)
+        if context.ignore_seen:
+            log(f"Seen-URL filter disabled (--ignore-seen); {len(seen_store)} known")
+        else:
+            all_items, skipped_seen = filter_unseen(all_items, seen_store)
+            if skipped_seen:
+                log(f"Skipped {skipped_seen} already-reported items "
+                    f"({len(seen_store)} known URLs)")
+                if trace:
+                    _ = trace.write(
+                        "stage_completed",
+                        stage="filter_seen",
+                        payload={"skipped": skipped_seen, "known": len(seen_store)},
+                    )
 
         step("normalize")
         normalized = normalize_items(all_items)
@@ -199,6 +209,16 @@ class NewsReportV1Pipeline:
                 },
             )
 
+        # 이번에 «채택된» 것만 기억한다. 관련성에서 떨어진 기사는 나중에 맥락이 생기면
+        # 다시 후보가 되어야 하므로 남기지 않는다.
+        if not context.ignore_seen:
+            added = record_seen(
+                seen_store,
+                (candidate.url for candidate in research_result.source_candidates),
+                today=today_str,
+            )
+            log(f"Recorded {added} newly reported URLs (total {len(seen_store)})")
+
         result_items = result_items_from_research(research_result)
         return PatternResult(
             report_path=artifact_paths.report_rel,
@@ -207,6 +227,28 @@ class NewsReportV1Pipeline:
             items=result_items,
             warnings=warnings,
         )
+
+    def _preflight(self, structured_provider, request, log) -> None:
+        """구독 CLI 의 남은 사용량을 미리 확인한다.
+
+        `/usage` 를 프롬프트로 보내는 방식이라 과금형 provider 에게는 쓰지 않는다
+        (호출부의 `supports_slash_preflight` 가드 참고).
+        """
+        log("Running provider pre-flight check...")
+        try:
+            # claude/agy는 /usage, codex는 /status 명령어로 RateLimitError 발생 여부를 미리 확인한다.
+            preflight_cmd = "/status" if request.provider == "codex" else "/usage"
+            usage_output = structured_provider.run(preflight_cmd)
+            usage_lower = usage_output.lower()
+            # 로컬 명령어의 출력문을 분석하여 claude의 '100% used' 또는 agy의 'Remaining 0%' 상태인지 검사한다.
+            if "100% used" in usage_lower or re.search(r"remaining\s+0(?:\.0+)?%", usage_lower):
+                raise RateLimitError(f"사용량 한도 초과 감지: {usage_output[:200]}")
+        except RateLimitError:
+            raise
+        except Exception as e:
+            # RateLimitError 이외의 에러(ex: /usage 미지원 등)는 수집 단계로 넘어가기 위해 무시한다.
+            log(f"Pre-flight check failed (ignored): {e}")
+
 
 
 def require_structured_provider(provider: object) -> StructuredProvider:
