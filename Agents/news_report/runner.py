@@ -106,6 +106,9 @@ def main():
         pattern_result = pattern.run(context)
 
         step("index")
+        from providers.subscription import enrich_usage_with_subscription
+
+        usage = enrich_usage_with_subscription(total_usage_of(llm), provider)
         result = build_success_result(
             job_id=job_id,
             started_at=started_at,
@@ -114,7 +117,7 @@ def main():
             source_stats=pattern_result.source_stats,
             items=pattern_result.items,
             warnings=pattern_result.warnings,
-            usage=total_usage_of(llm),
+            usage=usage,
         )
         write_result(args.result, result)
         status = result["status"]
