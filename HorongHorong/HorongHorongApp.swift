@@ -1076,6 +1076,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.setVolatileDomain(argumentDomain, forName: UserDefaults.argumentDomain)
         }
 
+        // 넓은 타임라인 자체가 문서의 대상이므로 스크린샷에서는 분야 목록이 화면을 차지하지 않게 한다.
+        if case .newsTimeline = config.target {
+            appState.isNewsListVisible = false
+        }
+
         let contentSize = config.contentSize
         let rootView = screenshotRootView(
             for: config.target,
