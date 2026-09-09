@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from providers import cli_providers
-from providers.cli_providers import ClaudeCliProvider, CodexCliProvider
+from providers.cli_providers import AntigravityCliProvider, ClaudeCliProvider, CodexCliProvider
 from providers.usage import RateLimitSnapshot, UsageRecord
 
 
@@ -56,7 +56,7 @@ _CODEX_STDOUT = "\n".join(
                 "usage": {
                     "input_tokens": 17253,
                     "cached_input_tokens": 4480,
-                    "cache_write_input_tokens": 0,
+                    "cache_write_input_tokens": 123,
                     "output_tokens": 23,
                     "reasoning_output_tokens": 15,
                 },
@@ -80,11 +80,30 @@ def test_claude_parse_output__json_response__returns_result_and_usage():
     assert usage is not None
     assert usage.input_tokens == 2
     assert usage.output_tokens == 4
-    assert usage.cached_input_tokens == 8050
-    assert usage.cache_write_input_tokens == 21276
+    assert usage.cache_hit_tokens == 8050
+    assert usage.cache_storage_5m_tokens == 21276
+    assert usage.cache_storage_1h_tokens == 0
     assert usage.total_cost_usd == pytest.approx(0.216895)
     # claude는 구독 잔여 한도를 노출하지 않는다.
     assert usage.rate_limits == ()
+
+
+@pytest.mark.unit
+def test_claude_parse_output__cache_creation_details__splits_storage_by_ttl():
+    # Given: Claude가 캐시 스토리지 토큰을 TTL별로 보고한다.
+    payload = json.loads(_CLAUDE_STDOUT)
+    payload["usage"]["cache_creation"] = {
+        "ephemeral_5m_input_tokens": 12000,
+        "ephemeral_1h_input_tokens": 9276,
+    }
+
+    # When: stdout을 파싱한다.
+    _, usage = ClaudeCliProvider().parse_output(json.dumps(payload))
+
+    # Then: 캐시 히트와 TTL별 스토리지를 서로 다른 의미로 보존한다.
+    assert usage.cache_hit_tokens == 8050
+    assert usage.cache_storage_5m_tokens == 12000
+    assert usage.cache_storage_1h_tokens == 9276
 
 
 # 시나리오 2. claude가 오류를 보고하면 schema 검증기로 넘기지 않고 바로 실패한다.
@@ -140,7 +159,9 @@ def test_codex_parse_output__jsonl_stream__returns_agent_message_and_usage(monke
     assert usage is not None
     assert usage.input_tokens == 17253
     assert usage.output_tokens == 23
-    assert usage.cached_input_tokens == 4480
+    assert usage.cache_hit_tokens == 4480
+    assert usage.cache_write_tokens == 123
+    assert usage.cache_storage_5m_tokens == 0
     assert usage.reasoning_output_tokens == 15
 
 
@@ -307,3 +328,37 @@ def test_usage_record_merge__none__keeps_original():
 
     # Then: 원래 값이 유지된다.
     assert merged == original
+
+
+# 시나리오 10. Antigravity CLI의 JSON 출력에서 토큰과 요율을 파싱한다.
+@pytest.mark.unit
+def test_antigravity_cli_parse_output__calculates_gemini_pricing():
+    stdout = json.dumps(
+        {
+            "status": "SUCCESS",
+            "response": "분석 결과입니다.",
+            "usage": {
+                "input_tokens": 5000,
+                "output_tokens": 1000,
+                "cache_read_tokens": 2000,
+                "thinking_tokens": 50,
+                "total_tokens": 6000,
+            },
+        }
+    )
+    provider = AntigravityCliProvider(model="gemini-3.8-flash-high")
+    text, usage = provider.parse_output(stdout)
+
+    assert text == "분석 결과입니다."
+    assert usage is not None
+    assert usage.input_tokens == 5000
+    assert usage.output_tokens == 1000
+    assert usage.cache_hit_tokens == 2000
+    assert usage.reasoning_output_tokens == 50
+    # gemini-3.8-flash 요율:
+    # input: 5000 * 0.75 / 1M = $0.00375
+    # output: 1000 * 3.75 / 1M = $0.00375
+    # cache_hit: 2000 * 0.075 / 1M = $0.00015
+    # total: $0.00765
+    assert usage.total_cost_usd == pytest.approx(0.00765, rel=1e-4)
+

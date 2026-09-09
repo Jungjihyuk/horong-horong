@@ -151,16 +151,21 @@ class AnthropicApiProvider:
 
         input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
-        cached = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        cache_hit = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+        cache_creation = getattr(usage, "cache_creation", None)
+        storage_5m = int(getattr(cache_creation, "ephemeral_5m_input_tokens", 0) or 0)
+        storage_1h = int(getattr(cache_creation, "ephemeral_1h_input_tokens", 0) or 0)
+        if cache_creation is None:
+            storage_5m = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
 
         pricing = load_pricing(self.model)
         cost = (
             estimate_cost_usd(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                cached_input_tokens=cached,
-                cache_write_input_tokens=cache_write,
+                cache_hit_tokens=cache_hit,
+                cache_storage_5m_tokens=storage_5m,
+                cache_storage_1h_tokens=storage_1h,
                 pricing=pricing,
             )
             if pricing
@@ -170,8 +175,9 @@ class AnthropicApiProvider:
         record = UsageRecord(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            cached_input_tokens=cached,
-            cache_write_input_tokens=cache_write,
+            cache_hit_tokens=cache_hit,
+            cache_storage_5m_tokens=storage_5m,
+            cache_storage_1h_tokens=storage_1h,
             total_cost_usd=cost,
             call_count=1,
         )

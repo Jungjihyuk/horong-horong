@@ -7,13 +7,79 @@ from dataclasses import replace
 from pathlib import Path
 
 from providers.base_provider import BaseCliProvider
+from providers.pricing import estimate_cost_usd, load_pricing
 from providers.protocols import RateLimitError
 from providers.usage import RateLimitSnapshot, UsageRecord
 
 
 class AntigravityCliProvider(BaseCliProvider):
+    def __init__(self, model: str | None = None) -> None:
+        super().__init__()
+        self.model = model or "gemini-3.8-flash"
+
     def _build_command(self, prompt: str) -> list[str]:
-        return ["agy", "-p", prompt]
+        cmd = ["agy", "-p", prompt, "--output-format", "json"]
+        if self.model:
+            cmd.extend(["--model", self.model])
+        return cmd
+
+    def parse_output(self, stdout: str) -> tuple[str, UsageRecord | None]:
+        try:
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            return stdout.strip(), None
+        if not isinstance(payload, dict):
+            return stdout.strip(), None
+
+        text = payload.get("response") or payload.get("result") or ""
+        status = payload.get("status")
+        if status == "ERROR" or payload.get("is_error"):
+            err_msg = str(text or payload)
+            lower_err = err_msg.lower()
+            if any(k in lower_err for k in ["rate limit", "usage limit", "429", "exceeded"]):
+                raise RateLimitError(f"antigravity 사용량 한도 초과: {err_msg[:200]}")
+            raise RuntimeError(f"antigravity CLI 오류: {err_msg[:200]}")
+
+        usage_dict = payload.get("usage")
+        if not isinstance(usage_dict, dict):
+            return str(text).strip(), None
+
+        input_tokens = _as_int(usage_dict.get("input_tokens"))
+        output_tokens = _as_int(usage_dict.get("output_tokens"))
+        cache_hit_tokens = _as_int(
+            usage_dict.get("cache_read_tokens") or usage_dict.get("cached_input_tokens")
+        )
+        thinking_tokens = _as_int(usage_dict.get("thinking_tokens"))
+
+        # 모델 접미사(-high, -medium, -low) 제거 후 과금표 조회
+        base_model = self.model
+        for suffix in ("-high", "-medium", "-low"):
+            if base_model.endswith(suffix):
+                base_model = base_model[: -len(suffix)]
+                break
+
+        pricing = load_pricing(base_model, prompt_tokens=input_tokens) or load_pricing(
+            "gemini-3.8-flash"
+        )
+        cost = (
+            estimate_cost_usd(
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_hit_tokens=cache_hit_tokens,
+                pricing=pricing,
+            )
+            if pricing
+            else None
+        )
+
+        return str(text).strip(), UsageRecord(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_hit_tokens=cache_hit_tokens,
+            reasoning_output_tokens=thinking_tokens,
+            total_cost_usd=cost,
+            call_count=1,
+        )
 
 
 class ClaudeCliProvider(BaseCliProvider):
@@ -55,11 +121,20 @@ class ClaudeCliProvider(BaseCliProvider):
         usage = payload.get("usage")
         usage = usage if isinstance(usage, dict) else {}
         cost = payload.get("total_cost_usd")
+        cache_creation = usage.get("cache_creation")
+        cache_creation = cache_creation if isinstance(cache_creation, dict) else {}
+        aggregate_storage = _as_int(usage.get("cache_creation_input_tokens"))
+        storage_5m = _as_int(cache_creation.get("ephemeral_5m_input_tokens"))
+        storage_1h = _as_int(cache_creation.get("ephemeral_1h_input_tokens"))
+        if not cache_creation:
+            # TTL 상세가 없는 Claude CLI 응답은 기본 캐시 수명인 5분 스토리지다.
+            storage_5m = aggregate_storage
         return text.strip(), UsageRecord(
             input_tokens=_as_int(usage.get("input_tokens")),
             output_tokens=_as_int(usage.get("output_tokens")),
-            cached_input_tokens=_as_int(usage.get("cache_read_input_tokens")),
-            cache_write_input_tokens=_as_int(usage.get("cache_creation_input_tokens")),
+            cache_hit_tokens=_as_int(usage.get("cache_read_input_tokens")),
+            cache_storage_5m_tokens=storage_5m,
+            cache_storage_1h_tokens=storage_1h,
             total_cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
             call_count=1,
         )
@@ -114,10 +189,10 @@ class CodexCliProvider(BaseCliProvider):
                     usage = UsageRecord(
                         input_tokens=_as_int(turn_usage.get("input_tokens")),
                         output_tokens=_as_int(turn_usage.get("output_tokens")),
-                        cached_input_tokens=_as_int(
+                        cache_hit_tokens=_as_int(
                             turn_usage.get("cached_input_tokens")
                         ),
-                        cache_write_input_tokens=_as_int(
+                        cache_write_tokens=_as_int(
                             turn_usage.get("cache_write_input_tokens")
                         ),
                         reasoning_output_tokens=_as_int(

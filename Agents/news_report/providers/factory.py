@@ -57,6 +57,12 @@ def create_provider(
         return create_ollama_provider(options, think=think)
     if name == "anthropic":
         return create_anthropic_provider(options)
+    if name == "antigravity":
+        model = options.model if options and options.model else None
+        provider = AntigravityCliProvider(model=model)
+        if options and options.timeout:
+            provider.timeout = options.timeout
+        return provider
     provider = factory()
     if options and options.timeout:
         provider.timeout = options.timeout
