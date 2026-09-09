@@ -10,8 +10,10 @@ struct NewsTimelineSuggestion: Identifiable, Equatable, Sendable {
     let label: String
     /// 이 후보가 묶는 리포트 헤딩들. 「무엇이 들어오는지」를 보여줄 때 쓴다.
     let headings: [String]
-    /// 만들면 나올 시점 수.
+    /// 만들면 나올 시점 수. 같은 기사가 여러 날 반복되면 처음 날에만 센다.
     let eventCount: Int
+    /// 이 주제가 등장한 리포트 파일 수. 재료가 얼마나 있는지를 가장 직접적으로 보여준다.
+    let reportCount: Int
     let monthCount: Int
     let dateFrom: String
     let dateTo: String
@@ -19,6 +21,32 @@ struct NewsTimelineSuggestion: Identifiable, Equatable, Sendable {
     let alreadyExists: Bool
     /// 처음 만들 때 드는 LLM 호출 수(개월 수 + 개요 1회). 누르기 전에 비용을 알려준다.
     let estimatedCalls: Int
+    /// 새로 추가된 리포트/사건이 있어 갱신이 필요한가.
+    let hasUpdates: Bool
+
+    init(
+        label: String,
+        headings: [String],
+        eventCount: Int,
+        reportCount: Int,
+        monthCount: Int,
+        dateFrom: String,
+        dateTo: String,
+        alreadyExists: Bool,
+        estimatedCalls: Int,
+        hasUpdates: Bool = true
+    ) {
+        self.label = label
+        self.headings = headings
+        self.eventCount = eventCount
+        self.reportCount = reportCount
+        self.monthCount = monthCount
+        self.dateFrom = dateFrom
+        self.dateTo = dateTo
+        self.alreadyExists = alreadyExists
+        self.estimatedCalls = estimatedCalls
+        self.hasUpdates = hasUpdates
+    }
 
     var id: String { label }
 
@@ -28,6 +56,7 @@ struct NewsTimelineSuggestion: Identifiable, Equatable, Sendable {
         if !dateFrom.isEmpty, !dateTo.isEmpty {
             parts.append("\(dateFrom) ~ \(dateTo)")
         }
+        parts.append("리포트 \(reportCount)편")
         parts.append("\(eventCount)개 시점")
         parts.append("\(monthCount)개월")
         return parts.joined(separator: " · ")

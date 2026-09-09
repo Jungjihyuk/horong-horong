@@ -7,11 +7,14 @@ import Foundation
 /// 구현은 `Data/Adapters/News/` 에 있다.
 @MainActor
 protocol NewsTimelineGateway {
+    /// 지금 설정으로 타임라인을 만들면 무엇이 쓰이는가. 누르기 전에 보여준다.
+    var providerDisplayName: String { get }
+
     /// 리포트에서 만들 수 있는 주제를 찾는다. LLM 을 쓰지 않아 즉시 끝난다.
     func suggestTopics(dataBasePath: String) async throws -> [NewsTimelineSuggestion]
 
     /// 고른 주제로 타임라인을 만들거나 갱신한다. 여기서만 LLM 이 돈다.
-    func buildTimeline(label: String, dataBasePath: String) async throws
+    func buildTimeline(label: String, axisLimit: Int, dataBasePath: String) async throws
 }
 
 /// 타임라인 생성이 실패한 이유. 사용자에게 그대로 보여줄 수 있는 문장을 담는다.

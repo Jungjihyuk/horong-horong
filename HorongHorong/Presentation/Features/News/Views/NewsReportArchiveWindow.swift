@@ -107,6 +107,7 @@ enum NewsReportMarkdownParser {
 
 struct NewsReportArchiveWindow: View {
     @Environment(\.appearanceDensity) private var appearanceDensity
+    @Environment(AppState.self) private var appState
     @ObservedObject private var selection = NewsReportArchiveSelection.shared
     @AppStorage(Constants.NewsStorageKey.dataBasePath)
     private var dataBasePath = Constants.defaultNewsDataBasePath
@@ -139,16 +140,25 @@ struct NewsReportArchiveWindow: View {
             switch mode {
             case .archive:
                 HStack(spacing: 0) {
+                    // 좌측 레일의 뉴스 버튼을 다시 누르면 접힌다. 폭을 0으로 줄여
+                    // 본문이 그만큼 넓어진다.
                     reportList(visibleEntries)
+                        .frame(width: appState.isNewsListVisible ? 250 : 0, alignment: .leading)
+                        .opacity(appState.isNewsListVisible ? 1 : 0)
+                        .clipped()
                     Divider().overlay(PopoverChrome.divider)
+                        .opacity(appState.isNewsListVisible ? 1 : 0)
+                        .frame(width: appState.isNewsListVisible ? 1 : 0)
                     detailPane(selectedEntry)
                 }
+                .animation(.easeInOut(duration: 0.24), value: appState.isNewsListVisible)
             case .timeline:
                 NewsTimelinePane(
                     viewModel: timelineViewModel,
                     gateway: timelineService,
                     dataBasePath: dataBasePath,
-                    initiallyPresentingPicker: showsTimelinePicker
+                    initiallyPresentingPicker: showsTimelinePicker,
+                    isCategoryListVisible: appState.isNewsListVisible
                 )
             }
         }
@@ -182,6 +192,9 @@ struct NewsReportArchiveWindow: View {
 
     private var toolbar: some View {
         HStack(spacing: 14) {
+            // 이 화면이 무엇을 보여주는지 정하는 컨트롤이라 맨 앞에 둔다.
+            NewsHubModeSwitch(mode: $mode)
+
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 13, weight: .semibold))
@@ -195,15 +208,8 @@ struct NewsReportArchiveWindow: View {
 
             Spacer(minLength: 16)
 
-            Picker("", selection: $mode) {
-                ForEach(NewsHubMode.allCases) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 168)
-
+            // 리포트 본문까지 뒤지는 검색이라 타임라인 모드에서는 의미가 없다.
+            if mode == .archive {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(PopoverChrome.inkTertiary)
@@ -217,6 +223,7 @@ struct NewsReportArchiveWindow: View {
                 RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
                     .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
             )
+            }
 
             Button {
                 revealInFinder()

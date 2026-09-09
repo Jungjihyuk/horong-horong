@@ -16,7 +16,7 @@ enum NewsTimelineMetrics {
     static let cardSpacing: CGFloat = 12
     static let columnPadding: CGFloat = 16
     /// 축 카드 영역의 고정 높이. 카드는 아래로 정렬해 축선에 붙는다.
-    static let axisCardHeight: CGFloat = 188
+    static let axisCardHeight: CGFloat = 248
     /// 카드와 축선 사이 점선 구간.
     static let connectorHeight: CGFloat = 26
     static let markerSize: CGFloat = 10
@@ -26,8 +26,10 @@ enum NewsTimelineMetrics {
     /// 배너가 월 컬럼 전체를 합친 폭(8개월이면 5,000pt 넘는다)까지 늘어난다.
     static let bannerWidth: CGFloat = 1080
 
-    static let columnWidth: CGFloat =
-        cardWidth * 3 + cardSpacing * 2 + columnPadding * 2
+    static func columnWidth(axisLimit: Int) -> CGFloat {
+        let slots = CGFloat(max(3, min(5, axisLimit)))
+        return cardWidth * slots + cardSpacing * (slots - 1) + columnPadding * 2
+    }
 
     /// 월별 파스텔. vault 생성기와 같은 계열을 쓴다.
     static let palette: [Color] = [
@@ -57,7 +59,11 @@ struct NewsTimelineView: View {
 
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(timeline.months.enumerated()), id: \.element.id) { index, month in
-                        NewsTimelineMonthColumn(month: month, tint: NewsTimelineMetrics.tint(for: index))
+                        NewsTimelineMonthColumn(
+                            month: month,
+                            axisLimit: timeline.axisLimit,
+                            tint: NewsTimelineMetrics.tint(for: index)
+                        )
                             .equatable()
                     }
                 }
@@ -75,9 +81,12 @@ struct NewsTimelineBanner: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(timeline.categoryLabel) — 월별 핵심 사건 타임라인")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink)
+            HStack(spacing: 6) {
+                Text("\(timeline.categoryLabel) — 월별 사건 흐름 타임라인")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                NewsTimelineImportanceInfoButton()
+            }
 
             Text(statsLine)
                 .font(.system(size: 11.5, design: .rounded))
@@ -116,9 +125,120 @@ struct NewsTimelineBanner: View, Equatable {
         }
         parts.append("\(timeline.totalEventCount)개 시점")
         parts.append("\(timeline.months.count)개월")
-        parts.append("월별 축 최대 3개")
-        parts.append("전환점 \(timeline.turningPointMonthKeys.count)곳")
+        parts.append("월별 대표 최대 \(timeline.axisLimit)개")
+        parts.append("전환점 \(timeline.turningPointCount)곳")
         return parts.joined(separator: " · ")
+    }
+}
+
+/// 중요도와 대표 선정은 서로 다른 판단이라는 사실을 화면에서 바로 설명한다.
+struct NewsTimelineImportanceInfoButton: View {
+    @State private var isPresented = false
+
+    var body: some View {
+        Button { isPresented.toggle() } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(PopoverChrome.inkTertiary)
+                .padding(3)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("중요도와 대표 선정 기준")
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("중요도 100점 기준")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                Text("변화의 크기 25 · 파급 범위 25 · 지속성 20\n흐름 전환력 20 · 근거 확실성 10")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                Text("대표 사건은 점수만 줄 세우지 않고, 반복 보도를 걷어낸 뒤 원인·변화·결과처럼 흐름에 새 정보를 보태는 사건을 고릅니다.")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("AI가 공통 기준으로 평가한 값이며 절대적인 사실 판정은 아닙니다.")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkTertiary)
+            }
+            .padding(12)
+            .frame(width: 310, alignment: .leading)
+            .background(PopoverChrome.card)
+        }
+    }
+}
+
+/// 사건별 항목 점수와 근거를 여는 작은 중요도 버튼.
+struct NewsTimelineImportanceBadge: View {
+    let event: NewsTimelineEvent
+    @State private var isPresented = false
+    @State private var isHovered = false
+
+    var body: some View {
+        Button { isPresented.toggle() } label: {
+            HStack(spacing: 2) {
+                Text("중요도 \(event.importance)")
+                Image(systemName: "info.circle")
+                    .font(.system(size: 8.5, weight: .semibold))
+            }
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .foregroundStyle(isHovered ? PopoverChrome.ink : PopoverChrome.inkTertiary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(
+                PopoverChrome.inkTertiary.opacity(isHovered ? 0.2 : 0.1),
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("이 사건의 중요도 근거")
+        .popover(isPresented: $isPresented, arrowEdge: .top) {
+            importanceDetails
+        }
+    }
+
+    @ViewBuilder
+    private var importanceDetails: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("중요도 \(event.importance)점")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(PopoverChrome.ink)
+
+            if let score = event.importanceAssessment {
+                scoreRow("변화의 크기", value: score.changeMagnitude, maximum: 25)
+                scoreRow("파급 범위", value: score.impactScope, maximum: 25)
+                scoreRow("지속성", value: score.durability, maximum: 20)
+                scoreRow("흐름 전환력", value: score.trajectoryPower, maximum: 20)
+                scoreRow("근거 확실성", value: score.evidenceStrength, maximum: 10)
+                if !score.reason.isEmpty {
+                    Divider()
+                    Text(score.reason)
+                        .font(.system(size: 10.5, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("이 결과는 이전 형식으로 만들어져 항목별 근거가 없습니다. 타임라인을 갱신하면 새 기준으로 다시 평가합니다.")
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(width: 270, alignment: .leading)
+        .background(PopoverChrome.card)
+    }
+
+    private func scoreRow(_ label: String, value: Int, maximum: Int) -> some View {
+        HStack {
+            Text(label)
+            Spacer(minLength: 12)
+            Text("\(value)/\(maximum)")
+                .monospacedDigit()
+        }
+        .font(.system(size: 10.5, design: .rounded))
+        .foregroundStyle(PopoverChrome.inkSecondary)
     }
 }
 
@@ -126,6 +246,7 @@ struct NewsTimelineBanner: View, Equatable {
 
 struct NewsTimelineMonthColumn: View, Equatable {
     let month: NewsTimelineMonth
+    let axisLimit: Int
     let tint: Color
 
     var body: some View {
@@ -142,7 +263,10 @@ struct NewsTimelineMonthColumn: View, Equatable {
 
             Spacer(minLength: 0)
         }
-        .frame(width: NewsTimelineMetrics.columnWidth, alignment: .topLeading)
+        .frame(
+            width: NewsTimelineMetrics.columnWidth(axisLimit: axisLimit),
+            alignment: .topLeading
+        )
     }
 
     private var monthHeaderBar: some View {
@@ -151,15 +275,9 @@ struct NewsTimelineMonthColumn: View, Equatable {
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink)
 
-            Text("축 \(month.axisEvents.count) · 세부 \(month.detailEvents.count)")
+            Text("대표 \(month.axisEvents.count) · 추가 \(month.detailEvents.count)")
                 .font(.system(size: 10.5, design: .rounded))
                 .foregroundStyle(PopoverChrome.ink.opacity(0.65))
-
-            if month.isTurningPoint {
-                Text("전환점")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.red)
-            }
 
             Spacer(minLength: 6)
 
@@ -208,7 +326,7 @@ struct NewsTimelineMonthColumn: View, Equatable {
     @ViewBuilder
     private var detailSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(month.detailEvents.isEmpty ? "세부 사건 없음" : "세부 사건 · 우선순위순")
+            Text(month.detailEvents.isEmpty ? "추가 사건 없음" : "추가 사건 · 중요도순")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundStyle(PopoverChrome.inkTertiary)
 
@@ -256,9 +374,21 @@ struct NewsTimelineAxisColumn: View, Equatable {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("핵심 \(ordinal) · 중요도 \(event.importance)")
-                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(PopoverChrome.ink.opacity(0.6))
+            HStack(spacing: 5) {
+                Text("대표 \(ordinal)")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(PopoverChrome.ink.opacity(0.6))
+                NewsTimelineImportanceBadge(event: event)
+                if event.isTurningPoint {
+                    Text("전환점")
+                        .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .overlay(Capsule().stroke(.red.opacity(0.6), lineWidth: 1))
+                }
+            }
+            .zIndex(1)
 
             NewsTimelineTitleText(title: event.title, url: event.linkURL, size: 12, lineLimit: 3)
                 .equatable()
@@ -281,6 +411,20 @@ struct NewsTimelineAxisColumn: View, Equatable {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .stroke(.red.opacity(0.45), lineWidth: 1)
                     )
+            }
+
+            if !event.whyItMatters.isEmpty {
+                Text("대표 이유 · \(event.whyItMatters)")
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(PopoverChrome.inkSecondary)
+                    .lineLimit(2)
+            }
+
+            if event.isTurningPoint {
+                Text("전환점 · \(event.turningPointReason)")
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.red.opacity(0.85))
+                    .lineLimit(2)
             }
         }
         .padding(10)
@@ -323,14 +467,7 @@ struct NewsTimelineDetailCard: View, Equatable {
                 Text(event.shortDate)
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(PopoverChrome.ink.opacity(0.75))
-                if let rank = event.rank {
-                    Text("\(rank)순위")
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(PopoverChrome.inkTertiary)
-                }
-                Text("중요도 \(event.importance)")
-                    .font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(PopoverChrome.inkTertiary)
+                NewsTimelineImportanceBadge(event: event)
             }
             .frame(width: 52, alignment: .leading)
 
@@ -368,9 +505,17 @@ struct NewsTimelineTitleText: View, Equatable {
     var body: some View {
         if let url {
             Link(destination: url) {
-                titleText
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    titleText
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: max(7, size - 4), weight: .semibold))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .help("원문 링크 열기")
+            .accessibilityHint("원문 링크를 엽니다")
         } else {
             titleText
         }
@@ -402,6 +547,51 @@ enum NewsHubMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// 보관함 ↔ 타임라인 전환 스위치.
+///
+/// `Picker(.segmented)` 를 쓰지 않는 이유: 시스템 강조색(주황)이 그대로 칠해져 이 화면의
+/// 크림 톤과 겉돌고, 높이도 툴바의 다른 컨트롤과 맞지 않는다. 좌측 레일의 선택 표시와
+/// 같은 토큰(`selectionFill`/`selectionInk`)을 써서 앱 안에서 일관되게 보이도록 한다.
+struct NewsHubModeSwitch: View {
+    @Binding var mode: NewsHubMode
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(NewsHubMode.allCases) { option in
+                segment(option)
+            }
+        }
+        .padding(3)
+        .background(
+            PopoverChrome.card,
+            in: RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: PopoverChrome.radius(10), style: .continuous)
+                .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+        )
+    }
+
+    private func segment(_ option: NewsHubMode) -> some View {
+        let isSelected = mode == option
+        return Button {
+            withAnimation(.easeInOut(duration: 0.18)) { mode = option }
+        } label: {
+            Text(option.title)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(isSelected ? PopoverChrome.selectionInk : PopoverChrome.inkSecondary)
+                .frame(width: 64, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                        .fill(isSelected ? PopoverChrome.selectionFill : .clear)
+                )
+                // 배경이 비어 있는 비선택 항목도 사각형 전체로 눌리게 한다.
+                .contentShape(RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// 타임라인 모드의 내용.
 ///
 /// **타임라인은 사용자가 만들 때만 생긴다.** 리포트가 늘었다고 자동으로 만들거나 갱신하지
@@ -413,6 +603,8 @@ struct NewsTimelinePane: View {
     let dataBasePath: String
     /// 스크린샷 타깃(`news-timeline-picker`)처럼 시트를 연 채로 열어야 할 때만 쓴다.
     var initiallyPresentingPicker: Bool = false
+    /// 좌측 레일의 뉴스 버튼으로 접었는지. 접히면 분야 목록이 사라지고 본문이 넓어진다.
+    var isCategoryListVisible: Bool = true
 
     @State private var isPickerPresented = false
 
@@ -474,7 +666,12 @@ struct NewsTimelinePane: View {
             HStack(spacing: 0) {
                 if viewModel.timelines.count > 1 {
                     categoryList
+                        .frame(width: isCategoryListVisible ? 190 : 0, alignment: .leading)
+                        .opacity(isCategoryListVisible ? 1 : 0)
+                        .clipped()
                     Divider().overlay(PopoverChrome.divider)
+                        .opacity(isCategoryListVisible ? 1 : 0)
+                        .frame(width: isCategoryListVisible ? 1 : 0)
                 }
 
                 if let timeline = viewModel.selectedTimeline {
@@ -482,6 +679,7 @@ struct NewsTimelinePane: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .animation(.easeInOut(duration: 0.24), value: isCategoryListVisible)
         }
     }
 
@@ -493,7 +691,7 @@ struct NewsTimelinePane: View {
             Spacer(minLength: 0)
         }
         .padding(.top, 12)
-        .frame(width: 190)
+        .frame(width: 190, alignment: .leading)
         .background(PopoverChrome.surfaceAlt.opacity(0.35))
     }
 
@@ -570,8 +768,7 @@ struct NewsTimelineTopicPicker: View {
     let dataBasePath: String
 
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(Constants.NewsStorageKey.selectedProvider)
-    private var selectedProvider = Constants.defaultNewsProvider
+    @State private var axisLimits: [String: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -583,6 +780,11 @@ struct NewsTimelineTopicPicker: View {
         .background(PopoverChrome.surface)
         .task {
             await viewModel.loadSuggestions(gateway: gateway, dataBasePath: dataBasePath)
+            for suggestion in viewModel.suggestions where axisLimits[suggestion.label] == nil {
+                axisLimits[suggestion.label] = viewModel.timelines.first {
+                    $0.categoryLabel == suggestion.label
+                }?.axisLimit ?? 3
+            }
         }
     }
 
@@ -595,7 +797,9 @@ struct NewsTimelineTopicPicker: View {
                 Text("리포트에 실제로 있는 주제만 보여줍니다. 고른 주제만 만들어집니다.")
                     .font(.system(size: 11.5, design: .rounded))
                     .foregroundStyle(PopoverChrome.inkTertiary)
-                Text("현재 Provider: \(selectedProvider.capitalized)")
+                // 리포트 provider 가 아니라 «타임라인이 실제로 쓸» 값이다.
+                // 설정에서 갈라 두면 둘이 다를 수 있다.
+                Text("현재 모델: \(gateway.providerDisplayName)")
                     .font(.system(size: 10.5, weight: .medium, design: .rounded))
                     .foregroundStyle(PopoverChrome.accent)
             }
@@ -642,11 +846,19 @@ struct NewsTimelineTopicPicker: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach(viewModel.suggestions) { suggestion in
-                        NewsTimelineSuggestionRow(suggestion: suggestion) {
+                        NewsTimelineSuggestionRow(
+                            suggestion: suggestion,
+                            existingTimeline: viewModel.timelines.first { $0.categoryLabel == suggestion.label },
+                            axisLimit: Binding(
+                                get: { axisLimits[suggestion.label] ?? 3 },
+                                set: { axisLimits[suggestion.label] = $0 }
+                            )
+                        ) {
                             dismiss()
                             Task {
                                 await viewModel.build(
                                     label: suggestion.label,
+                                    axisLimit: axisLimits[suggestion.label] ?? 3,
                                     gateway: gateway,
                                     dataBasePath: dataBasePath
                                 )
@@ -666,22 +878,40 @@ struct NewsTimelineTopicPicker: View {
 /// 넘는다(Swift 6 에서 컴파일 에러다).
 struct NewsTimelineSuggestionRow: View {
     let suggestion: NewsTimelineSuggestion
+    let existingTimeline: NewsTimeline?
+    @Binding var axisLimit: Int
     let action: () -> Void
 
+    private var isUpToDate: Bool {
+        guard suggestion.alreadyExists else { return false }
+        let currentAxisLimit = existingTimeline?.axisLimit ?? 3
+        return !suggestion.hasUpdates && (axisLimit == currentAxisLimit)
+    }
+
+    private var statusTitle: String? {
+        guard suggestion.alreadyExists else { return nil }
+        if suggestion.hasUpdates { return "새 리포트 있음" }
+        return isUpToDate ? "새 리포트 없음" : "설정 변경됨"
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(suggestion.label)
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                         .foregroundStyle(PopoverChrome.ink)
-                    if suggestion.alreadyExists {
-                        Text("이미 있음")
+                    Spacer(minLength: 8)
+                    if let statusTitle {
+                        Text(statusTitle)
                             .font(.system(size: 9.5, weight: .medium, design: .rounded))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(PopoverChrome.accentSoft.opacity(0.4), in: Capsule())
-                            .foregroundStyle(PopoverChrome.accent)
+                            .background(
+                                (isUpToDate ? PopoverChrome.inkTertiary.opacity(0.18) : PopoverChrome.accentSoft.opacity(0.4)),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(isUpToDate ? PopoverChrome.inkSecondary : PopoverChrome.accent)
                     }
                 }
 
@@ -699,9 +929,65 @@ struct NewsTimelineSuggestionRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(suggestion.alreadyExists ? "갱신" : "만들기", action: action)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            Divider().overlay(PopoverChrome.divider)
+
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("월별 핵심 사건")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    Text("각 월에 강조할 사건 수 · 기본 3개")
+                        .font(.system(size: 9.5, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                }
+                Spacer(minLength: 8)
+
+                HStack(spacing: 0) {
+                    Button {
+                        axisLimit = max(1, axisLimit - 1)
+                    } label: {
+                        Image(systemName: "minus")
+                            .frame(width: 26, height: 24)
+                    }
+                    .disabled(axisLimit == 1)
+                    .accessibilityLabel("월별 핵심 사건 줄이기")
+
+                    Text("\(axisLimit)개")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(PopoverChrome.ink)
+                        .frame(width: 38)
+
+                    Button {
+                        axisLimit = min(5, axisLimit + 1)
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 26, height: 24)
+                    }
+                    .disabled(axisLimit == 5)
+                    .accessibilityLabel("월별 핵심 사건 늘리기")
+                }
+                .buttonStyle(.borderless)
+                .background(
+                    PopoverChrome.surfaceAlt,
+                    in: RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: PopoverChrome.radius(7), style: .continuous)
+                        .stroke(PopoverChrome.border, lineWidth: PopoverChrome.borderWidth)
+                )
+                .help("한 달 타임라인 축 위에 카드로 강조할 핵심 사건의 수입니다.")
+
+                if isUpToDate {
+                    Text("반영할 리포트가 없습니다")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(PopoverChrome.inkTertiary)
+                } else {
+                    Button(suggestion.alreadyExists ? "갱신" : "만들기", action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .help(suggestion.alreadyExists ? "타임라인 갱신" : "타임라인 만들기")
+                }
+            }
         }
         .padding(11)
         .background(

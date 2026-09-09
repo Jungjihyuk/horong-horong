@@ -8,6 +8,8 @@ import Foundation
 struct NewsTimeline: Identifiable, Equatable, Sendable {
     let categoryId: String
     let categoryLabel: String
+    /// 한 달에 표시할 대표 사건의 사용자 지정 최대치(1...5).
+    let axisLimit: Int
     /// `2026-02-22` 형태. 문자열 그대로 두는 이유는 아래 `NewsTimelineEvent.date` 와 같다.
     let dateFrom: String
     let dateTo: String
@@ -24,7 +26,13 @@ struct NewsTimeline: Identifiable, Equatable, Sendable {
     }
 
     var turningPointMonthKeys: [String] {
-        months.filter(\.isTurningPoint).map(\.monthKey)
+        months.filter(\.hasTurningPoint).map(\.monthKey)
+    }
+
+    var turningPointCount: Int {
+        months.reduce(0) { count, month in
+            count + month.axisEvents.filter(\.isTurningPoint).count
+        }
     }
 }
 
@@ -37,7 +45,6 @@ struct NewsTimelineMonth: Identifiable, Equatable, Sendable {
     /// LLM 이 만든 그 달의 종합 정리.
     let summary: String
     let keyTerms: [String]
-    let isTurningPoint: Bool
     /// 그 달을 대표하는 사건. 최대 3개.
     let axisEvents: [NewsTimelineEvent]
     /// 우선순위순 세부 사건.
@@ -46,6 +53,8 @@ struct NewsTimelineMonth: Identifiable, Equatable, Sendable {
     var id: String { monthKey }
 
     var isSynthesized: Bool { !synthesizedAt.isEmpty }
+
+    var hasTurningPoint: Bool { axisEvents.contains(where: \.isTurningPoint) }
 
     /// 이 달이 마감됐는지. **저장하지 않고 매번 계산한다** — 이번 달은 다음 달이 되면
     /// 지난 달이라, 쓰기 없이 자정만 지나도 틀리는 값이기 때문이다(CLAUDE.md R2).
@@ -76,14 +85,15 @@ struct NewsTimelineEvent: Identifiable, Equatable, Sendable {
     let date: String
     let title: String
     let url: String
-    /// 리포트가 매긴 중요도 0~100.
+    /// 월 맥락에서 공통 루브릭으로 다시 평가한 중요도 0~100.
     let importance: Int
+    let importanceAssessment: NewsTimelineImportanceAssessment?
     let bullets: [String]
     let tags: [String]
-    /// 그 달 전체 기준 순위. 축 사건은 `nil`.
-    let rank: Int?
     /// 축 사건만 채워진다. 「왜 이것이 이 달의 축인가」.
     let whyItMatters: String
+    /// 비어 있지 않으면 이 대표 사건이 해당 월의 전환점이다.
+    let turningPointReason: String
 
     var id: String { eventId }
 
@@ -93,17 +103,31 @@ struct NewsTimelineEvent: Identifiable, Equatable, Sendable {
     }
 
     var linkURL: URL? { url.isEmpty ? nil : URL(string: url) }
+
+    var isTurningPoint: Bool { !turningPointReason.isEmpty }
+}
+
+/// 모든 뉴스 분야가 공유하는 중요도 100점 루브릭.
+struct NewsTimelineImportanceAssessment: Equatable, Sendable {
+    let changeMagnitude: Int
+    let impactScope: Int
+    let durability: Int
+    let trajectoryPower: Int
+    let evidenceStrength: Int
+    let reason: String
+
+    var total: Int {
+        changeMagnitude + impactScope + durability + trajectoryPower + evidenceStrength
+    }
 }
 
 /// 타임라인 전체 머리말.
 struct NewsTimelineOverview: Equatable, Sendable {
     let summary: String
     let emphasisKeywords: [String]
-    let turningPointCount: Int
 
     static let empty = NewsTimelineOverview(
         summary: "",
-        emphasisKeywords: [],
-        turningPointCount: 0
+        emphasisKeywords: []
     )
 }

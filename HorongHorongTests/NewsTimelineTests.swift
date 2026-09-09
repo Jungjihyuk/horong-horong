@@ -35,9 +35,10 @@ final class NewsTimelineTests: XCTestCase {
     private func sampleJSON(categoryId: String, categoryLabel: String) -> String {
         """
         {
-          "schema_version": 1,
+          "schema_version": 2,
           "category_id": "\(categoryId)",
           "category_label": "\(categoryLabel)",
+          "axis_limit": 3,
           "date_from": "2026-02-22",
           "date_to": "2026-04-30",
           "generated_at": "2026-09-08T21:00:00",
@@ -50,7 +51,6 @@ final class NewsTimelineTests: XCTestCase {
               "prompt_version": 2,
               "summary": "2월 종합.",
               "key_terms": ["관세"],
-              "is_turning_point": false,
               "axis_events": [
                 {
                   "event_id": "e1",
@@ -58,10 +58,18 @@ final class NewsTimelineTests: XCTestCase {
                   "title": "미 대법원 관세 무효화",
                   "url": "https://example.com/a",
                   "importance": 83,
+                  "importance_assessment": {
+                    "change_magnitude": 20,
+                    "impact_scope": 20,
+                    "durability": 15,
+                    "trajectory_power": 18,
+                    "evidence_strength": 10,
+                    "reason": "정책 경로를 바꾼 판결이다."
+                  },
                   "bullets": ["실물 경제의 역습"],
                   "tags": ["관세"],
-                  "rank": null,
-                  "why_it_matters": "판결이 흐름을 바꿨다."
+                  "why_it_matters": "판결이 흐름을 바꿨다.",
+                  "turning_point_reason": ""
                 }
               ],
               "detail_events": []
@@ -74,7 +82,6 @@ final class NewsTimelineTests: XCTestCase {
               "prompt_version": 2,
               "summary": "4월 종합.",
               "key_terms": ["유가", "증시"],
-              "is_turning_point": true,
               "axis_events": [
                 {
                   "event_id": "e2",
@@ -84,8 +91,8 @@ final class NewsTimelineTests: XCTestCase {
                   "importance": 88,
                   "bullets": [],
                   "tags": [],
-                  "rank": null,
-                  "why_it_matters": ""
+                  "why_it_matters": "",
+                  "turning_point_reason": "기대가 실제 금리 상승으로 바뀌었다."
                 }
               ],
               "detail_events": [
@@ -97,8 +104,8 @@ final class NewsTimelineTests: XCTestCase {
                   "importance": 83,
                   "bullets": ["이란 소통채널 폐쇄"],
                   "tags": ["휴전"],
-                  "rank": 4,
-                  "why_it_matters": ""
+                  "why_it_matters": "",
+                  "turning_point_reason": ""
                 }
               ]
             }
@@ -106,8 +113,7 @@ final class NewsTimelineTests: XCTestCase {
           "overview": {
             "input_hash": "sha256:ccc",
             "summary": "전체 흐름.",
-            "emphasis_keywords": ["국채금리", "유가"],
-            "turning_point_count": 1
+            "emphasis_keywords": ["국채금리", "유가"]
           },
           "warnings": []
         }
@@ -127,13 +133,47 @@ final class NewsTimelineTests: XCTestCase {
         XCTAssertEqual(timelines.count, 1)
         let timeline = try XCTUnwrap(timelines.first)
         XCTAssertEqual(timeline.categoryLabel, "금리/거시경제")
+        XCTAssertEqual(timeline.axisLimit, 3)
         XCTAssertEqual(timeline.months.count, 2)
         XCTAssertEqual(timeline.overview.emphasisKeywords, ["국채금리", "유가"])
 
         let february = try XCTUnwrap(timeline.months.first)
         XCTAssertEqual(february.keyTerms, ["관세"])
         XCTAssertEqual(february.axisEvents.first?.whyItMatters, "판결이 흐름을 바꿨다.")
-        XCTAssertNil(february.axisEvents.first?.rank, "축 사건은 순위를 갖지 않는다")
+        XCTAssertEqual(february.axisEvents.first?.importanceAssessment?.trajectoryPower, 18)
+        XCTAssertEqual(february.axisEvents.first?.importanceAssessment?.total, 83)
+    }
+
+    /// 구버전 상태는 상세 근거가 없어도 열리고 대표 최대치는 3으로 보정한다.
+    func testLoadTimelines_versionOneState_usesCompatibleDefaults() throws {
+        let json = """
+        {
+          "schema_version": 1,
+          "category_id": "legacy",
+          "category_label": "구버전",
+          "months": [{
+            "month_key": "2026-09",
+            "input_hash": "old",
+            "is_turning_point": true,
+            "axis_events": [{
+              "event_id": "old-event",
+              "date": "2026-09-01",
+              "title": "기존 사건",
+              "importance": 72,
+              "rank": null
+            }]
+          }]
+        }
+        """
+        try write(categoryId: "legacy", json: json)
+
+        let timeline = try XCTUnwrap(
+            NewsTimelineStore.loadTimelines(dataBasePath: base.path).first
+        )
+
+        XCTAssertEqual(timeline.axisLimit, 3)
+        XCTAssertNil(timeline.months[0].axisEvents[0].importanceAssessment)
+        XCTAssertEqual(timeline.turningPointCount, 0, "월 단위 구버전 표시는 사건 전환점으로 승격하지 않는다")
     }
 
     /// «N개 시점» 은 축과 세부를 합친 수다.
@@ -176,7 +216,6 @@ final class NewsTimelineTests: XCTestCase {
             synthesizedAt: "2026-09-08T21:00:00",
             summary: "",
             keyTerms: [],
-            isTurningPoint: false,
             axisEvents: [],
             detailEvents: []
         )
@@ -236,10 +275,12 @@ final class NewsTimelineTests: XCTestCase {
 /// 게이트웨이 fake. 실제 러너 프로세스를 띄우지 않는다.
 @MainActor
 private final class FakeTimelineGateway: NewsTimelineGateway {
+    var providerDisplayName: String = "fake · test-model"
     var suggestions: [NewsTimelineSuggestion] = []
     var suggestError: Error?
     var buildError: Error?
     private(set) var builtLabels: [String] = []
+    private(set) var builtAxisLimits: [Int] = []
     /// 만들기가 성공했을 때 상태 파일을 쓰기 위한 훅.
     var onBuild: ((String) -> Void)?
 
@@ -248,9 +289,10 @@ private final class FakeTimelineGateway: NewsTimelineGateway {
         return suggestions
     }
 
-    func buildTimeline(label: String, dataBasePath: String) async throws {
+    func buildTimeline(label: String, axisLimit: Int, dataBasePath: String) async throws {
         if let buildError { throw buildError }
         builtLabels.append(label)
+        builtAxisLimits.append(axisLimit)
         onBuild?(label)
     }
 }
@@ -258,12 +300,13 @@ private final class FakeTimelineGateway: NewsTimelineGateway {
 extension NewsTimelineTests {
     private func makeSuggestion(
         _ label: String,
-        exists: Bool = false
+        exists: Bool = false,
+        hasUpdates: Bool = true
     ) -> NewsTimelineSuggestion {
         NewsTimelineSuggestion(
-            label: label, headings: ["금융/증시"], eventCount: 50, monthCount: 8,
+            label: label, headings: ["금융/증시"], eventCount: 50, reportCount: 68, monthCount: 8,
             dateFrom: "2026-02-22", dateTo: "2026-09-08",
-            alreadyExists: exists, estimatedCalls: 9
+            alreadyExists: exists, estimatedCalls: 9, hasUpdates: hasUpdates
         )
     }
 
@@ -277,6 +320,21 @@ extension NewsTimelineTests {
 
         XCTAssertEqual(viewModel.suggestions.map(\.label), ["금리/거시경제", "AI/반도체"])
         XCTAssertNil(viewModel.errorMessage)
+    }
+
+    /// 제안 목록에서 각 주제의 갱신 필요 여부(hasUpdates)가 정상적으로 유지된다.
+    func testLoadSuggestions_preservesHasUpdatesFlag() async throws {
+        let gateway = FakeTimelineGateway()
+        gateway.suggestions = [
+            makeSuggestion("금리/거시경제", exists: true, hasUpdates: false),
+            makeSuggestion("AI/반도체", exists: true, hasUpdates: true),
+        ]
+        let viewModel = NewsTimelineViewModel()
+
+        await viewModel.loadSuggestions(gateway: gateway, dataBasePath: base.path)
+
+        XCTAssertFalse(viewModel.suggestions[0].hasUpdates)
+        XCTAssertTrue(viewModel.suggestions[1].hasUpdates)
     }
 
     /// 제안을 못 받아도 화면이 죽지 않고 사유를 보여준다.
@@ -304,10 +362,12 @@ extension NewsTimelineTests {
         XCTAssertTrue(viewModel.isEmpty)
 
         await viewModel.build(
-            label: "금리/거시경제", gateway: gateway, dataBasePath: base.path
+            label: "금리/거시경제", axisLimit: 5,
+            gateway: gateway, dataBasePath: base.path
         )
 
         XCTAssertEqual(gateway.builtLabels, ["금리/거시경제"], "고른 것 하나만 만들어야 한다")
+        XCTAssertEqual(gateway.builtAxisLimits, [5])
         XCTAssertEqual(viewModel.selectedTimeline?.categoryLabel, "금리/거시경제")
         XCTAssertNil(viewModel.buildingLabel, "끝나면 진행 상태가 풀려야 한다")
     }
@@ -318,7 +378,10 @@ extension NewsTimelineTests {
         gateway.buildError = NewsTimelineError.runnerFailed(code: 2, message: "러너가 죽었다")
         let viewModel = NewsTimelineViewModel()
 
-        await viewModel.build(label: "금리/거시경제", gateway: gateway, dataBasePath: base.path)
+        await viewModel.build(
+            label: "금리/거시경제", axisLimit: 3,
+            gateway: gateway, dataBasePath: base.path
+        )
 
         XCTAssertEqual(viewModel.errorMessage, "러너가 죽었다")
         XCTAssertNil(viewModel.buildingLabel)
@@ -331,6 +394,7 @@ extension NewsTimelineTests {
           "label": "금리/거시경제",
           "headings": ["금융/증시", "거시경제"],
           "event_count": 50,
+          "report_count": 68,
           "month_count": 8,
           "date_from": "2026-02-22",
           "date_to": "2026-09-08",
@@ -348,9 +412,13 @@ extension NewsTimelineTests {
         let item = try XCTUnwrap(payload.suggestions.first).toDomain
         XCTAssertEqual(item.label, "금리/거시경제")
         XCTAssertEqual(item.eventCount, 50)
+        XCTAssertEqual(item.reportCount, 68)
         XCTAssertTrue(item.alreadyExists)
         XCTAssertEqual(item.estimatedCalls, 9)
-        XCTAssertEqual(item.summaryLine, "2026-02-22 ~ 2026-09-08 · 50개 시점 · 8개월")
+        XCTAssertEqual(
+            item.summaryLine,
+            "2026-02-22 ~ 2026-09-08 · 리포트 68편 · 50개 시점 · 8개월"
+        )
     }
 
     /// 타임라인 러너는 리포트 러너의 «형제 파일» 이어야 한다 — 갈라지면 임포트가 깨진다.
@@ -372,5 +440,67 @@ extension NewsTimelineTests {
             NewsTimelineService.timelineRunnerPath(reportRunnerPath: reportRunner.path),
             timelineRunner.path
         )
+    }
+}
+
+// MARK: - provider / effort 결정
+
+extension NewsTimelineTests {
+    private func makeDefaults() throws -> UserDefaults {
+        let suite = "news-timeline-\(UUID().uuidString)"
+        return try XCTUnwrap(UserDefaults(suiteName: suite))
+    }
+
+    /// 기본은 리포트 설정 상속이다 — 설정을 두 벌로 늘리지 않는다.
+    func testProviderPlan_inheritsReportProviderByDefault() throws {
+        let defaults = try makeDefaults()
+        defaults.set("ollama", forKey: Constants.NewsStorageKey.selectedProvider)
+        defaults.set("qwen3:14b", forKey: Constants.NewsStorageKey.ollamaModel)
+
+        let plan = NewsTimelineService(defaults: defaults).providerPlan()
+
+        XCTAssertEqual(plan.provider, "ollama")
+        XCTAssertEqual(plan.options?.model, "qwen3:14b")
+    }
+
+    /// 갈라 두면 타임라인만 다른 provider 를 쓴다.
+    func testProviderPlan_explicitProvider_overridesReport() throws {
+        let defaults = try makeDefaults()
+        defaults.set("antigravity", forKey: Constants.NewsStorageKey.selectedProvider)
+        defaults.set("ollama", forKey: Constants.NewsStorageKey.timelineProvider)
+        defaults.set("qwen3.8:latest", forKey: Constants.NewsStorageKey.timelineOllamaModel)
+
+        let plan = NewsTimelineService(defaults: defaults).providerPlan()
+
+        XCTAssertEqual(plan.provider, "ollama")
+        XCTAssertEqual(plan.options?.model, "qwen3.8:latest")
+    }
+
+    /// **effort 는 리포트 값을 물려받지 않는다.**
+    ///
+    /// 리포트는 기사마다 수십 회를 불러 `low` 가 기본이지만, 타임라인은 월별 1회 +
+    /// 개요 1회뿐이라 한 단계 높여도 총액이 작다. 물려받으면 종합 품질만 손해다.
+    func testProviderPlan_antigravityEffort_usesSynthesisDefaultNotReportValue() throws {
+        let defaults = try makeDefaults()
+        defaults.set("antigravity", forKey: Constants.NewsStorageKey.selectedProvider)
+        defaults.set("low", forKey: Constants.NewsStorageKey.antigravityEffort)
+
+        let plan = NewsTimelineService(defaults: defaults).providerPlan()
+
+        XCTAssertEqual(plan.provider, "antigravity")
+        XCTAssertEqual(plan.options?.effort, Constants.defaultNewsTimelineAntigravityEffort)
+        XCTAssertNotEqual(plan.options?.effort, "low", "리포트의 low 를 그대로 쓰면 안 된다")
+    }
+
+    /// 사용자가 정한 값이 있으면 그것이 이긴다.
+    func testProviderPlan_explicitTimelineEffort_wins() throws {
+        let defaults = try makeDefaults()
+        defaults.set("antigravity", forKey: Constants.NewsStorageKey.selectedProvider)
+        defaults.set("high", forKey: Constants.NewsStorageKey.timelineAntigravityEffort)
+
+        let plan = NewsTimelineService(defaults: defaults).providerPlan()
+
+        XCTAssertEqual(plan.options?.effort, "high")
+        XCTAssertEqual(plan.displayName, "antigravity · high")
     }
 }

@@ -59,15 +59,25 @@ enum NewsTimelineStore {
 /// 화면이 쓰는 타입은 그대로 둘 수 있다.
 struct TimelineStatePayload: Decodable {
     struct Event: Decodable {
+        struct ImportanceAssessment: Decodable {
+            let changeMagnitude: Int
+            let impactScope: Int
+            let durability: Int
+            let trajectoryPower: Int
+            let evidenceStrength: Int
+            let reason: String?
+        }
+
         let eventId: String
         let date: String
         let title: String
         let url: String?
         let importance: Int?
+        let importanceAssessment: ImportanceAssessment?
         let bullets: [String]?
         let tags: [String]?
-        let rank: Int?
         let whyItMatters: String?
+        let turningPointReason: String?
     }
 
     struct Month: Decodable {
@@ -75,7 +85,6 @@ struct TimelineStatePayload: Decodable {
         let synthesizedAt: String?
         let summary: String?
         let keyTerms: [String]?
-        let isTurningPoint: Bool?
         let axisEvents: [Event]?
         let detailEvents: [Event]?
     }
@@ -83,11 +92,11 @@ struct TimelineStatePayload: Decodable {
     struct Overview: Decodable {
         let summary: String?
         let emphasisKeywords: [String]?
-        let turningPointCount: Int?
     }
 
     let categoryId: String
     let categoryLabel: String
+    let axisLimit: Int?
     let dateFrom: String?
     let dateTo: String?
     let months: [Month]?
@@ -103,6 +112,7 @@ struct TimelineStatePayload: Decodable {
         return NewsTimeline(
             categoryId: categoryId,
             categoryLabel: categoryLabel,
+            axisLimit: min(5, max(1, axisLimit ?? 3)),
             dateFrom: dateFrom ?? "",
             dateTo: dateTo ?? "",
             months: domainMonths,
@@ -120,7 +130,6 @@ struct TimelineStatePayload: Decodable {
             synthesizedAt: raw.synthesizedAt ?? "",
             summary: raw.summary ?? "",
             keyTerms: raw.keyTerms ?? [],
-            isTurningPoint: raw.isTurningPoint ?? false,
             axisEvents: axis,
             detailEvents: detail
         )
@@ -129,8 +138,7 @@ struct TimelineStatePayload: Decodable {
     private static func overview(_ raw: Overview) -> NewsTimelineOverview {
         NewsTimelineOverview(
             summary: raw.summary ?? "",
-            emphasisKeywords: raw.emphasisKeywords ?? [],
-            turningPointCount: raw.turningPointCount ?? 0
+            emphasisKeywords: raw.emphasisKeywords ?? []
         )
     }
 
@@ -141,10 +149,20 @@ struct TimelineStatePayload: Decodable {
             title: raw.title,
             url: raw.url ?? "",
             importance: raw.importance ?? 0,
+            importanceAssessment: raw.importanceAssessment.map {
+                NewsTimelineImportanceAssessment(
+                    changeMagnitude: $0.changeMagnitude,
+                    impactScope: $0.impactScope,
+                    durability: $0.durability,
+                    trajectoryPower: $0.trajectoryPower,
+                    evidenceStrength: $0.evidenceStrength,
+                    reason: $0.reason ?? ""
+                )
+            },
             bullets: raw.bullets ?? [],
             tags: raw.tags ?? [],
-            rank: raw.rank,
-            whyItMatters: raw.whyItMatters ?? ""
+            whyItMatters: raw.whyItMatters ?? "",
+            turningPointReason: raw.turningPointReason ?? ""
         )
     }
 }

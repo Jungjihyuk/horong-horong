@@ -22,6 +22,8 @@ final class NewsTimelineService: NewsTimelineGateway {
 
     // MARK: - NewsTimelineGateway
 
+    var providerDisplayName: String { providerPlan().displayName }
+
     func suggestTopics(dataBasePath: String) async throws -> [NewsTimelineSuggestion] {
         let output = try await run(arguments: ["--suggest"], dataBasePath: dataBasePath)
         guard let data = output.data(using: .utf8) else { throw NewsTimelineError.malformedOutput }
@@ -34,14 +36,17 @@ final class NewsTimelineService: NewsTimelineGateway {
         return payload.suggestions.map(\.toDomain)
     }
 
-    func buildTimeline(label: String, dataBasePath: String) async throws {
+    func buildTimeline(label: String, axisLimit: Int, dataBasePath: String) async throws {
         buildingLabel = label
         lastErrorMessage = nil
         defer { buildingLabel = nil }
 
         do {
             _ = try await run(
-                arguments: ["--category", label] + providerArguments(),
+                arguments: [
+                    "--category", label,
+                    "--axis-limit", String(min(5, max(1, axisLimit))),
+                ] + providerArguments(),
                 dataBasePath: dataBasePath
             )
         } catch {
@@ -63,14 +68,62 @@ final class NewsTimelineService: NewsTimelineGateway {
         return FileManager.default.fileExists(atPath: sibling.path) ? sibling.path : nil
     }
 
+    /// 이 실행에 쓸 provider 와 옵션.
+    ///
+    /// **기본은 리포트 설정 상속(`inherit`)이다.** 갈라 쓸 이유가 있을 때만 나뉜다 —
+    /// 리포트는 기사마다 수십 회를 부르고, 타임라인은 실행당 1~2회로 한 달치를 종합한다.
+    /// 그래서 타임라인만 더 좋은(비싼) 모델을 써도 총액이 작다.
+    struct TimelineProviderPlan {
+        let provider: String
+        let options: NewsProviderOptionsPayload?
+        /// 사용자에게 보여줄 한 줄. 「무엇으로 만들어지는지」를 누르기 전에 알린다.
+        var displayName: String {
+            if let model = options?.model, !model.isEmpty { return "\(provider) · \(model)" }
+            if let effort = options?.effort, !effort.isEmpty { return "\(provider) · \(effort)" }
+            return provider
+        }
+    }
+
+    func providerPlan() -> TimelineProviderPlan {
+        let reportConfiguration = NewsPipelineLaunchConfiguration.current(defaults: defaults)
+        let stored = defaults.string(forKey: Constants.NewsStorageKey.timelineProvider)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let provider = (stored.isEmpty || stored == Constants.newsTimelineInheritProvider)
+            ? reportConfiguration.provider
+            : stored
+
+        var options = NewsPipelineLaunchConfiguration.options(for: provider, defaults: defaults)
+
+        // 타임라인 전용 값이 있으면 그것만 덮어쓴다. endpoint·timeout 은 리포트와 공유해도
+        // 무방하므로 설정을 두 벌로 늘리지 않는다.
+        if provider == "ollama",
+           let model = defaults.string(forKey: Constants.NewsStorageKey.timelineOllamaModel)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !model.isEmpty {
+            options?.model = model
+        }
+        if provider == "antigravity" {
+            // **리포트 값을 물려받지 않는다.** 리포트는 기사마다 수십 회를 불러 low 가
+            // 기본이지만, 타임라인은 월별 1회 + 개요 1회뿐이라 한 단계 높여도 총액이 작다.
+            let stored = defaults.string(forKey: Constants.NewsStorageKey.timelineAntigravityEffort)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            options?.effort = stored.isEmpty
+                ? Constants.defaultNewsTimelineAntigravityEffort
+                : stored
+        }
+
+        return TimelineProviderPlan(provider: provider, options: options)
+    }
+
     private func providerArguments() -> [String] {
-        let configuration = NewsPipelineLaunchConfiguration.current(defaults: defaults)
-        var arguments = ["--provider", configuration.provider]
-        if let options = configuration.providerOptions {
+        let plan = providerPlan()
+        var arguments = ["--provider", plan.provider]
+        if let options = plan.options {
             if let model = options.model { arguments += ["--model", model] }
             if let endpoint = options.endpoint { arguments += ["--endpoint", endpoint] }
             // 러너의 `--timeout` 은 정수만 받는다. Double 을 그대로 넣으면 "120.0" 이 되어 거부된다.
             if let timeout = options.timeout { arguments += ["--timeout", String(Int(timeout))] }
+            if let effort = options.effort { arguments += ["--effort", effort] }
         }
         return arguments
     }
@@ -172,22 +225,26 @@ struct SuggestionPayload: Decodable {
         let label: String
         let headings: [String]?
         let eventCount: Int?
+        let reportCount: Int?
         let monthCount: Int?
         let dateFrom: String?
         let dateTo: String?
         let alreadyExists: Bool?
         let estimatedCalls: Int?
+        let hasUpdates: Bool?
 
         var toDomain: NewsTimelineSuggestion {
             NewsTimelineSuggestion(
                 label: label,
                 headings: headings ?? [],
                 eventCount: eventCount ?? 0,
+                reportCount: reportCount ?? 0,
                 monthCount: monthCount ?? 0,
                 dateFrom: dateFrom ?? "",
                 dateTo: dateTo ?? "",
                 alreadyExists: alreadyExists ?? false,
-                estimatedCalls: estimatedCalls ?? 0
+                estimatedCalls: estimatedCalls ?? 0,
+                hasUpdates: hasUpdates ?? true
             )
         }
     }

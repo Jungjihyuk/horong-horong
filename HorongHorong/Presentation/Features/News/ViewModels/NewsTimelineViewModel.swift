@@ -62,6 +62,7 @@ final class NewsTimelineViewModel {
     /// 고른 주제로 타임라인을 만든다. **여기서만 LLM 비용이 발생한다.**
     func build(
         label: String,
+        axisLimit: Int,
         gateway: NewsTimelineGateway,
         dataBasePath: String
     ) async {
@@ -70,7 +71,11 @@ final class NewsTimelineViewModel {
         defer { buildingLabel = nil }
 
         do {
-            try await gateway.buildTimeline(label: label, dataBasePath: dataBasePath)
+            try await gateway.buildTimeline(
+                label: label,
+                axisLimit: axisLimit,
+                dataBasePath: dataBasePath
+            )
             reload(dataBasePath: dataBasePath)
             // 방금 만든 것을 바로 보여준다.
             if let created = timelines.first(where: { $0.categoryLabel == label }) {
