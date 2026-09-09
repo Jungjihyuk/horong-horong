@@ -24,8 +24,8 @@ def existing_timeline_paths(output_dir: str) -> list[str]:
     return sorted(glob.glob(os.path.join(output_dir, "data", "timeline", "*.json")))
 
 
-def _identity(path: str) -> tuple[str, str] | None:
-    """상태 파일에서 (category_id, category_label) 만 꺼낸다."""
+def _identity(path: str) -> tuple[str, str, int] | None:
+    """상태 파일에서 분야 식별자와 저장된 대표 사건 최대치를 꺼낸다."""
     try:
         with open(path, encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -35,7 +35,9 @@ def _identity(path: str) -> tuple[str, str] | None:
     label = str(payload.get("category_label") or "").strip()
     if not category_id or not label:
         return None
-    return category_id, label
+    raw_limit = payload.get("axis_limit", 3)
+    axis_limit = raw_limit if isinstance(raw_limit, int) and 1 <= raw_limit <= 5 else 3
+    return category_id, label, axis_limit
 
 
 def refresh_existing_timelines(
@@ -64,7 +66,7 @@ def refresh_existing_timelines(
             warnings.append(f"타임라인 상태 파일을 읽지 못했습니다: {os.path.basename(path)}")
             continue
 
-        category_id, label = identity
+        category_id, label, axis_limit = identity
         try:
             result = build_timeline(
                 reports_dir=reports_dir,
@@ -74,6 +76,7 @@ def refresh_existing_timelines(
                 provider=provider,
                 provider_name=provider_name,
                 now=now,
+                axis_limit=axis_limit,
                 log=log,
             )
             write_timeline_markdown(output_dir, result.state)

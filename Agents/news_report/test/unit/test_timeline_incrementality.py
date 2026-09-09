@@ -35,7 +35,21 @@ class CountingProvider:
             return MonthSynthesis(
                 summary="이 달의 종합.",
                 key_terms=["키워드"],
-                is_turning_point=False,
+                assessments=[
+                    {
+                        "event_id": event_id,
+                        "duplicate_group": event_id,
+                        "assessment": {
+                            "change_magnitude": 20,
+                            "impact_scope": 20,
+                            "durability": 15,
+                            "trajectory_power": 15,
+                            "evidence_strength": 10,
+                            "reason": "공통 루브릭 평가 근거.",
+                        },
+                    }
+                    for event_id in event_ids
+                ],
                 axis=[{"event_id": event_ids[0], "why_it_matters": "축인 이유."}],
             )
         return OverviewSynthesis(summary="전체 흐름.", emphasis_keywords=["강조어"])
@@ -243,6 +257,23 @@ def test_build_timeline__dry_run__reports_plan_without_calling_provider(workspac
     assert not (workspace[0] / "data" / "timeline" / "macro.json").exists()
 
 
+# 시나리오 8. 대표 최대치를 바꾸면 봉인된 달도 새 설정으로 다시 종합한다.
+@pytest.mark.unit
+def test_build_timeline__axis_limit_changed__resynthesizes_all_months(workspace):
+    _, reports = workspace
+    write_report(reports, "2026-05-11", ["5월 기사"])
+    write_report(reports, "2026-06-02", ["6월 기사"])
+    now = datetime(2026, 6, 20)
+    build(workspace, CountingProvider(), now, axis_limit=3)
+
+    provider = CountingProvider()
+    build(workspace, provider, now, axis_limit=5)
+
+    state = load_state(str(workspace[0] / "data" / "timeline" / "macro.json"))
+    assert provider.month_calls == 2
+    assert state.axis_limit == 5
+
+
 class FlakyProvider(CountingProvider):
     """지정한 달의 프롬프트에서만 터지는 fake. 부분 실패를 재현한다."""
 
@@ -257,7 +288,7 @@ class FlakyProvider(CountingProvider):
         return super().generate_json(prompt, schema_model, options)
 
 
-# 시나리오 8. 한 달이 실패해도 나머지 달의 종합 결과는 저장된다.
+# 시나리오 9. 한 달이 실패해도 나머지 달의 종합 결과는 저장된다.
 @pytest.mark.unit
 def test_build_timeline__one_month_fails__other_months_are_still_saved(workspace):
     # Given: 3개월치 리포트가 있고 5월 종합이 실패한다.
@@ -277,7 +308,7 @@ def test_build_timeline__one_month_fails__other_months_are_still_saved(workspace
     assert result.state.warnings
 
 
-# 시나리오 9. 다음 실행은 실패했던 달만 다시 잡는다.
+# 시나리오 10. 다음 실행은 실패했던 달만 다시 잡는다.
 @pytest.mark.unit
 def test_build_timeline__rerun_after_failure__retries_only_failed_month(workspace):
     # Given: 5월이 실패한 채로 한 번 빌드가 끝났다.

@@ -16,10 +16,10 @@ import hashlib
 import os
 import re
 import unicodedata
-import urllib.parse
 from collections import Counter, defaultdict
 
 from contracts.timeline_artifact import TimelineEvent
+from storage.seen_urls import canonical_url  # 정의가 두 벌이면 조용히 갈라진다
 
 # 리포트 본문이 아니라 실행 메타를 담은 섹션. 사건으로 세면 안 된다.
 SKIP_HEADINGS = ("수집 현황", "오늘의 액션 아이템", "액션 아이템")
@@ -92,21 +92,6 @@ def clean_title(title: str) -> str:
     if "|" in text:
         text = text.split("|")[0].strip()
     return text.strip() or "(제목 없음)"
-
-
-def canonical_url(url: str) -> str:
-    """동일 기사 판별용 URL. fragment 만 지우고 경로·query 는 남긴다 —
-    Google News RSS 는 query 에 기사 식별자가 들어 있어 지우면 전부 같은 기사가 된다."""
-    url = (url or "").strip()
-    if not url:
-        return ""
-    try:
-        parts = urllib.parse.urlsplit(url)
-        return urllib.parse.urlunsplit(
-            (parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, "")
-        )
-    except ValueError:
-        return url.split("#", 1)[0]
 
 
 def normalized_title_key(title: str) -> str:

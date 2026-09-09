@@ -15,10 +15,31 @@ LLM 합성에만 둔다 — `input_hash` 가 그 경계다.
 
 from pydantic import BaseModel, Field
 
-TIMELINE_SCHEMA_VERSION = 1
+TIMELINE_SCHEMA_VERSION = 2
 
 # 월 종합 프롬프트가 바뀌면 올린다. 올리면 봉인된 달도 다시 종합된다.
-TIMELINE_PROMPT_VERSION = 2
+TIMELINE_PROMPT_VERSION = 3
+
+
+class ImportanceAssessment(BaseModel):
+    """분야와 무관하게 같은 배점으로 계산한 사건 중요도."""
+
+    change_magnitude: int = Field(ge=0, le=25)
+    impact_scope: int = Field(ge=0, le=25)
+    durability: int = Field(ge=0, le=20)
+    trajectory_power: int = Field(ge=0, le=20)
+    evidence_strength: int = Field(ge=0, le=10)
+    reason: str = ""
+
+    @property
+    def total(self) -> int:
+        return (
+            self.change_magnitude
+            + self.impact_scope
+            + self.durability
+            + self.trajectory_power
+            + self.evidence_strength
+        )
 
 
 class TimelineEvent(BaseModel):
@@ -33,11 +54,12 @@ class TimelineEvent(BaseModel):
     date: str  # YYYY-MM-DD. 이 사건이 실린 리포트의 날짜
     title: str  # 편집 프리픽스·언론사 꼬리를 걷어낸 제목
     url: str = ""  # 원문 URL. 없을 수 있다
-    importance: int = 0  # 리포트가 매긴 중요도 0~100
+    importance: int = 0  # 월 맥락에서 공통 루브릭으로 다시 매긴 중요도 0~100
+    importance_assessment: ImportanceAssessment | None = None
     bullets: list[str] = Field(default_factory=list)  # 카드에 표시할 요약 불릿
     tags: list[str] = Field(default_factory=list)  # 그 시점의 주제어(칩으로 표시)
-    rank: int | None = None  # 세부 사건의 우선순위. 축 사건은 None
     why_it_matters: str = ""  # 축 사건만 LLM 이 채운다. 「왜 이게 축인가」
+    turning_point_reason: str = ""  # 비어 있지 않으면 이 사건이 전환점이다
 
 
 class TimelineMonth(BaseModel):
@@ -50,9 +72,8 @@ class TimelineMonth(BaseModel):
     prompt_version: int = 0
     summary: str = ""  # LLM 이 만든 그 달의 종합 정리
     key_terms: list[str] = Field(default_factory=list)  # 그 달의 핵심어
-    is_turning_point: bool = False
-    axis_events: list[TimelineEvent] = Field(default_factory=list)  # 최대 3개
-    detail_events: list[TimelineEvent] = Field(default_factory=list)  # 우선순위순
+    axis_events: list[TimelineEvent] = Field(default_factory=list)
+    detail_events: list[TimelineEvent] = Field(default_factory=list)  # 중요도순
 
 class TimelineOverview(BaseModel):
     """타임라인 전체 머리말. 원본 사건이 아니라 월 요약들만 보고 만든다."""
@@ -60,7 +81,6 @@ class TimelineOverview(BaseModel):
     input_hash: str = ""  # 월 요약들의 해시. 달이 늘어도 입력 크기는 월 수만큼만 는다
     summary: str = ""
     emphasis_keywords: list[str] = Field(default_factory=list)
-    turning_point_count: int = 0
 
 
 class TimelineState(BaseModel):
@@ -69,6 +89,7 @@ class TimelineState(BaseModel):
     schema_version: int = TIMELINE_SCHEMA_VERSION
     category_id: str
     category_label: str
+    axis_limit: int = Field(default=3, ge=1, le=5)
     date_from: str = ""
     date_to: str = ""
     generated_at: str = ""
@@ -88,13 +109,28 @@ class AxisSelection(BaseModel):
     why_it_matters: str  # 한 문장. 왜 이 달의 축인가
 
 
+class EventAssessment(BaseModel):
+    """월 안의 사건 하나에 대한 중요도와 중복 판정."""
+
+    event_id: str
+    duplicate_group: str
+    assessment: ImportanceAssessment
+
+
+class TurningPointSelection(BaseModel):
+    """전체 표시 기간에서 흐름이 바뀐 대표 사건과 근거."""
+
+    event_id: str
+    reason: str
+
+
 class MonthSynthesis(BaseModel):
     """월 종합 LLM 응답."""
 
     summary: str  # 그 달에 무슨 일이 있었는지 2~3문장
     key_terms: list[str]  # 그 달의 핵심어 2~4개
-    is_turning_point: bool  # 이 달이 흐름의 전환점인가
-    axis: list[AxisSelection]  # 축 사건 최대 3개
+    assessments: list[EventAssessment]
+    axis: list[AxisSelection]
 
 
 class OverviewSynthesis(BaseModel):
@@ -102,3 +138,4 @@ class OverviewSynthesis(BaseModel):
 
     summary: str  # 전체 기간을 관통하는 흐름 2~3문장
     emphasis_keywords: list[str]  # 머리말에 강조할 키워드 3~6개
+    turning_points: list[TurningPointSelection] = Field(default_factory=list)

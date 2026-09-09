@@ -31,6 +31,9 @@ from renderers.timeline_markdown import write_timeline_markdown
 from timeline.build import build_timeline
 from timeline.suggest import suggest_topics
 
+# 한 달치를 한 번에 종합하는 작업이라 리포트(기사마다 수십 회)보다 높게 잡는다.
+DEFAULT_SYNTHESIS_EFFORT = "medium"
+
 
 def category_id_for(label: str) -> str:
     """라벨에서 파일명으로 쓸 안정 식별자를 만든다.
@@ -54,8 +57,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model")
     parser.add_argument("--endpoint")
     parser.add_argument("--timeout", type=int)
+    parser.add_argument("--effort", choices=["low", "medium", "high"],
+                        default=DEFAULT_SYNTHESIS_EFFORT,
+                        help="antigravity(agy) reasoning effort. 기본은 종합 작업에 맞춰 "
+                             f"{DEFAULT_SYNTHESIS_EFFORT} 다 — 호출이 1~2회뿐이라 높여도 총액이 작다")
     parser.add_argument("--since", help="이 날짜(YYYY-MM-DD) 이후 리포트만")
     parser.add_argument("--until", help="이 날짜(YYYY-MM-DD) 이전 리포트만")
+    parser.add_argument("--axis-limit", type=int, choices=range(1, 6), default=3,
+                        metavar="1..5", help="월별 대표 사건 최대 개수 (기본 3)")
     parser.add_argument("--think", action="store_true", default=False,
                         help="로컬 모델의 추론을 켠다. 기본은 꺼짐 — 스키마가 출력을 강제해 느려지기만 한다")
     parser.add_argument("--rebuild", action="store_true",
@@ -85,7 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     provider = None
     if not args.dry_run:
         options = ProviderOptionsConfig(
-            model=args.model, endpoint=args.endpoint, timeout=args.timeout
+            model=args.model,
+            endpoint=args.endpoint,
+            timeout=args.timeout,
+            effort=args.effort,
         )
         # 출력이 JSON schema 로 강제되므로 사고 토큰은 결과에 남지 않고 시간만 먹는다.
         provider = create_provider(args.provider, options, think=args.think)
@@ -105,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             until=args.until,
             rebuild=args.rebuild,
             dry_run=args.dry_run,
+            axis_limit=args.axis_limit,
             log=print,
         )
         # dry-run 은 실제로 부르지 않으므로 «부를 뻔한» 수를 센다.

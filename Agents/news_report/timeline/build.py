@@ -21,6 +21,7 @@ from contracts.timeline_artifact import (
     TimelineMonth,
     TimelineOverview,
     TimelineState,
+    TurningPointSelection,
 )
 from timeline.ingest import collect_events, query_terms
 from timeline.state import (
@@ -32,7 +33,7 @@ from timeline.state import (
     save_state,
     timeline_state_path,
 )
-from timeline.synthesize import synthesize_month, synthesize_overview
+from timeline.synthesize import apply_turning_points, synthesize_month, synthesize_overview
 
 
 @dataclass
@@ -72,15 +73,22 @@ def build_timeline(
     rebuild: bool = False,
     dry_run: bool = False,
     prompt_version: int = TIMELINE_PROMPT_VERSION,
+    axis_limit: int = 3,
     log: Callable[[str], None] = lambda _message: None,
 ) -> BuildResult:
+    axis_limit = min(5, max(1, axis_limit))
     events = collect_events(
         reports_dir, category_id, query_terms(category_label), since=since, until=until
     )
     path = timeline_state_path(output_dir, category_id)
     previous = load_state(path)
     plans = plan_months(
-        events, previous, now=now, prompt_version=prompt_version, rebuild=rebuild
+        events,
+        previous,
+        now=now,
+        prompt_version=prompt_version,
+        axis_limit=axis_limit,
+        rebuild=rebuild,
     )
 
     log(
@@ -119,6 +127,7 @@ def build_timeline(
                     now=now,
                     provider_name=provider_name,
                     prompt_version=prompt_version,
+                    axis_limit=axis_limit,
                 )
             )
         except Exception as error:  # noqa: BLE001 — 어떤 실패든 나머지 달은 살린다
@@ -135,7 +144,7 @@ def build_timeline(
         month_calls += 1
 
     try:
-        overview, overview_calls = _resolve_overview(
+        overview, turning_points, overview_calls = _resolve_overview(
             provider=provider,
             category_label=category_label,
             months=months,
@@ -150,13 +159,17 @@ def build_timeline(
         log(f"  개요      실패 — 월 요약은 저장한다 ({type(error).__name__})")
         warnings.append(f"개요 종합 실패: {type(error).__name__}: {error}")
         overview = previous.overview if previous else TimelineOverview()
+        turning_points = _stored_turning_points(previous)
         overview_calls = 0
+
+    months = apply_turning_points(months, turning_points)
 
     dates = [event.date for event in events]
     state = TimelineState(
         schema_version=TIMELINE_SCHEMA_VERSION,
         category_id=category_id,
         category_label=category_label,
+        axis_limit=axis_limit,
         date_from=min(dates) if dates else "",
         date_to=max(dates) if dates else "",
         generated_at=now.isoformat(timespec="seconds"),
@@ -190,22 +203,39 @@ def _resolve_overview(
     prompt_version: int,
     dry_run: bool,
     log: Callable[[str], None],
-) -> tuple[TimelineOverview, int]:
+) -> tuple[TimelineOverview, list[TurningPointSelection], int]:
     """개요를 다시 만들지 정한다. 월 요약이 하나도 안 바뀌었으면 부르지 않는다."""
     digest = overview_input_hash(months, prompt_version=prompt_version)
     if previous is not None and month_calls == 0 and previous.overview.input_hash == digest:
         log("  개요      건너뜀 (unchanged)")
-        return previous.overview, 0
+        return previous.overview, _stored_turning_points(previous), 0
 
     if not any(month.summary for month in months):
         # 아직 종합된 달이 하나도 없다. 요약할 재료가 없으니 부르지 않는다.
-        return TimelineOverview(input_hash=digest), 0
+        return TimelineOverview(input_hash=digest), [], 0
 
     if dry_run:
         log("  개요      [dry-run] 종합 예정")
-        return (previous.overview if previous else TimelineOverview(input_hash=digest)), 0
+        return (
+            previous.overview if previous else TimelineOverview(input_hash=digest),
+            _stored_turning_points(previous),
+            0,
+        )
 
     log("  개요      종합")
-    return synthesize_overview(
+    overview, selections = synthesize_overview(
         provider, category_label, months, prompt_version=prompt_version
-    ), 1
+    )
+    return overview, selections, 1
+
+
+def _stored_turning_points(previous: TimelineState | None) -> list[TurningPointSelection]:
+    """개요 생성 실패나 무변경 실행에서는 기존 사건 단위 전환점을 보존한다."""
+    if previous is None:
+        return []
+    return [
+        TurningPointSelection(event_id=event.event_id, reason=event.turning_point_reason)
+        for month in previous.months
+        for event in month.axis_events
+        if event.turning_point_reason
+    ]

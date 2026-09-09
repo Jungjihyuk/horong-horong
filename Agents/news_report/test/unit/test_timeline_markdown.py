@@ -37,8 +37,8 @@ def test_render_timeline_markdown__month_with_axis_and_details__shows_counts_and
         key_terms=["상승", "유가"],
         axis_events=[make_event("a1", "2026-04-10", "축 사건")],
         detail_events=[
-            make_event("d1", "2026-04-08", "세부 1", rank=1),
-            make_event("d2", "2026-04-16", "세부 2", rank=2),
+            make_event("d1", "2026-04-08", "세부 1"),
+            make_event("d2", "2026-04-16", "세부 2"),
         ],
     )
 
@@ -46,7 +46,7 @@ def test_render_timeline_markdown__month_with_axis_and_details__shows_counts_and
     rendered = render_timeline_markdown(make_state([month]))
 
     # Then: 목업과 같은 «축 N · 세부 M» 표기와 핵심어가 보인다.
-    assert "`축 1 · 세부 2`" in rendered
+    assert "`대표 1 · 추가 2`" in rendered
     assert "핵심어 상승 · 유가" in rendered
 
 
@@ -64,8 +64,8 @@ def test_render_timeline_markdown__month_without_details__renders_empty_state():
     rendered = render_timeline_markdown(make_state([month]))
 
     # Then: 빈 목록이 아니라 «없음» 이라고 말한다.
-    assert "_세부 사건 없음_" in rendered
-    assert "`축 1 · 세부 0`" in rendered
+    assert "_추가 사건 없음_" in rendered
+    assert "`대표 1 · 추가 0`" in rendered
 
 
 # 시나리오 3. 머리말에 기간·시점 수·개월 수·전환점 수가 모두 들어간다.
@@ -78,9 +78,12 @@ def test_render_timeline_markdown__header__summarizes_range_and_turning_points()
             axis_events=[make_event("a1", "2026-02-22", "축")],
         ),
         TimelineMonth(
-            month_key="2026-03", input_hash="y", is_turning_point=True,
-            axis_events=[make_event("a2", "2026-03-30", "축")],
-            detail_events=[make_event("d1", "2026-03-28", "세부", rank=1)],
+            month_key="2026-03", input_hash="y",
+            axis_events=[make_event(
+                "a2", "2026-03-30", "축",
+                turning_point_reason="금리 인하 기대가 긴축 우려로 바뀌었다.",
+            )],
+            detail_events=[make_event("d1", "2026-03-28", "세부")],
         ),
     ]
 
@@ -90,9 +93,9 @@ def test_render_timeline_markdown__header__summarizes_range_and_turning_points()
     )
 
     # Then: 머리말이 목업의 요약 줄을 재현한다.
-    assert "2026-02-22 ~ 2026-04-30 · 3개 시점 · 2개월 · 월별 축 최대 3개 · 전환점 1곳" in rendered
+    assert "2026-02-22 ~ 2026-04-30 · 3개 시점 · 2개월 · 월별 대표 최대 3개 · 전환점 1곳" in rendered
     assert "🔎 강조: 기준금리 · 물가" in rendered
-    assert "🔀 전환점" in rendered
+    assert "🔀 전환점: 금리 인하 기대가 긴축 우려로 바뀌었다." in rendered
 
 
 # 시나리오 4. 축 사건의 «왜 축인가» 와 세부 사건의 순위가 표시된다.
@@ -106,13 +109,13 @@ def test_render_timeline_markdown__axis_reason_and_detail_rank__are_rendered():
             make_event("a1", "2026-04-10", "CPI 발표", importance=93,
                        why_it_matters="물가 경로가 여기서 갈렸다.")
         ],
-        detail_events=[make_event("d1", "2026-04-08", "휴전 기대", rank=4, importance=83)],
+        detail_events=[make_event("d1", "2026-04-08", "휴전 기대", importance=83)],
     )
 
     # When: 렌더링한다.
     rendered = render_timeline_markdown(make_state([month]))
 
     # Then: 근거는 인용으로, 순위는 세부 줄에 붙는다.
-    assert "> 물가 경로가 여기서 갈렸다." in rendered
-    assert "`4순위 · 중요도 83`" in rendered
+    assert "> 대표 이유: 물가 경로가 여기서 갈렸다." in rendered
+    assert "`중요도 83`" in rendered
     assert "`04-10` · 중요도 93" in rendered
