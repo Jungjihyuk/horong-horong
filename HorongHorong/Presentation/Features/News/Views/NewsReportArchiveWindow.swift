@@ -115,7 +115,18 @@ struct NewsReportArchiveWindow: View {
 
     @State private var viewModel = NewsArchiveViewModel()
     @State private var timelineViewModel = NewsTimelineViewModel()
-    @State private var mode: NewsHubMode = .archive
+    /// 타임라인 러너를 띄우는 게이트웨이. 리포트 파이프라인과 완전히 별개 프로세스다.
+    @State private var timelineService = NewsTimelineService()
+    @State private var mode: NewsHubMode
+
+    /// 기본은 보관함. 스크린샷 타깃(`--screenshot-target news-timeline`)처럼
+    /// 특정 모드로 바로 열어야 할 때만 지정한다.
+    private let showsTimelinePicker: Bool
+
+    init(initialMode: NewsHubMode = .archive, showsTimelinePicker: Bool = false) {
+        _mode = State(initialValue: initialMode)
+        self.showsTimelinePicker = showsTimelinePicker
+    }
 
     var body: some View {
         let visibleEntries = viewModel.visibleEntries
@@ -133,7 +144,12 @@ struct NewsReportArchiveWindow: View {
                     detailPane(selectedEntry)
                 }
             case .timeline:
-                NewsTimelinePane(viewModel: timelineViewModel)
+                NewsTimelinePane(
+                    viewModel: timelineViewModel,
+                    gateway: timelineService,
+                    dataBasePath: dataBasePath,
+                    initiallyPresentingPicker: showsTimelinePicker
+                )
             }
         }
         .frame(minWidth: 840, minHeight: 540)

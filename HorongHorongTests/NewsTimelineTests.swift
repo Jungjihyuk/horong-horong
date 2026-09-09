@@ -230,3 +230,147 @@ final class NewsTimelineTests: XCTestCase {
         XCTAssertEqual(viewModel.selectedTimeline?.categoryId, "a")
     }
 }
+
+// MARK: - 주제 제안과 사용자 트리거 생성
+
+/// 게이트웨이 fake. 실제 러너 프로세스를 띄우지 않는다.
+@MainActor
+private final class FakeTimelineGateway: NewsTimelineGateway {
+    var suggestions: [NewsTimelineSuggestion] = []
+    var suggestError: Error?
+    var buildError: Error?
+    private(set) var builtLabels: [String] = []
+    /// 만들기가 성공했을 때 상태 파일을 쓰기 위한 훅.
+    var onBuild: ((String) -> Void)?
+
+    func suggestTopics(dataBasePath: String) async throws -> [NewsTimelineSuggestion] {
+        if let suggestError { throw suggestError }
+        return suggestions
+    }
+
+    func buildTimeline(label: String, dataBasePath: String) async throws {
+        if let buildError { throw buildError }
+        builtLabels.append(label)
+        onBuild?(label)
+    }
+}
+
+extension NewsTimelineTests {
+    private func makeSuggestion(
+        _ label: String,
+        exists: Bool = false
+    ) -> NewsTimelineSuggestion {
+        NewsTimelineSuggestion(
+            label: label, headings: ["금융/증시"], eventCount: 50, monthCount: 8,
+            dateFrom: "2026-02-22", dateTo: "2026-09-08",
+            alreadyExists: exists, estimatedCalls: 9
+        )
+    }
+
+    /// 제안은 러너에서 받아온다. 사용자가 「만들기」를 열 때만 부른다.
+    func testLoadSuggestions_populatesFromGateway() async throws {
+        let gateway = FakeTimelineGateway()
+        gateway.suggestions = [makeSuggestion("금리/거시경제"), makeSuggestion("AI/반도체")]
+        let viewModel = NewsTimelineViewModel()
+
+        await viewModel.loadSuggestions(gateway: gateway, dataBasePath: base.path)
+
+        XCTAssertEqual(viewModel.suggestions.map(\.label), ["금리/거시경제", "AI/반도체"])
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    /// 제안을 못 받아도 화면이 죽지 않고 사유를 보여준다.
+    func testLoadSuggestions_failure_surfacesMessageAndClearsList() async throws {
+        let gateway = FakeTimelineGateway()
+        gateway.suggestError = NewsTimelineError.runnerNotFound
+        let viewModel = NewsTimelineViewModel()
+
+        await viewModel.loadSuggestions(gateway: gateway, dataBasePath: base.path)
+
+        XCTAssertTrue(viewModel.suggestions.isEmpty)
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+
+    /// **사용자가 고른 주제만** 만들어진다. 만든 뒤 바로 보여준다.
+    func testBuild_createsOnlyChosenTopicAndSelectsIt() async throws {
+        let gateway = FakeTimelineGateway()
+        gateway.onBuild = { [self] label in
+            // 러너가 상태 파일을 쓴 상황을 재현한다.
+            try? write(categoryId: "금리-거시경제", json: sampleJSON(
+                categoryId: "금리-거시경제", categoryLabel: label
+            ))
+        }
+        let viewModel = NewsTimelineViewModel()
+        XCTAssertTrue(viewModel.isEmpty)
+
+        await viewModel.build(
+            label: "금리/거시경제", gateway: gateway, dataBasePath: base.path
+        )
+
+        XCTAssertEqual(gateway.builtLabels, ["금리/거시경제"], "고른 것 하나만 만들어야 한다")
+        XCTAssertEqual(viewModel.selectedTimeline?.categoryLabel, "금리/거시경제")
+        XCTAssertNil(viewModel.buildingLabel, "끝나면 진행 상태가 풀려야 한다")
+    }
+
+    /// 생성이 실패해도 예외가 화면 밖으로 새지 않는다.
+    func testBuild_failure_surfacesMessageAndStopsProgress() async throws {
+        let gateway = FakeTimelineGateway()
+        gateway.buildError = NewsTimelineError.runnerFailed(code: 2, message: "러너가 죽었다")
+        let viewModel = NewsTimelineViewModel()
+
+        await viewModel.build(label: "금리/거시경제", gateway: gateway, dataBasePath: base.path)
+
+        XCTAssertEqual(viewModel.errorMessage, "러너가 죽었다")
+        XCTAssertNil(viewModel.buildingLabel)
+    }
+
+    /// 러너 출력(snake_case)이 Domain 값 타입으로 옮겨진다.
+    func testSuggestionPayload_decodesSnakeCase() throws {
+        let json = """
+        {"suggestions": [{
+          "label": "금리/거시경제",
+          "headings": ["금융/증시", "거시경제"],
+          "event_count": 50,
+          "month_count": 8,
+          "date_from": "2026-02-22",
+          "date_to": "2026-09-08",
+          "already_exists": true,
+          "estimated_calls": 9
+        }]}
+        """
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let payload = try decoder.decode(
+            SuggestionPayload.self, from: Data(json.utf8)
+        )
+
+        let item = try XCTUnwrap(payload.suggestions.first).toDomain
+        XCTAssertEqual(item.label, "금리/거시경제")
+        XCTAssertEqual(item.eventCount, 50)
+        XCTAssertTrue(item.alreadyExists)
+        XCTAssertEqual(item.estimatedCalls, 9)
+        XCTAssertEqual(item.summaryLine, "2026-02-22 ~ 2026-09-08 · 50개 시점 · 8개월")
+    }
+
+    /// 타임라인 러너는 리포트 러너의 «형제 파일» 이어야 한다 — 갈라지면 임포트가 깨진다.
+    func testTimelineRunnerPath_resolvesSiblingOfReportRunner() throws {
+        let directory = base.appendingPathComponent("runner", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let reportRunner = directory.appendingPathComponent("runner.py")
+        try "".write(to: reportRunner, atomically: true, encoding: .utf8)
+
+        XCTAssertNil(
+            NewsTimelineService.timelineRunnerPath(reportRunnerPath: reportRunner.path),
+            "형제 파일이 없으면 nil 이어야 한다"
+        )
+
+        let timelineRunner = directory.appendingPathComponent("timeline_runner.py")
+        try "".write(to: timelineRunner, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            NewsTimelineService.timelineRunnerPath(reportRunnerPath: reportRunner.path),
+            timelineRunner.path
+        )
+    }
+}

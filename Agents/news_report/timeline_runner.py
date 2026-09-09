@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -28,6 +29,7 @@ from contracts.news_job_request import ProviderOptionsConfig
 from providers.factory import create_provider
 from renderers.timeline_markdown import write_timeline_markdown
 from timeline.build import build_timeline
+from timeline.suggest import suggest_topics
 
 
 def category_id_for(label: str) -> str:
@@ -44,8 +46,10 @@ def category_id_for(label: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="카테고리별 월간 타임라인 생성")
     parser.add_argument("--output-dir", required=True, help="data/reports 를 품은 폴더")
-    parser.add_argument("--category", required=True, action="append",
+    parser.add_argument("--category", action="append", default=[],
                         help="카테고리 라벨. 여러 번 줄 수 있다")
+    parser.add_argument("--suggest", action="store_true",
+                        help="리포트에서 만들 수 있는 주제를 JSON 으로 출력하고 끝낸다. LLM 을 쓰지 않는다")
     parser.add_argument("--provider", default="ollama")
     parser.add_argument("--model")
     parser.add_argument("--endpoint")
@@ -63,6 +67,17 @@ def main(argv: list[str] | None = None) -> int:
     reports_dir = os.path.join(args.output_dir, "data", "reports")
     if not os.path.isdir(reports_dir):
         print(f"리포트 폴더가 없습니다: {reports_dir}", file=sys.stderr)
+        return 2
+
+    if args.suggest:
+        # 앱이 파싱하므로 JSON 만 내보낸다. 진행 로그를 섞으면 안 된다.
+        payload = [item.to_dict() for item in suggest_topics(args.output_dir)]
+        json.dump({"suggestions": payload}, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+        return 0
+
+    if not args.category:
+        print("--category 를 하나 이상 주거나 --suggest 를 쓰세요.", file=sys.stderr)
         return 2
 
     # dry-run 은 LLM 을 부르지 않으므로 provider 를 만들 필요도 없다.

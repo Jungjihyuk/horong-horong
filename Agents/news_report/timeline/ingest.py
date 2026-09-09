@@ -35,6 +35,17 @@ ALIAS_CLUSTERS = [
     {"기업", "개별기업", "삼성전자", "sk하이닉스", "루미르", "에이피알", "스타트업", "커리어"},
 ]
 
+# 각 클러스터의 대표 이름. 제안 목록과 타임라인 제목에 쓴다.
+# 순서가 ALIAS_CLUSTERS 와 1:1 로 맞아야 한다.
+CLUSTER_LABELS = [
+    "금리/거시경제",
+    "AI/반도체",
+    "AI모델/에이전트",
+    "AI도구/개발",
+    "기업/커리어",
+]
+assert len(CLUSTER_LABELS) == len(ALIAS_CLUSTERS)
+
 # 주제어 신호를 왜곡하는 조사·상투어·출처명.
 NOISE = {"가능성이", "부담이", "있다는", "이후", "있다", "관련", "대한", "위한", "통해",
          "우려", "전망", "이라는", "라는", "대해", "된다", "됐다", "한다", "했다", "하는",
@@ -196,6 +207,28 @@ def event_id_for(category_id: str, date: str) -> str:
     ).hexdigest()[:8]
 
 
+def parse_reports(
+    reports_dir: str,
+    *,
+    since: str | None = None,
+    until: str | None = None,
+) -> list[tuple[str, list[dict]]]:
+    """(리포트 날짜, 섹션 목록) 을 날짜 오름차순으로.
+
+    파싱 결과를 여러 카테고리가 나눠 쓸 수 있게 분리했다 — 주제 «제안» 은 후보마다
+    전체 리포트를 훑어야 하는데, 그때마다 117편을 다시 읽으면 낭비다.
+    """
+    parsed: list[tuple[str, list[dict]]] = []
+    for path in sorted(glob.glob(os.path.join(reports_dir, "*.md"))):
+        date = report_date_of(path)
+        if not date:
+            continue
+        if (since and date < since) or (until and date > until):
+            continue
+        parsed.append((date, parse_report(path)))
+    return parsed
+
+
 def collect_events(
     reports_dir: str,
     category_id: str,
@@ -203,6 +236,7 @@ def collect_events(
     *,
     since: str | None = None,
     until: str | None = None,
+    parsed: list[tuple[str, list[dict]]] | None = None,
 ) -> list[TimelineEvent]:
     """리포트 폴더 전체를 훑어 이 카테고리의 시점 사건 목록을 만든다.
 
@@ -213,13 +247,10 @@ def collect_events(
     per_date: dict[str, dict] = defaultdict(
         lambda: {"trends": [], "items": [], "headings": set(), "keywords": []}
     )
-    for path in sorted(glob.glob(os.path.join(reports_dir, "*.md"))):
-        date = report_date_of(path)
-        if not date:
-            continue
-        if (since and date < since) or (until and date > until):
-            continue
-        for section in parse_report(path):
+    if parsed is None:
+        parsed = parse_reports(reports_dir, since=since, until=until)
+    for date, sections in parsed:
+        for section in sections:
             if not heading_matches(section["heading"], terms):
                 continue
             bucket = per_date[date]
