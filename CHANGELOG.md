@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-10
+
 ### 추가
 
 - 여러 뉴스 리포트에서 분야별 사건을 모아 월별 흐름과 전환점을 보여 주는 뉴스 타임라인을 추가했습니다. 리포트 보관함에서 분야를 골라 타임라인을 만들고, 월별 대표 사건·세부 사건·종합 요약과 다음 탐색 주제를 확인할 수 있습니다.
@@ -330,7 +332,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.0
 [0.2.9]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.2.9
