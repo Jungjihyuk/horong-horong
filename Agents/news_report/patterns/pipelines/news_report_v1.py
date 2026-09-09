@@ -12,6 +12,7 @@ from exporters.artifact_exporter import build_artifacts_dict, write_artifacts
 from exporters.meta_exporter import build_artifact_report_meta, write_meta
 from exporters.report_exporter import write_report
 from ontology import load_or_build_for_output_dir
+from storage.seen_urls import filter_unseen, load_seen_urls, record_seen
 from patterns.context import PipelineContext
 from patterns.research import (
     ResearchContext,
@@ -70,6 +71,23 @@ class NewsReportV1Pipeline:
         warnings = collect_result.warnings
 
         log(f"Total collected: {len(all_items)} items")
+
+        # 이미 리포트에 실렸던 기사는 다시 다루지 않는다. 실측(130회 실행)에서
+        # 채택분의 60%가 재수집분이었다. 걸러야 LLM 비용도 그만큼 준다.
+        seen_store = load_seen_urls(output_dir)
+        if context.ignore_seen:
+            log(f"Seen-URL filter disabled (--ignore-seen); {len(seen_store)} known")
+        else:
+            all_items, skipped_seen = filter_unseen(all_items, seen_store)
+            if skipped_seen:
+                log(f"Skipped {skipped_seen} already-reported items "
+                    f"({len(seen_store)} known URLs)")
+                if trace:
+                    _ = trace.write(
+                        "stage_completed",
+                        stage="filter_seen",
+                        payload={"skipped": skipped_seen, "known": len(seen_store)},
+                    )
 
         step("normalize")
         normalized = normalize_items(all_items)
@@ -190,6 +208,16 @@ class NewsReportV1Pipeline:
                     "item_count": len(research_result.source_candidates),
                 },
             )
+
+        # 이번에 «채택된» 것만 기억한다. 관련성에서 떨어진 기사는 나중에 맥락이 생기면
+        # 다시 후보가 되어야 하므로 남기지 않는다.
+        if not context.ignore_seen:
+            added = record_seen(
+                seen_store,
+                (candidate.url for candidate in research_result.source_candidates),
+                today=today_str,
+            )
+            log(f"Recorded {added} newly reported URLs (total {len(seen_store)})")
 
         result_items = result_items_from_research(research_result)
         return PatternResult(

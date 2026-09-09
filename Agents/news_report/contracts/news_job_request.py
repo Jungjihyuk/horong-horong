@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
+VALID_EFFORTS = ("low", "medium", "high")
 
 ProviderName = Literal[
     "codex", "claude", "opencode", "antigravity", "hermes", "ollama", "anthropic"
@@ -66,6 +68,26 @@ class ProviderOptionsConfig(BaseModel):
     model: str | None = Field(default=None, min_length=3)
     endpoint: str | None = Field(default=None, min_length=1)
     timeout: float | None = Field(default=None, gt=0)
+    # antigravity(agy) 전용. CLI 가 `--model gemini-3.8-flash` 에 `--effort` 를
+    # 함께 요구하도록 바뀌었다. 빠뜨리면 호출이 통째로 실패한다.
+    effort: Literal["low", "medium", "high"] | None = Field(default=None)
+
+    @field_validator("effort", mode="before")
+    @classmethod
+    def _demote_unknown_effort(cls, value: object) -> str | None:
+        """모르는 값은 거부하지 않고 None 으로 강등한다.
+
+        설정 문자열 하나가 잘못됐다고 수집 전체가 죽으면 손해가 너무 크다. None 이
+        되면 provider 의 `effort or DEFAULT_EFFORT` 가 기본값을 채운다. 강등했다는
+        사실은 `request_loader` 가 경고로 남기므로 조용히 삼켜지지는 않는다.
+
+        같은 처리를 `model` 에는 하지 않는다 — 모델 이름 오타를 삼키면 사용자가
+        모르는 모델이 도는 상태가 되어, 실패하는 편이 낫다.
+        """
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        return text if text in VALID_EFFORTS else None
 
 
 class NewsJobRequest(BaseModel):

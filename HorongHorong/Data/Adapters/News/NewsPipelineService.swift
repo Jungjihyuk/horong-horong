@@ -50,6 +50,8 @@ struct NewsProviderOptionsPayload: Codable {
     var model: String?
     var endpoint: String?
     var timeout: Double?
+    /// antigravity 전용 reasoning effort(low|medium|high).
+    var effort: String?
 }
 
 struct OllamaTagsResponse: Decodable {
