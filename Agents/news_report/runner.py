@@ -39,6 +39,8 @@ def main():
     parser.add_argument("--log", required=True)
     parser.add_argument("--debug-log")
     parser.add_argument("--trace-log")
+    parser.add_argument("--ignore-seen", action="store_true",
+                        help="이미 채택했던 URL 도 다시 수집한다. 과거 리포트를 다시 만들 때만 쓴다")
 
     args = parser.parse_args()
 
@@ -61,7 +63,7 @@ def main():
     trace = None
 
     try:
-        request = load_request(args.request)
+        request, request_warnings = load_request(args.request)
 
         job_id = request.job_id
         provider = request.provider
@@ -102,10 +104,14 @@ def main():
             step=step,
             trace=trace,
             started_at=started_at,
+            ignore_seen=args.ignore_seen,
         )
         pattern_result = pattern.run(context)
 
         step("index")
+        from providers.subscription import enrich_usage_with_subscription
+
+        usage = enrich_usage_with_subscription(total_usage_of(llm), provider)
         result = build_success_result(
             job_id=job_id,
             started_at=started_at,
@@ -113,8 +119,8 @@ def main():
             meta_path=pattern_result.meta_path,
             source_stats=pattern_result.source_stats,
             items=pattern_result.items,
-            warnings=pattern_result.warnings,
-            usage=total_usage_of(llm),
+            warnings=request_warnings + pattern_result.warnings,
+            usage=usage,
         )
         write_result(args.result, result)
         status = result["status"]

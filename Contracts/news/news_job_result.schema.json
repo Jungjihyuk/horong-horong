@@ -38,12 +38,14 @@
     "usage": {
       "type": ["object", "null"],
       "description": "리포트 실행 1회의 누적 소모량. 사용량을 보고하지 않는 provider는 null.",
-      "required": ["inputTokens", "outputTokens", "cachedInputTokens", "cacheWriteInputTokens", "reasoningOutputTokens", "callCount", "rateLimitsFirst", "rateLimits"],
+      "required": ["inputTokens", "outputTokens", "cacheHitTokens", "cacheWriteTokens", "cacheStorage5mTokens", "cacheStorage1hTokens", "reasoningOutputTokens", "callCount", "rateLimitsFirst", "rateLimits"],
       "properties": {
         "inputTokens": { "type": "integer" },
         "outputTokens": { "type": "integer" },
-        "cachedInputTokens": { "type": "integer" },
-        "cacheWriteInputTokens": { "type": "integer" },
+        "cacheHitTokens": { "type": "integer" },
+        "cacheWriteTokens": { "type": "integer" },
+        "cacheStorage5mTokens": { "type": "integer" },
+        "cacheStorage1hTokens": { "type": "integer" },
         "reasoningOutputTokens": { "type": "integer" },
         "totalCostUSD": { "type": ["number", "null"] },
         "callCount": { "type": "integer" },

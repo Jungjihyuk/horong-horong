@@ -1,0 +1,24 @@
+{
+  "_comment": "AI CLI 구독 요금제 5시간(300분) 세션 한도 소모율 환산 기준표. 요금제 정책이나 모델 출시에 따른 기준 변경 시 코드 수정 없이 데이터로 관리한다 (2026-09 기준).",
+  "plans": {
+    "claude": {
+      "plan_type": "Claude Pro",
+      "window_minutes": 300,
+      "cost_usd_per_percent": 0.1,
+      "tokens_per_percent": 15000,
+      "description": "5시간 세션 기준 $0.20 소모 시 2% ($0.10 / 1% 또는 15,000 토큰 / 1%)"
+    },
+    "codex": {
+      "plan_type": "ChatGPT Plus",
+      "window_minutes": 300,
+      "tokens_per_percent": 250000,
+      "description": "5시간 세션 기준 50만 토큰 소모 시 2% (25만 토큰 / 1%)"
+    },
+    "antigravity": {
+      "plan_type": "Google AI Pro",
+      "window_minutes": 300,
+      "tokens_per_percent": 500000,
+      "description": "5시간 세션 기준 100만 토큰 소모 시 2% (50만 토큰 / 1%)"
+    }
+  }
+}

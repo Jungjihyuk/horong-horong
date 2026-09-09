@@ -1,0 +1,164 @@
+{
+  "_comment": "Anthropic/Google/OpenAI API 요금 (USD / 1M 토큰). 요금 변경이 코드 변경이 되지 않도록 데이터로 둔다. (2026-09-09 기준).",
+  "models": {
+    "claude-opus-5": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_hit": 0.5,
+      "cache_storage_5m_ttl_usd_per_mtok": 6.25,
+      "cache_storage_1h_ttl_usd_per_mtok": 10.0
+    },
+    "claude-opus-4-8": {
+      "input": 5.0,
+      "output": 25.0,
+      "cache_hit": 0.5,
+      "cache_storage_5m_ttl_usd_per_mtok": 6.25,
+      "cache_storage_1h_ttl_usd_per_mtok": 10.0
+    },
+    "claude-sonnet-5": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_hit": 0.2,
+      "cache_storage_5m_ttl_usd_per_mtok": 2.5,
+      "cache_storage_1h_ttl_usd_per_mtok": 4.0
+    },
+    "claude-haiku-4-5": {
+      "input": 1.0,
+      "output": 5.0,
+      "cache_hit": 0.1,
+      "cache_storage_5m_ttl_usd_per_mtok": 1.25,
+      "cache_storage_1h_ttl_usd_per_mtok": 2.0
+    },
+    "claude-fable-5": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_hit": 1.0,
+      "cache_storage_5m_ttl_usd_per_mtok": 12.5,
+      "cache_storage_1h_ttl_usd_per_mtok": 20.0
+    },
+    "claude-fable-5-1": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_hit": 0.25,
+      "cache_storage_5m_ttl_usd_per_mtok": 12.5,
+      "cache_storage_1h_ttl_usd_per_mtok": 20.0
+    },
+    "gemini-3.8-flash": {
+      "input": 0.75,
+      "output": 3.75,
+      "cache_hit": 0.075,
+      "cache_storage_usd_per_mtok_hour": 0.5
+    },
+    "gemini-3.7-flash": {
+      "input": 0.75,
+      "output": 3.75,
+      "cache_hit": 0.075,
+      "cache_storage_usd_per_mtok_hour": 0.5
+    },
+    "gemini-3.6-flash": {
+      "input": 0.75,
+      "output": 3.75,
+      "cache_hit": 0.075,
+      "cache_storage_usd_per_mtok_hour": 0.5
+    },
+    "gemini-3.1-pro-preview": {
+      "pricing_tiers": [
+        {
+          "prompt_tokens_min": 0,
+          "prompt_tokens_max": 200000,
+          "input": 2.0,
+          "output": 12.0,
+          "cache_hit": 0.20
+        },
+        {
+          "prompt_tokens_min": 200001,
+          "prompt_tokens_max": null,
+          "input": 4.0,
+          "output": 18.0,
+          "cache_hit": 0.40
+        }
+      ],
+      "cache_storage_usd_per_mtok_hour": 4.50
+    },
+    "gpt-6-astra": {
+      "pricing_tiers": [
+        {
+          "prompt_tokens_min": 0,
+          "prompt_tokens_max": 272000,
+          "input": 10.0,
+          "output": 50.0,
+          "cache_hit": 1.0,
+          "cache_write": 12.5
+        },
+        {
+          "prompt_tokens_min": 272001,
+          "prompt_tokens_max": null,
+          "input": 20.0,
+          "output": 75.0,
+          "cache_hit": 2.0,
+          "cache_write": 25.0
+        }
+      ]
+    },
+    "gpt-5.6-sol": {
+      "pricing_tiers": [
+        {
+          "prompt_tokens_min": 0,
+          "prompt_tokens_max": 272000,
+          "input": 4.0,
+          "output": 20.0,
+          "cache_hit": 0.4,
+          "cache_write": 5.0
+        },
+        {
+          "prompt_tokens_min": 272001,
+          "prompt_tokens_max": null,
+          "input": 8.0,
+          "output": 30.0,
+          "cache_hit": 0.8,
+          "cache_write": 10.0
+        }
+      ]
+    },
+    "gpt-5.6-terra": {
+      "pricing_tiers": [
+        {
+          "prompt_tokens_min": 0,
+          "prompt_tokens_max": 272000,
+          "input": 2.0,
+          "output": 12.0,
+          "cache_hit": 0.2,
+          "cache_write": 2.5
+        },
+        {
+          "prompt_tokens_min": 272001,
+          "prompt_tokens_max": null,
+          "input": 4.0,
+          "output": 18.0,
+          "cache_hit": 0.4,
+          "cache_write": 5.0
+        }
+      ]
+    },
+    "gpt-5.6-luna": {
+      "pricing_tiers": [
+        {
+          "prompt_tokens_min": 0,
+          "prompt_tokens_max": 272000,
+          "input": 0.2,
+          "output": 1.2,
+          "cache_hit": 0.02,
+          "cache_write": 0.25
+        },
+        {
+          "prompt_tokens_min": 272001,
+          "prompt_tokens_max": null,
+          "input": 0.4,
+          "output": 1.8,
+          "cache_hit": 0.04,
+          "cache_write": 0.05
+        }
+      ]
+    }
+  }
+}

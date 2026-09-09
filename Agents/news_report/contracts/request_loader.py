@@ -9,14 +9,15 @@ import json
 from contracts.news_job_request import NewsJobRequest
 
 
-def load_request(path: str) -> NewsJobRequest:
+def load_request(path: str) -> tuple[NewsJobRequest, list[str]]:
     """요청 JSON 파일을 읽어 `NewsJobRequest`로 변환한다.
 
     Args:
         path: Swift 앱이 `--request` 인자로 넘긴 JSON 파일 경로.
 
     Returns:
-        runner가 바로 사용할 수 있는 `NewsJobRequest`.
+        `(요청, 경고 목록)`. 경고는 «거부하는 대신 기본값으로 강등한» 필드를 알린다 —
+        튜플로 돌려주는 이유는 호출부가 경고를 잊지 못하게 하기 위해서다.
 
     Raises:
         FileNotFoundError: 요청 파일이 존재하지 않을 때.
@@ -26,4 +27,18 @@ def load_request(path: str) -> NewsJobRequest:
     with open(path, "r", encoding="utf-8") as file:
         raw = json.load(file)
 
-    return NewsJobRequest.model_validate(raw)
+    request = NewsJobRequest.model_validate(raw)
+    return request, _demotion_warnings(raw, request)
+
+
+def _demotion_warnings(raw: dict, request: NewsJobRequest) -> list[str]:
+    """원본에는 값이 있었는데 파싱 결과가 비었다면 강등된 것이다."""
+    warnings: list[str] = []
+    options = raw.get("providerOptions")
+    if isinstance(options, dict):
+        raw_effort = options.get("effort")
+        if raw_effort is not None and request.provider_options.effort is None:
+            warnings.append(
+                f"providerOptions.effort 값 {raw_effort!r} 을 알 수 없어 기본값을 사용합니다."
+            )
+    return warnings

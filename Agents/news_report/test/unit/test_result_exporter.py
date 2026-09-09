@@ -46,7 +46,10 @@ def test_build_success_result__with_usage__serializes_camel_case_payload():
     usage = UsageRecord(
         input_tokens=17253,
         output_tokens=183,
-        cached_input_tokens=4480,
+        cache_hit_tokens=4480,
+        cache_write_tokens=67,
+        cache_storage_5m_tokens=120,
+        cache_storage_1h_tokens=30,
         total_cost_usd=0.2375,
         call_count=12,
         rate_limits_first=(
@@ -85,8 +88,10 @@ def test_build_success_result__with_usage__serializes_camel_case_payload():
     assert result["usage"] == {
         "inputTokens": 17253,
         "outputTokens": 183,
-        "cachedInputTokens": 4480,
-        "cacheWriteInputTokens": 0,
+        "cacheHitTokens": 4480,
+        "cacheWriteTokens": 67,
+        "cacheStorage5mTokens": 120,
+        "cacheStorage1hTokens": 30,
         "reasoningOutputTokens": 0,
         "totalCostUSD": 0.2375,
         "callCount": 12,

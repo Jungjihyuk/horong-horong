@@ -11,6 +11,14 @@ struct NewsPage: View {
     private var legacyAgentKeywordsCSV: String = Constants.defaultInterestKeywords
     @AppStorage(Constants.NewsStorageKey.selectedProvider)
     private var selectedProvider: String = Constants.defaultNewsProvider
+    @AppStorage(Constants.NewsStorageKey.antigravityEffort)
+    private var antigravityEffort: String = Constants.defaultNewsAntigravityEffort
+    @AppStorage(Constants.NewsStorageKey.timelineProvider)
+    private var timelineProvider: String = Constants.newsTimelineInheritProvider
+    @AppStorage(Constants.NewsStorageKey.timelineOllamaModel)
+    private var timelineOllamaModel: String = ""
+    @AppStorage(Constants.NewsStorageKey.timelineAntigravityEffort)
+    private var timelineAntigravityEffort: String = Constants.defaultNewsTimelineAntigravityEffort
     @AppStorage(Constants.NewsStorageKey.ollamaModel)
     private var ollamaModel: String = Constants.defaultNewsOllamaModel
     @AppStorage(Constants.NewsStorageKey.ollamaEndpoint)
@@ -385,9 +393,17 @@ struct NewsPage: View {
                     .labelsHidden()
                     .frame(width: 120)
                 }
+                if selectedProvider == "antigravity" {
+                    effortRow(
+                        title: "Antigravity Reasoning Effort",
+                        subtitle: "agy CLI 가 모델과 함께 요구하는 값입니다. 높일수록 느리고 정확합니다.",
+                        selection: $antigravityEffort
+                    )
+                }
                 if selectedProvider == "ollama" {
                     ollamaSettingsRows
                 }
+                timelineModelRows
                 SettingsRow(
                     "소스당 최대 항목 수",
                     subtitle: "각 소스에서 한 번에 가져올 기사 수. 늘리면 더 풍부하지만 LLM 호출 비용이 커집니다."
@@ -424,6 +440,80 @@ struct NewsPage: View {
             }
         }
     }
+
+    /// 타임라인 전용 모델 설정.
+    ///
+    /// 기본은 «리포트와 동일» 이다. 갈라 쓸 이유가 있을 때만 나뉜다 — 리포트는 기사마다
+    /// 수십 회를 부르고, 타임라인은 실행당 1~2회로 한 달치를 종합한다. 그래서 타임라인만
+    /// 더 좋은(비싼) 모델을 써도 총액이 작다.
+    @ViewBuilder
+    private var timelineModelRows: some View {
+        SettingsRow(
+            "타임라인 모델",
+            subtitle: "타임라인은 실행당 1~2회만 부르고 한 달치를 한 번에 종합합니다. 리포트와 갈라 쓸 수 있습니다."
+        ) {
+            Picker("", selection: $timelineProvider) {
+                Text("리포트와 동일 (\(selectedProvider))")
+                    .tag(Constants.newsTimelineInheritProvider)
+                ForEach(Constants.availableNewsProviders, id: \.self) { provider in
+                    Text(provider).tag(provider)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 190)
+        }
+
+        if effectiveTimelineProvider == "antigravity" {
+            effortRow(
+                title: "타임라인 Reasoning Effort",
+                subtitle: "타임라인은 호출이 적으니 리포트보다 높게 두어도 총액 부담이 작습니다.",
+                selection: $timelineAntigravityEffort
+            )
+        }
+
+        if effectiveTimelineProvider == "ollama" {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("타임라인 Ollama 모델").font(.callout)
+                    Text("비워두면 리포트와 같은 모델을 씁니다. 월 단위 종합이라 더 큰 모델이 유리할 수 있습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                OllamaModelPicker(
+                    model: $timelineOllamaModel,
+                    endpoint: normalizedOllamaEndpoint,
+                    dataBasePath: normalizedDataBasePath
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 10)
+        }
+    }
+
+    /// 상속(`inherit`)을 풀어낸 실제 provider.
+    private var effectiveTimelineProvider: String {
+        timelineProvider == Constants.newsTimelineInheritProvider
+            ? selectedProvider
+            : timelineProvider
+    }
+
+    private func effortRow(
+        title: String,
+        subtitle: String,
+        selection: Binding<String>
+    ) -> some View {
+        SettingsRow(title, subtitle: subtitle) {
+            Picker("", selection: selection) {
+                ForEach(["low", "medium", "high"], id: \.self) { level in
+                    Text(level).tag(level)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 120)
+        }
+    }
+
 
     @ViewBuilder
     private var ollamaSettingsRows: some View {

@@ -87,16 +87,20 @@ struct MainHubWindow: View {
     private func railItem(_ tab: HubTab) -> some View {
         let isSelected = appState.hubTab == tab
         return Button {
-            if tab == .memo, appState.hubTab == .memo {
+            // 이미 열려 있는 탭을 다시 누르면 안쪽 목록을 접었다 편다.
+            if appState.hubTab == tab, tab == .memo || tab == .news {
                 withAnimation(.easeInOut(duration: 0.24)) {
-                    appState.isRecordRailVisible.toggle()
+                    if tab == .memo {
+                        appState.isRecordRailVisible.toggle()
+                    } else {
+                        appState.isNewsListVisible.toggle()
+                    }
                 }
             } else {
                 appState.hubTab = tab
-                if tab == .memo {
-                    withAnimation(.easeInOut(duration: 0.24)) {
-                        appState.isRecordRailVisible = true
-                    }
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    if tab == .memo { appState.isRecordRailVisible = true }
+                    if tab == .news { appState.isNewsListVisible = true }
                 }
             }
         } label: {

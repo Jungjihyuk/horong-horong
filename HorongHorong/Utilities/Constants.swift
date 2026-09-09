@@ -1157,6 +1157,12 @@ enum Constants {
         recommendedNewsOllamaModel()
     }
     static let defaultNewsOllamaEndpoint = "http://127.0.0.1:11434"
+    /// 리포트용 reasoning effort 기본값. 기사마다 수십 회를 부르므로 낮게 둔다.
+    static let defaultNewsAntigravityEffort = "low"
+    /// 타임라인(종합)용 기본값. 월별 1회 + 개요 1회뿐이라 높여도 총액이 작다.
+    static let defaultNewsTimelineAntigravityEffort = "medium"
+    /// 타임라인 provider 기본값. 리포트 설정을 따른다는 뜻이다.
+    static let newsTimelineInheritProvider = "inherit"
     static let defaultNewsOllamaTimeout = 120.0
     static var newsHardwareMemoryGB: Int {
         memoryGB(forPhysicalMemoryBytes: ProcessInfo.processInfo.physicalMemory)
@@ -1775,6 +1781,16 @@ enum Constants {
         static let ollamaModel = "news.ollama.model"
         static let ollamaEndpoint = "news.ollama.endpoint"
         static let ollamaTimeout = "news.ollama.timeout"
+        /// antigravity(agy) reasoning effort. CLI 가 `--model` 과 함께 요구한다.
+        static let antigravityEffort = "news.antigravity.effort"
+        /// 타임라인 전용 provider. `inherit` 이면 리포트 설정을 그대로 쓴다.
+        ///
+        /// 분리해 둔 이유: 호출 특성이 정반대다. 리포트는 기사마다 수십 회를 부르고,
+        /// 타임라인은 실행당 1~2회로 한 달치를 종합한다. 그래서 타임라인만 비싼 모델을
+        /// 써도 총액이 작다.
+        static let timelineProvider = "news.timeline.provider"
+        static let timelineOllamaModel = "news.timeline.ollama.model"
+        static let timelineAntigravityEffort = "news.timeline.antigravity.effort"
         static let interestKeywords = "news.interestKeywords"
         static let youtubeChannelIds = "news.youtube.channelIds"  // legacy CSV, NewsSourceStore 가 마이그레이션
         static let sources = "news.sources.v1"

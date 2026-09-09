@@ -278,3 +278,47 @@ def test_cli_provider__timeout_twice__raises_timeout_expired():
         _ = provider.run("analyze source")
 
     assert provider.attempts == 2
+
+
+# 시나리오 N. antigravity 는 `--effort` 없이 호출하면 안 된다.
+@pytest.mark.unit
+def test_antigravity_provider__always_sends_effort():
+    """CLI 가 `--model gemini-3.8-flash` 에 effort 를 함께 요구하도록 바뀌었다.
+
+    빠뜨리면 `invalid model selection (... --effort "")` 로 매 호출이 실패해
+    리포트가 0건으로 끝난다(2026-09-09 실행이 21건 전부 이렇게 죽었다).
+    """
+    from providers.cli_providers import AntigravityCliProvider
+
+    command = AntigravityCliProvider()._build_command("프롬프트")
+
+    assert "--effort" in command
+    assert command[command.index("--effort") + 1] == AntigravityCliProvider.DEFAULT_EFFORT
+
+
+@pytest.mark.unit
+def test_antigravity_provider__effort_is_configurable():
+    # Given/When: 호출 특성에 따라 effort 를 바꿀 수 있어야 한다.
+    from providers.cli_providers import AntigravityCliProvider
+
+    command = AntigravityCliProvider(model="gemini-3.1-pro", effort="high")._build_command("x")
+
+    assert command[command.index("--model") + 1] == "gemini-3.1-pro"
+    assert command[command.index("--effort") + 1] == "high"
+
+
+@pytest.mark.unit
+def test_create_provider__antigravity_options__are_applied():
+    # Given: 요청이 model/effort/timeout 을 지정한다.
+    from contracts.news_job_request import ProviderOptionsConfig
+    from providers.cli_providers import AntigravityCliProvider
+    from providers.factory import create_provider
+
+    provider = create_provider(
+        "antigravity",
+        ProviderOptionsConfig(model="gemini-3.6-flash", effort="low", timeout=90),
+    )
+
+    assert isinstance(provider, AntigravityCliProvider)
+    assert provider.effort == "low"
+    assert provider.timeout == 90

@@ -60,4 +60,7 @@ final class AppState {
     var hubTab: HubTab = .stats
     /// 기록 탭의 '내 머리속' 사이드 패널. 기록 탭을 다시 누르면 접힌다.
     var isRecordRailVisible: Bool = true
+    /// 뉴스 탭 안쪽 목록(보관함=리포트 목록, 타임라인=분야 목록)이 펴져 있는가.
+    /// 좌측 레일의 뉴스 버튼을 다시 누르면 접힌다.
+    var isNewsListVisible: Bool = true
 }

@@ -4,8 +4,8 @@ import Foundation
 ///
 /// 값이 아니라 범위를 돌려준다. 호출 횟수는 설정에서 결정적으로 계산되지만
 /// 호출당 출력 토큰은 실행 전에 알 수 없어 과거 실행으로 보정하기 때문이다.
-struct NewsUsageEstimate {
-    enum Confidence {
+struct NewsUsageEstimate: Sendable, Equatable {
+    enum Confidence: Sendable {
         /// 과거 실행 이력으로 보정한 값.
         case calibrated
         /// 이력이 부족해 프롬프트 상한 기반으로 잡은 초기 추정.
@@ -17,7 +17,7 @@ struct NewsUsageEstimate {
     var tokenRange: ClosedRange<Int>
     /// 비용을 보고하는 provider(claude)만 채워진다.
     var costRange: ClosedRange<Double>?
-    /// 요금제 사용률을 노출하는 provider(codex)만 채워진다.
+    /// 요금제 사용률을 노출하거나 환산 가능한 provider(claude, codex, antigravity)만 채워진다.
     var primaryPercentRange: ClosedRange<Double>?
     var primaryWindowMinutes: Int?
     var confidence: Confidence
@@ -25,11 +25,7 @@ struct NewsUsageEstimate {
     var sampleCount: Int
 }
 
-/// 과거 실행 이력으로 다음 실행의 소모량을 추정한다.
-///
-/// 호출 수는 다루는 아이템 수(소스 수 × maxItemsPerSource)에 비례한다는 사실만
-/// 가정하고, 파이프라인 단계별 호출 구조는 모델링하지 않는다. 단계 구성이
-/// 바뀌어도 이력만 쌓이면 자동으로 따라가기 때문이다.
+/// 과거 실행 이력과 구독 요금제 정책으로 다음 실행의 소모량을 추정한다.
 enum NewsUsageEstimator {
     /// 이력이 이만큼 쌓이기 전에는 보정값을 신뢰하지 않고 범위를 넓힌다.
     static let minimumSamplesForConfidence = 3
@@ -37,15 +33,10 @@ enum NewsUsageEstimator {
     static let historyWindow = 10
 
     /// 이력이 없을 때 쓰는 초기 추정치.
-    ///
-    /// 프롬프트가 4000자(relevance) / 5000자(insight)로 잘려 있다는 사실에서
-    /// 입력 상한을, 출력은 보수적인 상수로 잡는다. 실행이 한 번이라도 성공하면
-    /// 즉시 실측 기반으로 대체된다.
     private static let coldStartTokensPerCall = 1_800.0
     private static let coldStartCallsPerItem = 2.0
 
-    /// - Parameter jobs: 최근 실행 이력. **저장소를 직접 읽지 않는다** — 호출부가 이미
-    ///   들고 있는 값을 넘긴다. 순수 함수라 SwiftData 없이 테스트한다.
+    /// - Parameter jobs: 최근 실행 이력. 저장소를 직접 읽지 않고 호출부에서 주입받는다.
     static func estimate(
         provider: String,
         plannedItems: Int,
@@ -55,17 +46,20 @@ enum NewsUsageEstimator {
             .lazy
             .filter { $0.provider == provider }
             .prefix(historyWindow)
-            .compactMap(sample(from:))
+            .compactMap { sample(from: $0, provider: provider) }
 
-        return estimate(plannedItems: plannedItems, samples: Array(samples))
+        return estimate(provider: provider, plannedItems: plannedItems, samples: Array(samples))
     }
 
     private static func estimate(
+        provider: String,
         plannedItems: Int,
         samples: [Sample]
     ) -> NewsUsageEstimate {
+        let rule = NewsSubscriptionPolicy.rule(for: provider)
+
         guard !samples.isEmpty else {
-            return coldStartEstimate(plannedItems: plannedItems)
+            return coldStartEstimate(provider: provider, plannedItems: plannedItems, rule: rule)
         }
 
         let callsPerItem = median(samples.map(\.callsPerItem))
@@ -77,15 +71,29 @@ enum NewsUsageEstimator {
         let spread = samples.count >= minimumSamplesForConfidence ? 0.25 : 0.6
 
         let costPerCall = medianOrNil(samples.compactMap(\.costPerCall))
-        let percentPerCall = medianOrNil(samples.compactMap(\.primaryPercentPerCall))
+        var percentPerCall = medianOrNil(samples.compactMap(\.primaryPercentPerCall))
+
+        // percentPerCall이 없거나 0.0001 이하이고 요금제 룰이 있는 경우 토큰/비용으로부터 보정
+        if (percentPerCall == nil || percentPerCall! <= 0.0001), let rule {
+            percentPerCall = rule.calculatePercent(tokens: Int(tokensPerCall), costUSD: costPerCall)
+        }
+
+        let primaryPercentRange: ClosedRange<Double>?
+        if let percentPerCall, percentPerCall > 0 {
+            primaryPercentRange = doubleRange(percentPerCall * calls, spread: spread)
+        } else {
+            primaryPercentRange = nil
+        }
+
+        let primaryWindowMinutes = samples.compactMap(\.primaryWindowMinutes).first ?? rule?.windowMinutes
 
         return NewsUsageEstimate(
             plannedItems: plannedItems,
             callRange: intRange(calls, spread: spread),
             tokenRange: intRange(tokens, spread: spread),
             costRange: costPerCall.map { doubleRange($0 * calls, spread: spread) },
-            primaryPercentRange: percentPerCall.map { doubleRange($0 * calls, spread: spread) },
-            primaryWindowMinutes: samples.compactMap(\.primaryWindowMinutes).first,
+            primaryPercentRange: primaryPercentRange,
+            primaryWindowMinutes: primaryWindowMinutes,
             confidence: samples.count >= minimumSamplesForConfidence ? .calibrated : .coldStart,
             sampleCount: samples.count
         )
@@ -102,8 +110,7 @@ enum NewsUsageEstimator {
         var primaryWindowMinutes: Int?
     }
 
-    private static func sample(from job: NewsJobRun) -> Sample? {
-        // 소모량을 보고하지 않는 provider이거나 아직 소모량이 기록되기 전인 실행은 건너뛴다.
+    private static func sample(from job: NewsJobRun, provider: String) -> Sample? {
         guard
             let usage = job.usage, usage.callCount > 0,
             let plannedItems = usage.plannedItems, plannedItems > 0,
@@ -112,24 +119,55 @@ enum NewsUsageEstimator {
         else { return nil }
 
         let callCount = Double(usage.callCount)
+        let totalTokens = usage.totalTokens ?? (input + output)
+        let costPerCall = usage.totalCostUSD.map { $0 / callCount }
+
+        var percentPerCall: Double?
+        if let delta = usage.primaryPercentDelta, delta > 0.0001 {
+            percentPerCall = delta / callCount
+        } else if let rule = NewsSubscriptionPolicy.rule(for: provider) {
+            // 과거 기록에 delta가 없거나 0인 경우 구독 정책으로 환산
+            if let percent = rule.calculatePercent(tokens: totalTokens, costUSD: usage.totalCostUSD) {
+                percentPerCall = percent / callCount
+            }
+        }
+
+        let windowMinutes = usage.primaryWindowMinutes ?? NewsSubscriptionPolicy.rule(for: provider)?.windowMinutes
+
         return Sample(
             callsPerItem: callCount / Double(plannedItems),
-            tokensPerCall: Double(input + output) / callCount,
-            costPerCall: usage.totalCostUSD.map { $0 / callCount },
-            primaryPercentPerCall: usage.primaryPercentDelta.map { $0 / callCount },
-            primaryWindowMinutes: usage.primaryWindowMinutes
+            tokensPerCall: Double(totalTokens) / callCount,
+            costPerCall: costPerCall,
+            primaryPercentPerCall: percentPerCall,
+            primaryWindowMinutes: windowMinutes
         )
     }
 
-    private static func coldStartEstimate(plannedItems: Int) -> NewsUsageEstimate {
+    private static func coldStartEstimate(
+        provider: String,
+        plannedItems: Int,
+        rule: NewsSubscriptionRule?
+    ) -> NewsUsageEstimate {
         let calls = coldStartCallsPerItem * Double(plannedItems)
+        let tokens = coldStartTokensPerCall * calls
+
+        var primaryPercentRange: ClosedRange<Double>?
+        var primaryWindowMinutes: Int?
+
+        if let rule {
+            if let percent = rule.calculatePercent(tokens: Int(tokens), costUSD: nil) {
+                primaryPercentRange = doubleRange(percent, spread: 0.6)
+                primaryWindowMinutes = rule.windowMinutes
+            }
+        }
+
         return NewsUsageEstimate(
             plannedItems: plannedItems,
             callRange: intRange(calls, spread: 0.6),
-            tokenRange: intRange(coldStartTokensPerCall * calls, spread: 0.6),
+            tokenRange: intRange(tokens, spread: 0.6),
             costRange: nil,
-            primaryPercentRange: nil,
-            primaryWindowMinutes: nil,
+            primaryPercentRange: primaryPercentRange,
+            primaryWindowMinutes: primaryWindowMinutes,
             confidence: .coldStart,
             sampleCount: 0
         )
@@ -151,8 +189,6 @@ enum NewsUsageEstimator {
         medianOrNil(values) ?? 0
     }
 
-    /// 평균이 아니라 중앙값을 쓴다. 실패로 조기 종료된 실행이 표본에 섞이면
-    /// 평균은 크게 흔들리지만 중앙값은 견딘다.
     private static func medianOrNil(_ values: [Double]) -> Double? {
         guard !values.isEmpty else { return nil }
         let sorted = values.sorted()

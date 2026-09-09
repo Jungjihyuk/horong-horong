@@ -42,6 +42,15 @@ class TracedStructuredProvider:
         self._trace: TraceSink = trace
         self._provider_name: str = provider_name
 
+    @property
+    def supports_slash_preflight(self) -> bool:
+        """감싼 provider 가 preflight 를 받는지 그대로 전달한다.
+
+        이 래퍼가 값을 가려버리면 과금형 provider 에서도 preflight 가 돌아
+        `/usage` 프롬프트 한 번이 그대로 청구된다.
+        """
+        return getattr(self._provider, "supports_slash_preflight", True)
+
     def run(self, prompt: str) -> str:
         """기존 TextProvider 계약과 호환되는 텍스트 생성 메서드."""
         return self._provider.run(prompt)

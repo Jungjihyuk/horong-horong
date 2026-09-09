@@ -13,7 +13,7 @@ enum HubTab: String, CaseIterable, Identifiable, Hashable {
     var label: String {
         switch self {
         case .memo:        return "기록"
-        case .news:        return "뉴스 보관함"
+        case .news:        return "뉴스"
         case .stats:       return "통계"
         case .achievement: return "성취"
         }
@@ -56,6 +56,10 @@ enum HubWindowPresenter {
         openWindow: OpenWindowAction
     ) {
         appState.hubTab = tab
+        // 탭으로 «들어올» 때는 목록을 펴 둔다. 접는 것은 같은 탭을 다시 눌렀을 때만이다.
+        if tab == .news {
+            appState.isNewsListVisible = true
+        }
         if tab == .memo {
             appState.isRecordRailVisible = true
         }
