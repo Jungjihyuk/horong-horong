@@ -130,6 +130,20 @@ final class NewsViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.lastReportedUsage)
     }
 
+    /// 현재 선택된 provider의 소모량만 필터링하여 다른 provider 요금과 섞이지 않아야 한다.
+    func testLastReportedUsageForProviderFiltersByProvider() {
+        let (viewModel, repository, _) = make()
+        repository.jobs = [
+            job(provider: "claude", usage: usage(calls: 20)),
+            job(provider: "antigravity", usage: NewsJobUsage(callCount: 5, inputTokens: 4000, outputTokens: 800, totalCostUSD: 0.006))
+        ]
+        viewModel.reload()
+
+        XCTAssertEqual(viewModel.lastReportedUsage(for: "antigravity")?.callCount, 5)
+        XCTAssertEqual(viewModel.lastReportedUsage(for: "claude")?.callCount, 20)
+        XCTAssertNil(viewModel.lastReportedUsage(for: "ollama"), "기록 없는 provider는 nil이어야 한다")
+    }
+
     /// ollama 는 무료라 추정하지 않는다.
     func testOllamaHasNoUsageEstimate() {
         let (viewModel, _, _) = make()

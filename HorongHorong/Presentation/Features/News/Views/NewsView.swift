@@ -70,22 +70,11 @@ struct NewsView: View {
                     runButton
 
                     // 실행 중에는 예측 대신 진행 상황(statusSection)을 보여준다.
-                    if !pipelineService.isRunning, let usageEstimate {
-                        NewsUsageEstimateLabel(estimate: usageEstimate)
-                    }
-
-                    if let usage = viewModel.lastReportedUsage {
-                        NewsUsageActualLabel(usage: usage)
-                    }
-
-                    if let nextCollectionText {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.system(size: 9))
-                            Text("다음 자동 수집 \(nextCollectionText)")
-                                .font(.system(size: 11))
-                        }
-                        .foregroundStyle(PopoverChrome.inkSecondary)
+                    if !pipelineService.isRunning {
+                        NewsExecutionInfoCard(
+                            estimate: usageEstimate,
+                            nextCollectionText: nextCollectionText
+                        )
                     }
 
                     if isPreparingOllama {
