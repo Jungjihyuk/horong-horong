@@ -805,6 +805,17 @@ final class CompanionController {
             return
         }
 
+        if CompanionGuideQuestion.matches(message),
+           let guidance = CompanionAppFacts.directGuidance(for: message) {
+            state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
+            state.chatMessages.append(CompanionChatMessage(role: .companion, text: guidance))
+            state.isAwaitingReply = false
+            state.streamingMessageID = nil
+            setAnimation(.waiting)
+            showAnswerDestinationIfAny(for: message)
+            return
+        }
+
         state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
         state.isAwaitingReply = true
         state.streamingMessageID = nil
@@ -843,7 +854,7 @@ final class CompanionController {
             self.state.isAwaitingReply = false
             self.state.streamingMessageID = nil
             self.reactWithMood(reply.mood)
-            self.showAnswerDestinationIfAny(for: message)
+            await self.showAnswerDestinationIfAny(for: message, session: session)
         }
     }
 
@@ -970,15 +981,38 @@ final class CompanionController {
     }
 
     /// 답한 내용을 화면으로도 보여준다. 설정 경로를 말했으면 그 자리를 열어 잠깐 강조한다.
-    private func showAnswerDestinationIfAny(for message: String) {
+    private func showAnswerDestinationIfAny(for message: String, session: CompanionChatSession? = nil) async {
         guard CompanionGuideQuestion.matches(message) else { return }
         if let destination = CompanionAppFacts.destination(for: message) {
-            CompanionOnboardingPresenter.openSettings(
-                tab: destination.tab,
-                highlight: destination.highlight
+            CompanionOnboardingPresenter.show(
+                destination,
+                questionTokens: SearchTokens.from(message)
             )
             return
         }
+
+        // 지식 레지스트리에 최상위 지식이 명시되어 있으나 목적지가 없는 경우(예: Knowledge/Works 등 준비 중인 기능),
+        // 화면 이동을 하지 않고 설명만 제공하는 것이 올바르므로 후속 분류기나 설정 색인으로 오탐색하지 않는다.
+        if CompanionKnowledgeRegistry.hasMatchedKnowledge(for: message) {
+            return
+        }
+
+        // 키워드 미매칭 시 LLM 구조화 분류기를 통해 유효한 목적지 추출 시도
+        if let session {
+            let classifiedID = await CompanionDestinationClassifier.classify(question: message) { prompt in
+                let reply = await session.reply(to: prompt, precise: true, onPartial: { _ in })
+                return reply.text
+            }
+            if let classifiedID,
+               let destination = CompanionDestinationRegistry.destination(for: classifiedID) {
+                CompanionOnboardingPresenter.show(
+                    destination,
+                    questionTokens: SearchTokens.from(message)
+                )
+                return
+            }
+        }
+
         // 손으로 지정한 목적지가 없어도 색인이 페이지를 찾아주고,
         // 그 페이지에서 제목이 가장 잘 맞는 카드가 스스로 강조된다.
         if let match = CompanionSettingsIndex.bestMatch(for: message) {
@@ -987,6 +1021,12 @@ final class CompanionController {
                 highlight: nil,
                 questionTokens: SearchTokens.from(message)
             )
+        }
+    }
+
+    private func showAnswerDestinationIfAny(for message: String) {
+        Task { @MainActor in
+            await showAnswerDestinationIfAny(for: message, session: nil)
         }
     }
 
