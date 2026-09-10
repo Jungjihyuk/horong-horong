@@ -164,6 +164,45 @@ ViewThatFits(in: .horizontal) {
 - 측정이 불가피하면 히스테리시스(예: 0.5pt 이상 변할 때만 반영)로 진동을 구조적으로 막는다.
 - `body` 최상단의 `GeometryReader` 는 자식에게 크기를 제안해 재배치를 연쇄시킨다. `onGeometryChange` 를 쓴다.
 
+### R12. 반복 애니메이션은 렌더링 트리와 분리한다
+`Picker`, `DatePicker`, `TextField`, `TextEditor`, `Menu`, WebView 등 플랫폼 뷰를 포함하는
+상위 컨테이너에 반복 애니메이션을 적용하지 않는다. 플랫폼 뷰의 갱신과 접근성 계산까지
+매 프레임 다시 실행되어 메인 스레드 100% CPU와 메모리 폭증으로 이어질 수 있다
+(2026-09-10 · 설정 미리알림 카드 강조).
+
+- 반복 강조는 콘텐츠의 `frame`, `padding`, `offset`, `scaleEffect`, `shadow`를 변경하지 않는다.
+- 강조 효과는 레이아웃에 참여하지 않는 별도 `overlay`에서 `opacity` 또는 색상만 변경한다.
+- 장식용 overlay에는 `.allowsHitTesting(false)`와 `.accessibilityHidden(true)`를 적용한다.
+- 무한 반복보다 횟수가 제한된 애니메이션을 우선하고, Reduce Motion에서는 정적 표현을 사용한다.
+- `onAppear`, `onDisappear`, `onGeometryChange`에서 같은 View 트리를 무효화하는 전역 탐색·대상 재선정 상태를 반복 변경하지 않는다.
+- 애니메이션 변경은 단위 테스트만으로 검증 완료로 보지 않는다. 실제 화면에서 종료 후 CPU·메모리가 안정되는지 확인한다.
+
+```swift
+// BAD: 플랫폼 컨트롤을 포함한 카드 전체가 영구적으로 다시 합성된다
+content
+    .scaleEffect(isPulsing ? 1.05 : 0.99)
+    .shadow(radius: isPulsing ? 10 : 3)
+    .animation(.easeInOut.repeatForever(), value: isPulsing)
+
+// GOOD: 레이아웃과 접근성 트리에서 분리한 장식의 투명도만 제한적으로 바꾼다
+content.overlay {
+    RoundedRectangle(cornerRadius: 10)
+        .stroke(tint, lineWidth: 2)
+        .opacity(isHighlighted ? pulseOpacity : 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+}
+```
+
+### R13. 화면 이동은 일회성 명령으로 처리한다
+`scrollTo`, 포커스 이동, 탭 전환 같은 UI 동작은 지속 상태가 아니라 한 번 소비되는 명령이다.
+
+- 강조 대상과 스크롤 요청을 같은 상태로 묶지 않는다.
+- 스크롤 요청에는 고유 ID를 부여하고 View가 한 번 처리한 뒤 폐기한다.
+- View 재생성이나 동일 값 재할당으로 같은 명령이 다시 실행되지 않게 한다.
+- 목적지는 화면을 그리기 전에 결정한다. `onAppear → 등록 → 대상 재선정 → body 갱신` 순환에 의존하지 않는다.
+- 동일 목적지 연속 요청, 이미 렌더링된 화면, View 재등장 각각에서 명령이 정확히 한 번 실행되는지 테스트한다.
+
 ---
 
 ## 2. 계층 및 의존성 규칙
@@ -241,6 +280,7 @@ HorongHorong/
 4. `#Predicate` 검증 — SwiftData 쿼리 변경 시 인메모리/실제 컨테이너 fetch 런타임 확인
 5. `cmp -s AGENTS.md CLAUDE.md` — 규칙 문서 일치 검증
 6. `git status` — 작업 트리 정돈 상태 확인
+7. 반복 애니메이션·자동 스크롤 변경 시 실제 대상 화면에서 효과 종료 후 CPU·메모리 안정 확인
 
 ### 테스트 퇴보 방지 원칙 (Regression Shield)
 - 현재 전체 테스트는 **802개**이며 0 failures 상태다.
@@ -259,4 +299,3 @@ HorongHorong/
 - 주석은 코드가 '무엇(WHAT)'을 하는지가 아니라 **'왜(WHY)' 그렇게 작성했는지(의도와 배경)**를 한국어로 명확히 설명한다.
 - 알려진 프레임워크 함정, 성능상의 이유로 선택한 우회책, 아키텍처 경계에 대한 근거를 주석으로 남긴다.
 - 작업 완료 보고 시에는 변경 내용, 아키텍처 영향, 검증 결과(통과 테스트 수)를 군더더기 없이 간결하게 보고한다.
-
