@@ -1389,6 +1389,152 @@ final class CompanionOnboardingDemoStoreTests: XCTestCase {
 }
 
 final class CompanionAppFactsTests: XCTestCase {
+    func testDestinationRegistryCoversEveryUserFacingSettingsTab() {
+        let registeredSections = Set(
+            CompanionDestinationRegistry.all
+                .filter { $0.surface == .settings && $0.targetID == nil }
+                .map(\.sectionID)
+        )
+
+        XCTAssertEqual(registeredSections, Set(SettingsTab.companionGuideCases.map(\.rawValue)))
+        XCTAssertFalse(registeredSections.contains(SettingsTab.ailab.rawValue))
+    }
+
+    func testDestinationRegistryCoversEverySettingsCard() {
+        let expectedTargets: Set<String> = [
+            "card:동작",
+            "settings.appearanceMode", "settings.theme", "settings.appIcon",
+            "card:프리셋", "card:프리셋 시간 편집", "card:알림", "card:메뉴바 표시",
+            "card:전역", "card:설정",
+            "card:카테고리", "card:앱 → 카테고리", "card:웹사이트 → 카테고리",
+            "card:자리 비움 감지 임계값", "card:짝 카테고리 (전환 무시)",
+            "card:타임라인 표시", "card:보관", "card:추적", "card:휴가 기간",
+            "card:집중 넛지", "card:개인화", "card:개인 회고 기반", "card:규칙 기반 기준",
+            "card:반복 방식", "card:해줄 말",
+            "card:추천 모델", "card:주간 목표 추천", "card:월간 목표 추천", "card:여정",
+            "card:보상", "card:적용 방식",
+            "card:소스", "card:관심 키워드", "card:파이프라인",
+            "card:실행 환경", "card:안전장치", "card:관심사",
+            "settings.companionBasics", "settings.activity", "settings.briefing", "settings.profile",
+            "settings.chat", "card:준비 중",
+            "settings.memoShortcut", "card:빠른 링크", "card:Todo 일정", "card:일기 수면 기록",
+            "card:미리알림 가져오기",
+            "card:저장소", "card:백업", "card:개선 데이터", "card:크레딧",
+            "settings.launchAtLogin",
+        ]
+        let registeredTargets = Set(CompanionDestinationRegistry.all.compactMap(\.targetID))
+
+        XCTAssertTrue(expectedTargets.isSubset(of: registeredTargets))
+    }
+
+    func testEveryRegisteredSettingsSectionCanBePresented() {
+        for destination in CompanionDestinationRegistry.all where destination.surface == .settings {
+            XCTAssertNotNil(
+                SettingsTab(rawValue: destination.sectionID),
+                "Unknown settings section: \(destination.sectionID)"
+            )
+        }
+    }
+
+    func testDestinationRegistryIDsAreUnique() {
+        let ids = CompanionDestinationRegistry.all.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
+    func testDeveloperOnlySettingsAreExcludedFromCompanionGuidance() {
+        XCTAssertFalse(SettingsTab.companionGuideCases.contains(.ailab))
+        XCTAssertFalse(CompanionAppFacts.matching("설정 페이지를 알려줘")?.contains("AI 실험실") == true)
+    }
+
+    func testDestinationRegistryResolvesAFrameworkIndependentSettingsDestination() {
+        let destination = CompanionDestinationRegistry.destination(for: .launchAtLogin)
+
+        XCTAssertEqual(destination?.surface, .settings)
+        XCTAssertEqual(destination?.sectionID, "general")
+        XCTAssertEqual(destination?.targetID, "settings.launchAtLogin")
+    }
+
+    func testDestinationRegistryRejectsUnknownIDs() {
+        XCTAssertNil(CompanionDestinationRegistry.destination(forRawID: "settings.missing"))
+        XCTAssertNil(CompanionDestinationRegistry.destination(forRawID: "popover.unknown"))
+        XCTAssertNil(CompanionDestinationRegistry.destination(forRawID: "hub.unknown"))
+    }
+
+    func testDestinationRegistryCoversEveryPopoverTab() {
+        let registeredSections = Set(
+            CompanionDestinationRegistry.all
+                .filter { $0.surface == .popover && $0.targetID == nil }
+                .map(\.sectionID)
+        )
+        let expectedSections = Set(PopoverTab.allCases.map(\.highlightKey))
+
+        XCTAssertEqual(registeredSections, expectedSections)
+    }
+
+    func testDestinationRegistryCoversEveryHubTab() {
+        let registeredSections = Set(
+            CompanionDestinationRegistry.all
+                .filter { $0.surface == .hub && $0.targetID == nil }
+                .map(\.sectionID)
+        )
+        let expectedSections = Set(HubTab.allCases.map(\.rawValue))
+
+        XCTAssertEqual(registeredSections, expectedSections)
+    }
+
+    func testSecondBrainUnsupportedSectionsAreNotRegisteredAsHubDestinations() {
+        let targets = CompanionDestinationRegistry.all
+            .filter { $0.surface == .hub }
+            .compactMap(\.targetID)
+
+        XCTAssertFalse(targets.contains("knowledge"))
+        XCTAssertFalse(targets.contains("works"))
+        XCTAssertTrue(targets.contains("quick"))
+        XCTAssertTrue(targets.contains("diary"))
+        XCTAssertTrue(targets.contains("todo"))
+        XCTAssertTrue(targets.contains("refs"))
+    }
+
+    func testEveryRegisteredPopoverDestinationCanBeResolved() {
+        for destination in CompanionDestinationRegistry.all where destination.surface == .popover {
+            XCTAssertNotNil(
+                PopoverTab.from(sectionID: destination.sectionID),
+                "Unknown popover section: \(destination.sectionID)"
+            )
+        }
+    }
+
+    func testEveryRegisteredHubDestinationCanBeResolved() {
+        for destination in CompanionDestinationRegistry.all where destination.surface == .hub {
+            XCTAssertNotNil(
+                HubTab(rawValue: destination.sectionID),
+                "Unknown hub section: \(destination.sectionID)"
+            )
+        }
+    }
+
+    func testDestinationRegistryResolvesPopoverAndHubDestinations() {
+        let popoverTimer = CompanionDestinationRegistry.destination(for: .popoverTimer)
+        XCTAssertEqual(popoverTimer?.surface, .popover)
+        XCTAssertEqual(popoverTimer?.sectionID, "timer")
+        XCTAssertNil(popoverTimer?.targetID)
+
+        let popoverStartFocus = CompanionDestinationRegistry.destination(for: .popoverTimerStartFocus)
+        XCTAssertEqual(popoverStartFocus?.surface, .popover)
+        XCTAssertEqual(popoverStartFocus?.sectionID, "timer")
+        XCTAssertEqual(popoverStartFocus?.targetID, "timer.startFocus")
+
+        let hubMemoQuick = CompanionDestinationRegistry.destination(for: .hubMemoQuick)
+        XCTAssertEqual(hubMemoQuick?.surface, .hub)
+        XCTAssertEqual(hubMemoQuick?.sectionID, "memo")
+        XCTAssertEqual(hubMemoQuick?.targetID, "quick")
+
+        let hubStatsFocus = CompanionDestinationRegistry.destination(for: .hubStatsFocusToggle)
+        XCTAssertEqual(hubStatsFocus?.surface, .hub)
+        XCTAssertEqual(hubStatsFocus?.sectionID, "stats")
+        XCTAssertEqual(hubStatsFocus?.targetID, "stats.focusToggle")
+    }
+
     /// 나열형 사실은 코드에서 만들어야 기능이 바뀌어도 답이 틀리지 않는다.
     func testThemeFactMatchesTheActualThemes() {
         let line = CompanionAppFacts.matching("무슨 테마가 있는데?")
@@ -1419,8 +1565,9 @@ final class CompanionAppFactsTests: XCTestCase {
     func testDestinationIsResolvedForTheme() {
         let destination = CompanionAppFacts.destination(for: "테마 어떻게 바꿔?")
 
-        XCTAssertEqual(destination?.tab, .appearance)
-        XCTAssertEqual(destination?.highlight, "settings.theme")
+        XCTAssertEqual(destination?.surface, .settings)
+        XCTAssertEqual(destination?.sectionID, "appearance")
+        XCTAssertEqual(destination?.targetID, "settings.theme")
     }
 
     func testNoDestinationForQuestionsWithoutOne() {
@@ -1448,11 +1595,28 @@ final class CompanionAppFactsTests: XCTestCase {
     func testReminderFactExplainsIntegrationAndOpensItsSettingsPage() {
         let line = CompanionAppFacts.matching("미리알림은 어떻게 연동해?")
         let destination = CompanionAppFacts.destination(for: "미리알림은 어떻게 연동해?")
+        let guidance = CompanionAppFacts.directGuidance(for: "미리알림은 어떻게 연동해?")
 
         XCTAssertNotNil(line)
         XCTAssertTrue(line!.contains("설정 → 기록 → 미리알림 가져오기"))
-        XCTAssertEqual(destination?.tab, .secondBrain)
-        XCTAssertEqual(destination?.highlight, "card:미리알림 가져오기")
+        XCTAssertEqual(guidance, "미리알림 연동 설정을 열어 안내해 드릴게요.")
+        XCTAssertEqual(destination?.sectionID, "secondBrain")
+        XCTAssertEqual(destination?.targetID, "card:미리알림 가져오기")
+    }
+
+    /// 자연스러운 부팅 질문은 정보 탭이 아니라 일반의 로그인 실행 행으로 안내해야 한다.
+    func testLaunchAtLoginQuestionOpensAndHighlightsGeneralSetting() {
+        let question = "호롱호롱 앱을 내가 직접 켜지 않고 컴퓨터가 켜졌을 때 자동으로 켤수도 잇어?"
+        let line = CompanionAppFacts.matching(question)
+        let destination = CompanionAppFacts.destination(for: question)
+        let guidance = CompanionAppFacts.directGuidance(for: question)
+
+        XCTAssertTrue(CompanionGuideQuestion.matches(question))
+        XCTAssertTrue(line?.contains("설정 → 일반 → 로그인 시 자동 시작") == true)
+        XCTAssertEqual(guidance, "로그인 시 자동 시작 설정을 열어 안내해 드릴게요.")
+        XCTAssertEqual(destination?.sectionID, "general")
+        XCTAssertEqual(destination?.targetID, "settings.launchAtLogin")
+        XCTAssertEqual(CompanionSettingsIndex.bestMatch(for: question)?.tab, .general)
     }
 }
 
@@ -1517,6 +1681,208 @@ final class CompanionGuideTests: XCTestCase {
 
     func testSmallTalkIsNotAUsageQuestion() {
         XCTAssertFalse(CompanionGuideQuestion.matches("오늘 날씨 좋네"))
+    }
+}
+
+final class CompanionKnowledgeRegistryTests: XCTestCase {
+    func testKnowledgeRegistryCoversEveryMajorUserGuideArea() {
+        let ids = Set(CompanionKnowledgeRegistry.all.map(\.id))
+        let expectedMajorAreas: [CompanionKnowledgeID] = [
+            .cliSetup,
+            .popover,
+            .newsReport,
+            .newsSettings,
+            .newsArchive,
+            .agentLab,
+            .agentSettings,
+            .timer,
+            .timerTask,
+            .timerSettings,
+            .secondBrainHub,
+            .quickNote,
+            .diary,
+            .todo,
+            .references,
+            .obsidianVaults,
+            .remindersImport,
+            .stats,
+            .statsDetail,
+            .categoryMapping,
+            .categoryPairs,
+            .vacation,
+            .focusNudge,
+            .appearance,
+            .launchAtLogin,
+            .settingsOverview,
+            .companionBasics,
+            .companionChat,
+            .scheduleBriefing,
+            .achievement,
+            .dataBackup,
+        ]
+
+        for expected in expectedMajorAreas {
+            XCTAssertTrue(ids.contains(expected), "Missing knowledge area: \(expected.rawValue)")
+        }
+        XCTAssertGreaterThanOrEqual(CompanionKnowledgeRegistry.all.count, 30)
+    }
+
+    func testKnowledgeRegistryIDsAreUnique() {
+        let ids = CompanionKnowledgeRegistry.all.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
+    func testEveryKnowledgeDestinationIDExistsInDestinationRegistry() {
+        for knowledge in CompanionKnowledgeRegistry.all {
+            if let destID = knowledge.destinationID {
+                XCTAssertNotNil(
+                    CompanionDestinationRegistry.destination(for: destID),
+                    "Knowledge '\(knowledge.id.rawValue)' references unknown destination '\(destID.rawValue)'"
+                )
+            }
+        }
+    }
+
+    func testUnsupportedScreensDoNotHaveDestinationID() {
+        let obsidian = CompanionKnowledgeRegistry.knowledge(for: .obsidianVaults)
+        XCTAssertNotNil(obsidian)
+        XCTAssertNil(obsidian?.destinationID, "Knowledge/Works must not have a destination ID while coming soon")
+
+        let cli = CompanionKnowledgeRegistry.knowledge(for: .cliSetup)
+        XCTAssertNotNil(cli)
+        XCTAssertNil(cli?.destinationID, "CLI setup is explanation only")
+    }
+
+    func testDeveloperOnlyAILabIsExcludedFromKnowledge() {
+        for knowledge in CompanionKnowledgeRegistry.all {
+            XCTAssertFalse(
+                knowledge.keywords.contains("ailab") || knowledge.keywords.contains("AI 실험실"),
+                "Developer-only AI lab must be excluded from companion knowledge: \(knowledge.id.rawValue)"
+            )
+            XCTAssertFalse(
+                knowledge.summary.contains("AI 실험실"),
+                "Developer-only AI lab must be excluded from summary: \(knowledge.id.rawValue)"
+            )
+        }
+    }
+
+    func testKnowledgeRegistryMatchesUserQuestions() {
+        let launchMatches = CompanionKnowledgeRegistry.matches("맥이 켜졌을 때 호롱호롱 자동으로 켜줘")
+        XCTAssertTrue(launchMatches.contains { $0.id == .launchAtLogin })
+
+        let timerMatches = CompanionKnowledgeRegistry.matches("포모도로 타이머 프리셋 몇 분이야?")
+        XCTAssertTrue(timerMatches.contains { $0.id == .timer })
+
+        let diaryMatches = CompanionKnowledgeRegistry.matches("일기랑 감정 기록 어디서 해?")
+        XCTAssertTrue(diaryMatches.contains { $0.id == .diary })
+
+        let newsMatches = CompanionKnowledgeRegistry.matches("뉴스 리포트 생성 어떻게 해?")
+        XCTAssertTrue(newsMatches.contains { $0.id == .newsReport })
+
+        let reminderMatches = CompanionKnowledgeRegistry.matches("미리알림 동기화하고 싶어")
+        XCTAssertTrue(reminderMatches.contains { $0.id == .remindersImport })
+    }
+
+    func testKnowledgeRegistryDirectGuidanceAndDestination() {
+        let guidance = CompanionKnowledgeRegistry.directGuidance(for: "로그인할 때 자동으로 켜줘")
+        XCTAssertEqual(guidance, "로그인 시 자동 시작 설정을 열어 안내해 드릴게요.")
+
+        let destID = CompanionKnowledgeRegistry.destinationID(for: "로그인할 때 자동으로 켜줘")
+        XCTAssertEqual(destID, .launchAtLogin)
+
+        if let destID {
+            let destination = CompanionDestinationRegistry.destination(for: destID)
+            XCTAssertEqual(destination?.surface, .settings)
+            XCTAssertEqual(destination?.sectionID, "general")
+        }
+    }
+
+    func testPopoverTabQuestionsResolveToExactPopoverTabDestinations() {
+        // 사용자가 "성취 탭이 뭐야?"라고 질문했을 때 타이머 탭이 아닌 성취 팝오버 목적지로 정확히 연결되어야 한다.
+        let achievementDestID = CompanionKnowledgeRegistry.destinationID(for: "성취 탭이 뭐야?")
+        XCTAssertEqual(achievementDestID, .popoverAchievement)
+        let achievementDest = achievementDestID.flatMap { CompanionDestinationRegistry.destination(for: $0) }
+        XCTAssertEqual(achievementDest?.surface, .popover)
+        XCTAssertEqual(achievementDest?.sectionID, "achievement")
+
+        // 다른 팝오버 탭 질문들도 각각의 팝오버 목적지로 정확히 분기해야 한다.
+        let timerDestID = CompanionKnowledgeRegistry.destinationID(for: "타이머 탭이 뭐야?")
+        XCTAssertEqual(timerDestID, .popoverTimer)
+        XCTAssertEqual(
+            CompanionDestinationRegistry.destination(for: timerDestID!)?.surface,
+            .popover
+        )
+
+        let newsDestID = CompanionKnowledgeRegistry.destinationID(for: "뉴스 탭이 뭐야?")
+        XCTAssertEqual(newsDestID, .popoverNews)
+        XCTAssertEqual(
+            CompanionDestinationRegistry.destination(for: newsDestID!)?.surface,
+            .popover
+        )
+
+        let statsDestID = CompanionKnowledgeRegistry.destinationID(for: "통계 탭이 뭐야?")
+        XCTAssertEqual(statsDestID, .popoverStats)
+        XCTAssertEqual(
+            CompanionDestinationRegistry.destination(for: statsDestID!)?.surface,
+            .popover
+        )
+
+        let memoDestID = CompanionKnowledgeRegistry.destinationID(for: "기록 탭이 뭐야?")
+        XCTAssertEqual(memoDestID, .popoverMemo)
+        XCTAssertEqual(
+            CompanionDestinationRegistry.destination(for: memoDestID!)?.surface,
+            .popover
+        )
+
+        let labDestID = CompanionKnowledgeRegistry.destinationID(for: "실험실 탭이 뭐야?")
+        XCTAssertEqual(labDestID, .popoverLab)
+        XCTAssertEqual(
+            CompanionDestinationRegistry.destination(for: labDestID!)?.surface,
+            .popover
+        )
+    }
+
+    func testSpecificityPrioritizesLongerKeywordMatchOverGeneral() {
+        // "성취 탭" (5자) 매칭이 다른 일반 항목보다 우선하여 첫 번째 매칭이 된다.
+        let matches = CompanionKnowledgeRegistry.matches("성취 탭이 뭐야?")
+        XCTAssertEqual(matches.first?.id, .achievement)
+
+        // "성취 설정"은 설정 창 목적지로 가야 한다.
+        let settingsMatches = CompanionKnowledgeRegistry.matches("성취 설정 어디서 해?")
+        XCTAssertEqual(settingsMatches.first?.id, .achievementSettings)
+        XCTAssertEqual(
+            CompanionKnowledgeRegistry.destinationID(for: "성취 설정 어디서 해?"),
+            .achievement
+        )
+    }
+
+    func testAppFactsDestinationForPopoverTabQuestions() {
+        let destination = CompanionAppFacts.destination(for: "성취 탭이 뭐야?")
+        XCTAssertEqual(destination?.surface, .popover)
+        XCTAssertEqual(destination?.sectionID, "achievement")
+    }
+
+    func testCategoryPairsQuestionResolvesAndExplainsIntegration() {
+        // "짝카테고리가 뭐야?" 질문 시 정확한 지식과 목적지로 연결되어야 한다.
+        let question = "짝카테고리가 뭐야?"
+        let destID = CompanionKnowledgeRegistry.destinationID(for: question)
+        XCTAssertEqual(destID, CompanionDestinationID(rawValue: "settings.category.pairs"))
+
+        let dest = destID.flatMap { CompanionDestinationRegistry.destination(for: $0) }
+        XCTAssertEqual(dest?.surface, .settings)
+        XCTAssertEqual(dest?.sectionID, "category")
+        XCTAssertEqual(dest?.targetID, "card:짝 카테고리 (전환 무시)")
+
+        // 안내 문구 및 사실 검증
+        let line = CompanionAppFacts.matching(question)
+        XCTAssertNotNil(line)
+        XCTAssertTrue(line!.contains("주의 분산"))
+        XCTAssertTrue(line!.contains("설정 → 카테고리 매핑 → 짝 카테고리 (전환 무시)"))
+
+        // "카테고리 전환 무시가 뭐야?" 질문도 매칭되어야 한다.
+        let altQuestion = "카테고리 전환 무시가 뭐야?"
+        let altDestID = CompanionKnowledgeRegistry.destinationID(for: altQuestion)
+        XCTAssertEqual(altDestID, CompanionDestinationID(rawValue: "settings.category.pairs"))
     }
 }
 
@@ -1645,6 +2011,19 @@ final class SettingsSearchIndexTests: XCTestCase {
 
 @MainActor
 final class CompanionCardHighlightTests: XCTestCase {
+    /// 플랫폼 Picker가 있는 설정 카드에서 무한 애니메이션은 접근성 트리까지 매 프레임 갱신한다.
+    func testHighlightModifierDoesNotContainInfiniteAnimation() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(
+                "HorongHorong/Presentation/Features/Companion/CompanionHighlight.swift"
+            )
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertFalse(source.contains("repeatForever"))
+    }
+
     /// 카드마다 식별자를 손으로 달지 않고, 제목이 가장 잘 맞는 카드가 스스로 강조돼야 한다.
     func testBestMatchingCardWins() {
         let center = CompanionHighlightCenter.shared
@@ -1656,6 +2035,28 @@ final class CompanionCardHighlightTests: XCTestCase {
 
         XCTAssertTrue(center.isHighlighted(CompanionHighlightCenter.cardID("휴가 기간")))
         center.endCardSearch()
+        center.highlight(nil)
+    }
+
+    /// 이미 그려진 설정 페이지에서는 카드의 onAppear가 다시 불리지 않아도 직접 지정한 위치로 이동해야 한다.
+    func testExplicitHighlightAlsoBecomesScrollTarget() {
+        let center = CompanionHighlightCenter.shared
+
+        center.highlightCard("card:미리알림 가져오기")
+
+        XCTAssertTrue(center.isHighlighted("card:미리알림 가져오기"))
+        XCTAssertEqual(center.scrollTarget, "card:미리알림 가져오기")
+        center.endCardSearch()
+        center.highlight(nil)
+    }
+
+    /// 행을 직접 강조할 때 그 행을 감싼 카드까지 흐려져서는 안 된다.
+    func testExplicitRowHighlightDoesNotDimCardContainer() {
+        let center = CompanionHighlightCenter.shared
+        center.highlight("settings.launchAtLogin")
+
+        XCTAssertFalse(center.isDimmed("card:동작"))
+        XCTAssertTrue(center.isHighlighted("settings.launchAtLogin"))
         center.highlight(nil)
     }
 
