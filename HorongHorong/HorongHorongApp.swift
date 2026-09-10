@@ -1448,6 +1448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private struct MenuBarLabel: View {
     let appState: AppState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @AppStorage(Constants.AppStorageKey.menubarLabelStyle)
     private var labelStyleRaw: String = Constants.defaultMenubarLabelStyle
     @AppStorage(Constants.AppStorageKey.menubarTimeStyle)
@@ -1503,16 +1504,53 @@ private struct MenuBarLabel: View {
         .onReceive(
             NotificationCenter.default.publisher(for: .companionOnboardingPerform)
         ) { notification in
-            guard notification.object as? String == "settings.open" else { return }
-            NSApp.activate()
-            openSettings()
-            DispatchQueue.main.async {
-                for window in NSApp.windows {
-                    let id = window.identifier?.rawValue ?? ""
-                    if id.contains("com_apple_SwiftUI_Settings")
-                        || window.title.localizedCaseInsensitiveContains("설정") {
-                        AppActivation.front(window)
+            guard let action = notification.object as? String else { return }
+            if action == "settings.open" {
+                NSApp.activate()
+                openSettings()
+                DispatchQueue.main.async {
+                    for window in NSApp.windows {
+                        let id = window.identifier?.rawValue ?? ""
+                        if id.contains("com_apple_SwiftUI_Settings")
+                            || window.title.localizedCaseInsensitiveContains("설정") {
+                            AppActivation.front(window)
+                        }
                     }
+                }
+            } else if action.hasPrefix("hub.open:") {
+                let tabRaw = String(action.dropFirst("hub.open:".count))
+                if let tab = HubTab(rawValue: tabRaw) {
+                    appState.hubTab = tab
+                    if tab == .news {
+                        appState.isNewsListVisible = true
+                    }
+                    if tab == .memo {
+                        appState.isRecordRailVisible = true
+                    }
+                }
+                NSApp.activate()
+                openWindow(id: HubWindowPresenter.windowID)
+                DispatchQueue.main.async {
+                    let window = HubWindowPresenter.existingWindow()
+                    window?.collectionBehavior.insert(.moveToActiveSpace)
+                    AppActivation.front(window)
+                }
+            } else if action == "hub.open" {
+                NSApp.activate()
+                openWindow(id: HubWindowPresenter.windowID)
+                DispatchQueue.main.async {
+                    let window = HubWindowPresenter.existingWindow()
+                    window?.collectionBehavior.insert(.moveToActiveSpace)
+                    AppActivation.front(window)
+                }
+            } else if action == "stats.openDetail" {
+                appState.hubTab = .stats
+                NSApp.activate()
+                openWindow(id: HubWindowPresenter.windowID)
+                DispatchQueue.main.async {
+                    let window = HubWindowPresenter.existingWindow()
+                    window?.collectionBehavior.insert(.moveToActiveSpace)
+                    AppActivation.front(window)
                 }
             }
         }

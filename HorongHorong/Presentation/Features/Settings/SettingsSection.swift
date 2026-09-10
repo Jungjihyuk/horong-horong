@@ -93,7 +93,11 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     var searchKeywords: [String] {
         switch self {
         case .general:
-            return ["로그인 시 자동 시작", "자동 업데이트", "익명 사용 데이터 전송"]
+            return [
+                "로그인 시 자동 시작", "자동 시작", "로그인할 때", "컴퓨터가 켜졌을 때",
+                "컴퓨터 켜지면", "맥이 켜졌을 때", "직접 켜지 않고", "부팅할 때",
+                "자동 업데이트", "익명 사용 데이터 전송",
+            ]
         case .appearance:
             return ["모드", "화면 모드", "라이트", "다크", "시스템",
                     "강조 색", "정보 밀도", "앱 아이콘",
@@ -171,6 +175,11 @@ enum SettingsTab: String, CaseIterable, Identifiable, Hashable {
     /// 실제로 노출할 탭 목록. 사이드바·검색·호로롱 안내가 모두 이 목록을 근거로 삼는다.
     static var visibleCases: [SettingsTab] {
         showsDeveloperTabs ? allCases : allCases.filter { !$0.isDeveloperOnly }
+    }
+
+    /// 사용자 대화에는 빌드 종류와 무관하게 개발자 전용 설정을 노출하지 않는다.
+    static var companionGuideCases: [SettingsTab] {
+        allCases.filter { !$0.isDeveloperOnly }
     }
 }
 

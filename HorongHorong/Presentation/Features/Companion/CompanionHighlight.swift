@@ -8,14 +8,54 @@ import SwiftUI
 final class CompanionHighlightCenter: ObservableObject {
     static let shared = CompanionHighlightCenter()
 
+    /// 스크롤 이동 요청 단위 (일회성 명령). R13 규약에 따라 고유 ID를 부여해 중복 실행을 방지한다.
+    struct ScrollCommand: Equatable, Identifiable, Sendable {
+        let id: UUID
+        let target: String
+
+        init(target: String, id: UUID = UUID()) {
+            self.id = id
+            self.target = target
+        }
+    }
+
     /// 강조할 대상 식별자. 대본의 `<!-- highlight: ... -->` 값이 그대로 들어온다.
     @Published private(set) var target: String?
+    /// 대기 중인 일회성 스크롤 명령. View가 처리한 뒤 폐기된다.
+    @Published private(set) var scrollCommand: ScrollCommand?
+
+    /// 이전 호환성을 위한 연산 프로퍼티. 대기 중인 명령의 대상 문자열을 반환한다.
+    var scrollTarget: String? {
+        scrollCommand?.target
+    }
 
     private init() {}
 
     func highlight(_ target: String?) {
         guard self.target != target else { return }
         self.target = target
+    }
+
+    /// 이미 화면에 나타난 카드도 강조와 동시에 보이는 위치로 이동시킨다.
+    func highlightCard(_ target: String) {
+        self.target = target
+        self.scrollCommand = ScrollCommand(target: target)
+    }
+
+    /// View가 스크롤을 처리할 때 호출하여 명령을 일회성으로 소비(폐기)한다.
+    @discardableResult
+    func consumeScrollCommand(id: UUID) -> String? {
+        guard let current = scrollCommand, current.id == id else { return nil }
+        scrollCommand = nil
+        return current.target
+    }
+
+    /// 현재 대기 중인 스크롤 명령을 소비(폐기)한다.
+    @discardableResult
+    func consumeScrollCommand() -> ScrollCommand? {
+        guard let command = scrollCommand else { return nil }
+        scrollCommand = nil
+        return command
     }
 
     // MARK: - 설정 카드 자동 찾기
@@ -34,11 +74,13 @@ final class CompanionHighlightCenter: ObservableObject {
         questionTokens = tokens
         registeredCards = []
         target = nil
+        scrollCommand = nil
     }
 
     func endCardSearch() {
         questionTokens = []
         registeredCards = []
+        scrollCommand = nil
     }
 
     /// 화면에 나타난 카드가 자기 제목을 알린다.
@@ -51,7 +93,9 @@ final class CompanionHighlightCenter: ObservableObject {
               score(for: best) > 0 else {
             return
         }
-        target = Self.cardID(best)
+        let cardID = Self.cardID(best)
+        target = cardID
+        scrollCommand = ScrollCommand(target: cardID)
     }
 
     /// 제목이 질문 낱말을 얼마나 담고 있는지.
@@ -65,6 +109,8 @@ final class CompanionHighlightCenter: ObservableObject {
     /// 강조가 켜져 있는데 이 요소가 대상이 아니면 뒤로 물러나야 한다.
     func isDimmed(_ id: String) -> Bool {
         guard let target else { return false }
+        // 행을 직접 가리킬 때 부모 카드까지 흐리면 자식의 강조 테두리도 함께 희미해진다.
+        if id.hasPrefix("card:"), !target.hasPrefix("card:") { return false }
         return target != id
     }
 
@@ -87,7 +133,6 @@ enum CompanionHighlightStyle {
 private struct CompanionHighlightModifier: ViewModifier {
     let id: String
     @ObservedObject private var center = CompanionHighlightCenter.shared
-    @State private var isPulsing = false
 
     func body(content: Content) -> some View {
         let isOn = center.isHighlighted(id)
@@ -99,28 +144,21 @@ private struct CompanionHighlightModifier: ViewModifier {
             .overlay(ring(isOn: isOn))
             .animation(.easeOut(duration: 0.22), value: isOn)
             .animation(.easeOut(duration: 0.22), value: isDimmed)
-            .onChange(of: isOn) { _, newValue in
-                isPulsing = newValue
-            }
     }
 
-    /// 숨 쉬듯 커졌다 작아지는 테두리. 시선이 자연스럽게 끌리도록 반복한다.
+    /// 플랫폼 Picker를 포함한 카드 전체가 매 프레임 갱신되지 않도록 정적 장식만 얹는다.
     @ViewBuilder
     private func ring(isOn: Bool) -> some View {
         if isOn {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(CompanionHighlightStyle.tint, lineWidth: 2)
-                .shadow(color: CompanionHighlightStyle.tint.opacity(0.8), radius: isPulsing ? 10 : 3)
-                .scaleEffect(isPulsing ? 1.05 : 0.99)
-                .opacity(isPulsing ? 0.75 : 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(CompanionHighlightStyle.tint.opacity(0.08))
+                )
                 .padding(-4)
                 .allowsHitTesting(false)
-                .animation(
-                    .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
-                    value: isPulsing
-                )
-                .onAppear { isPulsing = true }
-                .onDisappear { isPulsing = false }
+                .accessibilityHidden(true)
         }
     }
 }
