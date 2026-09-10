@@ -109,6 +109,7 @@
 		1E54F1E7D119A96E8DD02E5E /* AchievementRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C1659D5B0BAB1D2F7F37D6B /* AchievementRepository.swift */; };
 		1E5768EC1A1D6A0EBA3EA07E /* CategoryBehaviorConditionSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89903F84D222C3BC32106FC3 /* CategoryBehaviorConditionSet.swift */; };
 		1E9D6E3DF22118D13DCDC38B /* AchievementSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782E988F4A4E7AED59512FD3 /* AchievementSummaryView.swift */; };
+		1EF16794CC5B5289AF0736F4 /* CompanionDestinationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E9572BF803ACB52F68F7B20 /* CompanionDestinationClassifier.swift */; };
 		1FE70F3D5DFF6E050FD5F65B /* Tokenizers in Frameworks */ = {isa = PBXBuildFile; productRef = 0C264682582A150CE5D1EA24 /* Tokenizers */; };
 		2015808A3D6BF1768FBF8644 /* ReminderListPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3A49E8B4DDA9CF0762B9E9 /* ReminderListPolicy.swift */; };
 		20D6329484C5F2AB1C44582F /* CompanionKnowledgeRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94B5B2F63E73E4809507129B /* CompanionKnowledgeRegistry.swift */; };
@@ -240,6 +241,7 @@
 		444BD61F04BB0EF18BB8E627 /* Memo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA003DE36768E94825C2E07A /* Memo.swift */; };
 		444C6173BC6B4F6B6EF719F6 /* CompanionSpotlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A062873B866D34EF7A23365 /* CompanionSpotlight.swift */; };
 		44791E07575975209EA73D2D /* HorongHorongSchemaV8.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AFA5CD336503AA556427B5 /* HorongHorongSchemaV8.swift */; };
+		449DFB27EA846643D681950C /* CompanionDestinationClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E9572BF803ACB52F68F7B20 /* CompanionDestinationClassifier.swift */; };
 		44ED021FF495DB55BC81A9EB /* FoundationModelsGoalSuggestionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A540E5B651FD725532386D10 /* FoundationModelsGoalSuggestionProvider.swift */; };
 		4508B2B4B34CC28554936DD8 /* DiaryMoodStreakList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ECFD3CB9463D338C2B9E4EF /* DiaryMoodStreakList.swift */; };
 		457FBF97C481029CEBA02315 /* StickyNoteWidgetPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FE8435D672490B9990F9C0 /* StickyNoteWidgetPanel.swift */; };
@@ -1040,6 +1042,7 @@
 		6D5EB70D232672113D249170 /* NumberField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumberField.swift; sourceTree = "<group>"; };
 		6E192C3DE1CFB51041DAC3F8 /* ReferencesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferencesViewModel.swift; sourceTree = "<group>"; };
 		6E4120BACDCF3B8ECF9BB2CC /* NewsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewsRepository.swift; sourceTree = "<group>"; };
+		6E9572BF803ACB52F68F7B20 /* CompanionDestinationClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionDestinationClassifier.swift; sourceTree = "<group>"; };
 		6F7A0CAB7D02449F47C36E7D /* ManualSegmentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualSegmentEditorView.swift; sourceTree = "<group>"; };
 		712CC3A67CA5BB0D33FC277F /* FocusNudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNudge.swift; sourceTree = "<group>"; };
 		715BE9BF8219E87BE4C7CABE /* SwiftDataQuickNoteRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataQuickNoteRepositoryTests.swift; sourceTree = "<group>"; };
@@ -1661,6 +1664,7 @@
 				0B659A2F08384CD1B5A0A90F /* AgentPrompt.swift */,
 				63B2868D6F72531FB15F27BF /* AgentRootPath.swift */,
 				69E6272DDCC65ED9268B9277 /* AppUsageDaySlicer.swift */,
+				6E9572BF803ACB52F68F7B20 /* CompanionDestinationClassifier.swift */,
 				FBCF0A02CE84B7A47DEB0217 /* CompanionDestinationRegistry.swift */,
 				94B5B2F63E73E4809507129B /* CompanionKnowledgeRegistry.swift */,
 				7CECD24A66C541C20625B9CE /* DiaryMoodStreakPolicy.swift */,
@@ -2563,6 +2567,7 @@
 				FD764859E4BF3562315683E4 /* CompanionChatProvider.swift in Sources */,
 				17CCC38F3E34B9DD554F6C16 /* CompanionController.swift in Sources */,
 				7AC4F84BF3A00E9FCBE7AA8F /* CompanionDestination.swift in Sources */,
+				449DFB27EA846643D681950C /* CompanionDestinationClassifier.swift in Sources */,
 				2449BC15960B5563F8CA0641 /* CompanionDestinationRegistry.swift in Sources */,
 				72146DDBFB727B7036368DF1 /* CompanionGuide.swift in Sources */,
 				DE0B69552E19BD69A2E6787C /* CompanionHighlight.swift in Sources */,
@@ -2921,6 +2926,7 @@
 				4FC1DA34751367334E4C7843 /* CompanionChatProvider.swift in Sources */,
 				8CBE289F6BB077E0F6F5146A /* CompanionController.swift in Sources */,
 				06087336CCE048F07AC5FB93 /* CompanionDestination.swift in Sources */,
+				1EF16794CC5B5289AF0736F4 /* CompanionDestinationClassifier.swift in Sources */,
 				A19C111F1CA366355010BBD4 /* CompanionDestinationRegistry.swift in Sources */,
 				5841C3B64B2530E3FC69D29A /* CompanionGuide.swift in Sources */,
 				DB7724BEEDCFB68130668FE5 /* CompanionHighlight.swift in Sources */,

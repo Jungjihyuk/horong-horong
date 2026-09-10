@@ -2343,3 +2343,119 @@ final class CompanionBriefingTests: XCTestCase {
         XCTAssertEqual(CompanionBriefingSchedule.normalizedMinute(120), 59)
     }
 }
+
+final class CompanionDestinationClassifierTests: XCTestCase {
+    func testPromptIncludesOnlyRegisteredDestinations() {
+        let prompt = CompanionDestinationClassifier.prompt(for: "지난주 목표 잘 달성했는지 보고 싶어")
+        XCTAssertTrue(prompt.contains("목적지 ID 목록"))
+        XCTAssertTrue(prompt.contains("popover.achievement"))
+        XCTAssertTrue(prompt.contains("settings.category.pairs"))
+
+        // 개발자 전용 AI 실험실은 후보에 포함되지 않아야 한다.
+        XCTAssertFalse(prompt.contains("ailab"))
+        XCTAssertFalse(prompt.contains("AI 실험실"))
+
+        // 기본 후보의 모든 ID가 CompanionDestinationRegistry에 실존해야 한다.
+        for candidate in CompanionDestinationClassifier.defaultCandidates {
+            XCTAssertNotNil(
+                CompanionDestinationRegistry.destination(for: candidate.destinationID),
+                "Candidate destination does not exist in registry: \(candidate.destinationID.rawValue)"
+            )
+        }
+    }
+
+    func testValidJSONResponseParsesToExactDestinationID() {
+        // {"destinationId": "popover.achievement"}
+        let response1 = """
+        {"destinationId": "popover.achievement"}
+        """
+        XCTAssertEqual(
+            CompanionDestinationClassifier.parse(from: response1),
+            .popoverAchievement
+        )
+
+        // {"destination": "settings.category.pairs"}
+        let response2 = """
+        {"destination": "settings.category.pairs"}
+        """
+        XCTAssertEqual(
+            CompanionDestinationClassifier.parse(from: response2),
+            CompanionDestinationID(rawValue: "settings.category.pairs")
+        )
+    }
+
+    func testMarkdownCodeBlockJSONIsCleanlyParsed() {
+        let markdownResponse = """
+        ```json
+        {
+          "destinationId": "popover.timer"
+        }
+        ```
+        """
+        XCTAssertEqual(
+            CompanionDestinationClassifier.parse(from: markdownResponse),
+            .popoverTimer
+        )
+    }
+
+    func testNoneResponseReturnsNil() {
+        let responses = [
+            #"{"destinationId": "NONE"}"#,
+            #"{"destinationId": "none"}"#,
+            #"{"destination": "None"}"#,
+        ]
+        for res in responses {
+            XCTAssertNil(CompanionDestinationClassifier.parse(from: res), res)
+        }
+    }
+
+    func testHallucinatedOrUnregisteredDestinationIsRejected() {
+        // 모델이 지어낸 가짜 ID나 등록되지 않은 ID는 엄격히 거부되어야 한다.
+        let hallucinated = [
+            #"{"destinationId": "settings.super_secret_feature"}"#,
+            #"{"destinationId": "popover.camera"}"#,
+            #"{"destinationId": "https://example.com"}"#,
+            #"{"destinationId": "hub.unknown"}"#,
+        ]
+        for fake in hallucinated {
+            XCTAssertNil(CompanionDestinationClassifier.parse(from: fake), fake)
+        }
+    }
+
+    func testMalformedResponseReturnsNil() {
+        let malformed = [
+            "",
+            "   ",
+            "무슨 말인지 잘 모르겠습니다.",
+            "{ broken json destinationId }",
+            "none of the above",
+        ]
+        for bad in malformed {
+            XCTAssertNil(CompanionDestinationClassifier.parse(from: bad), bad)
+        }
+    }
+
+    func testClassifyExecutionWithMockGenerator() async {
+        // 모의 LLM 텍스트 생성기를 주입하여 비동기 분류 동작 검증
+        let question = "내가 세운 주간 목표 달성하고 보상 포인트 얻은 거 확인하고 싶어"
+        let dest = await CompanionDestinationClassifier.classify(question: question) { _ in
+            """
+            ```json
+            {"destinationId": "popover.achievement"}
+            ```
+            """
+        }
+        XCTAssertEqual(dest, .popoverAchievement)
+        let resolved = dest.flatMap { CompanionDestinationRegistry.destination(for: $0) }
+        XCTAssertEqual(resolved?.surface, .popover)
+        XCTAssertEqual(resolved?.sectionID, "achievement")
+    }
+
+    func testClassifyReturnsNilWhenGeneratorReturnsNoneOrFails() async {
+        let question = "오늘 점심 뭐 먹을까?"
+        let dest = await CompanionDestinationClassifier.classify(question: question) { _ in
+            #"{"destinationId": "NONE"}"#
+        }
+        XCTAssertNil(dest)
+    }
+}

@@ -93,5 +93,5 @@ AI 실험실(`ailab`)은 개발자 전용이므로 루미롱 안내, LLM 목적�
 1. [완료] 설정 탭과 카드 목적지를 Registry에 완전 등록하고 실제 `SettingsTab` 변환 검증을 추가한다.
 2. [완료] `Surface`를 팝오버·허브·독립 창으로 확장하고 Presentation 실행기를 surface별로 분기한다.
 3. [완료] `CompanionKnowledgeRegistry`를 도입해 `CompanionAppFacts`와 사용 가이드 기능 설명을 통합한다.
-4. 키워드 미매칭 시 LLM이 등록된 knowledge/destination ID만 반환하는 구조화 분류를 추가한다.
+4. [완료] 키워드 미매칭 시 LLM이 등록된 knowledge/destination ID만 반환하는 구조화 분류(`CompanionDestinationClassifier`)를 추가한다.
 5. 신뢰도 정책과 일회성 이동 명령의 중복 소비·없는 대상 회귀 테스트를 추가한다.
