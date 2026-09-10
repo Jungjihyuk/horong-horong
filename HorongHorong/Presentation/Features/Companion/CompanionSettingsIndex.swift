@@ -31,7 +31,7 @@ enum CompanionSettingsIndex {
     /// 질문과 가장 많이 겹치는 설정 페이지. 겹치는 게 없으면 nil.
     static func bestMatch(
         for question: String,
-        tabs: [SettingsTab] = SettingsTab.visibleCases
+        tabs: [SettingsTab] = SettingsTab.companionGuideCases
     ) -> Match? {
         let tokens = SearchTokens.from(question)
         guard !tokens.isEmpty else { return nil }

@@ -34,6 +34,11 @@ enum PopoverTab: String, CaseIterable, Identifiable {
         case .lab: return "bolt.horizontal.circle"
         }
     }
+
+    /// 목적지 sectionID(영문 highlightKey 또는 한글 rawValue)로부터 탭을 찾는다.
+    static func from(sectionID: String) -> PopoverTab? {
+        allCases.first { $0.highlightKey == sectionID || $0.rawValue == sectionID }
+    }
 }
 
 struct MenuBarPopover: View {

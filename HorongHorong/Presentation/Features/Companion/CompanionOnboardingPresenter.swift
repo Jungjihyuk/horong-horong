@@ -101,6 +101,31 @@ enum CompanionOnboardingPresenter {
         }
     }
 
+    /// Domain 목적지를 실제 화면 이동 명령으로 번역한다.
+    static func show(_ destination: CompanionDestination, questionTokens: [String] = []) {
+        switch destination.surface {
+        case .settings:
+            guard let tab = SettingsTab(rawValue: destination.sectionID) else { return }
+            openSettings(
+                tab: tab,
+                highlight: destination.targetID,
+                questionTokens: questionTokens
+            )
+        case .popover:
+            guard let tab = PopoverTab.from(sectionID: destination.sectionID) else { return }
+            openPopover(
+                tab: tab,
+                highlight: destination.targetID
+            )
+        case .hub:
+            guard let tab = HubTab(rawValue: destination.sectionID) else { return }
+            openHub(
+                tab: tab,
+                target: destination.targetID
+            )
+        }
+    }
+
     /// 온보딩이 열었던 창을 모두 정리한다.
     static func closeAll() {
         restoreRaisedWindows()
@@ -128,7 +153,11 @@ enum CompanionOnboardingPresenter {
         isPopoverOpen = false
     }
 
-    private static func openPopover(tab: PopoverTab) {
+    static func openPopover(
+        tab: PopoverTab,
+        highlight: String? = nil,
+        seconds: Double = 4
+    ) {
         if !isPopoverOpen, MenuBarExtraController.toggle() {
             isPopoverOpen = true
         }
@@ -136,6 +165,33 @@ enum CompanionOnboardingPresenter {
         // 팝오버가 그려진 뒤에 탭을 바꾼다.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             NotificationCenter.default.post(name: .companionOnboardingSelectTab, object: tab)
+            if let highlight {
+                CompanionHighlightCenter.shared.highlight(highlight)
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                    CompanionHighlightCenter.shared.highlight(nil)
+                }
+            }
+        }
+    }
+
+    /// 통합 창(Hub)을 열고 지정된 탭으로 이동한다.
+    static func openHub(
+        tab: HubTab,
+        target: String? = nil,
+        seconds: Double = 4
+    ) {
+        closePopover()
+        if tab == .memo, let target, let section = SecondBrainSection(rawValue: target) {
+            UserDefaults.standard.set(section.rawValue, forKey: Constants.AppStorageKey.mindSection)
+        }
+        perform("hub.open:\(tab.rawValue)")
+        if let target, !["quick", "diary", "todo", "refs"].contains(target) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                CompanionHighlightCenter.shared.highlight(target)
+                DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                    CompanionHighlightCenter.shared.highlight(nil)
+                }
+            }
         }
     }
 
@@ -180,7 +236,11 @@ enum CompanionOnboardingPresenter {
                 window.orderFrontRegardless()
             }
             if let highlight {
-                CompanionHighlightCenter.shared.highlight(highlight)
+                if highlight.hasPrefix("card:") {
+                    CompanionHighlightCenter.shared.highlightCard(highlight)
+                } else {
+                    CompanionHighlightCenter.shared.highlight(highlight)
+                }
             }
             // 잠깐 비추고 원래대로 돌린다. 대화 중엔 계속 강조할 이유가 없다.
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {

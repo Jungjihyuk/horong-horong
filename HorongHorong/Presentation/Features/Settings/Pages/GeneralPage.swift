@@ -30,6 +30,7 @@ struct GeneralPage: View {
                             }
                         }
                 }
+                .companionHighlight("settings.launchAtLogin")
                 updateRow
             }
 

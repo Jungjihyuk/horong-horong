@@ -20,6 +20,12 @@ final class CompanionHighlightCenter: ObservableObject {
         self.target = target
     }
 
+    /// 이미 화면에 나타난 카드도 강조와 동시에 보이는 위치로 이동시킨다.
+    func highlightCard(_ target: String) {
+        self.target = target
+        scrollTarget = target
+    }
+
     // MARK: - 설정 카드 자동 찾기
     //
     // 카드마다 강조 id 를 손으로 달지 않는다.
@@ -71,6 +77,8 @@ final class CompanionHighlightCenter: ObservableObject {
     /// 강조가 켜져 있는데 이 요소가 대상이 아니면 뒤로 물러나야 한다.
     func isDimmed(_ id: String) -> Bool {
         guard let target else { return false }
+        // 행을 직접 가리킬 때 부모 카드까지 흐리면 자식의 강조 테두리도 함께 희미해진다.
+        if id.hasPrefix("card:"), !target.hasPrefix("card:") { return false }
         return target != id
     }
 
@@ -93,7 +101,6 @@ enum CompanionHighlightStyle {
 private struct CompanionHighlightModifier: ViewModifier {
     let id: String
     @ObservedObject private var center = CompanionHighlightCenter.shared
-    @State private var isPulsing = false
 
     func body(content: Content) -> some View {
         let isOn = center.isHighlighted(id)
@@ -105,28 +112,21 @@ private struct CompanionHighlightModifier: ViewModifier {
             .overlay(ring(isOn: isOn))
             .animation(.easeOut(duration: 0.22), value: isOn)
             .animation(.easeOut(duration: 0.22), value: isDimmed)
-            .onChange(of: isOn) { _, newValue in
-                isPulsing = newValue
-            }
     }
 
-    /// 숨 쉬듯 커졌다 작아지는 테두리. 시선이 자연스럽게 끌리도록 반복한다.
+    /// 플랫폼 Picker를 포함한 카드 전체가 매 프레임 갱신되지 않도록 정적 장식만 얹는다.
     @ViewBuilder
     private func ring(isOn: Bool) -> some View {
         if isOn {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(CompanionHighlightStyle.tint, lineWidth: 2)
-                .shadow(color: CompanionHighlightStyle.tint.opacity(0.8), radius: isPulsing ? 10 : 3)
-                .scaleEffect(isPulsing ? 1.05 : 0.99)
-                .opacity(isPulsing ? 0.75 : 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(CompanionHighlightStyle.tint.opacity(0.08))
+                )
                 .padding(-4)
                 .allowsHitTesting(false)
-                .animation(
-                    .easeInOut(duration: 0.85).repeatForever(autoreverses: true),
-                    value: isPulsing
-                )
-                .onAppear { isPulsing = true }
-                .onDisappear { isPulsing = false }
+                .accessibilityHidden(true)
         }
     }
 }

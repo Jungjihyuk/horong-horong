@@ -805,6 +805,17 @@ final class CompanionController {
             return
         }
 
+        if CompanionGuideQuestion.matches(message),
+           let guidance = CompanionAppFacts.directGuidance(for: message) {
+            state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
+            state.chatMessages.append(CompanionChatMessage(role: .companion, text: guidance))
+            state.isAwaitingReply = false
+            state.streamingMessageID = nil
+            setAnimation(.waiting)
+            showAnswerDestinationIfAny(for: message)
+            return
+        }
+
         state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
         state.isAwaitingReply = true
         state.streamingMessageID = nil
@@ -973,9 +984,8 @@ final class CompanionController {
     private func showAnswerDestinationIfAny(for message: String) {
         guard CompanionGuideQuestion.matches(message) else { return }
         if let destination = CompanionAppFacts.destination(for: message) {
-            CompanionOnboardingPresenter.openSettings(
-                tab: destination.tab,
-                highlight: destination.highlight,
+            CompanionOnboardingPresenter.show(
+                destination,
                 questionTokens: SearchTokens.from(message)
             )
             return
