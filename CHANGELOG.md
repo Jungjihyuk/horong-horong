@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-11
+
 ### 추가
 
 - 루미롱 대화로 앱의 모든 기능과 개념을 안내하고 해당 화면으로 이동해 보여주는 기능 안내 파이프라인을 구축했습니다.
@@ -349,7 +351,8 @@ Sparkle 자동 업데이트 서명 체인을 바로잡은 릴리즈입니다. �
 
 첫 공개 릴리즈.
 
-[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/Jungjihyuk/horong-horong/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Jungjihyuk/horong-horong/releases/tag/v0.3.0
