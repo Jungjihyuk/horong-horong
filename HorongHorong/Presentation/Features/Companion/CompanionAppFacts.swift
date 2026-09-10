@@ -186,7 +186,10 @@ enum CompanionAppFacts {
 
     /// 답하면서 열어 보여줄 곳. 여러 개면 첫 번째만 쓴다.
     static func destination(for message: String, facts: [Fact]? = nil) -> CompanionDestination? {
-        if facts == nil, let destID = CompanionKnowledgeRegistry.destinationID(for: message) {
+        if facts == nil {
+            guard let destID = CompanionKnowledgeRegistry.destinationID(for: message) else {
+                return nil
+            }
             return CompanionDestinationRegistry.destination(for: destID)
         }
         guard let id = matches(message, facts: facts).compactMap(\.destinationID).first else {

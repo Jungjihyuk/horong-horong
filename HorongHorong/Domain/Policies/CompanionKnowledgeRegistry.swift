@@ -118,7 +118,7 @@ enum CompanionKnowledgeRegistry {
         ),
         CompanionKnowledge(
             id: .obsidianVaults,
-            keywords: ["knowledge", "works", "옵시디언", "obsidian", "vault", "보관함"],
+            keywords: ["knowledge", "works", "옵시디언", "obsidian", "vault", "보관함", "지식", "지식 관리", "노리지", "웍스"],
             summary: "지정한 Obsidian 보관함의 마크다운 문서를 폴더 트리로 탐색하고 읽거나 편집하는 기능입니다. 현재 준비 중입니다.",
             path: "기록 허브 → Knowledge / Works (준비 중)",
             destinationID: nil
@@ -265,15 +265,15 @@ enum CompanionKnowledgeRegistry {
         knowledge(for: CompanionKnowledgeID(rawValue: rawID))
     }
 
-    /// 사용자 질문 메시지와 키워드가 일치하는 지식 항목들을 구체도(가장 긴 일치 키워드 길이 및 일치 개수) 순으로 정렬하여 반환한다.
-    static func matches(_ message: String) -> [CompanionKnowledge] {
-        let normalized = message.lowercased()
+    struct ScoredKnowledge {
+        let item: CompanionKnowledge
+        let maxMatchedKeywordLength: Int
+        let matchedKeywordCount: Int
+    }
 
-        struct ScoredKnowledge {
-            let item: CompanionKnowledge
-            let maxMatchedKeywordLength: Int
-            let matchedKeywordCount: Int
-        }
+    /// 사용자 질문과 일치하는 지식 항목들을 점수(최장 키워드 길이 및 일치 개수) 순으로 계산한다.
+    static func scoredMatches(_ message: String) -> [ScoredKnowledge] {
+        let normalized = message.lowercased()
 
         let scored: [ScoredKnowledge] = all.compactMap { item in
             let matchedKeywords = item.keywords.filter { keyword in
@@ -288,14 +288,17 @@ enum CompanionKnowledgeRegistry {
             )
         }
 
-        return scored
-            .sorted { lhs, rhs in
-                if lhs.maxMatchedKeywordLength != rhs.maxMatchedKeywordLength {
-                    return lhs.maxMatchedKeywordLength > rhs.maxMatchedKeywordLength
-                }
-                return lhs.matchedKeywordCount > rhs.matchedKeywordCount
+        return scored.sorted { lhs, rhs in
+            if lhs.maxMatchedKeywordLength != rhs.maxMatchedKeywordLength {
+                return lhs.maxMatchedKeywordLength > rhs.maxMatchedKeywordLength
             }
-            .map(\.item)
+            return lhs.matchedKeywordCount > rhs.matchedKeywordCount
+        }
+    }
+
+    /// 사용자 질문 메시지와 키워드가 일치하는 지식 항목들을 구체도(가장 긴 일치 키워드 길이 및 일치 개수) 순으로 정렬하여 반환한다.
+    static func matches(_ message: String) -> [CompanionKnowledge] {
+        scoredMatches(message).map(\.item)
     }
 
     /// 사용자 질문에 맞는 첫 번째 확정 안내 문구를 반환한다.
@@ -303,8 +306,27 @@ enum CompanionKnowledgeRegistry {
         matches(message).compactMap(\.directGuidance).first
     }
 
-    /// 사용자 질문에 맞는 첫 번째 목적지 ID를 반환한다.
+    /// 사용자 질문에 맞는 목적지 ID를 반환한다.
+    ///
+    /// 질문에서 가장 구체적으로 일치한 최상위 지식 항목이 목적지를 갖지 않는 경우(예: 준비 중인 기능, 설명 전용 항목),
+    /// 질문 문장에 우연히 포함된 덜 구체적인 상위 키워드(예: "기록에서 knowledge가 뭐야"의 "기록")의 목적지로 잘못 이동하지 않도록 nil을 반환한다.
     static func destinationID(for message: String) -> CompanionDestinationID? {
-        matches(message).compactMap(\.destinationID).first
+        let scored = scoredMatches(message)
+        guard let top = scored.first else { return nil }
+
+        // 최상위 구체도(가장 긴 일치 키워드 길이)를 가진 항목들 중에서만 목적지를 탐색한다.
+        for entry in scored {
+            guard entry.maxMatchedKeywordLength == top.maxMatchedKeywordLength else { break }
+            if let destID = entry.item.destinationID {
+                return destID
+            }
+        }
+        return nil
+    }
+
+    /// 사용자 질문과 일치하는 명시적 지식 항목이 존재하는지 여부.
+    /// 설명이 이미 지식 레지스트리에 정의되어 있다면 목적지가 없더라도 후속 설정 색인 폴백으로 넘어가지 않아야 한다.
+    static func hasMatchedKnowledge(for message: String) -> Bool {
+        !matches(message).isEmpty
     }
 }

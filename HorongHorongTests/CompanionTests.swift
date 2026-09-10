@@ -2459,3 +2459,230 @@ final class CompanionDestinationClassifierTests: XCTestCase {
         XCTAssertNil(dest)
     }
 }
+
+// MARK: - 5단계: 신뢰도 정책 및 화면 이동 명령 안전성 테스트
+
+@MainActor
+final class CompanionNavigationSafetyTests: XCTestCase {
+    override func tearDown() async throws {
+        try await super.tearDown()
+        CompanionHighlightCenter.shared.endCardSearch()
+        CompanionHighlightCenter.shared.highlight(nil)
+    }
+
+    // MARK: - R13 일회성 스크롤 명령 및 중복 소비 방지
+
+    /// 스크롤 명령은 고유 ID를 부여받고, 뷰가 한 번 처리(consume)한 뒤에는 폐기되어야 한다.
+    func testScrollCommandHasUniqueIdAndIsConsumedOnce() {
+        let center = CompanionHighlightCenter.shared
+        center.highlightCard("card:미리알림 가져오기")
+
+        guard let command = center.scrollCommand else {
+            XCTFail("scrollCommand가 생성되어야 합니다.")
+            return
+        }
+        XCTAssertEqual(command.target, "card:미리알림 가져오기")
+        XCTAssertEqual(center.scrollTarget, "card:미리알림 가져오기")
+
+        // 뷰가 스크롤을 처리하면서 소비(폐기)
+        let consumed = center.consumeScrollCommand(id: command.id)
+        XCTAssertEqual(consumed, "card:미리알림 가져오기")
+
+        // 한 번 소비된 후에는 대기 중인 명령이 없어야 한다
+        XCTAssertNil(center.scrollCommand)
+        XCTAssertNil(center.scrollTarget)
+
+        // 이미 소비된 ID로 다시 소비를 시도해도 nil이어야 한다
+        XCTAssertNil(center.consumeScrollCommand(id: command.id))
+    }
+
+    /// 동일한 대상을 연속 요청하더라도 각각 새로운 UUID가 발급되어 개별 명령으로 식별되어야 한다.
+    func testSubsequentRequestForSameTargetGeneratesNewCommandId() {
+        let center = CompanionHighlightCenter.shared
+
+        center.highlightCard("card:미리알림 가져오기")
+        let firstID = center.scrollCommand?.id
+        XCTAssertNotNil(firstID)
+        center.consumeScrollCommand()
+
+        center.highlightCard("card:미리알림 가져오기")
+        let secondID = center.scrollCommand?.id
+        XCTAssertNotNil(secondID)
+
+        XCTAssertNotEqual(firstID, secondID, "동일 대상 연속 요청 시 새로운 명령 ID가 발급되어야 합니다.")
+    }
+
+    /// 한 번 소비된 명령은 뷰가 재등장(onAppear)하더라도 다시 실행되지 않는다 (R13).
+    func testViewReappearanceDoesNotReplayConsumedScrollCommand() {
+        let center = CompanionHighlightCenter.shared
+
+        center.highlightCard("card:보관")
+        XCTAssertNotNil(center.scrollCommand)
+
+        // 첫 번째 진입 시 화면에서 명령 소비
+        let handled = center.consumeScrollCommand()
+        XCTAssertEqual(handled?.target, "card:보관")
+
+        // 화면 재등장 시뮬레이션: 새로운 요청이 없으므로 대기 중인 명령은 nil
+        XCTAssertNil(center.scrollCommand)
+        XCTAssertNil(center.consumeScrollCommand())
+    }
+
+    /// 카드 검색 시작 또는 종료 시 대기 중인 스크롤 명령이 깨끗이 초기화되어야 한다.
+    func testBeginAndEndCardSearchClearsPendingScrollCommand() {
+        let center = CompanionHighlightCenter.shared
+        center.highlightCard("card:타임라인 표시")
+        XCTAssertNotNil(center.scrollCommand)
+
+        center.beginCardSearch(tokens: ["테스트"])
+        XCTAssertNil(center.scrollCommand)
+
+        center.registerCard("테스트")
+        XCTAssertNotNil(center.scrollCommand)
+
+        center.endCardSearch()
+        XCTAssertNil(center.scrollCommand)
+    }
+
+    // MARK: - 미지원 및 없는 대상 No-op 안전성
+
+    /// Obsidian Vaults(Knowledge, Works)는 준비 중인 기능이므로 이동 목적지가 없어야 한다.
+    /// 문맥에 "기록"이라는 상위 단어가 포함되어 있어도 하위 일반 목적지(.hubMemo)로 잘못 떨어져 창이 열리면 안 된다.
+    func testObsidianVaultsHasNoDestinationAndDoesNotTriggerNavigation() {
+        let knowledge = CompanionKnowledgeRegistry.knowledge(for: .obsidianVaults)
+        XCTAssertNotNil(knowledge)
+        XCTAssertNil(knowledge?.destinationID, "준비 중인 Obsidian Vaults는 실행 목적지(destinationID)를 가지면 안 됩니다.")
+
+        let questions = [
+            "기록에서 knowledge가 뭐야",
+            "기록에서 works가 뭐야",
+            "기록 탭에서 knowledge는 뭐야",
+            "knowledge가 뭐야",
+            "works가 뭐야",
+            "Obsidian 보관함 어떻게 써?",
+            "지식 관리 기능 어디 있어?",
+            "Works 화면 열어줘",
+            "노리지 기능이 뭐야",
+            "웍스 화면이 뭐야",
+        ]
+        for q in questions {
+            XCTAssertTrue(
+                CompanionKnowledgeRegistry.hasMatchedKnowledge(for: q),
+                "'\(q)' 질문은 지식 레지스트리의 obsidianVaults에 매칭되어야 합니다."
+            )
+            let dest = CompanionAppFacts.destination(for: q)
+            XCTAssertNil(
+                dest,
+                "'\(q)' 질문에 대해서는 화면 이동 목적지가 없어야 합니다(설명만 제공, Works/Hub 등으로 잘못 이동 금지)."
+            )
+        }
+
+        // 반면 명시적인 기록 허브나 탭 요청은 정상적으로 목적지를 가져야 한다
+        let validRecordQueries = [
+            ("기록 허브 열어줘", "memo"),
+            ("기록 탭 보여줘", "memo"),
+        ]
+        for (q, expectedSection) in validRecordQueries {
+            let dest = CompanionAppFacts.destination(for: q)
+            XCTAssertNotNil(dest, "'\(q)' 질문은 목적지가 있어야 합니다.")
+            XCTAssertEqual(dest?.sectionID, expectedSection)
+        }
+    }
+
+    /// LLM 분류기나 외부에서 지어낸 가짜 목적지 ID는 Registry에서 완전히 거부되어 화면 이동이 발생하지 않아야 한다.
+    func testHallucinatedOrUnregisteredDestinationProducesNilInRegistry() {
+        let hallucinatedIDs: [CompanionDestinationID] = [
+            CompanionDestinationID(rawValue: "settings.nonexistent_tab"),
+            CompanionDestinationID(rawValue: "popover.unknown_section"),
+            CompanionDestinationID(rawValue: "hub.invalid"),
+            CompanionDestinationID(rawValue: "hub.knowledge"),
+            CompanionDestinationID(rawValue: "hub.works"),
+            CompanionDestinationID(rawValue: "settings.ailab"),
+        ]
+        for fakeID in hallucinatedIDs {
+            let resolved = CompanionDestinationRegistry.destination(for: fakeID)
+            XCTAssertNil(resolved, "미등록/금지된 ID '\(fakeID.rawValue)'는 Registry에서 nil을 반환해야 합니다.")
+        }
+    }
+
+    // MARK: - 스몰톡 및 무관한 질문 차단
+
+    /// 일상 인사나 스몰톡 질문 시 가이드 안내 질문으로 매칭되지 않고 목적지도 없어야 한다.
+    func testSmalltalkAndIrrelevantQuestionsDoNotTriggerGuideNavigation() {
+        let smalltalks = [
+            "안녕",
+            "안녕하세요!",
+            "오늘 날씨 어때?",
+            "너 누구야?",
+            "배고프다",
+            "오늘 하루도 화이팅",
+            "고마워",
+            "좋은 아침이야",
+        ]
+        for msg in smalltalks {
+            XCTAssertFalse(
+                CompanionGuideQuestion.matches(msg),
+                "'\(msg)'는 기능 안내 질문으로 매칭되면 안 됩니다 (1차 방어선)."
+            )
+            XCTAssertNil(
+                CompanionAppFacts.destination(for: msg),
+                "'\(msg)'는 목적지를 반환하면 안 됩니다."
+            )
+        }
+
+        // 설정과 전혀 무관한 순수 스몰톡은 설정 색인에서도 매칭되지 않아야 한다
+        let nonSettingsQuestions = [
+            "안녕",
+            "배고프다",
+            "고마워",
+            "좋은 아침",
+        ]
+        for msg in nonSettingsQuestions {
+            XCTAssertNil(
+                CompanionSettingsIndex.bestMatch(for: msg),
+                "'\(msg)'는 설정 색인 검색에서 매칭되면 안 됩니다."
+            )
+        }
+    }
+
+    // MARK: - 구체적 키워드 우선순위 (Specificity) 회귀 방지
+
+    /// 모호한 상위 키워드('탭')보다 구체적인 탭 키워드('성취 탭', '기록 탭')가 우선권을 가져야 한다.
+    func testSpecificTabKeywordWinsOverGenericTab() {
+        let achievementDest = CompanionAppFacts.destination(for: "성취 탭이 뭐야?")
+        XCTAssertEqual(achievementDest?.surface, .popover)
+        XCTAssertEqual(achievementDest?.sectionID, "achievement")
+
+        let memoDest = CompanionAppFacts.destination(for: "기록 탭 설명해줘")
+        XCTAssertEqual(memoDest?.surface, .popover)
+        XCTAssertEqual(memoDest?.sectionID, "memo")
+
+        let statsDest = CompanionAppFacts.destination(for: "통계 탭 보여줘")
+        XCTAssertEqual(statsDest?.surface, .popover)
+        XCTAssertEqual(statsDest?.sectionID, "stats")
+    }
+
+    /// 짝 카테고리 관련 질문 시 해당 설정 카드 목적지로 정확히 매핑되어야 한다.
+    func testCategoryPairsDestinationMapping() {
+        let questions = [
+            "짝 카테고리 설정 어디서 해?",
+            "짝카테고리 기능 알려줘",
+            "카테고리 전환 무시 어떻게 설정해?",
+        ]
+        let expected = CompanionDestinationRegistry.destination(
+            for: CompanionDestinationID(rawValue: "settings.category.pairs")
+        )
+        XCTAssertNotNil(expected)
+        for q in questions {
+            let dest = CompanionAppFacts.destination(for: q)
+            XCTAssertEqual(
+                dest,
+                expected,
+                "'\(q)' 질문은 짝 카테고리 설정 카드로 매핑되어야 합니다."
+            )
+            XCTAssertEqual(dest?.surface, .settings)
+            XCTAssertEqual(dest?.sectionID, "category")
+            XCTAssertEqual(dest?.targetID, "card:짝 카테고리 (전환 무시)")
+        }
+    }
+}

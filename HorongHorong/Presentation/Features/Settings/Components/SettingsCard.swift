@@ -71,6 +71,7 @@ struct SettingsPageHeader: View {
 struct SettingsPageScroll<Content: View>: View {
     @Environment(\.appearanceDensity) private var density
     @ObservedObject private var highlightCenter = CompanionHighlightCenter.shared
+    @State private var lastHandledCommandID: UUID?
 
     @ViewBuilder var content: () -> Content
 
@@ -85,21 +86,24 @@ struct SettingsPageScroll<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .onAppear {
-                scrollToHighlightedCard(using: proxy)
+                handleScrollCommand(using: proxy)
             }
-            .onChange(of: highlightCenter.scrollTarget) { _, _ in
-                scrollToHighlightedCard(using: proxy)
+            .onChange(of: highlightCenter.scrollCommand) { _, _ in
+                handleScrollCommand(using: proxy)
             }
         }
     }
 
-    private func scrollToHighlightedCard(using proxy: ScrollViewProxy) {
-        guard let target = highlightCenter.scrollTarget else { return }
-        // 설정 페이지 전환과 카드 등록이 같은 런루프에 일어나므로 배치가 끝난 다음 이동한다.
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.3)) {
-                proxy.scrollTo(target, anchor: .center)
-            }
-        }
+    private func handleScrollCommand(using proxy: ScrollViewProxy) {
+        guard let command = highlightCenter.scrollCommand,
+              command.id != lastHandledCommandID else { return }
+        lastHandledCommandID = command.id
+        let target = command.target
+        highlightCenter.consumeScrollCommand(id: command.id)
+        proxy.scrollAfterLayout(
+            to: target,
+            anchor: .center,
+            animation: .easeOut(duration: 0.3)
+        )
     }
 }

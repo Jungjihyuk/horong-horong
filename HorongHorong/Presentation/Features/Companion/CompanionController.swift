@@ -991,6 +991,12 @@ final class CompanionController {
             return
         }
 
+        // 지식 레지스트리에 최상위 지식이 명시되어 있으나 목적지가 없는 경우(예: Knowledge/Works 등 준비 중인 기능),
+        // 화면 이동을 하지 않고 설명만 제공하는 것이 올바르므로 후속 분류기나 설정 색인으로 오탐색하지 않는다.
+        if CompanionKnowledgeRegistry.hasMatchedKnowledge(for: message) {
+            return
+        }
+
         // 키워드 미매칭 시 LLM 구조화 분류기를 통해 유효한 목적지 추출 시도
         if let session {
             let classifiedID = await CompanionDestinationClassifier.classify(question: message) { prompt in

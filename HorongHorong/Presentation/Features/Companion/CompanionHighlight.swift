@@ -8,10 +8,26 @@ import SwiftUI
 final class CompanionHighlightCenter: ObservableObject {
     static let shared = CompanionHighlightCenter()
 
+    /// 스크롤 이동 요청 단위 (일회성 명령). R13 규약에 따라 고유 ID를 부여해 중복 실행을 방지한다.
+    struct ScrollCommand: Equatable, Identifiable, Sendable {
+        let id: UUID
+        let target: String
+
+        init(target: String, id: UUID = UUID()) {
+            self.id = id
+            self.target = target
+        }
+    }
+
     /// 강조할 대상 식별자. 대본의 `<!-- highlight: ... -->` 값이 그대로 들어온다.
     @Published private(set) var target: String?
-    /// 강조 카드가 현재 스크롤 영역 밖에 있어도 실제 위치까지 이동시키기 위한 별도 목적지.
-    @Published private(set) var scrollTarget: String?
+    /// 대기 중인 일회성 스크롤 명령. View가 처리한 뒤 폐기된다.
+    @Published private(set) var scrollCommand: ScrollCommand?
+
+    /// 이전 호환성을 위한 연산 프로퍼티. 대기 중인 명령의 대상 문자열을 반환한다.
+    var scrollTarget: String? {
+        scrollCommand?.target
+    }
 
     private init() {}
 
@@ -23,7 +39,23 @@ final class CompanionHighlightCenter: ObservableObject {
     /// 이미 화면에 나타난 카드도 강조와 동시에 보이는 위치로 이동시킨다.
     func highlightCard(_ target: String) {
         self.target = target
-        scrollTarget = target
+        self.scrollCommand = ScrollCommand(target: target)
+    }
+
+    /// View가 스크롤을 처리할 때 호출하여 명령을 일회성으로 소비(폐기)한다.
+    @discardableResult
+    func consumeScrollCommand(id: UUID) -> String? {
+        guard let current = scrollCommand, current.id == id else { return nil }
+        scrollCommand = nil
+        return current.target
+    }
+
+    /// 현재 대기 중인 스크롤 명령을 소비(폐기)한다.
+    @discardableResult
+    func consumeScrollCommand() -> ScrollCommand? {
+        guard let command = scrollCommand else { return nil }
+        scrollCommand = nil
+        return command
     }
 
     // MARK: - 설정 카드 자동 찾기
@@ -42,13 +74,13 @@ final class CompanionHighlightCenter: ObservableObject {
         questionTokens = tokens
         registeredCards = []
         target = nil
-        scrollTarget = nil
+        scrollCommand = nil
     }
 
     func endCardSearch() {
         questionTokens = []
         registeredCards = []
-        scrollTarget = nil
+        scrollCommand = nil
     }
 
     /// 화면에 나타난 카드가 자기 제목을 알린다.
@@ -63,7 +95,7 @@ final class CompanionHighlightCenter: ObservableObject {
         }
         let cardID = Self.cardID(best)
         target = cardID
-        scrollTarget = cardID
+        scrollCommand = ScrollCommand(target: cardID)
     }
 
     /// 제목이 질문 낱말을 얼마나 담고 있는지.
