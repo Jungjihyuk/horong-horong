@@ -108,7 +108,52 @@ enum CompanionAppFacts {
             Fact(
                 keywords: ["단축키", "퀵 메모", "퀵메모"],
                 line: "기본 퀵 메모 단축키: ⌘⇧N",
-                path: "설정 → 단축키 → 퀵 메모 띄우기"
+                path: "설정 → 단축키 → 퀵 메모 띄우기",
+                destination: Destination(tab: .hotkey, highlight: "card:전역")
+            ),
+            Fact(
+                keywords: ["미리알림", "미리 알림", "reminders", "리마인더"],
+                line: "미리알림 연동: 선택한 Apple 미리알림 목록의 미완료 항목을 Todo로 가져오고, 가져온 항목의 변경 사항을 다시 미리알림에 동기화한다.",
+                path: "설정 → 기록 → 미리알림 가져오기",
+                destination: Destination(tab: .secondBrain, highlight: "card:미리알림 가져오기")
+            ),
+            Fact(
+                keywords: ["todo", "할 일", "할일", "일정 입력", "자연어 일정"],
+                line: "Todo: 할 일을 기록하고 자연어로 날짜·시각·소요 시간을 입력하며, 일정 배치·완료·보관·미리알림 연결을 관리한다.",
+                path: "기록 허브 → Todo"
+            ),
+            Fact(
+                keywords: ["일기", "diary", "감정", "수면 기록"],
+                line: "Diary: 날짜별 일기와 하루 여러 시점의 감정, 취침·기상 시각을 기록하고 달력과 인사이트에서 돌아본다.",
+                path: "기록 허브 → Diary"
+            ),
+            Fact(
+                keywords: ["knowledge", "works", "옵시디언", "obsidian", "vault", "보관함"],
+                line: "Knowledge와 Works: 각각 지정한 Obsidian 보관함의 마크다운 문서를 폴더 트리로 탐색하고 읽거나 편집한다.",
+                path: "기록 허브 → Knowledge 또는 Works"
+            ),
+            Fact(
+                keywords: ["references", "레퍼런스", "빠른 링크", "스티키 노트"],
+                line: "References: 웹 링크를 보관하고 검색하며, 항목을 화면 위 스티키 노트로 띄울 수 있다. 기본 빠른 링크 단축키는 ⌘⇧L이다.",
+                path: "기록 허브 → References"
+            ),
+            Fact(
+                keywords: ["성취", "주간 목표", "월간 목표", "여정", "보상", "포인트"],
+                line: "성취: 메모와 Todo를 주간·월간 목표로 묶고 페르소나·비전과 연결한다. 달성 포인트는 사용자가 만든 보상으로 교환할 수 있다.",
+                path: "성취 창",
+                destination: Destination(tab: .achievement, highlight: nil)
+            ),
+            Fact(
+                keywords: ["몰입도", "집중 넛지", "잔소리", "기준선"],
+                line: "몰입: 집중 세션의 앱·웹 사용 패턴으로 몰입도를 계산하고, 기준선 아래로 떨어지면 설정한 방식으로 호로롱이가 말을 건다.",
+                path: "설정 → 몰입",
+                destination: Destination(tab: .focus, highlight: nil)
+            ),
+            Fact(
+                keywords: ["백업", "복원", "내보내기", "데이터 위치"],
+                line: "데이터: 로컬 저장소 위치를 확인하고 백업·복원·내보내기를 관리한다.",
+                path: "설정 → 데이터",
+                destination: Destination(tab: .data, highlight: nil)
             ),
             Fact(
                 keywords: ["리포트", "레포트"],

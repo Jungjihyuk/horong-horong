@@ -975,7 +975,8 @@ final class CompanionController {
         if let destination = CompanionAppFacts.destination(for: message) {
             CompanionOnboardingPresenter.openSettings(
                 tab: destination.tab,
-                highlight: destination.highlight
+                highlight: destination.highlight,
+                questionTokens: SearchTokens.from(message)
             )
             return
         }

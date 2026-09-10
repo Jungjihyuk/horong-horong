@@ -35,6 +35,7 @@ struct SettingsGroupCard<Content: View>: View {
         // 호로롱이 답한 내용에 해당하는 카드가 스스로 강조된다.
         // 카드마다 식별자를 손으로 달지 않아도 되도록 여기 한 곳에서 처리한다.
         .companionHighlight(CompanionHighlightCenter.cardID(title ?? ""))
+        .id(CompanionHighlightCenter.cardID(title ?? ""))
         .onAppear {
             if let title {
                 CompanionHighlightCenter.shared.registerCard(title)
@@ -69,17 +70,36 @@ struct SettingsPageHeader: View {
 /// 카드는 detail 영역 전체에서 좌우 padding 만 빼고 자유롭게 늘어난다 (윈도우를 키우면 카드도 같이 커짐).
 struct SettingsPageScroll<Content: View>: View {
     @Environment(\.appearanceDensity) private var density
+    @ObservedObject private var highlightCenter = CompanionHighlightCenter.shared
 
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: density.pageContentSpacing) {
-                content()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: density.pageContentSpacing) {
+                    content()
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, density.pageVerticalPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, density.pageVerticalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear {
+                scrollToHighlightedCard(using: proxy)
+            }
+            .onChange(of: highlightCenter.scrollTarget) { _, _ in
+                scrollToHighlightedCard(using: proxy)
+            }
+        }
+    }
+
+    private func scrollToHighlightedCard(using proxy: ScrollViewProxy) {
+        guard let target = highlightCenter.scrollTarget else { return }
+        // 설정 페이지 전환과 카드 등록이 같은 런루프에 일어나므로 배치가 끝난 다음 이동한다.
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.3)) {
+                proxy.scrollTo(target, anchor: .center)
+            }
         }
     }
 }

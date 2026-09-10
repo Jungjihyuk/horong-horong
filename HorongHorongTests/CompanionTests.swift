@@ -1443,6 +1443,17 @@ final class CompanionAppFactsTests: XCTestCase {
     func testMatchingIsCaseInsensitive() {
         XCTAssertNotNil(CompanionAppFacts.matching("AGENT 뭐 쓸 수 있어?"))
     }
+
+    /// 문서 검색이 빗나가도 자주 묻는 OS 연동은 확정 사실과 실제 설정 위치를 답해야 한다.
+    func testReminderFactExplainsIntegrationAndOpensItsSettingsPage() {
+        let line = CompanionAppFacts.matching("미리알림은 어떻게 연동해?")
+        let destination = CompanionAppFacts.destination(for: "미리알림은 어떻게 연동해?")
+
+        XCTAssertNotNil(line)
+        XCTAssertTrue(line!.contains("설정 → 기록 → 미리알림 가져오기"))
+        XCTAssertEqual(destination?.tab, .secondBrain)
+        XCTAssertEqual(destination?.highlight, "card:미리알림 가져오기")
+    }
 }
 
 final class CompanionGuideTests: XCTestCase {
@@ -1499,7 +1510,7 @@ final class CompanionGuideTests: XCTestCase {
     }
 
     func testUsageQuestionsAreDetected() {
-        for message in ["테마 어떻게 바꿔?", "단축키 뭐가 있어?", "통계 어디서 봐?"] {
+        for message in ["테마 어떻게 바꿔?", "단축키 뭐가 있어?", "통계 어디서 봐?", "미리알림이 뭐야?", "백업 알려줘"] {
             XCTAssertTrue(CompanionGuideQuestion.matches(message), message)
         }
     }
@@ -1657,6 +1668,7 @@ final class CompanionCardHighlightTests: XCTestCase {
         center.registerCard("퀵 메모")
 
         XCTAssertTrue(center.isHighlighted(CompanionHighlightCenter.cardID("미리알림 가져오기")))
+        XCTAssertEqual(center.scrollTarget, CompanionHighlightCenter.cardID("미리알림 가져오기"))
         center.endCardSearch()
         center.highlight(nil)
     }

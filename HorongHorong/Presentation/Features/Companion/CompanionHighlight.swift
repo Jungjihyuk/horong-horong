@@ -10,6 +10,8 @@ final class CompanionHighlightCenter: ObservableObject {
 
     /// 강조할 대상 식별자. 대본의 `<!-- highlight: ... -->` 값이 그대로 들어온다.
     @Published private(set) var target: String?
+    /// 강조 카드가 현재 스크롤 영역 밖에 있어도 실제 위치까지 이동시키기 위한 별도 목적지.
+    @Published private(set) var scrollTarget: String?
 
     private init() {}
 
@@ -34,11 +36,13 @@ final class CompanionHighlightCenter: ObservableObject {
         questionTokens = tokens
         registeredCards = []
         target = nil
+        scrollTarget = nil
     }
 
     func endCardSearch() {
         questionTokens = []
         registeredCards = []
+        scrollTarget = nil
     }
 
     /// 화면에 나타난 카드가 자기 제목을 알린다.
@@ -51,7 +55,9 @@ final class CompanionHighlightCenter: ObservableObject {
               score(for: best) > 0 else {
             return
         }
-        target = Self.cardID(best)
+        let cardID = Self.cardID(best)
+        target = cardID
+        scrollTarget = cardID
     }
 
     /// 제목이 질문 낱말을 얼마나 담고 있는지.
