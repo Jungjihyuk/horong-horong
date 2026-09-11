@@ -239,6 +239,9 @@ struct SecondBrainView: View {
             }
         }
         }
+        // Knowledge/Works는 첫 선택 직후 한 프레임 뒤에 지연 삽입된다. 그 사이에도 본문이
+        // 남은 공간을 차지해야 HStack이 다시 정렬되며 rail 선택 카드가 들썩이지 않는다.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
