@@ -56,7 +56,12 @@ enum MenuBarExtraController {
 /// 호로롱이 어디를 누르라고 알려주고 사용자가 눌러보는 편이 튜토리얼에 맞다.
 @MainActor
 enum CompanionOnboardingPresenter {
-    private static var isPopoverOpen = false
+    /// `MenuBarExtra` 가 만든 팝오버 창. 처음 열릴 때 등록된다.
+    private static weak var popoverWindow: NSWindow?
+    private static let popover = CompanionPopoverToggle(
+        isVisible: { popoverWindow?.isVisible == true },
+        toggle: { MenuBarExtraController.toggle() }
+    )
     /// 온보딩이 직접 연 통계 상세 창만 닫는다. 사용자가 미리 열어둔 창은 건드리지 않는다.
     private static var didOpenStatsWindow = false
     /// 딤 위로 끌어올린 창과 원래 레벨. 온보딩이 끝나면 되돌린다.
@@ -144,13 +149,14 @@ enum CompanionOnboardingPresenter {
         openPopover(tab: .memo)
     }
 
+    /// 팝오버가 실제로 열려 있는지 읽을 수 있게 창을 등록한다.
+    static func registerPopoverWindow(_ window: NSWindow) {
+        popoverWindow = window
+    }
+
     /// 온보딩이 끝나면 열어둔 팝오버를 닫아 원래 상태로 돌려놓는다.
     static func closePopover() {
-        guard isPopoverOpen, MenuBarExtraController.toggle() else {
-            isPopoverOpen = false
-            return
-        }
-        isPopoverOpen = false
+        popover.close()
     }
 
     static func openPopover(
@@ -158,10 +164,7 @@ enum CompanionOnboardingPresenter {
         highlight: String? = nil,
         seconds: Double = 4
     ) {
-        if !isPopoverOpen, MenuBarExtraController.toggle() {
-            isPopoverOpen = true
-        }
-        guard isPopoverOpen else { return }
+        guard popover.open() else { return }
         // 팝오버가 그려진 뒤에 탭을 바꾼다.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             NotificationCenter.default.post(name: .companionOnboardingSelectTab, object: tab)

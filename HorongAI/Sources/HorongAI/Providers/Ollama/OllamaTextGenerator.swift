@@ -89,4 +89,31 @@ public struct OllamaTextGenerator: Sendable {
         }
         return GenerationOutput(text: text, usage: usage)
     }
+
+    /// 대화 기록까지 함께 보내는 한 번짜리 생성.
+    ///
+    /// 컴패니언 의도 판단은 "아까 내가 한 말"이나 정정("아니 고민이라고")처럼 **앞선 말**을 봐야
+    /// 고를 수 있어서, 지시문 + 질문 하나만 받는 `generate(prompt:)` 로는 부족하다.
+    public func generate(
+        messages: [OllamaChatClient.Message],
+        temperature: Double,
+        maxTokens: Int,
+        format: JSONSchema?,
+        contextLength: Int?,
+        timeoutInterval: TimeInterval = 60.0
+    ) async throws -> String {
+        let client = OllamaChatClient(endpoint: endpoint, model: model)
+        var text = ""
+        for try await update in client.streamUpdates(
+            messages: messages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            format: format,
+            contextLength: contextLength,
+            requestTimeoutInterval: timeoutInterval
+        ) {
+            text = update.text
+        }
+        return text
+    }
 }

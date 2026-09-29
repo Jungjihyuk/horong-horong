@@ -37,6 +37,8 @@ public struct OllamaChatClient: Sendable {
             let repeat_penalty: Double?
             let presence_penalty: Double?
             let frequency_penalty: Double?
+            /// 문맥 창 크기. `nil` 이면 보내지 않아 서버 기본값을 쓴다(기존 호출은 그대로).
+            var num_ctx: Int? = nil
         }
     }
 
@@ -187,6 +189,7 @@ public struct OllamaChatClient: Sendable {
         presencePenalty: Double? = nil,
         frequencyPenalty: Double? = nil,
         format: JSONSchema? = nil,
+        contextLength: Int? = nil,
         requestTimeoutInterval: TimeInterval = 60.0
     ) -> AsyncThrowingStream<StreamUpdate, Error> {
         AsyncThrowingStream { continuation in
@@ -211,7 +214,8 @@ public struct OllamaChatClient: Sendable {
                                 num_predict: maxTokens,
                                 repeat_penalty: repeatPenalty,
                                 presence_penalty: presencePenalty,
-                                frequency_penalty: frequencyPenalty
+                                frequency_penalty: frequencyPenalty,
+                                num_ctx: contextLength
                             )
                         ),
                         format: format

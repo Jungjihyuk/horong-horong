@@ -1,0 +1,10 @@
+schema_version = "1.4"
+[metadata]
+description = "Companion prototype: intent and execution, semantic answer review separate"
+[agent]
+timeout_sec = 300
+[verifier]
+timeout_sec = 30
+[environment]
+docker_image = "nikolaik/python-nodejs:python3.11-nodejs20"
+network_mode = "no-network"

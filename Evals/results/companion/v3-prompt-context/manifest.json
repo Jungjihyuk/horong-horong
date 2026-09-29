@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "feature": "companion",
+  "evaluation_version": "v3-prompt-context",
+  "decision_mode": "structured_output_json",
+  "status": "archived_results_not_model_approval",
+  "changes": "v2 사례·채점·추론 설정 유지. 판단 규칙 명확화, 출처·도구 상태 구분, 현재 날짜·요일 전달, 답변용 내부 ID 제거, 간결한 답변 지시",
+  "reference_time": "2026-09-18T10:00:00+09:00",
+  "case_version": "v1-15-cases",
+  "prompt_version": "v3",
+  "grader_version": "v2",
+  "snapshot_provenance": "HorongHorong 에서 실행한 코드 그대로. 각 run manifest 의 source_sha256 과 snapshot 해시가 같음을 확인함 (2026-09-29)",
+  "limitations": [
+    "답변 의미 품질은 자동 합격 판정하지 않음",
+    "원시 사례 결과는 로컬 보관(Git 백업 아님)",
+    "모델당 3회, 온도 0"
+  ],
+  "runs": [
+    {
+      "path": "gemma4-26b/run-01",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "gemma4-26b/run-02",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "gemma4-26b/run-03",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "gemma4-e4b/run-01",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "gemma4-e4b/run-02",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "gemma4-e4b/run-03",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3-8b/run-01",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3-8b/run-02",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3-8b/run-03",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3.5-9b/run-01",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3.5-9b/run-02",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    },
+    {
+      "path": "qwen3.5-9b/run-03",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+    }
+  ]
+}

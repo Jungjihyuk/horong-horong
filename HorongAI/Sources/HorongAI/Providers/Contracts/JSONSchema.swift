@@ -30,6 +30,7 @@ public indirect enum JSONSchema: Sendable, Equatable {
     /// 실측(2026-08-25): `"resultType": "suggestions, guidance mixed? No, strict JSON. Let's analyze first.…"`
     case stringEnum([String])
     case integer
+    case boolean
     case array(of: JSONSchema)
     /// **속성 순서가 그대로 문법이 된다.** `[String: JSONSchema]` 로 두면 순서를 표현할 수 없어
     /// 인코더 마음대로 나가는데, 그게 실제로 사고를 냈다(2026-08-25) — `resultType` 이 맨 뒤로
@@ -40,6 +41,11 @@ public indirect enum JSONSchema: Sendable, Equatable {
     /// (`scheduleText` · `criterion` 등)까지 필수로 걸면, 모델이 그걸 지어내느라
     /// 토큰을 쓰고 내용도 나빠진다.
     case object(properties: [Property], required: [String])
+    /// 적힌 속성 말고는 **아무 키도 못 쓰는** 객체(`additionalProperties: false`).
+    ///
+    /// 컴패니언 의도 판단은 평가기(`Evals/companion_eval.py`)가 이 모양으로 재 왔다.
+    /// 앱이 다른 모양을 보내면 평가 결과를 앱에 옮겨 쓸 수 없다.
+    case closedObject(properties: [Property], required: [String])
 
     /// 이름과 모양을 **순서까지 담아** 들고 다니는 한 쌍.
     public struct Property: Sendable, Equatable {
@@ -74,14 +80,14 @@ extension JSONSchema {
             return #"{"type":"string","enum":[\#(list)]}"#
         case .integer:
             return #"{"type":"integer"}"#
+        case .boolean:
+            return #"{"type":"boolean"}"#
         case .array(let element):
             return #"{"type":"array","items":\#(element.jsonText)}"#
         case .object(let properties, let required):
-            let props = properties
-                .map { #"\#(Self.quoted($0.name)):\#($0.schema.jsonText)"# }
-                .joined(separator: ",")
-            let requiredList = required.map(Self.quoted).joined(separator: ",")
-            return #"{"type":"object","properties":{\#(props)},"required":[\#(requiredList)]}"#
+            return #"{"type":"object","properties":{\#(Self.propertiesText(properties))},"required":[\#(Self.requiredText(required))]}"#
+        case .closedObject(let properties, let required):
+            return #"{"type":"object","additionalProperties":false,"properties":{\#(Self.propertiesText(properties))},"required":[\#(Self.requiredText(required))]}"#
         }
     }
 
@@ -93,5 +99,15 @@ extension JSONSchema {
             return "\"\""
         }
         return quoted
+    }
+
+    private static func propertiesText(_ properties: [Property]) -> String {
+        properties
+            .map { #"\#(quoted($0.name)):\#($0.schema.jsonText)"# }
+            .joined(separator: ",")
+    }
+
+    private static func requiredText(_ required: [String]) -> String {
+        required.map(quoted).joined(separator: ",")
     }
 }
