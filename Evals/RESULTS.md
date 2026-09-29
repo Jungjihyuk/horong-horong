@@ -15,10 +15,16 @@
   - 현재 날짜와 요일을 준다.
   - 답변용 근거에서 ID를 빼고, 간결하게 답하도록 지시한다.
 - `v3-native-tools`: v3의 사례·채점·문맥 규칙을 그대로 쓰고, 판단만 Ollama 네이티브 tool calling으로 바꾼 비교용 버전 (`companion_eval_native.py`). 보관 위치는 v3와 같은 방식.
-- `v4-schedule-rule`: 현재 실행 코드. v3에 판단 규칙 3줄만 더했다. 사례·채점·추론 설정은 그대로다.
+- `v4-schedule-rule`: v3에 판단 규칙 3줄만 더했다. 사례·채점·추론 설정은 그대로다. 보관 위치는 v3와 같은 방식.
   - 이전 발언 확인(`history_recall`)은 사용자가 앞서 자기가 한 말을 물을 때만 쓴다.
   - 앞으로 있을 일정을 묻는 질문은 표현이 달라도 `schedule_lookup`이다. 예시는 시험 사례에 없는 표현만 쓴다.
   - `next_only=true`이면 `after`는 항상 비운다.
+- `v5-date-move`: 현재 실행 코드. 앱에서 실제로 틀린 것(2026-09-29 수동 확인)을 사례로 옮기고 고쳤다.
+  - 연도 규칙과 2주치 날짜표. 시각만 주면 "10월 2일"을 2024년으로 계산했다.
+  - 옮기기 도구 `schedule_move`. 도구가 없어서 옮기기 요청을 새 할일 추가로 처리해 중복이 생겼다.
+  - 기간 조회 `until`. 날짜 없는 조회가 검증에서 막혀 예전 흐름으로 빠졌다.
+  - 답변 규칙에 "도구 결과로 확인된 작업만 했다고 말한다"를 넣었다.
+  - 사례 6개 추가 → 21개: 다른 달 날짜, 연말 날짜, "다음주 금요일", 확인 뒤 "응 추가해줘", 옮기기, 기간 조회.
 - v2의 원시 결과, 그리고 Lantern에서 1회 실행한 v3 원시 결과는 Lantern 로컬에만 있다. 이 저장소의 결과는 새로 쌓는다.
 
 ## 규칙
@@ -90,18 +96,40 @@ v3에서 gemma4:e4b·qwen3:8b가 "바로 다음 일정" 사례를 매번 틀려�
 - 앱 기본 모델(`Constants.defaultCompanionOllamaModel = gemma4:e4b`)은 v4에서 전 사례를 통과했고 회귀가 없다.
 - 원시 결과: `results/companion/v4-schedule-rule/<모델>/run-0N/` (로컬 보관)
 
-## 실행 (v4, Ollama 실행 상태에서 하나씩 순차 실행)
+## v5 평가 - 날짜·옮기기·기간 (2026-09-29, 이 저장소에서 실행)
+
+같은 모델당 3회. 기존 15개는 v4와 비교해 회귀를 보고, 새 6개는 통과 여부를 본다.
+
+| 모델 | 3회 모두 통과 (21개 중) | 기존 15개 v4 → v5 | 새 6개 | 3회 모두 실패한 사례 | 사례당 시간 중앙값 |
+|---|---|---|---|---|---|
+| **gemma4:e4b** (앱 기본) | **21/21** | 15 → 15 | 6/6 | 없음 | 4.5초 |
+| qwen3.5:9b | **21/21** | 14 → **15** (`after` 회복) | 6/6 | 없음 | 7.2초 |
+| gemma4:26b | **21/21** | 15 → 15 | 6/6 | 없음 | 13.0초 |
+| qwen3:8b | 18/21 | 15 → **13** | 5/6 | `ambiguous`, `recall`, `move` | 4.3초 |
+
+- qwen3:8b의 회귀
+  - `ambiguous`("그거 금요일로 옮겨줘"): 되묻지 않고 제목 "그거", 시각 10:00(현재 시각)으로 옮기기를 골랐다. 옮기기 도구가 생기자 추측으로 부른다. 앱에서는 "그거"라는 할일이 없어 옮기지 않고(`not_found`) 되묻는다.
+  - `recall`("아까 내가 목표라고 말한 게 뭐였지?"): 이전 대화 확인 대신 저장된 목표 조회를 골랐다. 지시문이 길어진 뒤 앞 대화를 쓰는 판단이 약해진 사례로 본다.
+  - `move`("다음주 월요일"): 2026-09-21 대신 09-20(일요일)으로 계산했다.
+- 앱 기본 모델 gemma4:e4b와 qwen3.5:9b, gemma4:26b는 새 사례를 포함해 전부 통과했고 회귀가 없다.
+- 날짜표를 넣은 뒤 앞 대화를 봐야 하는 사례(`recall`, `correction`, `confirm`)는 qwen3:8b의 `recall`을 빼고 모두 통과했다.
+- 응답 시간: 실행 중간(22:2x)에 앱 테스트 빌드가 겹쳐 qwen3:8b 이후 모델은 느리게 기록됐을 수 있다. 판정에는 영향이 없다.
+- 원시 결과: `results/companion/v5-date-move/<모델>/run-0N/` (로컬 보관)
+
+## 실행 (v5, Ollama 실행 상태에서 하나씩 순차 실행)
 
 ```bash
-python3 Evals/companion_eval.py --model gemma4:26b --output Evals/results/companion/v4-schedule-rule/gemma4-26b/run-01
-python3 Evals/companion_eval.py --model gemma4:e4b --output Evals/results/companion/v4-schedule-rule/gemma4-e4b/run-01
-python3 Evals/companion_eval.py --model qwen3:8b --output Evals/results/companion/v4-schedule-rule/qwen3-8b/run-01
-python3 Evals/companion_eval.py --model qwen3.5:9b --output Evals/results/companion/v4-schedule-rule/qwen3.5-9b/run-01
+python3 Evals/companion_eval.py --model gemma4:26b --output Evals/results/companion/v5-date-move/gemma4-26b/run-01
+python3 Evals/companion_eval.py --model gemma4:e4b --output Evals/results/companion/v5-date-move/gemma4-e4b/run-01
+python3 Evals/companion_eval.py --model qwen3:8b --output Evals/results/companion/v5-date-move/qwen3-8b/run-01
+python3 Evals/companion_eval.py --model qwen3.5:9b --output Evals/results/companion/v5-date-move/qwen3.5-9b/run-01
 ```
+
+- 평가기 규칙을 바꾸면 `python3 Evals/export_companion_contract.py`로 계약 픽스처를 다시 내보낸다. 앱 테스트(`CompanionIntentContractTests`)가 앱 지시문·양식이 픽스처와 같은지 확인한다.
 
 - 이미 끝난 버전은 해당 버전 폴더의 `snapshot/` 코드로 재현한다. 현재 코드를 이전 버전 경로에 실행하지 않는다.
 - 네이티브 도구 비교: `python3 Evals/companion_eval_native.py --model <모델> --output Evals/results/companion/v3-native-tools/<모델>/run-0N`
 
 - 반복 실행은 `run-02`, `run-03`처럼 새 run 번호를 지정한다.
-- 각 run에는 15개 사례 JSON, manifest, 실행 코드 사본이 생긴다. 사례 JSON은 manifest의 `completed_cases`로 구분한다.
+- 각 run에는 사례 JSON(v5는 21개), manifest, 실행 코드 사본이 생긴다. 사례 JSON은 manifest의 `completed_cases`로 구분한다.
 - 단위 테스트: `cd Evals && python3 -m unittest test_companion_eval`
