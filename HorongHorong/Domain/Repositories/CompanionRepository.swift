@@ -30,6 +30,8 @@ struct CompanionOnboardingCounts: Equatable, Sendable {
 }
 
 struct CompanionMemoSummary: Equatable, Sendable {
+    /// 컴패니언이 할 일을 옮길 때 대상을 가리킨다.
+    let id: UUID
     let title: String
     let isCompleted: Bool
     let startDate: Date?

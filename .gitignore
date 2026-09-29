@@ -190,6 +190,14 @@ Evals/results/baselines/*
 !Evals/results/baselines/*/
 Evals/results/baselines/*/*
 !Evals/results/baselines/*/manifest.json
+# 컴패니언 의도 평가: 원시 결과는 로컬 보관, 버전별 manifest와 평가 스냅샷만 추적한다
+!Evals/results/companion/
+Evals/results/companion/*
+!Evals/results/companion/*/
+Evals/results/companion/*/*
+!Evals/results/companion/*/manifest.json
+!Evals/results/companion/*/evaluation-snapshot.json
+!Evals/results/companion/*/snapshot/
 promptfooconfig.json
 Evals/.provider
 Evals/.goal-eval-configuration.json

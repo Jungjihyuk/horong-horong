@@ -3,6 +3,11 @@ import AppKit
 import Combine
 import SwiftUI
 
+extension Notification.Name {
+    /// 컴패니언이 대화로 할 일을 추가·옮겼다. 할 일 목록이 다시 읽는다.
+    static let companionDidChangeTodos = Notification.Name("CompanionDidChangeTodos")
+}
+
 /// 루미롱 컴패니언의 생명주기 담당.
 /// 설정·포모도로 상태를 보고 오버레이를 띄우거나 숨기고, 활동 반경 안에서 걷게 하며,
 /// 정해진 시각에 오늘 일정 브리핑을 띄운다.
@@ -18,6 +23,10 @@ final class CompanionController {
     private let state: CompanionPresentationState
     private let overlay: CompanionOverlayPanel
     private let repository: CompanionRepository
+    /// 의도 판단 흐름의 목표 조회 도구가 읽는다.
+    private let achievementRepository: AchievementRepository
+    /// 의도 판단 흐름의 옮기기 도구가 쓴다. 미리알림·로컬 알림까지 다시 맞추는 기존 경로다.
+    private let todoRepository: TodoRepository
 
     private var tickTimer: Timer?
     private var briefingTimer: Timer?
@@ -63,9 +72,16 @@ final class CompanionController {
     /// 한 틱이 인정하는 최대 간격. 잠들었다 깨거나 시계가 앞으로 튀어도 이만큼만 흘린 것으로 본다.
     private static let maximumTickDelta: TimeInterval = 1.0
 
-    init(appState: AppState, repository: CompanionRepository) {
+    init(
+        appState: AppState,
+        repository: CompanionRepository,
+        achievementRepository: AchievementRepository,
+        todoRepository: TodoRepository
+    ) {
         self.appState = appState
         self.repository = repository
+        self.achievementRepository = achievementRepository
+        self.todoRepository = todoRepository
         let character = CompanionRegistry.character(for: Self.selectedIdentifier)
         self.state = CompanionPresentationState(character: character)
         self.overlay = CompanionOverlayPanel(state: state)
@@ -805,6 +821,15 @@ final class CompanionController {
             return
         }
 
+        // 분명한 저장 지시는 위에서 코드가 처리했다. 나머지는 모델이 의도를 고른다 —
+        // 키워드로 먼저 나누면 "일정 때문에 걱정이야" 같은 고민을 일정 질문으로 오해한다.
+        if let decider = intentDecider() {
+            companionProviderLog.notice("companion flow=intent model=\(decider.model, privacy: .public)")
+            sendWithIntent(message, decider: decider)
+            return
+        }
+        companionProviderLog.notice("companion flow=evidence reason=provider_not_ollama")
+
         if CompanionGuideQuestion.matches(message),
            let guidance = CompanionAppFacts.directGuidance(for: message) {
             state.chatMessages.append(CompanionChatMessage(role: .user, text: message))
@@ -822,6 +847,14 @@ final class CompanionController {
         setAnimation(.review)
 
         let session = chatSessionForCurrentCharacter()
+        chatReplyTask?.cancel()
+        chatReplyTask = Task { @MainActor [weak self] in
+            await self?.replyWithEvidence(to: message, session: session)
+        }
+    }
+
+    /// 키워드로 근거를 골라 답하는 기존 흐름. Ollama 의도 판단이 실패했을 때도 여기로 돌아온다.
+    private func replyWithEvidence(to message: String, session: CompanionChatSession) async {
         let isTaskQuestion = CompanionTaskQuestion.matches(message)
         let items = isTaskQuestion ? todayBriefingItems() : []
         // 순서가 곧 프롬프트 순서다 — 앱 사실 · 설정 위치 · 설명서.
@@ -842,19 +875,298 @@ final class CompanionController {
             ? CompanionScheduleBuilder.entries(from: items, now: Date())
             : []
 
+        let reply = await session.reply(to: modelInput, precise: hasEvidence) { [weak self] partial in
+            self?.applyStreamedReply(partial.text)
+        }
+        guard !Task.isCancelled, state.isChatting else { return }
+        applyStreamedReply(reply.text)
+        attachPendingSchedule()
+        state.isAwaitingReply = false
+        state.streamingMessageID = nil
+        reactWithMood(reply.mood)
+        await showAnswerDestinationIfAny(for: message, session: session)
+    }
+
+    // MARK: - 의도 판단 흐름 (Ollama)
+
+    /// 평가한 경로(Ollama)에서만 새 판단 흐름을 쓴다. MLX·Apple 모델은 평가 전이라 기존 흐름을 유지한다.
+    private func intentDecider() -> CompanionIntentDecider? {
+        CompanionIntentDecider.make(selectedOllama: CompanionChatProviderFactory.selectedOllama())
+    }
+
+    /// 판단 → 도구 실행 → 근거 기반 답변. 평가기(`Evals/companion_eval.py`)의 `run_case` 와 같은 순서다.
+    private func sendWithIntent(_ message: String, decider: CompanionIntentDecider) {
+        let history = state.chatMessages
+        let userMessage = CompanionChatMessage(role: .user, text: message)
+        state.chatMessages.append(userMessage)
+        state.isAwaitingReply = true
+        state.streamingMessageID = nil
+        setAnimation(.review)
+
+        let session = chatSessionForCurrentCharacter()
         chatReplyTask?.cancel()
         chatReplyTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let reply = await session.reply(to: modelInput, precise: hasEvidence) { [weak self] partial in
+            let now = Date()
+            let decision: CompanionIntentTask.Decision
+            do {
+                decision = try await decider.decide(history: history, message: message, now: now)
+            } catch {
+                // 판단을 못 해도 캐릭터는 답해야 한다. 기존 흐름으로 돌아간다.
+                companionProviderLog.error(
+                    """
+                    companion flow=evidence reason=decision_failed \
+                    error=\(String(describing: error), privacy: .public) \
+                    elapsed=\(Date().timeIntervalSince(now), format: .fixed(precision: 1), privacy: .public)s
+                    """
+                )
+                guard !Task.isCancelled, self.state.isChatting else { return }
+                await self.replyWithEvidence(to: message, session: session)
+                return
+            }
+            guard !Task.isCancelled, self.state.isChatting else { return }
+            // 판단 값은 사용자 문장이 아니라 공개해도 되는 모양이다. 제목만 가린다.
+            companionProviderLog.notice(
+                """
+                intent decided action=\(decision.action.rawValue, privacy: .public) \
+                date=\(decision.date, privacy: .public) after=\(decision.after, privacy: .public) \
+                next_only=\(decision.nextOnly, privacy: .public) title=\(decision.title, privacy: .private) \
+                elapsed=\(Date().timeIntervalSince(now), format: .fixed(precision: 1), privacy: .public)s
+                """
+            )
+
+            let outcome = self.runIntentTool(decision, message: message, userMessageID: userMessage.id, now: now)
+            companionProviderLog.notice(
+                """
+                intent tool action=\(decision.action.rawValue, privacy: .public) \
+                status=\(outcome.logStatus, privacy: .public) \
+                created_memo=\(outcome.createdMemoID != nil, privacy: .public)
+                """
+            )
+            if let failure = outcome.failureMessage {
+                self.state.isAwaitingReply = false
+                self.appendMemoStatusMessage(failure)
+                return
+            }
+            self.pendingSchedule = outcome.schedule
+            let context = CompanionIntentTask.AnswerContext(
+                action: decision.action,
+                result: outcome.result,
+                now: now,
+                timeZone: .current
+            )
+            let reply = await session.reply(
+                to: CompanionIntentTask.answerInput(userMessage: message, context: context),
+                precise: true
+            ) { [weak self] partial in
                 self?.applyStreamedReply(partial.text)
             }
             guard !Task.isCancelled, self.state.isChatting else { return }
             self.applyStreamedReply(reply.text)
             self.attachPendingSchedule()
+            self.attachCreatedMemo(outcome.createdMemoID)
+            if outcome.didChangeTodos {
+                // 할 일 목록은 컴패니언의 쓰기를 모른다. 포모도로처럼 알려 줘야 다시 읽는다.
+                NotificationCenter.default.post(name: .companionDidChangeTodos, object: nil)
+            }
             self.state.isAwaitingReply = false
             self.state.streamingMessageID = nil
             self.reactWithMood(reply.mood)
-            await self.showAnswerDestinationIfAny(for: message, session: session)
+            if decision.action == .appHelp {
+                await self.showAnswerDestinationIfAny(for: message, session: session, requiresGuideKeyword: false)
+            }
+        }
+    }
+
+    private struct IntentToolOutcome {
+        var result: CompanionIntentTask.ToolResult?
+        /// 조회한 일정은 모델 문장이 아니라 저장된 데이터로 그린다.
+        var schedule: [CompanionScheduleEntry] = []
+        var createdMemoID: UUID?
+        /// 할 일을 추가·옮겼으면 목록 화면이 다시 읽어야 한다.
+        var didChangeTodos = false
+        /// 저장 실패나 날짜 안전망에 걸리면 모델에게 넘기지 않고 바로 알린다.
+        /// 모델이 "저장했어요"·"옮겼어요"라고 지어낼 틈을 없앤다.
+        var failureMessage: String?
+
+        /// 로그용 도구 상태. 답변 문맥의 `tool_status` 와 같은 말에 막힘·실패만 더했다.
+        var logStatus: String {
+            if failureMessage != nil { return "blocked_or_failed" }
+            switch result {
+            case nil: return "not_requested"
+            case .schedules(let items): return items.isEmpty ? "success_empty" : "success(\(items.count))"
+            case .goals(let goals): return goals.isEmpty ? "success_empty" : "success(\(goals.count))"
+            case .guide(let text): return text.isEmpty ? "success_empty" : "success"
+            case .created: return "success"
+            case .moved: return "success(moved)"
+            case .moveNotFound: return "success_empty(move_not_found)"
+            case .moveAmbiguous(let items): return "success(move_ambiguous \(items.count))"
+            }
+        }
+    }
+
+    /// 모델이 고른 행동에 맞는 도구를 실행한다. 도구가 필요 없는 행동은 아무것도 건드리지 않는다.
+    private func runIntentTool(
+        _ decision: CompanionIntentTask.Decision,
+        message: String,
+        userMessageID: UUID,
+        now: Date
+    ) -> IntentToolOutcome {
+        let calendar = Calendar.current
+        // 코드 안전망: 지난 날짜로 저장하거나, 말한 요일과 날짜가 어긋나면 모델에게 넘기지 않고 되묻는다.
+        if !decision.date.isEmpty,
+           let issue = CompanionScheduleLookupPolicy.dateIssue(
+               date: decision.date,
+               isWrite: decision.action == .scheduleCreate || decision.action == .scheduleMove,
+               message: message,
+               now: now,
+               calendar: calendar
+           ) {
+            return IntentToolOutcome(failureMessage: Self.dateIssueMessage(issue))
+        }
+        switch decision.action {
+        case .conversation, .clarification, .historyRecall:
+            return IntentToolOutcome(result: nil)
+
+        case .scheduleLookup:
+            let found = CompanionScheduleLookupPolicy.lookup(
+                CompanionScheduleLookupPolicy.entries(from: repository.briefingMemos(), calendar: calendar),
+                date: decision.date,
+                until: decision.until,
+                after: decision.after,
+                nextOnly: decision.nextOnly,
+                now: now,
+                calendar: calendar
+            )
+            return IntentToolOutcome(
+                result: .schedules(found.map {
+                    .init(title: CompanionScheduleBuilder.firstLine(of: $0.memo.title), date: $0.date, time: $0.time)
+                }),
+                schedule: found.map {
+                    CompanionScheduleEntry(
+                        time: $0.memo.deadline,
+                        title: CompanionScheduleBuilder.firstLine(of: $0.memo.title),
+                        isCompleted: $0.memo.isCompleted
+                    )
+                }
+            )
+
+        case .scheduleCreate:
+            guard let dates = CompanionScheduleLookupPolicy.saveDates(
+                date: decision.date, after: decision.after, calendar: calendar
+            ) else {
+                return IntentToolOutcome(failureMessage: "날짜를 알아듣지 못했어요. 다시 말씀해 주세요.")
+            }
+            do {
+                let result = try memoStore.save(
+                    CompanionMemoSaveRequest(
+                        messageID: userMessageID,
+                        content: decision.title,
+                        isTodayTask: CompanionScheduleLookupPolicy.day(now, calendar) == decision.date,
+                        startDate: dates.startDate,
+                        deadline: dates.deadline
+                    ),
+                    in: repository,
+                    now: now
+                )
+                let memoID: UUID
+                switch result {
+                case .saved(let id), .duplicate(let id): memoID = id
+                }
+                if let index = state.chatMessages.firstIndex(where: { $0.id == userMessageID }) {
+                    state.chatMessages[index].savedMemoID = memoID
+                }
+                return IntentToolOutcome(
+                    result: .created(.init(title: decision.title, date: decision.date, time: decision.after)),
+                    createdMemoID: memoID,
+                    didChangeTodos: true
+                )
+            } catch {
+                return IntentToolOutcome(failureMessage: "메모를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")
+            }
+
+        case .scheduleMove:
+            let targets = CompanionScheduleLookupPolicy.moveTargets(
+                CompanionScheduleLookupPolicy.entries(from: repository.briefingMemos(), calendar: calendar),
+                title: decision.title
+            )
+            let item = { (entry: CompanionScheduleLookupPolicy.Entry) in
+                CompanionIntentTask.ScheduleItem(
+                    title: CompanionScheduleBuilder.firstLine(of: entry.memo.title), date: entry.date, time: entry.time
+                )
+            }
+            // 하나일 때만 옮긴다. 없거나 여럿이면 아무것도 바꾸지 않고 모델이 되묻게 한다.
+            guard targets.count == 1, let target = targets.first else {
+                return IntentToolOutcome(result: targets.isEmpty ? .moveNotFound : .moveAmbiguous(targets.map(item)))
+            }
+            guard let dates = CompanionScheduleLookupPolicy.movedDates(
+                target, date: decision.date, after: decision.after, calendar: calendar
+            ) else {
+                return IntentToolOutcome(failureMessage: "날짜를 알아듣지 못했어요. 다시 말씀해 주세요.")
+            }
+            do {
+                try todoRepository.setSchedule(id: target.memo.id, startDate: dates.startDate, deadline: dates.deadline)
+            } catch {
+                return IntentToolOutcome(failureMessage: "할 일을 옮기지 못했어요. 잠시 후 다시 시도해 주세요.")
+            }
+            let movedTime = dates.deadline.map { CompanionScheduleLookupPolicy.clock($0, calendar) } ?? ""
+            return IntentToolOutcome(
+                result: .moved(
+                    title: CompanionScheduleBuilder.firstLine(of: target.memo.title),
+                    from: item(target),
+                    to: .init(title: CompanionScheduleBuilder.firstLine(of: target.memo.title), date: decision.date, time: movedTime)
+                ),
+                createdMemoID: target.memo.id,
+                didChangeTodos: true
+            )
+
+        case .goalLookup:
+            let goals = achievementRepository.goals()
+                .filter { $0.completedAt == nil && $0.closedAt == nil }
+                .map { "\($0.emoji) \($0.title)".trimmingCharacters(in: .whitespaces) }
+            return IntentToolOutcome(result: .goals(goals))
+
+        case .appHelp:
+            // 모델이 사용법 질문이라고 판단했으므로 키워드 검사 없이 근거를 모은다.
+            var evidence = CompanionAppFacts.evidence(for: message)
+            if let match = CompanionSettingsIndex.bestMatch(for: message) {
+                evidence.append(match.evidenceItem)
+            }
+            if guideSections.isEmpty {
+                guideSections = CompanionGuide.loadFromBundle()
+            }
+            if let guide = GuideRetriever.evidence(for: message, in: guideSections) {
+                evidence.append(guide)
+            }
+            let text = evidence.map(\.text).filter { !$0.isEmpty }.joined(separator: "\n\n")
+            return IntentToolOutcome(result: .guide(text))
+        }
+    }
+
+    /// 날짜 안전망에 걸렸을 때 사용자에게 되묻는 말. 코드가 날짜를 고치지 않고 확인을 받는다.
+    private static func dateIssueMessage(_ issue: CompanionScheduleLookupPolicy.DateIssue) -> String {
+        func spoken(_ date: String) -> String {
+            let parts = date.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3 else { return date }
+            return "\(parts[0])년 \(parts[1])월 \(parts[2])일"
+        }
+        switch issue {
+        case .past(let date):
+            return "\(spoken(date))은 이미 지난 날짜라 저장하지 않았어요. 언제로 할까요?"
+        case .weekdayMismatch(let date, let said, let actual):
+            return "\(spoken(date))은 \(actual)이에요. 말씀하신 \(said)과 달라서 그대로 두었어요. 날짜를 다시 알려 주세요."
+        }
+    }
+
+    /// 저장한 할 일로 가는 버튼(「기록 탭 보기」)을 답변 말풍선에 단다.
+    private func attachCreatedMemo(_ memoID: UUID?) {
+        guard let memoID else { return }
+        if let id = state.streamingMessageID,
+           let index = state.chatMessages.firstIndex(where: { $0.id == id }) {
+            state.chatMessages[index].memoDestinationID = memoID
+            state.chatMessages[index].allowsMemoSave = false
+        } else {
+            appendMemoStatusMessage("", memoID: memoID)
         }
     }
 
@@ -981,8 +1293,13 @@ final class CompanionController {
     }
 
     /// 답한 내용을 화면으로도 보여준다. 설정 경로를 말했으면 그 자리를 열어 잠깐 강조한다.
-    private func showAnswerDestinationIfAny(for message: String, session: CompanionChatSession? = nil) async {
-        guard CompanionGuideQuestion.matches(message) else { return }
+    /// - Parameter requiresGuideKeyword: 모델이 이미 사용법 질문으로 판단했으면 키워드 검사를 건너뛴다.
+    private func showAnswerDestinationIfAny(
+        for message: String,
+        session: CompanionChatSession? = nil,
+        requiresGuideKeyword: Bool = true
+    ) async {
+        guard !requiresGuideKeyword || CompanionGuideQuestion.matches(message) else { return }
         if let destination = CompanionAppFacts.destination(for: message) {
             CompanionOnboardingPresenter.show(
                 destination,

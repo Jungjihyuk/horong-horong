@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "feature": "companion",
+  "evaluation_version": "v4-schedule-rule",
+  "decision_mode": "structured_output_json",
+  "status": "current_results_not_model_approval",
+  "changes": "v3 에 판단 규칙 3줄 추가 (history_recall 범위, 앞으로의 일정 질문은 schedule_lookup, next_only 이면 after 비움). 사례·채점·추론 설정은 v3 그대로",
+  "reference_time": "2026-09-18T10:00:00+09:00",
+  "case_version": "v1-15-cases",
+  "prompt_version": "v4",
+  "grader_version": "v2",
+  "snapshot_provenance": "HorongHorong 에서 실행한 코드 그대로. 각 run manifest 의 source_sha256 과 snapshot 해시가 같음을 확인함 (2026-09-29)",
+  "regression_vs_v3": {
+    "gemma4:e4b": "14→15, next 고쳐짐",
+    "qwen3:8b": "14→15, next 고쳐짐",
+    "gemma4:26b": "15→15",
+    "qwen3.5:9b": "15→14, after 회귀"
+  },
+  "limitations": [
+    "답변 의미 품질은 자동 합격 판정하지 않음",
+    "원시 사례 결과는 로컬 보관(Git 백업 아님)",
+    "모델당 3회, 온도 0",
+    "next_only 필드 설명의 '바로 다음 일정' 문구는 v3 부터 있던 것"
+  ],
+  "runs": [
+    {
+      "path": "gemma4-26b/run-01",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "gemma4-26b/run-02",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "gemma4-26b/run-03",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "gemma4-e4b/run-01",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "gemma4-e4b/run-02",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "gemma4-e4b/run-03",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3-8b/run-01",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3-8b/run-02",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3-8b/run-03",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3.5-9b/run-01",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3.5-9b/run-02",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    },
+    {
+      "path": "qwen3.5-9b/run-03",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 14,
+      "source_sha256": "63bb589cf06f8c659b170bf0f915379b37b11ca70dcdd588577bb7825181205f"
+    }
+  ]
+}

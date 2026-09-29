@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "feature": "companion",
+  "evaluation_version": "v1-baseline",
+  "status": "archived_results_not_model_approval",
+  "changes": "프롬프트·문맥 개선 전 최초 비교 기준",
+  "reference_time": "2026-09-18T10:00:00+09:00",
+  "case_version": "v1-15-cases",
+  "prompt_version": "v1",
+  "grader_version": "v1",
+  "snapshot_provenance": "아카이브 시점 현재 소스. 실행 당시 소스 해시는 기록되지 않았음. 저장된 decision_input과 현재 프롬프트·이력·발언의 일치는 별도 검증함.",
+  "settings_from_current_source": {
+    "think": false,
+    "temperature": 0,
+    "num_predict": 512,
+    "num_ctx": 4096,
+    "keep_alive": "1m"
+  },
+  "limitations": [
+    "Qwen3.5 run-02만 보존됨. 덮어쓴 run-01은 복원하지 않음.",
+    "최대 메모리·모델 digest·실행 당시 전체 요청 설정은 기록되지 않음.",
+    "답변 의미 품질은 자동 합격 판정하지 않음.",
+    "다음 버전에서 사례나 채점 변경 시 v1 점수와 직접 비교하지 말 것."
+  ],
+  "runs": [
+    {
+      "path": "gemma4-26b/run-01",
+      "model": "gemma4:26b",
+      "provider": "ollama",
+      "records": 15,
+      "decision_response_times_utc": [
+        "2026-09-18T11:03:22.550898Z",
+        "2026-09-18T11:04:35.917245Z"
+      ],
+      "scores": {
+        "intent": 13,
+        "execution": 13
+      },
+      "artifacts": {
+        "after.json": "25c0ba852d62728af1c6a029fe5dfe26cb5d54bf1811920baf340c01f229428e",
+        "ambiguous.json": "9f3d0325fbd24156cc4e13c11f2aff391ef7dc54fc71a56c94795c60b616bef5",
+        "correction.json": "3a7330b9dfff3ab8450ccf8a288d984d07c942eb3af174323c800b92f3b2dc2d",
+        "create.json": "db9a555fadb8d03843c547e1aa5edf24a0f80b8bcff34f273e6869e988f49e57",
+        "date.json": "e84dc2d90a2e6a441072c61e65d697299eb62f59b66a949a66a468bfa1dc16f9",
+        "empty.json": "e562df75c3d3e5c8a70df19d882543aaf740744c177cd5d8cf6e5b6270a2b310",
+        "goal.json": "8b9ee78ff97664d0d9a6fbff794317bb8bf7cb9fe0035af8a85d41234ea3c142",
+        "greeting.json": "a28dc1332c769d5b17585be90c398fd7f887a0dd124c7ef24accdad719ea10dd",
+        "help.json": "964bc4ed25057984177cae24acbd9d999c7d98624d78ccb1a8f5450798f93c3a",
+        "negation.json": "2942f33daa952951883730c23ebc33a1ae448ca15ccbbf7100d7ce77369541bb",
+        "next.json": "9ae187c6ac4047f65b0ea64c5a51da0b4d8fb5e2f8186e5dd6e56369ce40e44e",
+        "recall.json": "1d4360bfccb18e4e98489abe83e9a494d5b81174a984810fc0e08154e52f4667",
+        "today.json": "fb0e7b970a8244043dd91f443d0d0f8659d97ac0726e2104d8076e251e5858ec",
+        "tomorrow.json": "ffd5dac52e8325917c0c3fab070c7097cc39cebb4222f1bfe1d1db5587a6670a",
+        "worry.json": "82bc335ce415a3693ac0e45d10be36fa12bd8865ef6f792c2e9e50ec52d25cad"
+      }
+    },
+    {
+      "path": "gemma4-e4b/run-01",
+      "model": "gemma4:e4b",
+      "provider": "ollama",
+      "records": 15,
+      "decision_response_times_utc": [
+        "2026-09-18T11:01:15.731336Z",
+        "2026-09-18T11:02:17.943149Z"
+      ],
+      "scores": {
+        "intent": 15,
+        "execution": 15
+      },
+      "artifacts": {
+        "after.json": "6aeb7fa2d91f4209a5d3e6969f2154a74d43c2eea4dfd8fa94d5ed85d981a58c",
+        "ambiguous.json": "9099737673e62a5cf79559e4b383bd8930ea594cd5850049e01dbbe4f1baa6b4",
+        "correction.json": "25e829ddbe54048bfc6b7e7fa2d5a913b58e082e75d60af66b7cd7c2261e0c9a",
+        "create.json": "1ce40f43e57010b47155eba5c61670a7c714813de094af9fb3622a43be3631d0",
+        "date.json": "b614023ae8873689f4a8ba64f3f1b8609a4a3a430a03070fb637177e1fc3f661",
+        "empty.json": "4c284bc66be38be78f908ca6fa1c1e578d12b8deced8552d88db6c7d107ee828",
+        "goal.json": "2f77c6d84a62310f04da40da2120dbf93761d38099567f5e69af8a3263c6d0d0",
+        "greeting.json": "6ba7bf3e7c6f6146053e4c535a4120cb10b6f471c7d727e76c012dee8de98503",
+        "help.json": "f0487af46798e6225849af100257eb9175be9aaaa5e3fd5e7cfb94469bcf4faa",
+        "negation.json": "eafdc14c4abba2448d025ab6cbef5c837141e83fd1c627c199e5448691be8e88",
+        "next.json": "5e5f1cdf377d07fd98ce2a113b24d467cbcb87b084b4e4d3013ba0b7ec8a5cfc",
+        "recall.json": "fdcc6ac83cddc995a3b958e71cc71eee71b6a082984cf47f7c11cd64348163ea",
+        "today.json": "2e8d0bebd3abe0c6765a407f6bfe70f882b9870cae9f6fc2bbea309b8cefb92f",
+        "tomorrow.json": "135894c26545aa1829a4c10e937603e50f3f7be22da23af5109dea5024c18754",
+        "worry.json": "cb071feddc1ad1cbc5e9bf4c62f8fc169fa047d45112f90020d13ba2292aabab"
+      }
+    },
+    {
+      "path": "qwen3-8b/run-01",
+      "model": "qwen3:8b",
+      "provider": "ollama",
+      "records": 15,
+      "decision_response_times_utc": [
+        "2026-09-18T10:59:09.305895Z",
+        "2026-09-18T11:00:29.629152Z"
+      ],
+      "scores": {
+        "intent": 12,
+        "execution": 11
+      },
+      "artifacts": {
+        "after.json": "d8dfec5c4a5b22d36ad52d4b4a2ae009a35868a12f751f7116f0e998bf3fd774",
+        "ambiguous.json": "8d3eefa2cff2bdb67862637d275b9b4e70a87902dc69578402a4895e43aa833f",
+        "correction.json": "e30a9170c1e32bc179b2af7448535e9038580fc19c8e4d486835ea23d3786cc8",
+        "create.json": "e4640b253ba5743b0910784501e6d90e91bc8bda1283a0e6f184433b6cdc5f56",
+        "date.json": "3a2aa305e9f4ce86452fe99df916a3cc5f7259ed5454daf31ce82690997e26ee",
+        "empty.json": "220558408519f090f205f0c035dcc5b99201283d9f036c22908291d5d4d0dfc3",
+        "goal.json": "ea604a230df479fd024997cd537eb4d67d8ce6599cae7085d8e5299701b6bfe2",
+        "greeting.json": "873a9d9409f5a253428200a0cad5826d0c9fa093e4542b6d699c7216d13e885d",
+        "help.json": "7e0491c86b9bb9f8a09fcfced2049a4c3193f591f6391902f4f3039a178b7d1a",
+        "negation.json": "4d6ab653878fdc77492024525b18151b4016054f3a3046f4f80e6ad41f2dab2f",
+        "next.json": "43d06aeb69dad7a00595e3a6d55b261ae6b824875689db9cc6ca5465ace270ce",
+        "recall.json": "edebab1255b03fc95f145cb6d4444bf2472eb783c5e40c8ce0c87dd23c461d83",
+        "today.json": "c687b9b5b619f1a00751d48152a75f30cb3719d4e8d8dda600b3afc5222c9dce",
+        "tomorrow.json": "26a1836fc62b03ab8bad6ab7ceac7ac69c4f15ca443a708c95adee9d26f1fda4",
+        "worry.json": "df36c1fb11cb458804dfae29326a465f22dd2b6e4f91762504ab89b1efe5b05b"
+      }
+    },
+    {
+      "path": "qwen3.5-9b/run-02",
+      "model": "qwen3.5:9b",
+      "provider": "ollama",
+      "records": 15,
+      "decision_response_times_utc": [
+        "2026-09-18T11:11:26.076317Z",
+        "2026-09-18T11:13:14.041801Z"
+      ],
+      "scores": {
+        "intent": 14,
+        "execution": 14
+      },
+      "artifacts": {
+        "after.json": "c18dfab712da2062460eb8db12b13dd6ab1e9c7f5a677c1b8c14d669a3b7679d",
+        "ambiguous.json": "7c9ca0307bb5f52c50b9087d5cf6e51bbe877e23c187452954b517b58eddb9e3",
+        "correction.json": "29bd9e34e546f1f7ab8c96bd1933d40cfb39302e91dfb4fb5b56bb6758f12b58",
+        "create.json": "e4a3d59b178769f67be9b1aeb43885cf44377a4419293dcae9ec5076a94993a3",
+        "date.json": "689e12920c916a321a252df241989a41574602682612a56067aa86c6a2c020df",
+        "empty.json": "e7956c7a5a2bad5fb0373e338d6e188b93e7641dd2a63c5265b71847212797c2",
+        "goal.json": "79b6d13139f7a5e76007720bb0331bbc7c58189829430d6f785b2abd18fc2746",
+        "greeting.json": "a96c966ca5e064fef9f191437f926408191cc2991bb6c8416640e4a91b1bec43",
+        "help.json": "c144ea4d6b3b21980a9bc12b3b6d34aa5e80c895b18fbb60e00c5e8dead3253f",
+        "negation.json": "f50d9293ba45791bbad73319fd62f146ab6c434000d7d507db99bb7cdad9f323",
+        "next.json": "aff399a407f2b509bf55f4f65133b2b7040df1427a664e11bb70c32088e697a6",
+        "recall.json": "f9058147130efafbdbd8641d3e4c6ec13b25a8df2da94ffad38bc86ee01ba1c7",
+        "today.json": "0610e44cada999431502b8d042f69fd8207f798cb76b1c974057d7c19e70278a",
+        "tomorrow.json": "9f9b03ecab502422e605702bf8035cb3dfa3baa9087b3018894a03c29c25dcdc",
+        "worry.json": "6f30c9c29468c69a81a0b3695245d63f41030fe603a7ef56b5cffe8be9998c99"
+      }
+    }
+  ]
+}

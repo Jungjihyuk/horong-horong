@@ -750,6 +750,7 @@ final class CompanionMemoStoreTests: XCTestCase {
             repository.briefingMemos(),
             [
                 CompanionMemoSummary(
+                    id: active.id,
                     title: "오늘 할 일",
                     isCompleted: false,
                     startDate: active.startDate,

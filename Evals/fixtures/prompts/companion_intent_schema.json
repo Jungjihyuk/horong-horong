@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "conversation",
+        "clarification",
+        "schedule_lookup",
+        "schedule_create",
+        "goal_lookup",
+        "app_help",
+        "history_recall",
+        "schedule_move"
+      ]
+    },
+    "date": {
+      "type": "string"
+    },
+    "after": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "next_only": {
+      "type": "boolean"
+    },
+    "until": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "action",
+    "date",
+    "after",
+    "title",
+    "next_only",
+    "until"
+  ]
+}

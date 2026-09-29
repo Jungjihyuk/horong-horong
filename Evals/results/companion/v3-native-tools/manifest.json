@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "feature": "companion",
+  "evaluation_version": "v3-native-tools",
+  "decision_mode": "native_tools",
+  "status": "archived_results_not_model_approval",
+  "changes": "v3 사례·채점·answer_context 재사용. 판단만 Ollama 네이티브 tool calling 으로 바꿈",
+  "reference_time": "2026-09-18T10:00:00+09:00",
+  "case_version": "v1-15-cases",
+  "prompt_version": "v3-native",
+  "grader_version": "v2-native",
+  "snapshot_provenance": "HorongHorong 에서 실행한 코드 그대로. 각 run manifest 의 source_sha256 과 snapshot 해시가 같음을 확인함 (2026-09-29)",
+  "limitations": [
+    "답변 의미 품질은 자동 합격 판정하지 않음",
+    "원시 사례 결과는 로컬 보관(Git 백업 아님)",
+    "모델당 3회, 온도 0"
+  ],
+  "runs": [
+    {
+      "path": "gemma4-26b/run-01",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "gemma4-26b/run-02",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "gemma4-26b/run-03",
+      "model": "gemma4:26b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 15,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "gemma4-e4b/run-01",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 10,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "gemma4-e4b/run-02",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 10,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "gemma4-e4b/run-03",
+      "model": "gemma4:e4b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 10,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3-8b/run-01",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 13,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3-8b/run-02",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 13,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3-8b/run-03",
+      "model": "qwen3:8b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 13,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3.5-9b/run-01",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 12,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3.5-9b/run-02",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 12,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    },
+    {
+      "path": "qwen3.5-9b/run-03",
+      "model": "qwen3.5:9b",
+      "status": "completed_not_model_approval",
+      "completed_cases": 15,
+      "passed_intent_and_execution": 12,
+      "source_sha256": {
+        "companion_eval_native.py": "9f0dbe0f42fbb31d9efe03160665c359206d3ff2e77b92a3023b8a1fb6e0b8c9",
+        "companion_eval.py": "008aa889d49eee63573bd3c3aa5c08dbefc439effb8bf9640dedd5eda42fd141"
+      }
+    }
+  ]
+}
