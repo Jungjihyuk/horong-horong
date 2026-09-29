@@ -591,7 +591,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stickyNotes = StickyNoteWidgetPresenter(repository: dependencies.referenceRepository)
         companionController = CompanionController(
             appState: appState,
-            repository: dependencies.companionRepository
+            repository: dependencies.companionRepository,
+            achievementRepository: dependencies.achievementRepository
         )
     }
 

@@ -39,6 +39,20 @@ protocol CompanionChatProvider {
 }
 
 enum CompanionChatProviderFactory {
+    /// 설정에서 Ollama 를 골랐을 때 그 주소와 모델. 의도 판단도 대화와 같은 모델로 한다.
+    static func selectedOllama() -> (endpoint: String, model: String)? {
+        let selected = UserDefaults.standard.string(
+            forKey: Constants.AppStorageKey.companionChatProvider
+        ) ?? Constants.defaultCompanionChatProvider
+        guard selected == Constants.CompanionChatProviderKind.ollama.rawValue else { return nil }
+        return (
+            UserDefaults.standard.string(forKey: Constants.NewsStorageKey.ollamaEndpoint)
+                ?? Constants.defaultNewsOllamaEndpoint,
+            UserDefaults.standard.string(forKey: Constants.AppStorageKey.companionOllamaModel)
+                ?? Constants.defaultCompanionOllamaModel
+        )
+    }
+
     /// 로컬 모델을 쓸 수 있으면 그것을, 아니면 고정 응답 공급자를 돌려준다.
     /// 대화·추론은 전부 기기 안에서 끝나며 어떤 경우에도 네트워크로 나가지 않는다.
     @MainActor
@@ -53,14 +67,10 @@ enum CompanionChatProviderFactory {
             ollamaReachable=\(ollamaReachable, privacy: .public)
             """
         )
-        if selected == Constants.CompanionChatProviderKind.ollama.rawValue {
+        if let ollama = selectedOllama() {
             let provider = PackageChatProvider(OllamaProvider(
-                endpoint: UserDefaults.standard.string(
-                    forKey: Constants.NewsStorageKey.ollamaEndpoint
-                ) ?? Constants.defaultNewsOllamaEndpoint,
-                model: UserDefaults.standard.string(
-                    forKey: Constants.AppStorageKey.companionOllamaModel
-                ) ?? Constants.defaultCompanionOllamaModel,
+                endpoint: ollama.endpoint,
+                model: ollama.model,
                 reachable: ollamaReachable,
                 capabilities: ProviderCapabilities(
                     maxPromptCharacters: Constants.achievementPromptCharacterBudget(for: .ollama)

@@ -180,6 +180,7 @@
 		31935563B81F2C1D54FB1DFB /* LegacyReferenceV7.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3930CB2C0150ED7AFA961788 /* LegacyReferenceV7.swift */; };
 		31BDC34B5896528541DE7626 /* NewsSourceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68BFA743553B29BE6EB037 /* NewsSourceStore.swift */; };
 		32059D8A26FCA55A233AB9A4 /* TodoScheduleCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC15EB624D13127471005D18 /* TodoScheduleCard.swift */; };
+		32066643EC610B7CF35B1948 /* CompanionScheduleLookupPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D09439CF7C05EE3A6B1209 /* CompanionScheduleLookupPolicy.swift */; };
 		322EFD49F9D623304BBB1C75 /* Chips.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533933E2382625E32588D04A /* Chips.swift */; };
 		32818FB85BB19A4512CF1FC3 /* NewsReportArchiveWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC7AFC911E04A771AD0E7D0B /* NewsReportArchiveWindow.swift */; };
 		33116F2103A8A265C89869C6 /* StatsChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5DC97A7466DC4F437556D89 /* StatsChartView.swift */; };
@@ -343,6 +344,7 @@
 		612B79EA006D43A8564A848A /* SwiftDataStatsSummaryRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB49E261801135C4AD1315F /* SwiftDataStatsSummaryRepository.swift */; };
 		618F7FF85EF084D53F544C21 /* HorongAIMLX in Frameworks */ = {isa = PBXBuildFile; productRef = AAFB5BF68A34538F16C5C758 /* HorongAIMLX */; };
 		621DEDF15507BBDF430545A1 /* FocusPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC3FC758FB5417595AB64A6 /* FocusPage.swift */; };
+		6269AF14DAFCCA3B0D67730B /* CompanionScheduleLookupPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46D09439CF7C05EE3A6B1209 /* CompanionScheduleLookupPolicy.swift */; };
 		6298725479AB6FB34E9889E7 /* DiaryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E3ADB78B1615DFF58A514D4 /* DiaryViewModel.swift */; };
 		62A47F0B30BAD92125458C9A /* TodoBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45C51C7CA163CBB24141CA5 /* TodoBrowserView.swift */; };
 		62C064DF01EDC69E90E7CC38 /* IdlePromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A204375A5A49737F46C5548 /* IdlePromptPanel.swift */; };
@@ -513,6 +515,7 @@
 		9D1635B95A7DB0B00C29A984 /* RewardRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F31FF48763DE4142617921 /* RewardRepository.swift */; };
 		9D9AD622E488544EF61AE135 /* FocusTrend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E168FAA1C4CC4877A28C745 /* FocusTrend.swift */; };
 		9E7D9EF6CAD54AC10D339A36 /* ReferencesBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6043EFCD6C5E52C4C98E2C8A /* ReferencesBrowserView.swift */; };
+		9E999470F8C927C58FCF715C /* CompanionIntentContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC82B8A82E50F781113B9185 /* CompanionIntentContractTests.swift */; };
 		9F14CE655EB6C46DD32BF7BF /* CompanionKnowledge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7522D14E17F6298FE07A5764 /* CompanionKnowledge.swift */; };
 		9F1AC4C771326E433CA4E03B /* ReferenceURLPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741937D5C1862039BA842AF4 /* ReferenceURLPolicy.swift */; };
 		9F9262B9085424148D94A6C3 /* MLXHuggingFace in Frameworks */ = {isa = PBXBuildFile; productRef = 76FD2DA36946E510A88203D6 /* MLXHuggingFace */; };
@@ -655,6 +658,7 @@
 		C78C5CB9FB56DAC13A19FCA2 /* TrackerStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BDD9AF40C2BFFBC6B739D9D /* TrackerStateStore.swift */; };
 		C8675B31569D2ECABD5F1C2B /* RewardTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523FA0B797E2254EE17C7D45 /* RewardTabView.swift */; };
 		C8AE6FE869B65C10292DE465 /* RewardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2190648ED872F82BC91540F /* RewardViewModelTests.swift */; };
+		C935199874CF08A8690E2082 /* CompanionScheduleLookupPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5CA853A340DDF076033821 /* CompanionScheduleLookupPolicyTests.swift */; };
 		C9827C5ABDFD56601F6CCE75 /* DataPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8D67A1F19637DE7766DD11C /* DataPage.swift */; };
 		CA6BD09D578F73DE24974D0B /* StatsSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BEC1DD184ACF0E611A1729E /* StatsSummaryView.swift */; };
 		CAAEE9DFD9BC3D5B3C91971A /* DiaryDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ADEC5D4312E47AA5625F438 /* DiaryDay.swift */; };
@@ -688,6 +692,7 @@
 		D46843385A6459CE208DFFFB /* VaultCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B2E2C2D9C6F8C1ADE7BB13 /* VaultCatalogTests.swift */; };
 		D4B67242D636E9426FF4C01A /* FocusPulseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06037B24EF7020D9F40DDED5 /* FocusPulseCard.swift */; };
 		D50ADC5DC6C32F0C224B5FA7 /* CompanionBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8C5D6091CF19B1DFE537811 /* CompanionBriefing.swift */; };
+		D55504F09DB7B2270E0B22E2 /* CompanionIntentDecider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1544079AB9FB814110AB2A /* CompanionIntentDecider.swift */; };
 		D55B929B2FE34EE81CDFE95B /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FBC617CE6D8192B3425DCB /* SettingsRow.swift */; };
 		D572FFFFD409E12DD01351B2 /* SwiftDataRewardRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C7C5683FAA613A4EFE19B2 /* SwiftDataRewardRepositoryTests.swift */; };
 		D5A49C9FB64C750B90B311E2 /* FocusNudgeSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD4A12E7727B0D0C2A2E2F4 /* FocusNudgeSettingsStore.swift */; };
@@ -758,6 +763,7 @@
 		EA63F0946865EEA7CC4B42B7 /* DailyTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A793B40386850181A1A384 /* DailyTimelineView.swift */; };
 		EAA0CBF80F4CDC80DEE306CB /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D11427730BE431936DEE67 /* TimerManager.swift */; };
 		EAEF3787625D9189967F3EA8 /* CLIAgentAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71EA7242679BE2971EF68F2B /* CLIAgentAdapter.swift */; };
+		EBF4345D9A0DAEB5F16AF9F7 /* CompanionIntentDecider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1544079AB9FB814110AB2A /* CompanionIntentDecider.swift */; };
 		EC8AE6BF7C0B9C50F44AD767 /* ReferencesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E192C3DE1CFB51041DAC3F8 /* ReferencesViewModel.swift */; };
 		ED021A3D8779777E7E48CFD6 /* FocusDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E185E673C473BF483327C36 /* FocusDetailView.swift */; };
 		ED32C74F4BFD97AFA63FF617 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA25DD516AA5500C0E0491CE /* Constants.swift */; };
@@ -920,7 +926,9 @@
 		2AAA64764D85B6D7D537F916 /* DiaryMoodSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryMoodSlot.swift; sourceTree = "<group>"; };
 		2B24DC534D4456A1DDD26B30 /* StatsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPage.swift; sourceTree = "<group>"; };
 		2BB1E8B410C3FF306B5740F9 /* SwiftDataReferenceRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataReferenceRepository.swift; sourceTree = "<group>"; };
+		2C1544079AB9FB814110AB2A /* CompanionIntentDecider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionIntentDecider.swift; sourceTree = "<group>"; };
 		2C672B23F6B026868BE6E18E /* VaultFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultFileStoreTests.swift; sourceTree = "<group>"; };
+		2D5CA853A340DDF076033821 /* CompanionScheduleLookupPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionScheduleLookupPolicyTests.swift; sourceTree = "<group>"; };
 		2D8F38936C59C0412702D3EB /* TelemetryClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryClient.swift; sourceTree = "<group>"; };
 		2E3ADB78B1615DFF58A514D4 /* DiaryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryViewModel.swift; sourceTree = "<group>"; };
 		2F19084B1B000B3326F2ACCA /* CompanionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionView.swift; sourceTree = "<group>"; };
@@ -962,6 +970,7 @@
 		44E43AAB7ADB6436A8C4DDE6 /* SwiftDataStatsDetailRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStatsDetailRepository.swift; sourceTree = "<group>"; };
 		44F5C4F4E7BD11BBFBE7749A /* HealthSleepMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthSleepMathTests.swift; sourceTree = "<group>"; };
 		466E0B5D318243D443FE2A58 /* HorongHorongTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HorongHorongTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		46D09439CF7C05EE3A6B1209 /* CompanionScheduleLookupPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionScheduleLookupPolicy.swift; sourceTree = "<group>"; };
 		46F1965ACA903C7D79ED614D /* DiaryInsights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryInsights.swift; sourceTree = "<group>"; };
 		47349F3065928035E9C6E27B /* LabPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabPage.swift; sourceTree = "<group>"; };
 		47EC7554E0518A7A29FCE6B2 /* AppUsageRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUsageRepository.swift; sourceTree = "<group>"; };
@@ -1177,6 +1186,7 @@
 		BB6520A2BCA4E932F3AE0A92 /* SwiftDataStatsSummaryRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStatsSummaryRepositoryTests.swift; sourceTree = "<group>"; };
 		BBAEE317FF480F9B32F3F0BD /* SwiftDataStatsRecordEditorRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStatsRecordEditorRepository.swift; sourceTree = "<group>"; };
 		BC0E743139EFA49E2F373801 /* companion */ = {isa = PBXFileReference; lastKnownFileType = folder; name = companion; path = Assets/companion; sourceTree = SOURCE_ROOT; };
+		BC82B8A82E50F781113B9185 /* CompanionIntentContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionIntentContractTests.swift; sourceTree = "<group>"; };
 		BD41EEE4AC0A596B529FDEC0 /* SwiftDataStoreLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataStoreLocation.swift; sourceTree = "<group>"; };
 		BEC80AA67EE4CE5B548952A0 /* SwiftDataAchievementRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataAchievementRepositoryTests.swift; sourceTree = "<group>"; };
 		BF587CD8D4ADFBADE9BE9D6B /* CompanionUserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionUserProfile.swift; sourceTree = "<group>"; };
@@ -1617,6 +1627,7 @@
 				B46C2AEE98AA3484A1BE4AF2 /* CompanionController.swift */,
 				542B4AEE41BF97EE2E105170 /* CompanionGuide.swift */,
 				154AE1F1ABE39359CB6C2BC4 /* CompanionHighlight.swift */,
+				2C1544079AB9FB814110AB2A /* CompanionIntentDecider.swift */,
 				4A2CB9817ED587A373147173 /* CompanionMood.swift */,
 				DA961C2FECF48DBE96D543DE /* CompanionOnboardingPresenter.swift */,
 				13ED4885BE456C5CFD500442 /* CompanionOverlayPanel.swift */,
@@ -1673,6 +1684,7 @@
 				6E9572BF803ACB52F68F7B20 /* CompanionDestinationClassifier.swift */,
 				FBCF0A02CE84B7A47DEB0217 /* CompanionDestinationRegistry.swift */,
 				94B5B2F63E73E4809507129B /* CompanionKnowledgeRegistry.swift */,
+				46D09439CF7C05EE3A6B1209 /* CompanionScheduleLookupPolicy.swift */,
 				7CECD24A66C541C20625B9CE /* DiaryMoodStreakPolicy.swift */,
 				E03B67E832201F5026E56761 /* DiaryMoodTransitionPolicy.swift */,
 				92A14AA8F9A99E2EE946964D /* DiaryQuickCapturePolicy.swift */,
@@ -1757,7 +1769,9 @@
 				387F464C45BF01C903A0D019 /* AttentionAnalyticsTests.swift */,
 				6BFDB918694C1C7CA83E3B9C /* BrowserURLClassificationTests.swift */,
 				FE497DB7545D31619C218C84 /* CompanionFrameIndexTests.swift */,
+				BC82B8A82E50F781113B9185 /* CompanionIntentContractTests.swift */,
 				20538B3D3343A55001830C2C /* CompanionPopoverToggleTests.swift */,
+				2D5CA853A340DDF076033821 /* CompanionScheduleLookupPolicyTests.swift */,
 				51D9BE9BF74EB33D376D7FC6 /* CompanionTests.swift */,
 				A085E1471B4C845A64B08334 /* ConstantsDefaultsTests.swift */,
 				6D0617F80C52FC659782D6B4 /* DiaryEntryDuplicateTests.swift */,
@@ -2578,6 +2592,7 @@
 				2449BC15960B5563F8CA0641 /* CompanionDestinationRegistry.swift in Sources */,
 				72146DDBFB727B7036368DF1 /* CompanionGuide.swift in Sources */,
 				DE0B69552E19BD69A2E6787C /* CompanionHighlight.swift in Sources */,
+				EBF4345D9A0DAEB5F16AF9F7 /* CompanionIntentDecider.swift in Sources */,
 				23CDD723E3B7E7E5215A036B /* CompanionKnowledge.swift in Sources */,
 				0CAD69D26DDA6D16009FB3E1 /* CompanionKnowledgeRegistry.swift in Sources */,
 				B813D0B22EB82B93756D26FD /* CompanionMood.swift in Sources */,
@@ -2590,6 +2605,7 @@
 				57AB8E18052203503C26380C /* CompanionRepository.swift in Sources */,
 				BA644EA2827C5FEC575773B4 /* CompanionRoamingEngine.swift in Sources */,
 				E6F8783A840609708B78067B /* CompanionRoamingRegion.swift in Sources */,
+				6269AF14DAFCCA3B0D67730B /* CompanionScheduleLookupPolicy.swift in Sources */,
 				40AA666A811078485EB7E125 /* CompanionSettingsIndex.swift in Sources */,
 				444C6173BC6B4F6B6EF719F6 /* CompanionSpotlight.swift in Sources */,
 				CBFADE8A1E77D3356FE06BE7 /* CompanionSpriteMetrics.swift in Sources */,
@@ -2938,6 +2954,7 @@
 				A19C111F1CA366355010BBD4 /* CompanionDestinationRegistry.swift in Sources */,
 				5841C3B64B2530E3FC69D29A /* CompanionGuide.swift in Sources */,
 				DB7724BEEDCFB68130668FE5 /* CompanionHighlight.swift in Sources */,
+				D55504F09DB7B2270E0B22E2 /* CompanionIntentDecider.swift in Sources */,
 				9F14CE655EB6C46DD32BF7BF /* CompanionKnowledge.swift in Sources */,
 				20D6329484C5F2AB1C44582F /* CompanionKnowledgeRegistry.swift in Sources */,
 				67B9A196A2130ED5F4985FAA /* CompanionMood.swift in Sources */,
@@ -2950,6 +2967,7 @@
 				AC3A656693A73C0F9C8B1A5F /* CompanionRepository.swift in Sources */,
 				2475AF994DB3F9A9589938FB /* CompanionRoamingEngine.swift in Sources */,
 				55C5EF6D886F9D7F7E213EAF /* CompanionRoamingRegion.swift in Sources */,
+				32066643EC610B7CF35B1948 /* CompanionScheduleLookupPolicy.swift in Sources */,
 				837115C6F0DB6DCB835BBE28 /* CompanionSettingsIndex.swift in Sources */,
 				CEDFB69871F5138430343FBD /* CompanionSpotlight.swift in Sources */,
 				FE9656AEB22E7F536A55124D /* CompanionSpriteMetrics.swift in Sources */,
@@ -3235,7 +3253,9 @@
 				7D5001BA1778BFD2D3D9607B /* AttentionAnalyticsTests.swift in Sources */,
 				2914E61149677340D1EF8D4D /* BrowserURLClassificationTests.swift in Sources */,
 				A7B33C9745ABF4D5E8059D6F /* CompanionFrameIndexTests.swift in Sources */,
+				9E999470F8C927C58FCF715C /* CompanionIntentContractTests.swift in Sources */,
 				88FC95616341639D8F0E778F /* CompanionPopoverToggleTests.swift in Sources */,
+				C935199874CF08A8690E2082 /* CompanionScheduleLookupPolicyTests.swift in Sources */,
 				767C43DF408C9106CD5EA585 /* CompanionTests.swift in Sources */,
 				0C457E2681F8C34BE3ADF35C /* ConstantsDefaultsTests.swift in Sources */,
 				ACD15784AE20917933640A8C /* DiaryEntryDuplicateTests.swift in Sources */,

@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 
 NOW = "2026-09-18T10:00:00+09:00"
-EVALUATION_VERSION = "v4-schedule-rule"
+EVALUATION_VERSION = "v3-prompt-context"
 SEED = [
     {"id": "t1", "title": "팀 회의", "date": "2026-09-18", "time": "09:00"},
     {"id": "t2", "title": "배포 점검", "date": "2026-09-18", "time": "15:00"},
@@ -42,15 +42,11 @@ clarification은 실제 조회·변경 요청의 필수 정보가 부족할 때 
 상담을 더 잘하기 위한 질문은 conversation 안에서 합니다.
 현재 저장된 개인 목표 조회와 이전 대화에서 한 발언 확인은 다릅니다.
 이전 발언 확인은 history_recall이며 저장소 목표를 대신 조회하지 않습니다.
-history_recall은 사용자가 앞선 대화에서 자신이 한 말을 다시 물을 때만 씁니다.
-앞으로 있을 일정·할일을 묻는 질문은 표현이 달라도 저장된 일정을 묻는 것이므로 schedule_lookup입니다
-(예: "이따 뭐 있지?", "다음 약속 언제야?").
 conversation/clarification/goal_lookup/app_help/history_recall은 date/after/title 모두 빈 문자열,
 next_only는 false입니다. 현재 시각을 빈 필드에 복사하지 마세요.
 일정 전체 조회는 요청 날짜의 모든 항목을 뜻합니다. 이미 지난 항목도 임의로 제외하지 마세요.
 사용자가 가장 가까운 다음 일정 하나를 요청한 경우에만 next_only=true입니다.
 이 경우 현재 시각 필터는 코드가 적용하므로 after에 현재 시각을 넣지 마세요.
-next_only=true이면 after는 항상 빈 문자열입니다.
 after는 사용자가 명시한 시간 조건에만 사용합니다. 시간 미지정은 빈 문자열입니다.
 일정 추가에서도 현재 시각이나 자정을 임의로 지정하지 마세요.
 date에는 날짜만, after에는 시간만 넣고 전체 타임스탬프는 넣지 마세요.
@@ -279,7 +275,7 @@ def ollama(model, messages, schema=None):
 def run_case(test, model, chat=ollama):
     tools = FakeTools()
     record = {"id": test["id"], "model": model, "provider": "ollama",
-              "evaluation_version": EVALUATION_VERSION, "prompt_version": "v4",
+              "evaluation_version": EVALUATION_VERSION, "prompt_version": "v3",
               "initial_state": copy.deepcopy(tools.items)}
     start = time.monotonic()
     history = copy.deepcopy(test["history"])
@@ -322,14 +318,13 @@ def main():
     args.output.mkdir(parents=True)
     selected = [test for test in CASES if not args.cases or test["id"] in args.cases]
     source = Path(__file__).read_text()
-    manifest = {"evaluation_version": EVALUATION_VERSION, "prompt_version": "v4",
+    manifest = {"evaluation_version": EVALUATION_VERSION, "prompt_version": "v3",
                 "grader_version": "v2", "model": args.model, "provider": "ollama",
                 "status": "running", "cases": selected, "initial_state": SEED,
                 "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
                 "decision_system_prompt": SYSTEM, "decision_schema": SCHEMA,
                 "answer_system_prompt": ANSWER_SYSTEM,
-                "changes_from_v3": ["저장된 일정 질문(schedule_lookup)과 이전 발언 확인(history_recall) 구분 규칙 추가",
-                                    "next_only=true이면 after를 비운다고 명시"],
+                "changes_from_v2": ["판단 규칙 명확화", "출처·도구 상태 구분", "현재 날짜·요일 전달", "답변용 내부 ID 제거", "간결한 답변 지시"],
                 "settings": {"think": False, "temperature": 0, "num_predict": 512, "num_ctx": 4096},
                 "completed_cases": [],
                 "limitations": ["답변 의미 검토는 별도", "v1과 채점·데이터가 달라 점수 직접 비교 금지"]}

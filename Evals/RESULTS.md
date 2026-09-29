@@ -9,12 +9,17 @@
 
 - `v1-baseline`: 프롬프트·문맥 개선 전 최초 비교 기준. `results/companion/v1-baseline/`에 manifest와 평가 스냅샷을 보존한다.
 - `v2-eval-hardening`: 채점 강화. 내일 일정 2개를 모두 찾는지 본다. 저장된 목표와 대화 속 목표를 구분하는지 본다. 쓰지 않는 인자까지 검사한다. 프롬프트는 v1 그대로다.
-- `v3-prompt-context`: 현재 실행 코드. 프롬프트와 문맥만 개선했고, v2의 사례·채점·추론 설정은 그대로다.
+- `v3-prompt-context`: 프롬프트와 문맥만 개선했고, v2의 사례·채점·추론 설정은 그대로다. 코드와 실행 목록은 `results/companion/v3-prompt-context/snapshot/`·`manifest.json`에 보관한다.
   - 도구를 실행하지 않은 것과 조회 결과가 비어 있는 것을 구분한다.
   - 정보 출처를 표시한다.
   - 현재 날짜와 요일을 준다.
   - 답변용 근거에서 ID를 빼고, 간결하게 답하도록 지시한다.
-- v2·v3의 원시 결과는 Lantern 로컬에만 있고 여기로 옮기지 않았다. 이 저장소의 결과는 새로 쌓는다.
+- `v3-native-tools`: v3의 사례·채점·문맥 규칙을 그대로 쓰고, 판단만 Ollama 네이티브 tool calling으로 바꾼 비교용 버전 (`companion_eval_native.py`). 보관 위치는 v3와 같은 방식.
+- `v4-schedule-rule`: 현재 실행 코드. v3에 판단 규칙 3줄만 더했다. 사례·채점·추론 설정은 그대로다.
+  - 이전 발언 확인(`history_recall`)은 사용자가 앞서 자기가 한 말을 물을 때만 쓴다.
+  - 앞으로 있을 일정을 묻는 질문은 표현이 달라도 `schedule_lookup`이다. 예시는 시험 사례에 없는 표현만 쓴다.
+  - `next_only=true`이면 `after`는 항상 비운다.
+- v2의 원시 결과, 그리고 Lantern에서 1회 실행한 v3 원시 결과는 Lantern 로컬에만 있다. 이 저장소의 결과는 새로 쌓는다.
 
 ## 규칙
 
@@ -69,14 +74,33 @@
 - 네이티브 방식으로 전 사례를 통과한 것은 gemma4:26b뿐이다.
 - 원시 결과: `results/companion/v3-native-tools/<모델>/run-0N/` (로컬 보관). 단위 테스트: `cd Evals && python3 -m unittest test_companion_eval_native`
 
-## 실행 (v3, Ollama 실행 상태에서 하나씩 순차 실행)
+## v4 회귀 평가 - JSON 양식 (2026-09-29, 이 저장소에서 실행)
+
+v3에서 gemma4:e4b·qwen3:8b가 "바로 다음 일정" 사례를 매번 틀려서 판단 규칙 3줄을 더했다. 같은 15개 사례를 모델당 3회 돌려, 고쳐진 사례와 새로 깨진 사례를 v3와 비교했다.
+
+| 모델 | v3 → v4 (3회 모두 통과) | 고쳐진 사례 | 새로 깨진 사례 | v4 사례당 시간 중앙값 |
+|---|---|---|---|---|
+| gemma4:e4b | 14 → **15** | `next` | 없음 | 3.8초 |
+| qwen3:8b | 14 → **15** | `next` | 없음 | 3.7초 |
+| gemma4:26b | 15 → 15 | - | 없음 | 8.1초 |
+| qwen3.5:9b | 15 → **14** | - | `after` | 6.3초 |
+
+- qwen3.5:9b는 v4에서 "오늘 오후 2시 이후 일정 보여줘"의 날짜를 빠뜨리고 시간 조건만 넣었다(3회 모두). 네이티브 도구 방식에서 같은 모델이 틀린 방식과 같다.
+- 한 모델을 고친 규칙이 다른 모델의 다른 사례를 깨뜨렸다. 규칙을 바꿀 때마다 모든 모델·사례를 다시 돌려야 하는 이유다.
+- 앱 기본 모델(`Constants.defaultCompanionOllamaModel = gemma4:e4b`)은 v4에서 전 사례를 통과했고 회귀가 없다.
+- 원시 결과: `results/companion/v4-schedule-rule/<모델>/run-0N/` (로컬 보관)
+
+## 실행 (v4, Ollama 실행 상태에서 하나씩 순차 실행)
 
 ```bash
-python3 Evals/companion_eval.py --model gemma4:26b --output Evals/results/companion/v3-prompt-context/gemma4-26b/run-01
-python3 Evals/companion_eval.py --model gemma4:e4b --output Evals/results/companion/v3-prompt-context/gemma4-e4b/run-01
-python3 Evals/companion_eval.py --model qwen3:8b --output Evals/results/companion/v3-prompt-context/qwen3-8b/run-01
-python3 Evals/companion_eval.py --model qwen3.5:9b --output Evals/results/companion/v3-prompt-context/qwen3.5-9b/run-01
+python3 Evals/companion_eval.py --model gemma4:26b --output Evals/results/companion/v4-schedule-rule/gemma4-26b/run-01
+python3 Evals/companion_eval.py --model gemma4:e4b --output Evals/results/companion/v4-schedule-rule/gemma4-e4b/run-01
+python3 Evals/companion_eval.py --model qwen3:8b --output Evals/results/companion/v4-schedule-rule/qwen3-8b/run-01
+python3 Evals/companion_eval.py --model qwen3.5:9b --output Evals/results/companion/v4-schedule-rule/qwen3.5-9b/run-01
 ```
+
+- 이미 끝난 버전은 해당 버전 폴더의 `snapshot/` 코드로 재현한다. 현재 코드를 이전 버전 경로에 실행하지 않는다.
+- 네이티브 도구 비교: `python3 Evals/companion_eval_native.py --model <모델> --output Evals/results/companion/v3-native-tools/<모델>/run-0N`
 
 - 반복 실행은 `run-02`, `run-03`처럼 새 run 번호를 지정한다.
 - 각 run에는 15개 사례 JSON, manifest, 실행 코드 사본이 생긴다. 사례 JSON은 manifest의 `completed_cases`로 구분한다.

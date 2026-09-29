@@ -155,6 +155,45 @@ final class JSONSchemaTests: XCTestCase {
         )
         let text = try XCTUnwrap(String(data: body, encoding: .utf8))
         XCTAssertFalse(text.contains(#""format""#), text)
+        XCTAssertFalse(text.contains(#""num_ctx""#), text)
         XCTAssertNoThrow(try JSONSerialization.jsonObject(with: body))
+    }
+
+    // MARK: - 컴패니언 의도 판단 양식
+
+    func testBooleanAndClosedObject() {
+        XCTAssertEqual(JSONSchema.boolean.jsonText, #"{"type":"boolean"}"#)
+        let schema = JSONSchema.closedObject(
+            properties: [.init("action", .stringEnum(["a"])), .init("next_only", .boolean)],
+            required: ["action", "next_only"]
+        )
+        XCTAssertEqual(
+            schema.jsonText,
+            #"{"type":"object","additionalProperties":false,"properties":{"action":{"type":"string","enum":["a"]},"next_only":{"type":"boolean"}},"required":["action","next_only"]}"#
+        )
+    }
+
+    /// 평가기는 `num_ctx: 4096` 으로 쟀다. 값을 주면 본문에 실려야 앱이 같은 조건으로 부른다.
+    func testRequestBodyCarriesContextLengthWhenGiven() throws {
+        let body = try OllamaChatClient.body(
+            OllamaChatClient.ChatRequest(
+                model: "m",
+                messages: [.init(role: "user", content: "안녕")],
+                stream: true,
+                think: false,
+                options: .init(
+                    temperature: 0,
+                    num_predict: 512,
+                    repeat_penalty: nil,
+                    presence_penalty: nil,
+                    frequency_penalty: nil,
+                    num_ctx: 4096
+                )
+            ),
+            format: nil
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let options = try XCTUnwrap(object["options"] as? [String: Any])
+        XCTAssertEqual(options["num_ctx"] as? Int, 4096)
     }
 }

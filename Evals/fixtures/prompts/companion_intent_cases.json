@@ -1,0 +1,77 @@
+[
+  {
+    "id": "worry",
+    "message": "다음주에 이력서 첨삭 일정이 있는데 어떻게 준비해야 할지 모르겠네",
+    "expected_action": "conversation"
+  },
+  {
+    "id": "correction",
+    "message": "아니 일정을 추가해달라는게 아니고 고민이라고",
+    "expected_action": "conversation"
+  },
+  {
+    "id": "goal",
+    "message": "내 목표가 뭔지 아니",
+    "expected_action": "goal_lookup"
+  },
+  {
+    "id": "help",
+    "message": "목표 기능은 어떻게 써?",
+    "expected_action": "app_help"
+  },
+  {
+    "id": "tomorrow",
+    "message": "내일 일정 보여줘",
+    "expected_action": "schedule_lookup"
+  },
+  {
+    "id": "today",
+    "message": "오늘 할일 보여줘",
+    "expected_action": "schedule_lookup"
+  },
+  {
+    "id": "date",
+    "message": "9월 25일 일정 알려줘",
+    "expected_action": "schedule_lookup"
+  },
+  {
+    "id": "after",
+    "message": "오늘 오후 2시 이후 일정 보여줘",
+    "expected_action": "schedule_lookup"
+  },
+  {
+    "id": "next",
+    "message": "지금 바로 다음 일정은 뭐야?",
+    "expected_action": "schedule_lookup"
+  },
+  {
+    "id": "create",
+    "message": "오늘 할일에 호롱호롱 앱 배포하기 추가해줘",
+    "expected_action": "schedule_create"
+  },
+  {
+    "id": "negation",
+    "message": "내일 일정을 추가하지 마. 그냥 걱정돼서 말한 거야",
+    "expected_action": "conversation"
+  },
+  {
+    "id": "ambiguous",
+    "message": "그거 금요일로 옮겨줘",
+    "expected_action": "clarification"
+  },
+  {
+    "id": "greeting",
+    "message": "오늘 좀 지치네. 잠깐 이야기할래?",
+    "expected_action": "conversation"
+  },
+  {
+    "id": "recall",
+    "message": "아까 내가 목표라고 말한 게 뭐였지?",
+    "expected_action": "history_recall"
+  },
+  {
+    "id": "empty",
+    "message": "9월 20일 일정 보여줘",
+    "expected_action": "schedule_lookup"
+  }
+]

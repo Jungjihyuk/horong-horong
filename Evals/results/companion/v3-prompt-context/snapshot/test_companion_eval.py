@@ -52,7 +52,7 @@ class EvaluationTests(unittest.TestCase):
                 main()
                 manifest = json.loads((output / "manifest.json").read_text())
                 self.assertEqual(manifest["completed_cases"], ["worry"])
-                self.assertEqual(manifest["prompt_version"], "v4")
+                self.assertEqual(manifest["prompt_version"], "v3")
                 with self.assertRaises(SystemExit):
                     main()
                 self.assertEqual(run.call_count, 1)
