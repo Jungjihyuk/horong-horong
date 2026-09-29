@@ -1609,6 +1609,8 @@ struct HorongHorongApp: App {
                 .environment(\.appearanceDensity, appearanceDensity)
                 .modelContainer(guidedModelContainer)
                 .id(onboardingDemoStore.isActive)
+                // 컴패니언이 팝오버를 대신 열 때 실제로 열려 있는지 확인하는 데 쓴다.
+                .configureHostWindow { CompanionOnboardingPresenter.registerPopoverWindow($0) }
         } label: {
             MenuBarLabel(appState: appDelegate.appState)
         }

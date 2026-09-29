@@ -1,0 +1,208 @@
+{
+  "reference_time": "2026-09-18T10:00:00+09:00",
+  "cases": [
+    {
+      "id": "worry",
+      "message": "다음주에 이력서 첨삭 일정이 있는데 어떻게 준비해야 할지 모르겠네",
+      "expected_action": "conversation",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "correction",
+      "message": "아니 일정을 추가해달라는게 아니고 고민이라고",
+      "expected_action": "conversation",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": [
+        {
+          "role": "user",
+          "content": "다음주 첨삭 일정 때문에 걱정이야"
+        },
+        {
+          "role": "assistant",
+          "content": "날짜와 시간을 더 구체적으로 알려주세요."
+        }
+      ]
+    },
+    {
+      "id": "goal",
+      "message": "내 목표가 뭔지 아니",
+      "expected_action": "goal_lookup",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "help",
+      "message": "목표 기능은 어떻게 써?",
+      "expected_action": "app_help",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "tomorrow",
+      "message": "내일 일정 보여줘",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "date": "2026-09-19"
+      },
+      "expected_ids": [
+        "t3"
+      ],
+      "history": []
+    },
+    {
+      "id": "today",
+      "message": "오늘 할일 보여줘",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "date": "2026-09-18"
+      },
+      "expected_ids": [
+        "t1",
+        "t2"
+      ],
+      "history": []
+    },
+    {
+      "id": "date",
+      "message": "9월 25일 일정 알려줘",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "date": "2026-09-25"
+      },
+      "expected_ids": [
+        "t4"
+      ],
+      "history": []
+    },
+    {
+      "id": "after",
+      "message": "오늘 오후 2시 이후 일정 보여줘",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "date": "2026-09-18",
+        "after": "14:00"
+      },
+      "expected_ids": [
+        "t2"
+      ],
+      "history": []
+    },
+    {
+      "id": "next",
+      "message": "지금 바로 다음 일정은 뭐야?",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "next_only": true
+      },
+      "expected_ids": [
+        "t2"
+      ],
+      "history": []
+    },
+    {
+      "id": "create",
+      "message": "오늘 할일에 호롱호롱 앱 배포하기 추가해줘",
+      "expected_action": "schedule_create",
+      "expected_args": {
+        "date": "2026-09-18",
+        "title": "호롱호롱 앱 배포하기"
+      },
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "negation",
+      "message": "내일 일정을 추가하지 마. 그냥 걱정돼서 말한 거야",
+      "expected_action": "conversation",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "ambiguous",
+      "message": "그거 금요일로 옮겨줘",
+      "expected_action": "clarification",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "greeting",
+      "message": "오늘 좀 지치네. 잠깐 이야기할래?",
+      "expected_action": "conversation",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": []
+    },
+    {
+      "id": "recall",
+      "message": "아까 내가 목표라고 말한 게 뭐였지?",
+      "expected_action": "history_recall",
+      "expected_args": {},
+      "expected_ids": null,
+      "history": [
+        {
+          "role": "user",
+          "content": "내 목표는 이번 달에 포트폴리오 완성이야."
+        },
+        {
+          "role": "assistant",
+          "content": "포트폴리오 완성이 목표시군요."
+        }
+      ]
+    },
+    {
+      "id": "empty",
+      "message": "9월 20일 일정 보여줘",
+      "expected_action": "schedule_lookup",
+      "expected_args": {
+        "date": "2026-09-20"
+      },
+      "expected_ids": [],
+      "history": []
+    }
+  ],
+  "decision_system_prompt": "사용자의 요청 행동을 판단하세요. 현재 시각 2026-09-18T10:00:00+09:00, Asia/Seoul.\n대화 소재만으로 조회/저장을 하지 마세요. 고민과 조언은 conversation,\n개인 목표 확인은 goal_lookup, 앱 기능 사용법은 app_help,\n앞선 발언 확인은 history_recall입니다. 부정과 정정을 최근 맥락으로 이해하세요.\n명시적 일정 조회는 schedule_lookup, 명시적 할일 추가는 schedule_create.\n불명확한 변경 요청은 clarification. 임의의 변경 대상이나 날짜를 추측하지 마세요.\ndate는 YYYY-MM-DD, after는 HH:MM, title은 저장할 제목입니다.\n사용하지 않는 문자열은 빈 문자열, next_only는 바로 다음 일정 조회일 때만 true.\nnext_only일 때 날짜 미지정은 빈 date로 전체 미래 일정에서 찾습니다.\nJSON으로만 출력하세요.",
+  "decision_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "conversation",
+          "clarification",
+          "schedule_lookup",
+          "schedule_create",
+          "goal_lookup",
+          "app_help",
+          "history_recall"
+        ]
+      },
+      "date": {
+        "type": "string"
+      },
+      "after": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "next_only": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "action",
+      "date",
+      "after",
+      "title",
+      "next_only"
+    ]
+  }
+}
