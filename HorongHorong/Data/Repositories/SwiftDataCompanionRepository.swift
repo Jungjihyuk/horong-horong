@@ -44,6 +44,7 @@ struct SwiftDataCompanionRepository: CompanionRepository {
             .filter { !$0.isRecentlyDeleted }
             .map {
                 CompanionMemoSummary(
+                    id: $0.id,
                     title: $0.content,
                     isCompleted: $0.isCompletedValue,
                     startDate: $0.startDate,

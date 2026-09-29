@@ -6,9 +6,10 @@ final class CompanionIntentTaskTests: XCTestCase {
     private typealias Task = CompanionIntentTask
 
     private func json(
-        _ action: String, date: String = "", after: String = "", title: String = "", nextOnly: String = "false"
+        _ action: String, date: String = "", after: String = "", title: String = "", nextOnly: String = "false",
+        until: String = ""
     ) -> String {
-        #"{"action":"\#(action)","date":"\#(date)","after":"\#(after)","title":"\#(title)","next_only":\#(nextOnly)}"#
+        #"{"action":"\#(action)","date":"\#(date)","after":"\#(after)","title":"\#(title)","next_only":\#(nextOnly),"until":"\#(until)"}"#
     }
 
     // MARK: - 판단 읽기
@@ -31,7 +32,7 @@ final class CompanionIntentTaskTests: XCTestCase {
         XCTAssertThrowsError(try Task.parseDecision(#"{"action":"conversation"}"#)) {
             XCTAssertEqual($0 as? Task.DecisionError, .invalidFields)
         }
-        let extra = #"{"action":"conversation","date":"","after":"","title":"","next_only":false,"x":1}"#
+        let extra = #"{"action":"conversation","date":"","after":"","title":"","next_only":false,"until":"","x":1}"#
         XCTAssertThrowsError(try Task.parseDecision(extra)) {
             XCTAssertEqual($0 as? Task.DecisionError, .invalidFields)
         }
@@ -66,6 +67,58 @@ final class CompanionIntentTaskTests: XCTestCase {
         XCTAssertThrowsError(try Task.parseDecision(json("schedule_lookup"))) {
             XCTAssertEqual($0 as? Task.DecisionError, .missingLookupDate)
         }
+    }
+
+    // MARK: - v5: 기간 조회·옮기기
+
+    func testParsesRangeLookupAndMove() throws {
+        XCTAssertEqual(
+            try Task.parseDecision(json("schedule_lookup", date: "2026-09-19", until: "2026-09-25")),
+            Task.Decision(action: .scheduleLookup, date: "2026-09-19", until: "2026-09-25")
+        )
+        XCTAssertEqual(
+            try Task.parseDecision(json("schedule_move", date: "2026-09-21", title: "면접 준비")),
+            Task.Decision(action: .scheduleMove, date: "2026-09-21", title: "면접 준비")
+        )
+    }
+
+    func testRejectsBackwardOrMisplacedRange() {
+        XCTAssertThrowsError(try Task.parseDecision(json("schedule_lookup", date: "2026-09-25", until: "2026-09-19"))) {
+            XCTAssertEqual($0 as? Task.DecisionError, .invalidRange)
+        }
+        XCTAssertThrowsError(try Task.parseDecision(json("schedule_create", date: "2026-09-25", title: "x", until: "2026-09-26"))) {
+            XCTAssertEqual($0 as? Task.DecisionError, .invalidRange)
+        }
+    }
+
+    func testMoveNeedsTargetAndDate() {
+        XCTAssertThrowsError(try Task.parseDecision(json("schedule_move", date: "2026-09-21"))) {
+            XCTAssertEqual($0 as? Task.DecisionError, .missingMoveArgument)
+        }
+    }
+
+    /// 옮기기 결과는 평가기 `FakeTools` 의 모양 그대로 넘긴다. 대상이 없으면 '조회했지만 없음'과 같은 상태다.
+    func testMoveContextShapes() {
+        let moved = Task.AnswerContext(
+            action: .scheduleMove,
+            result: .moved(title: "면접 준비",
+                           from: .init(title: "면접 준비", date: "2026-09-19", time: "11:00"),
+                           to: .init(title: "면접 준비", date: "2026-09-21", time: "11:00")),
+            now: now, timeZone: seoul
+        )
+        XCTAssertTrue(moved.jsonText.hasSuffix(
+            #""source": "schedule_repository", "tool_status": "success", "result": {"status": "moved", "title": "면접 준비", "from": {"date": "2026-09-19", "time": "11:00"}, "to": {"date": "2026-09-21", "time": "11:00"}}}"#
+        ), moved.jsonText)
+        XCTAssertEqual(Task.AnswerContext(action: .scheduleMove, result: .moveNotFound, now: now, timeZone: seoul).toolStatus,
+                       "success_empty")
+    }
+
+    func testDateTableStartsTodayAndSpansTwoWeeks() {
+        let lines = Task.dateTable(now: now, timeZone: seoul).split(separator: "\n")
+        XCTAssertEqual(lines.count, 14)
+        XCTAssertEqual(lines.first, "2026-09-18 금요일 (오늘)")
+        XCTAssertEqual(lines[1], "2026-09-19 토요일 (내일)")
+        XCTAssertEqual(lines.last, "2026-10-01 목요일")
     }
 
     // MARK: - 답변 참고 데이터

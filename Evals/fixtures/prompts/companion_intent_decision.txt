@@ -3,8 +3,9 @@
 개인 목표 확인은 goal_lookup, 앱 기능 사용법은 app_help,
 앞선 발언 확인은 history_recall입니다. 부정과 정정을 최근 맥락으로 이해하세요.
 명시적 일정 조회는 schedule_lookup, 명시적 할일 추가는 schedule_create.
+기존 할일을 다른 날짜·시간으로 옮기는 요청은 schedule_move.
 불명확한 변경 요청은 clarification. 임의의 변경 대상이나 날짜를 추측하지 마세요.
-date는 YYYY-MM-DD, after는 HH:MM, title은 저장할 제목입니다.
+date는 YYYY-MM-DD, after는 HH:MM, title은 저장하거나 옮길 할일 제목, until은 조회 끝 날짜(YYYY-MM-DD)입니다.
 사용하지 않는 문자열은 빈 문자열, next_only는 바로 다음 일정 조회일 때만 true.
 next_only일 때 날짜 미지정은 빈 date로 전체 미래 일정에서 찾습니다.
 JSON으로만 출력하세요.
@@ -17,7 +18,7 @@ clarification은 실제 조회·변경 요청의 필수 정보가 부족할 때 
 history_recall은 사용자가 앞선 대화에서 자신이 한 말을 다시 물을 때만 씁니다.
 앞으로 있을 일정·할일을 묻는 질문은 표현이 달라도 저장된 일정을 묻는 것이므로 schedule_lookup입니다
 (예: "이따 뭐 있지?", "다음 약속 언제야?").
-conversation/clarification/goal_lookup/app_help/history_recall은 date/after/title 모두 빈 문자열,
+conversation/clarification/goal_lookup/app_help/history_recall은 date/after/title/until 모두 빈 문자열,
 next_only는 false입니다. 현재 시각을 빈 필드에 복사하지 마세요.
 일정 전체 조회는 요청 날짜의 모든 항목을 뜻합니다. 이미 지난 항목도 임의로 제외하지 마세요.
 사용자가 가장 가까운 다음 일정 하나를 요청한 경우에만 next_only=true입니다.
@@ -26,4 +27,24 @@ next_only=true이면 after는 항상 빈 문자열입니다.
 after는 사용자가 명시한 시간 조건에만 사용합니다. 시간 미지정은 빈 문자열입니다.
 일정 추가에서도 현재 시각이나 자정을 임의로 지정하지 마세요.
 date에는 날짜만, after에는 시간만 넣고 전체 타임스탬프는 넣지 마세요.
-title은 일정 추가일 때만 채웁니다. 저장·변경하지 말라는 정정을 우선 반영하세요.
+title은 일정 추가·옮기기일 때만 채웁니다. 저장·변경하지 말라는 정정을 우선 반영하세요.
+옮기기는 schedule_move로 하고 새 할일 추가(schedule_create)로 대신하지 마세요.
+schedule_move는 title에 옮길 할일 이름, date·after에 새 날짜·시간을 넣습니다. 무엇을 옮길지 모르면 clarification입니다.
+여러 날짜의 일정을 한 번에 조회하면 date에 시작 날짜, until에 끝 날짜를 넣습니다. 하루만 조회하면 until은 빈 문자열입니다.
+
+올해는 2026년입니다. 사용자가 연도를 말하지 않은 날짜의 연도는 2026입니다.
+날짜표(이 표에서 찾아 date를 채우세요):
+2026-09-18 금요일 (오늘)
+2026-09-19 토요일 (내일)
+2026-09-20 일요일
+2026-09-21 월요일
+2026-09-22 화요일
+2026-09-23 수요일
+2026-09-24 목요일
+2026-09-25 금요일
+2026-09-26 토요일
+2026-09-27 일요일
+2026-09-28 월요일
+2026-09-29 화요일
+2026-09-30 수요일
+2026-10-01 목요일

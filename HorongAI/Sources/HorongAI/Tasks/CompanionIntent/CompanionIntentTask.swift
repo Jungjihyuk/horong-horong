@@ -2,8 +2,8 @@ import Foundation
 
 /// 컴패니언이 말의 의도를 먼저 고르고(판단), 앱이 도구를 실행한 뒤, 그 결과를 근거로 답하게 하는 태스크.
 ///
-/// 지시문·양식·답변 규칙은 평가기(`Evals/companion_eval.py`, v4)와 **글자까지 같아야** 한다.
-/// 평가기가 15개 사례를 모델당 3회씩 재서 고른 계약이라, 앱이 다르게 보내면 그 결과를 믿을 수 없다.
+/// 지시문·양식·답변 규칙은 평가기(`Evals/companion_eval.py`, v5)와 **글자까지 같아야** 한다.
+/// 평가기가 사례(v5 기준 21개)를 모델당 3회씩 재서 고른 계약이라, 앱이 다르게 보내면 그 결과를 믿을 수 없다.
 /// 같은지는 앱 테스트(`CompanionIntentContractTests`)가 `Evals/fixtures/prompts/companion_intent_*` 와 비교해 지킨다.
 public enum CompanionIntentTask {
 
@@ -16,6 +16,7 @@ public enum CompanionIntentTask {
         case goalLookup = "goal_lookup"
         case appHelp = "app_help"
         case historyRecall = "history_recall"
+        case scheduleMove = "schedule_move"
     }
 
     /// 모델이 고른 행동과 인자. 쓰지 않는 문자열은 빈 문자열이다.
@@ -27,13 +28,18 @@ public enum CompanionIntentTask {
         public let after: String
         public let title: String
         public let nextOnly: Bool
+        /// 기간 조회의 끝 날짜 `YYYY-MM-DD`. 하루만 조회하면 빈 문자열이다.
+        public let until: String
 
-        public init(action: Action, date: String = "", after: String = "", title: String = "", nextOnly: Bool = false) {
+        public init(
+            action: Action, date: String = "", after: String = "", title: String = "", nextOnly: Bool = false, until: String = ""
+        ) {
             self.action = action
             self.date = date
             self.after = after
             self.title = title
             self.nextOnly = nextOnly
+            self.until = until
         }
     }
 
@@ -46,6 +52,8 @@ public enum CompanionIntentTask {
         case invalidTime
         case missingCreateArgument
         case missingLookupDate
+        case invalidRange
+        case missingMoveArgument
     }
 
     // MARK: - 판단
@@ -57,8 +65,9 @@ public enum CompanionIntentTask {
             .init("after", .string),
             .init("title", .string),
             .init("next_only", .boolean),
+            .init("until", .string),
         ],
-        required: ["action", "date", "after", "title", "next_only"]
+        required: ["action", "date", "after", "title", "next_only", "until"]
     )
 
     /// 평가기와 같은 추론 설정(`settings`). 판단은 매번 같은 답이 나와야 해서 온도 0 이다.
@@ -66,16 +75,21 @@ public enum CompanionIntentTask {
     public static let decisionMaxTokens = 512
     public static let decisionContextLength = 4096
 
-    /// 판단 지시문. 평가기의 `SYSTEM` 에서 현재 시각·시간대만 바꿔 끼운다.
+    /// 판단 지시문. 평가기의 `SYSTEM` 에서 현재 시각·시간대·날짜표만 바꿔 끼운다.
+    ///
+    /// 연도 규칙과 2주치 날짜표는 v5 에서 넣었다. 시각만 주면 작은 모델이 "10월 2일"을 2024년으로 계산했고,
+    /// 연도 규칙만 넣으면 "다음주 화요일"이 틀렸다. 표에서 찾게 하자 둘 다 맞았다(2026-09-29 실측).
     public static func decisionInstructions(now: Date, timeZone: TimeZone) -> String {
-        """
+        let year = String(isoTimestamp(now, timeZone: timeZone).prefix(4))
+        return """
         사용자의 요청 행동을 판단하세요. 현재 시각 \(isoTimestamp(now, timeZone: timeZone)), \(timeZone.identifier).
         대화 소재만으로 조회/저장을 하지 마세요. 고민과 조언은 conversation,
         개인 목표 확인은 goal_lookup, 앱 기능 사용법은 app_help,
         앞선 발언 확인은 history_recall입니다. 부정과 정정을 최근 맥락으로 이해하세요.
         명시적 일정 조회는 schedule_lookup, 명시적 할일 추가는 schedule_create.
+        기존 할일을 다른 날짜·시간으로 옮기는 요청은 schedule_move.
         불명확한 변경 요청은 clarification. 임의의 변경 대상이나 날짜를 추측하지 마세요.
-        date는 YYYY-MM-DD, after는 HH:MM, title은 저장할 제목입니다.
+        date는 YYYY-MM-DD, after는 HH:MM, title은 저장하거나 옮길 할일 제목, until은 조회 끝 날짜(YYYY-MM-DD)입니다.
         사용하지 않는 문자열은 빈 문자열, next_only는 바로 다음 일정 조회일 때만 true.
         next_only일 때 날짜 미지정은 빈 date로 전체 미래 일정에서 찾습니다.
         JSON으로만 출력하세요.
@@ -88,7 +102,7 @@ public enum CompanionIntentTask {
         history_recall은 사용자가 앞선 대화에서 자신이 한 말을 다시 물을 때만 씁니다.
         앞으로 있을 일정·할일을 묻는 질문은 표현이 달라도 저장된 일정을 묻는 것이므로 schedule_lookup입니다
         (예: "이따 뭐 있지?", "다음 약속 언제야?").
-        conversation/clarification/goal_lookup/app_help/history_recall은 date/after/title 모두 빈 문자열,
+        conversation/clarification/goal_lookup/app_help/history_recall은 date/after/title/until 모두 빈 문자열,
         next_only는 false입니다. 현재 시각을 빈 필드에 복사하지 마세요.
         일정 전체 조회는 요청 날짜의 모든 항목을 뜻합니다. 이미 지난 항목도 임의로 제외하지 마세요.
         사용자가 가장 가까운 다음 일정 하나를 요청한 경우에만 next_only=true입니다.
@@ -97,9 +111,31 @@ public enum CompanionIntentTask {
         after는 사용자가 명시한 시간 조건에만 사용합니다. 시간 미지정은 빈 문자열입니다.
         일정 추가에서도 현재 시각이나 자정을 임의로 지정하지 마세요.
         date에는 날짜만, after에는 시간만 넣고 전체 타임스탬프는 넣지 마세요.
-        title은 일정 추가일 때만 채웁니다. 저장·변경하지 말라는 정정을 우선 반영하세요.
+        title은 일정 추가·옮기기일 때만 채웁니다. 저장·변경하지 말라는 정정을 우선 반영하세요.
+        옮기기는 schedule_move로 하고 새 할일 추가(schedule_create)로 대신하지 마세요.
+        schedule_move는 title에 옮길 할일 이름, date·after에 새 날짜·시간을 넣습니다. 무엇을 옮길지 모르면 clarification입니다.
+        여러 날짜의 일정을 한 번에 조회하면 date에 시작 날짜, until에 끝 날짜를 넣습니다. 하루만 조회하면 until은 빈 문자열입니다.
+
+        올해는 \(year)년입니다. 사용자가 연도를 말하지 않은 날짜의 연도는 \(year)입니다.
+        날짜표(이 표에서 찾아 date를 채우세요):
+        \(dateTable(now: now, timeZone: timeZone))
 
         """
+    }
+
+    /// 오늘부터 2주치 날짜·요일. 평가기의 `date_table()` 과 같은 모양이다.
+    static func dateTable(now: Date, timeZone: TimeZone, days: Int = 14) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let start = calendar.startOfDay(for: now)
+        return (0..<days).compactMap { offset -> String? in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
+            let parts = calendar.dateComponents([.year, .month, .day], from: day)
+            let date = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            let mark = offset == 0 ? " (오늘)" : offset == 1 ? " (내일)" : ""
+            return "\(date) \(weekday(day, timeZone: timeZone))\(mark)"
+        }
+        .joined(separator: "\n")
     }
 
     /// 모델 출력을 판단 계약으로 읽는다. 평가기의 `validate()` 와 같은 규칙으로 거른다.
@@ -111,7 +147,7 @@ public enum CompanionIntentTask {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw DecisionError.notJSONObject
         }
-        guard Set(object.keys) == ["action", "date", "after", "title", "next_only"] else {
+        guard Set(object.keys) == ["action", "date", "after", "title", "next_only", "until"] else {
             throw DecisionError.invalidFields
         }
         guard let rawAction = object["action"] as? String, let action = Action(rawValue: rawAction) else {
@@ -121,10 +157,16 @@ public enum CompanionIntentTask {
         guard let flag = object["next_only"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(),
               let date = object["date"] as? String,
               let after = object["after"] as? String,
-              let title = object["title"] as? String else {
+              let title = object["title"] as? String,
+              let until = object["until"] as? String else {
             throw DecisionError.invalidValueType
         }
         if !date.isEmpty, !isCalendarDate(date) { throw DecisionError.invalidDate }
+        if !until.isEmpty, !isCalendarDate(until) { throw DecisionError.invalidDate }
+        // 날짜 문자열이 YYYY-MM-DD 로 확인됐으므로 문자열 비교가 곧 날짜 비교다.
+        if !until.isEmpty, action != .scheduleLookup || date.isEmpty || until < date {
+            throw DecisionError.invalidRange
+        }
         if !after.isEmpty, !isClockTime(after) { throw DecisionError.invalidTime }
         let nextOnly = flag.boolValue
         if action == .scheduleCreate,
@@ -132,7 +174,11 @@ public enum CompanionIntentTask {
             throw DecisionError.missingCreateArgument
         }
         if action == .scheduleLookup, date.isEmpty, !nextOnly { throw DecisionError.missingLookupDate }
-        return Decision(action: action, date: date, after: after, title: title, nextOnly: nextOnly)
+        if action == .scheduleMove,
+           date.isEmpty || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw DecisionError.missingMoveArgument
+        }
+        return Decision(action: action, date: date, after: after, title: title, nextOnly: nextOnly, until: until)
     }
 
     // MARK: - 답변
@@ -146,6 +192,8 @@ public enum CompanionIntentTask {
     history_recall이면 앞선 역할별 대화에서 사용자의 발언을 찾아 답하세요.
     success_empty는 조회 성공 후 결과가 없다는 뜻이며 조회 실패라고 설명하지 마세요.
     저장 성공 결과가 있을 때만 저장했다고 말하세요. 지정되지 않은 시간은 만들지 마세요.
+    도구 결과로 확인된 작업만 했다고 말하세요. 옮기기 결과가 moved일 때만 옮겼다고 말하고,
+    not_found면 대상을 찾지 못했다고, ambiguous면 후보 중 무엇인지 물어보세요.
     요청한 날짜와 현재 날짜가 다르면 오늘이라고 부르지 마세요. 요일은 제공된 근거가 없으면 생략하세요.
     내부 action, tool_status, JSON, ID, null 등 처리 용어는 사용자에게 보여주지 마세요.
     고민에는 먼저 공감하고 실용적인 제안 2~3개 또는 확인 질문 하나로 답하세요.
@@ -174,6 +222,12 @@ public enum CompanionIntentTask {
         case created(ScheduleItem)
         case goals([String])
         case guide(String)
+        /// 옮긴 할일. 이전·새 날짜와 시각을 함께 준다.
+        case moved(title: String, from: ScheduleItem, to: ScheduleItem)
+        /// 제목으로 찾은 할일이 없다. 아무것도 바꾸지 않았다.
+        case moveNotFound
+        /// 제목으로 찾은 할일이 여럿이다. 아무것도 바꾸지 않았다.
+        case moveAmbiguous([ScheduleItem])
     }
 
     /// 답변 모델에게 넘길 참고 데이터. 평가기의 `answer_context` 와 같은 키·순서로 만든다.
@@ -198,6 +252,7 @@ public enum CompanionIntentTask {
             case .schedules(let items) where items.isEmpty: return "success_empty"
             case .goals(let goals) where goals.isEmpty: return "success_empty"
             case .guide(let text) where text.isEmpty: return "success_empty"
+            case .moveNotFound: return "success_empty"
             default: return "success"
             }
         }
@@ -208,7 +263,7 @@ public enum CompanionIntentTask {
             case .historyRecall: return "conversation_history"
             case .goalLookup: return "saved_goals"
             case .appHelp: return "app_guide"
-            case .scheduleLookup, .scheduleCreate: return "schedule_repository"
+            case .scheduleLookup, .scheduleCreate, .scheduleMove: return "schedule_repository"
             case .conversation, .clarification: return "conversation"
             }
         }
@@ -236,6 +291,17 @@ public enum CompanionIntentTask {
                 return .object([("source", .string("saved_goals")), ("goals", .array(goals.map(JSONValue.string)))])
             case .guide(let text):
                 return .object([("source", .string("app_guide")), ("text", .string(text))])
+            case .moved(let title, let from, let to):
+                return .object([
+                    ("status", .string("moved")),
+                    ("title", .string(title)),
+                    ("from", .object([("date", .string(from.date)), ("time", .string(from.time))])),
+                    ("to", .object([("date", .string(to.date)), ("time", .string(to.time))])),
+                ])
+            case .moveNotFound:
+                return .object([("status", .string("not_found"))])
+            case .moveAmbiguous(let candidates):
+                return .object([("status", .string("ambiguous")), ("candidates", .array(candidates.map(value(of:))))])
             }
         }
 

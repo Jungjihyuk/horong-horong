@@ -1,10 +1,11 @@
 import copy
+import json
 import unittest
 from companion_eval import CASES, FakeTools, SEED, grade, run_case, annotate_record
 
 
 def decision(action="conversation", **kwargs):
-    return dict(action=action, date="", after="", title="", next_only=False, **{}) | kwargs
+    return dict(action=action, date="", after="", title="", next_only=False, until="", **{}) | kwargs
 
 
 class EvaluationTests(unittest.TestCase):
@@ -52,7 +53,7 @@ class EvaluationTests(unittest.TestCase):
                 main()
                 manifest = json.loads((output / "manifest.json").read_text())
                 self.assertEqual(manifest["completed_cases"], ["worry"])
-                self.assertEqual(manifest["prompt_version"], "v4")
+                self.assertEqual(manifest["prompt_version"], "v5")
                 with self.assertRaises(SystemExit):
                     main()
                 self.assertEqual(run.call_count, 1)
@@ -174,6 +175,59 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(record["decision_input"], calls[0])
         self.assertEqual(len(calls), 2)
         self.assertEqual(record["final_state"], SEED)
+
+
+class V5Tests(unittest.TestCase):
+    """v5: 옮기기 도구, 기간 조회, 날짜표."""
+
+    def run_with(self, key, d, answer="답"):
+        test = next(t for t in CASES if t["id"] == key)
+        replies = iter([{"message": {"content": json.dumps(d)}}, {"message": {"content": answer}}])
+        record = run_case(test, "fake", chat=lambda *a, **k: next(replies))
+        return grade(test, record), record
+
+    def test_move_changes_only_target_date_and_keeps_time(self):
+        scores, record = self.run_with("move", decision("schedule_move", date="2026-09-21", title="면접 준비"))
+        self.assertTrue(scores["intent"] and scores["execution"])
+        moved = next(x for x in record["final_state"] if x["id"] == "t3")
+        self.assertEqual((moved["date"], moved["time"]), ("2026-09-21", "11:00"))
+        self.assertEqual(len(record["final_state"]), len(SEED))
+
+    def test_move_handled_as_create_fails(self):
+        scores, record = self.run_with("move", decision("schedule_create", date="2026-09-21", title="면접 준비"))
+        self.assertFalse(scores["intent"])
+        self.assertFalse(scores["execution"])
+
+    def test_move_without_match_changes_nothing_and_reports_not_found(self):
+        tools = FakeTools()
+        result = tools.execute(decision("schedule_move", date="2026-09-21", title="없는 일"), "x")
+        self.assertEqual(result, {"status": "not_found"})
+        self.assertEqual(tools.items, SEED)
+        from companion_eval import answer_context
+        self.assertEqual(answer_context(decision("schedule_move", date="2026-09-21", title="없는 일"), result)["tool_status"],
+                         "success_empty")
+
+    def test_range_lookup_returns_every_item_in_range(self):
+        scores, record = self.run_with("range", decision("schedule_lookup", date="2026-09-19", until="2026-09-25"))
+        self.assertTrue(scores["intent"] and scores["execution"])
+
+    def test_until_needs_lookup_and_ordered_dates(self):
+        from companion_eval import validate
+        with self.assertRaises(ValueError):
+            validate(decision("schedule_lookup", date="2026-09-25", until="2026-09-19"))
+        with self.assertRaises(ValueError):
+            validate(decision("schedule_create", date="2026-09-25", title="x", until="2026-09-26"))
+
+    def test_wrong_year_fails_intent(self):
+        scores, _ = self.run_with("month_date", decision("schedule_create", date="2024-10-02", title="치과"))
+        self.assertFalse(scores["intent"])
+
+    def test_date_table_lists_two_weeks_from_today(self):
+        from companion_eval import SYSTEM
+        self.assertIn("2026-09-18 금요일 (오늘)", SYSTEM)
+        self.assertIn("2026-09-19 토요일 (내일)", SYSTEM)
+        self.assertIn("2026-10-01 목요일", SYSTEM)
+        self.assertNotIn("2026-10-02", SYSTEM)
 
 
 if __name__ == "__main__":

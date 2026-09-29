@@ -90,8 +90,8 @@ def tool_calls_of(message):
 
 def to_decision(call):
     """도구 호출을 v3 판단 계약 모양으로 옮긴다. 모델이 주지 않은 인자는 v3 규칙대로 비운다."""
-    decision = {"action": call["name"], "date": "", "after": "", "title": "", "next_only": False}
-    for key in ("date", "after", "title", "next_only"):
+    decision = {"action": call["name"], "date": "", "after": "", "title": "", "next_only": False, "until": ""}
+    for key in ("date", "after", "title", "next_only", "until"):
         if key in call["arguments"]:
             decision[key] = call["arguments"][key]
     return decision

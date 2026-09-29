@@ -592,7 +592,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         companionController = CompanionController(
             appState: appState,
             repository: dependencies.companionRepository,
-            achievementRepository: dependencies.achievementRepository
+            achievementRepository: dependencies.achievementRepository,
+            todoRepository: dependencies.todoRepository
         )
     }
 

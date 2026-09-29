@@ -118,6 +118,10 @@ struct TodoBrowserView: View {
             // 회고 저장은 포모도로 저장소가 직접 Todo를 고치므로, 화면이 들고 있는 스냅샷을 다시 읽는다.
             viewModel.reload()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .companionDidChangeTodos)) { _ in
+            // 컴패니언도 대화로 할 일을 추가·옮긴다. 같은 이유로 다시 읽는다.
+            viewModel.reload()
+        }
         .onDisappear {
             viewModel.flush()
             viewModel.commitPendingDeleteIfNeeded()

@@ -11,7 +11,8 @@
         "schedule_create",
         "goal_lookup",
         "app_help",
-        "history_recall"
+        "history_recall",
+        "schedule_move"
       ]
     },
     "date": {
@@ -25,6 +26,9 @@
     },
     "next_only": {
       "type": "boolean"
+    },
+    "until": {
+      "type": "string"
     }
   },
   "required": [
@@ -32,6 +36,7 @@
     "date",
     "after",
     "title",
-    "next_only"
+    "next_only",
+    "until"
   ]
 }

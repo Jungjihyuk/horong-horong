@@ -2,7 +2,7 @@ import HorongAI
 import XCTest
 @testable import 호롱호롱
 
-/// 앱이 평가기(`Evals/companion_eval.py` v4)와 **같은 계약**으로 모델을 부르는지 본다.
+/// 앱이 평가기(`Evals/companion_eval.py` v5)와 **같은 계약**으로 모델을 부르는지 본다.
 ///
 /// 픽스처는 평가기가 만든다(`python3 Evals/export_companion_contract.py`). 이 테스트에는 기록 모드가 없다 —
 /// 앱 쪽을 바꿔 맞추면 평가하지 않은 계약으로 앱이 돌게 되므로, 바꾸려면 평가기부터 고치고 다시 잰다.
@@ -42,7 +42,7 @@ final class CompanionIntentContractTests: XCTestCase {
             [EvaluationCase].self,
             from: Data(try fixture("companion_intent_cases.json").utf8)
         )
-        XCTAssertEqual(cases.count, 15)
+        XCTAssertEqual(cases.count, 21)
         for item in cases {
             XCTAssertNil(CompanionMemoIntent.parse(item.message), "\(item.id): \(item.message)")
         }
@@ -59,6 +59,14 @@ final class CompanionIntentContractTests: XCTestCase {
         XCTAssertEqual(messages.dropFirst().dropLast().map(\.content), ["말3", "말4", "말5", "말6", "말7", "말8"])
         XCTAssertEqual(messages[1].role, "user")
         XCTAssertEqual(messages[2].role, "assistant")
+    }
+
+    /// 연결 확인 캐시에 막히지 않는다. Ollama 를 골랐으면 판단을 시도하고, 실패하면 기존 흐름으로 돌아간다.
+    func testDecisionIsAttemptedWheneverOllamaIsSelected() {
+        let decider = CompanionIntentDecider.make(selectedOllama: ("http://127.0.0.1:11434", "gemma4:e4b"))
+        XCTAssertEqual(decider?.endpoint, "http://127.0.0.1:11434")
+        XCTAssertEqual(decider?.model, "gemma4:e4b")
+        XCTAssertNil(CompanionIntentDecider.make(selectedOllama: nil))
     }
 
     private struct EvaluationCase: Decodable {
