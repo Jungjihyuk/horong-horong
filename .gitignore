@@ -194,3 +194,6 @@ promptfooconfig.json
 Evals/.provider
 Evals/.goal-eval-configuration.json
 Evals/report/eval-report.html
+
+# 리포트 생성물 
+Agents/news_report/data/*
